@@ -1,0 +1,466 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1258" height="1172" viewBox="0 0 1258 1172" font-family="Helvetica,Arial,sans-serif" xmlns:c2pa="http://c2pa.org/manifest">
+<rect width="1258" height="1172" fill="#fff"/>
+<text x="629.0" y="44" text-anchor="middle" font-size="25" font-weight="bold">VGA adapter: 256 colours, with 64-colour fallback (9 colour resistors)</text>
+<text x="629.0" y="74" text-anchor="middle" font-size="17" fill="#444">5x7 cm perfboard (18 x 24 holes). Top view, component side, antenna end at the top.</text>
+<rect x="326.2" y="96.2" width="625.6" height="829.6" rx="10" fill="#e9d9a6" stroke="#8a7332" stroke-width="2"/>
+<circle cx="350" cy="120" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="350" cy="154" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="350" cy="188" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="350" cy="222" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="350" cy="256" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="350" cy="290" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="350" cy="324" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="350" cy="358" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="350" cy="392" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="350" cy="426" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="350" cy="460" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="350" cy="494" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="350" cy="528" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="350" cy="562" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="350" cy="596" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="350" cy="630" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="350" cy="664" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="350" cy="698" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="350" cy="732" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="350" cy="766" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="350" cy="800" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="350" cy="834" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="350" cy="868" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="350" cy="902" r="4" fill="#fff" stroke="#b09a55"/>
+<text x="350" y="87.7" text-anchor="middle" font-size="12" fill="#666">1</text>
+<circle cx="384" cy="120" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="384" cy="154" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="384" cy="188" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="384" cy="222" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="384" cy="256" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="384" cy="290" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="384" cy="324" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="384" cy="358" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="384" cy="392" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="384" cy="426" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="384" cy="460" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="384" cy="494" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="384" cy="528" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="384" cy="562" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="384" cy="596" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="384" cy="630" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="384" cy="664" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="384" cy="698" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="384" cy="732" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="384" cy="766" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="384" cy="800" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="384" cy="834" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="384" cy="868" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="384" cy="902" r="4" fill="#fff" stroke="#b09a55"/>
+<text x="384" y="87.7" text-anchor="middle" font-size="12" fill="#666">2</text>
+<circle cx="418" cy="120" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="418" cy="154" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="418" cy="188" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="418" cy="222" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="418" cy="256" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="418" cy="290" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="418" cy="324" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="418" cy="358" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="418" cy="392" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="418" cy="426" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="418" cy="460" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="418" cy="494" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="418" cy="528" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="418" cy="562" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="418" cy="596" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="418" cy="630" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="418" cy="664" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="418" cy="698" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="418" cy="732" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="418" cy="766" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="418" cy="800" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="418" cy="834" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="418" cy="868" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="418" cy="902" r="4" fill="#fff" stroke="#b09a55"/>
+<text x="418" y="87.7" text-anchor="middle" font-size="12" fill="#666">3</text>
+<circle cx="452" cy="120" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="452" cy="154" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="452" cy="188" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="452" cy="222" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="452" cy="256" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="452" cy="290" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="452" cy="324" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="452" cy="358" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="452" cy="392" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="452" cy="426" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="452" cy="460" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="452" cy="494" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="452" cy="528" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="452" cy="562" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="452" cy="596" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="452" cy="630" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="452" cy="664" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="452" cy="698" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="452" cy="732" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="452" cy="766" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="452" cy="800" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="452" cy="834" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="452" cy="868" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="452" cy="902" r="4" fill="#fff" stroke="#b09a55"/>
+<text x="452" y="87.7" text-anchor="middle" font-size="12" fill="#666">4</text>
+<circle cx="486" cy="120" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="486" cy="154" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="486" cy="188" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="486" cy="222" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="486" cy="256" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="486" cy="290" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="486" cy="324" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="486" cy="358" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="486" cy="392" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="486" cy="426" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="486" cy="460" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="486" cy="494" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="486" cy="528" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="486" cy="562" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="486" cy="596" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="486" cy="630" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="486" cy="664" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="486" cy="698" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="486" cy="732" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="486" cy="766" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="486" cy="800" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="486" cy="834" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="486" cy="868" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="486" cy="902" r="4" fill="#fff" stroke="#b09a55"/>
+<text x="486" y="87.7" text-anchor="middle" font-size="12" fill="#666">5</text>
+<circle cx="520" cy="120" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="520" cy="154" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="520" cy="188" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="520" cy="222" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="520" cy="256" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="520" cy="290" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="520" cy="324" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="520" cy="358" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="520" cy="392" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="520" cy="426" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="520" cy="460" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="520" cy="494" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="520" cy="528" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="520" cy="562" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="520" cy="596" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="520" cy="630" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="520" cy="664" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="520" cy="698" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="520" cy="732" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="520" cy="766" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="520" cy="800" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="520" cy="834" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="520" cy="868" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="520" cy="902" r="4" fill="#fff" stroke="#b09a55"/>
+<text x="520" y="87.7" text-anchor="middle" font-size="12" fill="#666">6</text>
+<circle cx="554" cy="120" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="554" cy="154" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="554" cy="188" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="554" cy="222" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="554" cy="256" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="554" cy="290" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="554" cy="324" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="554" cy="358" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="554" cy="392" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="554" cy="426" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="554" cy="460" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="554" cy="494" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="554" cy="528" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="554" cy="562" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="554" cy="596" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="554" cy="630" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="554" cy="664" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="554" cy="698" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="554" cy="732" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="554" cy="766" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="554" cy="800" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="554" cy="834" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="554" cy="868" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="554" cy="902" r="4" fill="#fff" stroke="#b09a55"/>
+<text x="554" y="87.7" text-anchor="middle" font-size="12" fill="#666">7</text>
+<circle cx="588" cy="120" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="588" cy="902" r="4" fill="#fff" stroke="#b09a55"/>
+<text x="588" y="87.7" text-anchor="middle" font-size="12" fill="#666">8</text>
+<circle cx="622" cy="120" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="622" cy="902" r="4" fill="#fff" stroke="#b09a55"/>
+<text x="622" y="87.7" text-anchor="middle" font-size="12" fill="#666">9</text>
+<circle cx="656" cy="120" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="656" cy="902" r="4" fill="#fff" stroke="#b09a55"/>
+<text x="656" y="87.7" text-anchor="middle" font-size="12" fill="#666">10</text>
+<circle cx="690" cy="120" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="690" cy="902" r="4" fill="#fff" stroke="#b09a55"/>
+<text x="690" y="87.7" text-anchor="middle" font-size="12" fill="#666">11</text>
+<circle cx="724" cy="120" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="724" cy="902" r="4" fill="#fff" stroke="#b09a55"/>
+<text x="724" y="87.7" text-anchor="middle" font-size="12" fill="#666">12</text>
+<circle cx="758" cy="120" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="758" cy="902" r="4" fill="#fff" stroke="#b09a55"/>
+<text x="758" y="87.7" text-anchor="middle" font-size="12" fill="#666">13</text>
+<circle cx="792" cy="120" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="792" cy="902" r="4" fill="#fff" stroke="#b09a55"/>
+<text x="792" y="87.7" text-anchor="middle" font-size="12" fill="#666">14</text>
+<circle cx="826" cy="120" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="826" cy="902" r="4" fill="#fff" stroke="#b09a55"/>
+<text x="826" y="87.7" text-anchor="middle" font-size="12" fill="#666">15</text>
+<circle cx="860" cy="120" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="860" cy="902" r="4" fill="#fff" stroke="#b09a55"/>
+<text x="860" y="87.7" text-anchor="middle" font-size="12" fill="#666">16</text>
+<circle cx="894" cy="120" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="894" cy="154" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="894" cy="188" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="894" cy="222" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="894" cy="256" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="894" cy="290" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="894" cy="324" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="894" cy="358" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="894" cy="392" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="894" cy="426" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="894" cy="460" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="894" cy="494" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="894" cy="528" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="894" cy="562" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="894" cy="596" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="894" cy="630" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="894" cy="664" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="894" cy="698" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="894" cy="732" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="894" cy="766" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="894" cy="800" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="894" cy="834" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="894" cy="868" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="894" cy="902" r="4" fill="#fff" stroke="#b09a55"/>
+<text x="894" y="87.7" text-anchor="middle" font-size="12" fill="#666">17</text>
+<circle cx="928" cy="120" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="928" cy="154" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="928" cy="188" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="928" cy="222" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="928" cy="256" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="928" cy="290" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="928" cy="324" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="928" cy="358" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="928" cy="392" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="928" cy="426" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="928" cy="460" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="928" cy="494" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="928" cy="528" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="928" cy="562" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="928" cy="596" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="928" cy="630" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="928" cy="664" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="928" cy="698" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="928" cy="732" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="928" cy="766" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="928" cy="800" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="928" cy="834" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="928" cy="868" r="4" fill="#fff" stroke="#b09a55"/>
+<circle cx="928" cy="902" r="4" fill="#fff" stroke="#b09a55"/>
+<text x="928" y="87.7" text-anchor="middle" font-size="12" fill="#666">18</text>
+<rect x="535.3" y="133.6" width="377.4" height="754.8" rx="6" fill="#2b2b2b" fill-opacity="0.10" stroke="#333" stroke-dasharray="7 5" stroke-width="2"/>
+<text x="724.0" y="494" text-anchor="middle" font-size="19" fill="#333">ESP32-S3 dev board</text>
+<text x="724.0" y="518" text-anchor="middle" font-size="15" fill="#333">(plugs in here)</text>
+<text x="724.0" y="160" text-anchor="middle" font-size="14" fill="#333">antenna end</text>
+<text x="724.0" y="872" text-anchor="middle" font-size="14" fill="#333">USB sockets end</text>
+<rect x="541" y="141" width="26" height="740" fill="#222"/>
+<rect x="548" y="148" width="12" height="12" fill="#d8b23a"/>
+<text x="574" y="159" text-anchor="start" font-size="12" font-weight="normal" fill="#888">3V3</text>
+<rect x="548" y="182" width="12" height="12" fill="#d8b23a"/>
+<text x="574" y="193" text-anchor="start" font-size="12" font-weight="normal" fill="#888">3V3</text>
+<rect x="548" y="216" width="12" height="12" fill="#d8b23a"/>
+<text x="574" y="227" text-anchor="start" font-size="12" font-weight="normal" fill="#888">RST</text>
+<rect x="548" y="250" width="12" height="12" fill="#d8b23a"/>
+<text x="574" y="261" text-anchor="start" font-size="14" font-weight="bold" fill="#000">GPIO4</text>
+<rect x="548" y="284" width="12" height="12" fill="#d8b23a"/>
+<text x="574" y="295" text-anchor="start" font-size="14" font-weight="bold" fill="#000">GPIO5</text>
+<rect x="548" y="318" width="12" height="12" fill="#d8b23a"/>
+<text x="574" y="329" text-anchor="start" font-size="14" font-weight="bold" fill="#000">GPIO6</text>
+<rect x="548" y="352" width="12" height="12" fill="#d8b23a"/>
+<text x="574" y="363" text-anchor="start" font-size="14" font-weight="bold" fill="#000">GPIO7</text>
+<rect x="548" y="386" width="12" height="12" fill="#d8b23a"/>
+<text x="574" y="397" text-anchor="start" font-size="14" font-weight="bold" fill="#000">GPIO15</text>
+<rect x="548" y="420" width="12" height="12" fill="#d8b23a"/>
+<text x="574" y="431" text-anchor="start" font-size="14" font-weight="bold" fill="#000">GPIO16</text>
+<rect x="548" y="454" width="12" height="12" fill="#d8b23a"/>
+<text x="574" y="465" text-anchor="start" font-size="14" font-weight="bold" fill="#000">GPIO17</text>
+<rect x="548" y="488" width="12" height="12" fill="#d8b23a"/>
+<text x="574" y="499" text-anchor="start" font-size="14" font-weight="bold" fill="#000">GPIO18</text>
+<rect x="548" y="522" width="12" height="12" fill="#d8b23a"/>
+<text x="574" y="533" text-anchor="start" font-size="14" font-weight="bold" fill="#000">GPIO8</text>
+<rect x="548" y="556" width="12" height="12" fill="#d8b23a"/>
+<text x="574" y="567" text-anchor="start" font-size="12" font-weight="normal" fill="#888">GPIO3</text>
+<rect x="548" y="590" width="12" height="12" fill="#d8b23a"/>
+<text x="574" y="601" text-anchor="start" font-size="12" font-weight="normal" fill="#888">GPIO46</text>
+<rect x="548" y="624" width="12" height="12" fill="#d8b23a"/>
+<text x="574" y="635" text-anchor="start" font-size="14" font-weight="bold" fill="#000">GPIO9</text>
+<rect x="548" y="658" width="12" height="12" fill="#d8b23a"/>
+<text x="574" y="669" text-anchor="start" font-size="14" font-weight="bold" fill="#000">GPIO10</text>
+<rect x="548" y="692" width="12" height="12" fill="#d8b23a"/>
+<text x="574" y="703" text-anchor="start" font-size="12" font-weight="normal" fill="#888">GPIO11</text>
+<rect x="548" y="726" width="12" height="12" fill="#d8b23a"/>
+<text x="574" y="737" text-anchor="start" font-size="12" font-weight="normal" fill="#888">GPIO12</text>
+<rect x="548" y="760" width="12" height="12" fill="#d8b23a"/>
+<text x="574" y="771" text-anchor="start" font-size="12" font-weight="normal" fill="#888">GPIO13</text>
+<rect x="548" y="794" width="12" height="12" fill="#d8b23a"/>
+<text x="574" y="805" text-anchor="start" font-size="12" font-weight="normal" fill="#888">GPIO14</text>
+<rect x="548" y="828" width="12" height="12" fill="#d8b23a"/>
+<text x="574" y="839" text-anchor="start" font-size="12" font-weight="normal" fill="#888">5V</text>
+<rect x="548" y="862" width="12" height="12" fill="#d8b23a"/>
+<text x="574" y="873" text-anchor="start" font-size="14" font-weight="bold" fill="#000">GND</text>
+<rect x="881" y="141" width="26" height="740" fill="#222"/>
+<rect x="888" y="148" width="12" height="12" fill="#d8b23a"/>
+<text x="874" y="159" text-anchor="end" font-size="12" font-weight="normal" fill="#888">GND</text>
+<rect x="888" y="182" width="12" height="12" fill="#d8b23a"/>
+<text x="874" y="193" text-anchor="end" font-size="12" font-weight="normal" fill="#888">TX</text>
+<rect x="888" y="216" width="12" height="12" fill="#d8b23a"/>
+<text x="874" y="227" text-anchor="end" font-size="12" font-weight="normal" fill="#888">RX</text>
+<rect x="888" y="250" width="12" height="12" fill="#d8b23a"/>
+<text x="874" y="261" text-anchor="end" font-size="12" font-weight="normal" fill="#888">GPIO1</text>
+<rect x="888" y="284" width="12" height="12" fill="#d8b23a"/>
+<text x="874" y="295" text-anchor="end" font-size="12" font-weight="normal" fill="#888">GPIO2</text>
+<rect x="888" y="318" width="12" height="12" fill="#d8b23a"/>
+<text x="874" y="329" text-anchor="end" font-size="12" font-weight="normal" fill="#888">GPIO42</text>
+<rect x="888" y="352" width="12" height="12" fill="#d8b23a"/>
+<text x="874" y="363" text-anchor="end" font-size="12" font-weight="normal" fill="#888">GPIO41</text>
+<rect x="888" y="386" width="12" height="12" fill="#d8b23a"/>
+<text x="874" y="397" text-anchor="end" font-size="12" font-weight="normal" fill="#888">GPIO40</text>
+<rect x="888" y="420" width="12" height="12" fill="#d8b23a"/>
+<text x="874" y="431" text-anchor="end" font-size="12" font-weight="normal" fill="#888">GPIO39</text>
+<rect x="888" y="454" width="12" height="12" fill="#d8b23a"/>
+<text x="874" y="465" text-anchor="end" font-size="12" font-weight="normal" fill="#888">GPIO38</text>
+<rect x="888" y="488" width="12" height="12" fill="#d8b23a"/>
+<text x="874" y="499" text-anchor="end" font-size="12" font-weight="normal" fill="#888">GPIO37</text>
+<rect x="888" y="522" width="12" height="12" fill="#d8b23a"/>
+<text x="874" y="533" text-anchor="end" font-size="12" font-weight="normal" fill="#888">GPIO36</text>
+<rect x="888" y="556" width="12" height="12" fill="#d8b23a"/>
+<text x="874" y="567" text-anchor="end" font-size="12" font-weight="normal" fill="#888">GPIO35</text>
+<rect x="888" y="590" width="12" height="12" fill="#d8b23a"/>
+<text x="874" y="601" text-anchor="end" font-size="12" font-weight="normal" fill="#888">GPIO0</text>
+<rect x="888" y="624" width="12" height="12" fill="#d8b23a"/>
+<text x="874" y="635" text-anchor="end" font-size="12" font-weight="normal" fill="#888">GPIO45</text>
+<rect x="888" y="658" width="12" height="12" fill="#d8b23a"/>
+<text x="874" y="669" text-anchor="end" font-size="12" font-weight="normal" fill="#888">GPIO48</text>
+<rect x="888" y="692" width="12" height="12" fill="#d8b23a"/>
+<text x="874" y="703" text-anchor="end" font-size="12" font-weight="normal" fill="#888">GPIO47</text>
+<rect x="888" y="726" width="12" height="12" fill="#d8b23a"/>
+<text x="874" y="737" text-anchor="end" font-size="12" font-weight="normal" fill="#888">GPIO21</text>
+<rect x="888" y="760" width="12" height="12" fill="#d8b23a"/>
+<text x="874" y="771" text-anchor="end" font-size="12" font-weight="normal" fill="#888">GPIO20</text>
+<rect x="888" y="794" width="12" height="12" fill="#d8b23a"/>
+<text x="874" y="805" text-anchor="end" font-size="12" font-weight="normal" fill="#888">GPIO19</text>
+<rect x="888" y="828" width="12" height="12" fill="#d8b23a"/>
+<text x="874" y="839" text-anchor="end" font-size="12" font-weight="normal" fill="#888">GND</text>
+<rect x="888" y="862" width="12" height="12" fill="#d8b23a"/>
+<text x="874" y="873" text-anchor="end" font-size="12" font-weight="normal" fill="#888">GND</text>
+<text x="554" y="908" text-anchor="middle" font-size="13">socket strip 1x22</text>
+<text x="894" y="908" text-anchor="middle" font-size="13">socket strip 1x22</text>
+<line x1="384" y1="256" x2="520" y2="256" stroke="#888" stroke-width="3"/>
+<rect x="410" y="245" width="84" height="22" rx="9" fill="#f3e3c0" stroke="#c0392b" stroke-width="3"/>
+<text x="452" y="261" text-anchor="middle" font-size="14" font-weight="bold" fill="#c0392b">510 Ω</text>
+<line x1="520" y1="256" x2="554" y2="256" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
+<circle cx="384" cy="256" r="5" fill="#666"/><circle cx="520" cy="256" r="5" fill="#666"/>
+<line x1="384" y1="290" x2="520" y2="290" stroke="#888" stroke-width="3"/>
+<rect x="410" y="279" width="84" height="22" rx="9" fill="#f3e3c0" stroke="#c0392b" stroke-width="3"/>
+<text x="452" y="295" text-anchor="middle" font-size="14" font-weight="bold" fill="#c0392b">1 k Ω</text>
+<line x1="520" y1="290" x2="554" y2="290" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
+<circle cx="384" cy="290" r="5" fill="#666"/><circle cx="520" cy="290" r="5" fill="#666"/>
+<line x1="384" y1="324" x2="520" y2="324" stroke="#888" stroke-width="3"/>
+<rect x="410" y="313" width="84" height="22" rx="9" fill="#f3e3c0" stroke="#c0392b" stroke-width="3"/>
+<text x="452" y="329" text-anchor="middle" font-size="14" font-weight="bold" fill="#c0392b">2 k Ω</text>
+<line x1="520" y1="324" x2="554" y2="324" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
+<circle cx="384" cy="324" r="5" fill="#666"/><circle cx="520" cy="324" r="5" fill="#666"/>
+<line x1="384" y1="358" x2="520" y2="358" stroke="#888" stroke-width="3"/>
+<rect x="410" y="347" width="84" height="22" rx="9" fill="#f3e3c0" stroke="#1e8449" stroke-width="3"/>
+<text x="452" y="363" text-anchor="middle" font-size="14" font-weight="bold" fill="#1e8449">510 Ω</text>
+<line x1="520" y1="358" x2="554" y2="358" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
+<circle cx="384" cy="358" r="5" fill="#666"/><circle cx="520" cy="358" r="5" fill="#666"/>
+<line x1="384" y1="392" x2="520" y2="392" stroke="#888" stroke-width="3"/>
+<rect x="410" y="381" width="84" height="22" rx="9" fill="#f3e3c0" stroke="#1e8449" stroke-width="3"/>
+<text x="452" y="397" text-anchor="middle" font-size="14" font-weight="bold" fill="#1e8449">1 k Ω</text>
+<line x1="520" y1="392" x2="554" y2="392" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
+<circle cx="384" cy="392" r="5" fill="#666"/><circle cx="520" cy="392" r="5" fill="#666"/>
+<line x1="384" y1="426" x2="520" y2="426" stroke="#888" stroke-width="3"/>
+<rect x="410" y="415" width="84" height="22" rx="9" fill="#f3e3c0" stroke="#1e8449" stroke-width="3"/>
+<text x="452" y="431" text-anchor="middle" font-size="14" font-weight="bold" fill="#1e8449">2 k Ω</text>
+<line x1="520" y1="426" x2="554" y2="426" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
+<circle cx="384" cy="426" r="5" fill="#666"/><circle cx="520" cy="426" r="5" fill="#666"/>
+<line x1="384" y1="460" x2="520" y2="460" stroke="#888" stroke-width="3"/>
+<rect x="410" y="449" width="84" height="22" rx="9" fill="#f3e3c0" stroke="#1f5fa8" stroke-width="3"/>
+<text x="452" y="465" text-anchor="middle" font-size="14" font-weight="bold" fill="#1f5fa8">510 Ω</text>
+<line x1="520" y1="460" x2="554" y2="460" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
+<circle cx="384" cy="460" r="5" fill="#666"/><circle cx="520" cy="460" r="5" fill="#666"/>
+<line x1="384" y1="494" x2="520" y2="494" stroke="#888" stroke-width="3"/>
+<rect x="410" y="483" width="84" height="22" rx="9" fill="#f3e3c0" stroke="#1f5fa8" stroke-width="3"/>
+<text x="452" y="499" text-anchor="middle" font-size="14" font-weight="bold" fill="#1f5fa8">1 k Ω</text>
+<line x1="520" y1="494" x2="554" y2="494" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
+<circle cx="384" cy="494" r="5" fill="#666"/><circle cx="520" cy="494" r="5" fill="#666"/>
+<line x1="384" y1="528" x2="520" y2="528" stroke="#888" stroke-width="3"/>
+<rect x="410" y="517" width="84" height="22" rx="9" fill="#f3e3c0" stroke="#1f5fa8" stroke-width="3"/>
+<text x="452" y="533" text-anchor="middle" font-size="14" font-weight="bold" fill="#1f5fa8">2 k Ω</text>
+<line x1="520" y1="528" x2="554" y2="528" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
+<circle cx="384" cy="528" r="5" fill="#666"/><circle cx="520" cy="528" r="5" fill="#666"/>
+<line x1="384" y1="630" x2="520" y2="630" stroke="#888" stroke-width="3"/>
+<rect x="410" y="619" width="84" height="22" rx="9" fill="#f3e3c0" stroke="#555" stroke-width="3"/>
+<text x="452" y="635" text-anchor="middle" font-size="14" font-weight="bold" fill="#555">100 Ω</text>
+<line x1="520" y1="630" x2="554" y2="630" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
+<circle cx="384" cy="630" r="5" fill="#666"/><circle cx="520" cy="630" r="5" fill="#666"/>
+<line x1="384" y1="664" x2="520" y2="664" stroke="#888" stroke-width="3"/>
+<rect x="410" y="653" width="84" height="22" rx="9" fill="#f3e3c0" stroke="#555" stroke-width="3"/>
+<text x="452" y="669" text-anchor="middle" font-size="14" font-weight="bold" fill="#555">100 Ω</text>
+<line x1="520" y1="664" x2="554" y2="664" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
+<circle cx="384" cy="664" r="5" fill="#666"/><circle cx="520" cy="664" r="5" fill="#666"/>
+<rect x="337" y="243" width="26" height="468" fill="#222"/>
+<rect x="344" y="250" width="12" height="12" fill="#d8b23a"/>
+<rect x="344" y="284" width="12" height="12" fill="#d8b23a"/>
+<rect x="344" y="318" width="12" height="12" fill="#d8b23a"/>
+<rect x="344" y="352" width="12" height="12" fill="#d8b23a"/>
+<rect x="344" y="386" width="12" height="12" fill="#d8b23a"/>
+<rect x="344" y="420" width="12" height="12" fill="#d8b23a"/>
+<rect x="344" y="454" width="12" height="12" fill="#d8b23a"/>
+<rect x="344" y="488" width="12" height="12" fill="#d8b23a"/>
+<rect x="344" y="522" width="12" height="12" fill="#d8b23a"/>
+<rect x="344" y="556" width="12" height="12" fill="#d8b23a"/>
+<rect x="344" y="590" width="12" height="12" fill="#d8b23a"/>
+<rect x="344" y="624" width="12" height="12" fill="#d8b23a"/>
+<rect x="344" y="658" width="12" height="12" fill="#d8b23a"/>
+<rect x="344" y="692" width="12" height="12" fill="#d8b23a"/>
+<line x1="384" y1="256" x2="384" y2="324" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
+<circle cx="384" cy="256" r="5" fill="#666"/>
+<circle cx="384" cy="290" r="5" fill="#666"/>
+<circle cx="384" cy="324" r="5" fill="#666"/>
+<line x1="350" y1="256" x2="384" y2="256" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
+<line x1="330" y1="256" x2="308" y2="256" stroke="#c0392b" stroke-width="2"/>
+<text x="302" y="261" text-anchor="end" font-size="15" font-weight="bold" fill="#c0392b">RED  →  VGA pin 1</text>
+<line x1="384" y1="358" x2="384" y2="426" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
+<circle cx="384" cy="358" r="5" fill="#666"/>
+<circle cx="384" cy="392" r="5" fill="#666"/>
+<circle cx="384" cy="426" r="5" fill="#666"/>
+<line x1="350" y1="358" x2="384" y2="358" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
+<line x1="330" y1="358" x2="308" y2="358" stroke="#1e8449" stroke-width="2"/>
+<text x="302" y="363" text-anchor="end" font-size="15" font-weight="bold" fill="#1e8449">GREEN  →  VGA pin 2</text>
+<line x1="384" y1="460" x2="384" y2="528" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
+<circle cx="384" cy="460" r="5" fill="#666"/>
+<circle cx="384" cy="494" r="5" fill="#666"/>
+<circle cx="384" cy="528" r="5" fill="#666"/>
+<line x1="350" y1="460" x2="384" y2="460" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
+<line x1="330" y1="460" x2="308" y2="460" stroke="#1f5fa8" stroke-width="2"/>
+<text x="302" y="465" text-anchor="end" font-size="15" font-weight="bold" fill="#1f5fa8">BLUE  →  VGA pin 3</text>
+<line x1="350" y1="630" x2="384" y2="630" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
+<line x1="330" y1="630" x2="308" y2="630" stroke="#333" stroke-width="2"/>
+<text x="302" y="635" text-anchor="end" font-size="15" font-weight="bold" fill="#333">HSYNC  →  VGA pin 13</text>
+<line x1="350" y1="664" x2="384" y2="664" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
+<line x1="330" y1="664" x2="308" y2="664" stroke="#333" stroke-width="2"/>
+<text x="302" y="669" text-anchor="end" font-size="15" font-weight="bold" fill="#333">VSYNC  →  VGA pin 14</text>
+<line x1="520" y1="868" x2="554" y2="868" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
+<polyline points="520,868 384,868 384,698" fill="none" stroke="#111" stroke-width="5" stroke-linejoin="round"/>
+<circle cx="384" cy="698" r="5" fill="#111"/><circle cx="520" cy="868" r="5" fill="#111"/>
+<line x1="350" y1="698" x2="384" y2="698" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
+<line x1="330" y1="698" x2="308" y2="698" stroke="#000" stroke-width="2"/>
+<text x="302" y="703" text-anchor="end" font-size="15" font-weight="bold" fill="#000">GND  →  VGA pins 5 6 7 8 10</text>
+<text x="452" y="890" text-anchor="middle" font-size="13">ground wire</text>
+<text x="302" y="222" text-anchor="end" font-size="13" fill="#444">pin header 1x14, wires to the VGA socket</text>
+<line x1="60" y1="972" x2="100" y2="972" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/><text x="112" y="977" font-size="15">solder bridge between neighbouring holes, on the underside</text>
+<line x1="60" y1="1002" x2="100" y2="1002" stroke="#111" stroke-width="5"/><text x="112" y="1007" font-size="15">insulated ground wire, on the underside (the only wire on the board)</text>
+<text x="60" y="1048" font-size="15">Each colour has three resistors joined at their left ends: 510 Ω on the top bit, 1 kΩ on the middle bit, 2 kΩ on the low bit.</text>
+<text x="60" y="1074" font-size="15">256 colours: red 3 bits, green 3 bits, blue 2 bits. 64 colours: 2 bits per colour. The spare low pin of a colour repeats its top bit.</text>
+<text x="60" y="1100" font-size="15">The rows of GPIO3 and GPIO46 stay empty. The right socket strip is drawn 10 holes from the left one; if your board is 9 apart, use column 16.</text>
+<text x="60" y="1126" font-size="15">Pin names follow the ESP32-S3-DevKitC-1 layout. Compare them with the labels printed on your board before soldering.</text>
+<metadata><c2pa:manifest>AAAWgmp1bWIAAAAeanVtZGMycGEAEQAQgAAAqgA4m3EDYzJwYQAAABZcanVtYgAAAEdqdW1kYzJtYQARABCAAACqADibcQN1cm46YzJwYTo3MTg5MWVhNi04NDAxLTQxODAtYTE1OS02NDk4ZmUyMjE5YTkAAAADl2p1bWIAAAApanVtZGMyYXMAEQAQgAAAqgA4m3EDYzJwYS5hc3NlcnRpb25zAAAAALxqdW1iAAAARGp1bWRjYm9yABEAEIAAAKoAOJtxE2MycGEuaW5ncmVkaWVudC52MwAAAAAYYzJzaDTYp7KtGoVwdC9/5kuMtN8AAABwY2JvcqNpZGM6Zm9ybWF0bWltYWdlL3N2Zyt4bWxqaW5zdGFuY2VJRHgseG1wOmlpZDpkODk5OWQzNC03YjM2LTQ3NmItYjAyZi02ODM3M2E0NjgxMzJscmVsYXRpb25zaGlwaHBhcmVudE9mAAAB4mp1bWIAAABBanVtZGNib3IAEQAQgAAAqgA4m3ETYzJwYS5hY3Rpb25zLnYyAAAAABhjMnNo4ag3CDd2jW+D1V71S56gJwAAAZljYm9yomdhY3Rpb25zgqJmYWN0aW9ua2MycGEub3BlbmVkanBhcmFtZXRlcnOha2luZ3JlZGllbnRzgaJjdXJseC1zZWxmI2p1bWJmPWMycGEuYXNzZXJ0aW9ucy9jMnBhLmluZ3JlZGllbnQudjNkaGFzaFggB79nJMVvBC+QWEmSEi/b1HnFxCeENOPcGwNHAJwRKaykZmFjdGlvbngdY29tLmFudGhyb3BpYy5jbGF1ZGUucHJvdmlkZWRqcGFyYW1ldGVyc6F4H2NvbS5hbnRocm9waWMub3JpZ2luLWNvbmZpZGVuY2VndW5rbm93bmtkZXNjcmlwdGlvbnhmQ2xhdWRlIHByb3ZpZGVkIHRoaXMgZmlsZSBhdCB0aGUgcmVxdWVzdCBvZiBhIHVzZXIgYW5kIG1heSBoYXZlIGNyZWF0ZWQgb3IgbW9kaWZpZWQgdGhlIGZpbGUgY29udGVudHMubXNvZnR3YXJlQWdlbnShZG5hbWVmQ2xhdWRlcmFsbEFjdGlvbnNJbmNsdWRlZPUAAADIanVtYgAAAEBqdW1kY2JvcgARABCAAACqADibcRNjMnBhLmhhc2guZGF0YQAAAAAYYzJzaGXSC8RX0euDLnx0w2cHl1MAAACAY2JvcqVjYWxnZnNoYTI1NmNwYWRMAAAAAAAAAAAAAAAAZGhhc2hYIH16bOnl5tgmpHVSMqEiVflKA1acAI076rx2XPSkZZoYZG5hbWVuanVtYmYgbWFuaWZlc3RqZXhjbHVzaW9uc4GiZXN0YXJ0GYkdZmxlbmd0aBkeBAAAAj5qdW1iAAAAJ2p1bWRjMmNsABEAEIAAAKoAOJtxA2MycGEuY2xhaW0udjIAAAACD2Nib3KlY2FsZ2ZzaGEyNTZpc2lnbmF0dXJleE1zZWxmI2p1bWJmPS9jMnBhL3VybjpjMnBhOjcxODkxZWE2LTg0MDEtNDE4MC1hMTU5LTY0OThmZTIyMTlhOS9jMnBhLnNpZ25hdHVyZWppbnN0YW5jZUlEeCx4bXA6aWlkOmVlMmIzZjM5LTI1YjgtNDI5Ny05NmQzLTVmM2Y0YmZmMGRlMXJjcmVhdGVkX2Fzc2VydGlvbnODomN1cmx4LXNlbGYjanVtYmY9YzJwYS5hc3NlcnRpb25zL2MycGEuaW5ncmVkaWVudC52M2RoYXNoWCAHv2ckxW8EL5BYSZISL9vUecXEJ4Q049wbA0cAnBEprKJjdXJseCpzZWxmI2p1bWJmPWMycGEuYXNzZXJ0aW9ucy9jMnBhLmFjdGlvbnMudjJkaGFzaFggDZXcsj5Wn2Tu7ENSo1P9RBBLeKJjslxfNBGTlNpRpxCiY3VybHgpc2VsZiNqdW1iZj1jMnBhLmFzc2VydGlvbnMvYzJwYS5oYXNoLmRhdGFkaGFzaFggTc9iR6h/gK278xYM81geii9a//5ZFwgUzL426rSLW8d0Y2xhaW1fZ2VuZXJhdG9yX2luZm+jZG5hbWVvQW50aHJvcGljIEZpbGVzZ3ZlcnNpb25lMS4wLjBrc3BlY1ZlcnNpb25lMi40LjAAABA4anVtYgAAAChqdW1kYzJjcwARABCAAACqADibcQNjMnBhLnNpZ25hdHVyZQAAABAIY2JvctKEWQISogEmGCFZAgowggIGMIIBjaADAgECAhRA5aAK7sI50L64g/oGQgU9Z1UTADAKBggqhkjOPQQDAzBJMRcwFQYDVQQKEw5BbnRocm9waWMsIFBCQzEuMCwGA1UEAxMlQW50aHJvcGljIENvbnRlbnQgQ3JlZGVudGlhbHMgUm9vdCBDQTAeFw0yNjA4MDcxODQzNTZaFw0yODA4MDYxOTQzNTZaMEQxFzAVBgNVBAoTDkFudGhyb3BpYywgUEJDMSkwJwYDVQQDEyBBbnRocm9waWMgQ2xhdWRlIENvbnRlbnQgU2lnbmluZzBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABJh6CmvLUBgFFNU0vUKlOVtE6djd17L5SuwX0LemFisBM3dkd/3cyjxFA3Qo5S46fX0/ihY0VZ7mfb9KF703t5OjWDBWMA4GA1UdDwEB/wQEAwIHgDAVBgNVHSUEDjAMBgorBgEEAYPoXgIBMAwGA1UdEwEB/wQCMAAwHwYDVR0jBBgwFoAUzlHiBIFOZFsj+OPEz5o+nMHXXMIwCgYIKoZIzj0EAwMDZwAwZAIwMXMdFJ4BetLLVY7ORuE9noqbbAZOZn/aArXyTwFAZfKrPzxF2vPoJNf1+UCdg1XGAjBwX1zd9WGqYkqmL5SFqw1QySjr1zJfpJM9+1rdDwSPLMOPOjKuiXjoU/pUUeG9RwmhY3BhZFkNngAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPZYQBkjAIhteNVlidYAXJLmIHgEghsx06GZCr3F5afNTakm1Sb1lPsAovI5OTl4GbULFPxN6tFLkIDPDTDmHFep+fY=</c2pa:manifest></metadata></svg>

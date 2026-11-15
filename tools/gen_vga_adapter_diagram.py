@@ -1,0 +1,70 @@
+P=34; OX=350; OY=120; COLS=18; ROWS=24
+def x(c): return OX+(c-1)*P
+def y(r): return OY+(r-1)*P
+LC=7; RC=17; R0=2
+def hr(n): return y(n+R0-1)
+J1=["3V3","3V3","RST","GPIO4","GPIO5","GPIO6","GPIO7","GPIO15","GPIO16","GPIO17","GPIO18","GPIO8","GPIO3","GPIO46","GPIO9","GPIO10","GPIO11","GPIO12","GPIO13","GPIO14","5V","GND"]
+J3=["GND","TX","RX","GPIO1","GPIO2","GPIO42","GPIO41","GPIO40","GPIO39","GPIO38","GPIO37","GPIO36","GPIO35","GPIO0","GPIO45","GPIO48","GPIO47","GPIO21","GPIO20","GPIO19","GND","GND"]
+RED="#c0392b"; GRN="#1e8449"; BLU="#1f5fa8"; GRY="#555"
+slots={4:("510",RED),5:("1 k",RED),6:("2 k",RED),7:("510",GRN),8:("1 k",GRN),9:("2 k",GRN),10:("510",BLU),11:("1 k",BLU),12:("2 k",BLU),15:("100",GRY),16:("100",GRY)}
+chan=[("RED","VGA pin 1",RED,4,6),("GREEN","VGA pin 2",GRN,7,9),("BLUE","VGA pin 3",BLU,10,12)]
+W=x(COLS)+330; H=y(ROWS)+270
+o=[];a=o.append
+a(f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}" font-family="Helvetica,Arial,sans-serif">')
+a(f'<rect width="{W}" height="{H}" fill="#fff"/>')
+a(f'<text x="{W/2}" y="44" text-anchor="middle" font-size="25" font-weight="bold">VGA adapter: 256 colours, with 64-colour fallback (9 colour resistors)</text>')
+a(f'<text x="{W/2}" y="74" text-anchor="middle" font-size="17" fill="#444">5x7 cm perfboard (18 x 24 holes). Top view, component side, antenna end at the top.</text>')
+a(f'<rect x="{x(1)-P*0.7}" y="{y(1)-P*0.7}" width="{(COLS-1)*P+P*1.4}" height="{(ROWS-1)*P+P*1.4}" rx="10" fill="#e9d9a6" stroke="#8a7332" stroke-width="2"/>')
+for c in range(1,COLS+1):
+    for r in range(1,ROWS+1):
+        if 8<=c<=16 and 2<=r<=23: continue
+        a(f'<circle cx="{x(c)}" cy="{y(r)}" r="4" fill="#fff" stroke="#b09a55"/>')
+    a(f'<text x="{x(c)}" y="{y(1)-P*0.95}" text-anchor="middle" font-size="12" fill="#666">{c}</text>')
+a(f'<rect x="{x(LC)-P*0.55}" y="{hr(1)-P*0.6}" width="{(RC-LC)*P+P*1.1}" height="{21*P+P*1.2}" rx="6" fill="#2b2b2b" fill-opacity="0.10" stroke="#333" stroke-dasharray="7 5" stroke-width="2"/>')
+mx=(x(LC)+x(RC))/2
+a(f'<text x="{mx}" y="{hr(11)}" text-anchor="middle" font-size="19" fill="#333">ESP32-S3 dev board</text>')
+a(f'<text x="{mx}" y="{hr(11)+24}" text-anchor="middle" font-size="15" fill="#333">(plugs in here)</text>')
+a(f'<text x="{mx}" y="{hr(1)+6}" text-anchor="middle" font-size="14" fill="#333">antenna end</text>')
+a(f'<text x="{mx}" y="{hr(22)+4}" text-anchor="middle" font-size="14" fill="#333">USB sockets end</text>')
+for col,names,side in ((LC,J1,1),(RC,J3,-1)):
+    a(f'<rect x="{x(col)-13}" y="{hr(1)-13}" width="26" height="{21*P+26}" fill="#222"/>')
+    for i,n in enumerate(names,1):
+        a(f'<rect x="{x(col)-6}" y="{hr(i)-6}" width="12" height="12" fill="#d8b23a"/>')
+        used = col==LC and (i in slots or i==22)
+        a(f'<text x="{x(col)+side*20}" y="{hr(i)+5}" text-anchor="{"start" if side==1 else "end"}" font-size="{14 if used else 12}" font-weight="{"bold" if used else "normal"}" fill="{"#000" if used else "#888"}">{n}</text>')
+a(f'<text x="{x(LC)}" y="{hr(22)+40}" text-anchor="middle" font-size="13">socket strip 1x22</text>')
+a(f'<text x="{x(RC)}" y="{hr(22)+40}" text-anchor="middle" font-size="13">socket strip 1x22</text>')
+for pin,(val,col) in slots.items():
+    yy=hr(pin)
+    a(f'<line x1="{x(2)}" y1="{yy}" x2="{x(6)}" y2="{yy}" stroke="#888" stroke-width="3"/>')
+    a(f'<rect x="{x(3)-8}" y="{yy-11}" width="{2*P+16}" height="22" rx="9" fill="#f3e3c0" stroke="{col}" stroke-width="3"/>')
+    a(f'<text x="{x(4)}" y="{yy+5}" text-anchor="middle" font-size="14" font-weight="bold" fill="{col}">{val} Ω</text>')
+    a(f'<line x1="{x(6)}" y1="{yy}" x2="{x(7)}" y2="{yy}" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>')
+    a(f'<circle cx="{x(2)}" cy="{yy}" r="5" fill="#666"/><circle cx="{x(6)}" cy="{yy}" r="5" fill="#666"/>')
+a(f'<rect x="{x(1)-13}" y="{hr(4)-13}" width="26" height="{13*P+26}" fill="#222"/>')
+for i in range(4,18): a(f'<rect x="{x(1)-6}" y="{hr(i)-6}" width="12" height="12" fill="#d8b23a"/>')
+def out(r,lab,col):
+    a(f'<line x1="{x(1)}" y1="{hr(r)}" x2="{x(2)}" y2="{hr(r)}" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>')
+    a(f'<line x1="{x(1)-20}" y1="{hr(r)}" x2="{x(1)-42}" y2="{hr(r)}" stroke="{col}" stroke-width="2"/>')
+    a(f'<text x="{x(1)-48}" y="{hr(r)+5}" text-anchor="end" font-size="15" font-weight="bold" fill="{col}">{lab}</text>')
+for name,vp,col,lo,hi in chan:
+    a(f'<line x1="{x(2)}" y1="{hr(lo)}" x2="{x(2)}" y2="{hr(hi)}" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>')
+    for r in range(lo,hi+1): a(f'<circle cx="{x(2)}" cy="{hr(r)}" r="5" fill="#666"/>')
+    out(lo,f"{name}  →  {vp}",col)
+out(15,"HSYNC  →  VGA pin 13","#333"); out(16,"VSYNC  →  VGA pin 14","#333")
+a(f'<line x1="{x(6)}" y1="{hr(22)}" x2="{x(7)}" y2="{hr(22)}" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>')
+a(f'<polyline points="{x(6)},{hr(22)} {x(2)},{hr(22)} {x(2)},{hr(17)}" fill="none" stroke="#111" stroke-width="5" stroke-linejoin="round"/>')
+a(f'<circle cx="{x(2)}" cy="{hr(17)}" r="5" fill="#111"/><circle cx="{x(6)}" cy="{hr(22)}" r="5" fill="#111"/>')
+out(17,"GND  →  VGA pins 5 6 7 8 10","#000")
+a(f'<text x="{x(4)}" y="{hr(22)+22}" text-anchor="middle" font-size="13">ground wire</text>')
+a(f'<text x="{x(1)-48}" y="{hr(4)-34}" text-anchor="end" font-size="13" fill="#444">pin header 1x14, wires to the VGA socket</text>')
+ly=y(ROWS)+70
+a(f'<line x1="60" y1="{ly}" x2="100" y2="{ly}" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/><text x="112" y="{ly+5}" font-size="15">solder bridge between neighbouring holes, on the underside</text>')
+a(f'<line x1="60" y1="{ly+30}" x2="100" y2="{ly+30}" stroke="#111" stroke-width="5"/><text x="112" y="{ly+35}" font-size="15">insulated ground wire, on the underside (the only wire on the board)</text>')
+for k,t in enumerate(["Each colour has three resistors joined at their left ends: 510 Ω on the top bit, 1 kΩ on the middle bit, 2 kΩ on the low bit.",
+ "256 colours: red 3 bits, green 3 bits, blue 2 bits. 64 colours: 2 bits per colour. The spare low pin of a colour repeats its top bit.",
+ "The rows of GPIO3 and GPIO46 stay empty. The right socket strip is drawn 10 holes from the left one; if your board is 9 apart, use column 16.",
+ "Pin names follow the ESP32-S3-DevKitC-1 layout. Compare them with the labels printed on your board before soldering."]):
+    a(f'<text x="60" y="{ly+76+k*26}" font-size="15">{t}</text>')
+a('</svg>')
+open('docs/hardware/vga-adapter-256.svg','w').write('\n'.join(o))
