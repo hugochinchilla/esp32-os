@@ -20,7 +20,9 @@ Last updated: 2026-11-15.
 | Debug link | UART0 through the USB-C socket marked UART | Leaves the chip's own USB port free for a keyboard and mouse |
 | Keyboard and mouse | USB host on GPIO19 and GPIO20, later. Until then, input is injected over serial or the network | No USB breakout boards on hand yet |
 | Two USB devices | Through a hub (external, or a hub module on the board), or one receiver shared by keyboard and mouse | The chip has a single USB port |
-| Clock | NTP when online. Optional battery-backed clock chip on I2C (GPIO1, GPIO2) | The chip has no battery input for its own clock |
+| Clock | NTP when online. A battery-backed clock chip (I2C on GPIO1, GPIO2) only if it can be built from parts already at home | The chip has no battery input for its own clock; no new purchases |
+| No purchased modules | Nothing is bought for this project. Extras are built from parts on hand or not at all | Owner's choice |
+| Networking order | 1. Serial only, for debugging and screen dumps. 2. Wi-Fi, once a basic OS boots. 3. Later: network over the second USB-C socket, and dial-up over serial | Wi-Fi leaves the serial port free for debugging while the system is in use |
 | First code | A VGA test program in ESP-IDF (C) showing 64-colour and 256-colour test cards | Proves the wiring before anything else is built on it |
 
 ## Rejected
@@ -32,6 +34,7 @@ Last updated: 2026-11-15.
 | An "upgradeable" 15-bit board with empty resistor slots | Replaced by the 9-resistor board |
 | USB ports made from ordinary GPIO pins in software | Only works with slow devices and its timing would compete with the video signal |
 | Powering a keyboard from the dev board's own USB-C socket | That socket cannot supply 5 V to a device |
+| Ethernet module (W5500, ENC28J60) | Would have to be bought |
 | LVGL for the desktop | No overlapping window manager, and its widgets are built for touch panels |
 
 ## Still open
@@ -47,6 +50,19 @@ Last updated: 2026-11-15.
 | Clock chip | DS3231 module, another I2C chip | DS3231 |
 | Look and name | 95 style, 98 style, a mix; name of the OS | Open. All art must be original or freely licensed |
 | Pixel clock | 25.175 MHz (fractional divider), 25, 24 or 26.67 MHz | Pick on the bench with the test program |
+
+## Ideas kept for later
+
+Not scheduled. To be revisited once a basic OS boots.
+
+| Idea | How it would work | Cost |
+| --- | --- | --- |
+| Dial-up over serial | PPP from the OS to a PPP server (`pppd`) on the connected computer, which shares its internet connection. About 90 KB/s at 921,600 baud; could be throttled to 56k and given a Dial-Up Networking window that "dials" | No hardware, no pins. Needs a one-time setup on the computer; awkward on Windows |
+| Dial-up and debugging on the same serial port | The debug protocol is already framed packets, so network traffic travels as one more packet type. The PC tool splits the two and hands the network side to `pppd` through a virtual serial port | No hardware. More work in the PC tool |
+| Network over USB | The second USB-C socket presents the board to the computer as a network card. Much faster than serial | Uses the port reserved for the keyboard and mouse, so not both at once |
+| Second serial port | A UART on two spare pins for dial-up, separate from the debug link | Needs a USB-serial adapter |
+| Wired Ethernet | SPI module with an RJ45 socket, 5 pins | Rejected for now: a module would have to be bought |
+| Battery-backed clock | I2C clock chip with a coin cell on GPIO1 and GPIO2 | Only if parts are already at home |
 
 ## To confirm on the bench
 
@@ -64,4 +80,5 @@ Last updated: 2026-11-15.
 5. Desktop shell, file system and file manager.
 6. Text editor, then image viewer.
 7. Wi-Fi, NTP, remote display.
-8. Clock chip, SD card, USB host board.
+8. USB host board, SD card.
+9. Network over USB and dial-up over serial.
