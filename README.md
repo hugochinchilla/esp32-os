@@ -41,12 +41,15 @@ resistor values and build notes.
 | `docs/hardware/` | VGA adapter pin map, resistor values and board diagram |
 | `firmware/vga-test/` | ESP-IDF test program for the VGA wiring |
 | `ci/` | GitHub Actions workflow to copy into `.github/workflows/` |
-| `tools/` | Script that regenerates the board diagram |
+| `tools/` | Setup script for Arch-based systems, and the script that regenerates the board diagram |
 
 ## Building the VGA test
 
 Needs [ESP-IDF](https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/get-started/)
-v5.5.
+v5.5. On Arch-based systems (including Omarchy), `tools/setup-arch.sh` installs
+it together with the build tools and gives your user access to serial ports
+without sudo. Log out and back in afterwards, then run `get_idf` in each new
+terminal.
 
 ```sh
 cd firmware/vga-test
