@@ -45,6 +45,17 @@ greys.
 | 14 | VSYNC |
 | 5, 6, 7, 8, 10 | Ground |
 
+### Wire colours of the cut VGA cable in use
+
+Wire colours are not standardised. These were found with a multimeter on the
+cable used for this build and apply to that cable only.
+
+| Wire colour | Connector pin | Signal |
+| --- | --- | --- |
+| Brown | 13 | HSYNC |
+| Yellow | 14 | VSYNC |
+| White | 10 | Ground |
+
 ## Reserved and spare pins
 
 | Use | GPIO |
