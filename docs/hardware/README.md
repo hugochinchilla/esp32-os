@@ -53,7 +53,9 @@ greys.
 | Clock chip on I2C: SDA, SCL | 1, 2 |
 | SD card: CLK, CMD, D0 | 12, 11, 13 |
 | USB power switch enable and fault, optional | 14, 21 |
-| Spare | 38 to 42, 47, 48 (one of 38 or 48 is the on-board LED) |
+| Audio out to a 3.5 mm jack (later) | 42 |
+| Beeper (later) | 41 |
+| Spare | 38, 39, 40, 47, 48 (one of 38 or 48 is the on-board LED) |
 | Not used: boot strapping pins | 0, 3, 45, 46 |
 | Not available: flash and PSRAM | 26 to 37 |
 
@@ -67,3 +69,18 @@ greys.
   a pin header; wire it to a solder-cup socket, a breakout or a cut cable.
 - 1/4 W resistors are far more than needed (the worst case is about 16 mW).
   Prefer 1% parts.
+
+## Audio output (planned, not built)
+
+```
+GPIO42 ---[ 1 kΩ ]---+---||---> jack tip and ring
+                     |  1 to 10 µF
+                  [100 nF]
+                     |
+GND -----------------+--------> jack sleeve
+```
+
+The resistor and the 100 nF capacitor smooth the pin's fast switching into an
+audio signal. The series capacitor removes the DC offset. The output suits
+amplified speakers or a line input, not a bare speaker. The beeper connects
+between GPIO41 and ground.

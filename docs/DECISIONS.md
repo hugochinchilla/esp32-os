@@ -61,6 +61,7 @@ Not scheduled. To be revisited once a basic OS boots.
 | Dial-up and debugging on the same serial port | The debug protocol is already framed packets, so network traffic travels as one more packet type. The PC tool splits the two and hands the network side to `pppd` through a virtual serial port | No hardware. More work in the PC tool |
 | Network over USB | The second USB-C socket presents the board to the computer as a network card. Much faster than serial | Uses the port reserved for the keyboard and mouse, so not both at once |
 | Second serial port | A UART on two spare pins for dial-up, separate from the debug link | Needs a USB-serial adapter |
+| Sound | One pin through a 1 kΩ resistor and a 100 nF capacitor to a 3.5 mm jack for amplified speakers (GPIO42), plus a beeper on a second pin (GPIO41). Wanted for a boot chime and, above all, dial-up modem sounds. The chip generates the signal in hardware, separate from the video output | Parts already at home. Sounds must be original or synthesized: no Microsoft chime, no copied recordings |
 | Wired Ethernet | SPI module with an RJ45 socket, 5 pins | Rejected for now: a module would have to be bought |
 | Battery-backed clock | I2C clock chip with a coin cell on GPIO1 and GPIO2 | Only if parts are already at home |
 
