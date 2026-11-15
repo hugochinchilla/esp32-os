@@ -24,6 +24,9 @@ Last updated: 2026-11-15.
 | No purchased modules | Nothing is bought for this project. Extras are built from parts on hand or not at all | Owner's choice |
 | Networking order | 1. Serial only, for debugging and screen dumps. 2. Wi-Fi, once a basic OS boots. 3. Later: network over the second USB-C socket, and dial-up over serial | Wi-Fi leaves the serial port free for debugging while the system is in use |
 | First code | A VGA test program in ESP-IDF (C) showing 64-colour and 256-colour test cards | Proves the wiring before anything else is built on it |
+| Code structure | Ports and adapters. The core (drawing, window manager, widgets, shell, apps) depends only on interfaces such as display, input, clock, storage, network and debug link. Adapters implement them for the ESP32, for a PC, and in memory for tests. Interfaces are coarse (framebuffer access, changed rectangles), never one call per pixel; the scanout interrupt sits below them | One seam gives host tests, a desktop that runs on a PC, and a small hardware-bound layer. Applies whichever language is chosen |
+| PC build | Yes. The core builds and runs on a PC | Follows from the code structure; lets the desktop be developed and tested without the board |
+| Testing | Three layers: unit tests of the core on the PC, test-first where practical; framebuffer snapshots compared with stored images; a small number of on-device tests through the serial debug protocol. Signal timing is checked on the bench, not by tests | Fast feedback for most of the code, and checks that can run without hardware |
 
 ## Rejected
 
@@ -46,7 +49,8 @@ Last updated: 2026-11-15.
 | How apps are delivered | Built into the firmware, or loadable from disk | Built in first, behind an app interface |
 | SD card in the first version | Yes, later, never | Later (pins are reserved) |
 | How two USB sockets are provided | External hub, hub module on the board, shared receiver | One socket now, space for a hub module |
-| A PC build of the desktop for testing | Yes, no | Yes |
+| A PC build of the desktop for testing | Yes, no | Decided: yes. See Decided |
+| How the PC build shows the screen | SDL window, image files only | Open |
 | Clock chip | DS3231 module, another I2C chip | DS3231 |
 | Look and name | 95 style, 98 style, a mix; name of the OS | Open. All art must be original or freely licensed |
 | Pixel clock | 25.175 MHz (fractional divider), 25, 24 or 26.67 MHz | Pick on the bench with the test program |
