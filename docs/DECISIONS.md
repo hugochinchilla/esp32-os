@@ -23,6 +23,7 @@ Last updated: 2026-11-15.
 | Clock | NTP when online. A battery-backed clock chip (I2C on GPIO1, GPIO2) only if it can be built from parts already at home | The chip has no battery input for its own clock; no new purchases |
 | No purchased modules | Nothing is bought for this project. Extras are built from parts on hand or not at all | Owner's choice |
 | Networking order | 1. Serial only, for debugging and screen dumps. 2. Wi-Fi, once a basic OS boots. 3. Later: network over the second USB-C socket, and dial-up over serial | Wi-Fi leaves the serial port free for debugging while the system is in use |
+| Language and base | C++ on ESP-IDF, with FreeRTOS underneath. Our own kernel layer (app model, app scheduling, messages, file system layer) sits on top of it | Every Espressif driver works directly, which carries the least risk for video, USB and Wi-Fi |
 | First code | A VGA test program in ESP-IDF (C) showing 64-colour and 256-colour test cards | Proves the wiring before anything else is built on it |
 | Code structure | Ports and adapters. The core (drawing, window manager, widgets, shell, apps) depends only on interfaces such as display, input, clock, storage, network and debug link. Adapters implement them for the ESP32, for a PC, and in memory for tests. Interfaces are coarse (framebuffer access, changed rectangles), never one call per pixel; the scanout interrupt sits below them | One seam gives host tests, a desktop that runs on a PC, and a small hardware-bound layer. Applies whichever language is chosen |
 | PC build | Yes. The core builds and runs on a PC | Follows from the code structure; lets the desktop be developed and tested without the board |
@@ -38,6 +39,7 @@ Last updated: 2026-11-15.
 | USB ports made from ordinary GPIO pins in software | Only works with slow devices and its timing would compete with the video signal |
 | Powering a keyboard from the dev board's own USB-C socket | That socket cannot supply 5 V to a device |
 | Ethernet module (W5500, ENC28J60) | Would have to be bought |
+| Writing our own kernel from scratch, without FreeRTOS | Would mean porting or rewriting Wi-Fi support, USB host, display and network code, and the chip cannot isolate apps from each other anyway |
 | LVGL for the desktop | No overlapping window manager, and its widgets are built for touch panels |
 
 ## Still open
@@ -45,7 +47,6 @@ Last updated: 2026-11-15.
 | Question | Options | Suggested |
 | --- | --- | --- |
 | Remote keyboard, mouse and screen for a person | VNC server, web page, debug tool only | VNC server |
-| Language and framework for the OS | ESP-IDF with C++, ESP-IDF with C, Rust | ESP-IDF with C++ |
 | How apps are delivered | Built into the firmware, or loadable from disk | Built in first, behind an app interface |
 | SD card in the first version | Yes, later, never | Later (pins are reserved) |
 | How two USB sockets are provided | External hub, hub module on the board, shared receiver | One socket now, space for a hub module |
@@ -67,6 +68,7 @@ Not scheduled. To be revisited once a basic OS boots.
 | Network over USB | The second USB-C socket presents the board to the computer as a network card. Much faster than serial | Uses the port reserved for the keyboard and mouse, so not both at once |
 | Second serial port | A UART on two spare pins for dial-up, separate from the debug link | Needs a USB-serial adapter |
 | Sound | One pin through a 1 kΩ resistor and a 100 nF capacitor to a 3.5 mm jack for amplified speakers (GPIO42), plus a beeper on a second pin (GPIO41). Wanted for a boot chime and, above all, dial-up modem sounds. The chip generates the signal in hardware, separate from the video output | Parts already at home. Sounds must be original or synthesized: no Microsoft chime, no copied recordings |
+| Port to Rust | Rewrite the OS in Rust as a later adventure, either on ESP-IDF or without it | A full rewrite. Check the state of Rust's display and USB host support for this chip first |
 | Wired Ethernet | SPI module with an RJ45 socket, 5 pins | Rejected for now: a module would have to be bought |
 | Battery-backed clock | I2C clock chip with a coin cell on GPIO1 and GPIO2 | Only if parts are already at home |
 
