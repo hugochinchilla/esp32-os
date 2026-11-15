@@ -8,7 +8,9 @@ in the same change whenever a decision is made or reversed.
   Present options with a recommendation.
 - Hardware facts (pin map, resistor values) live in `docs/hardware/README.md`.
   The firmware pin definitions must match it.
-- Firmware targets ESP-IDF v5.5 on ESP32-S3 with octal PSRAM. CI builds
-  `firmware/vga-test` on every push.
+- Firmware targets ESP-IDF v5.5 on ESP32-S3 with octal PSRAM. A GitHub Actions
+  workflow that builds it is in `ci/github-build-workflow.yml`; it is not active
+  until the owner copies it to `.github/workflows/`, because agent sessions
+  cannot push workflow files.
 - Do not add Microsoft icons, fonts or bitmaps. All art must be original or
   freely licensed.

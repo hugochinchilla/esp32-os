@@ -40,6 +40,7 @@ resistor values and build notes.
 | `docs/DECISIONS.md` | What has been decided, what was rejected, and what is still open |
 | `docs/hardware/` | VGA adapter pin map, resistor values and board diagram |
 | `firmware/vga-test/` | ESP-IDF test program for the VGA wiring |
+| `ci/` | GitHub Actions workflow to copy into `.github/workflows/` |
 | `tools/` | Script that regenerates the board diagram |
 
 ## Building the VGA test

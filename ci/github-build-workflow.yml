@@ -1,0 +1,35 @@
+name: Build firmware
+
+on:
+  push:
+    paths:
+      - "firmware/**"
+      - ".github/workflows/build.yml"
+  pull_request:
+    paths:
+      - "firmware/**"
+      - ".github/workflows/build.yml"
+
+jobs:
+  vga-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build with ESP-IDF
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: release-v5.5
+          target: esp32s3
+          path: firmware/vga-test
+          command: >-
+            idf.py build &&
+            cd build &&
+            esptool.py --chip esp32s3 merge_bin -o vga-test-merged.bin @flash_args
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: vga-test-firmware
+          path: firmware/vga-test/build/vga-test-merged.bin
+          if-no-files-found: error
