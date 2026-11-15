@@ -4,6 +4,8 @@ Read `docs/DECISIONS.md` before proposing or changing anything. It records what
 has been decided, what was rejected and why, and what is still open. Update it
 in the same change whenever a decision is made or reversed.
 
+- Commit directly to `main`. This project does not use feature branches or pull
+  requests.
 - The owner wants to be asked about design choices, not have them made for him.
   Present options with a recommendation.
 - Hardware facts (pin map, resistor values) live in `docs/hardware/README.md`.
