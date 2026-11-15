@@ -25,10 +25,11 @@ resistor DAC wiring.
 
 - ESP32-S3 dev board with 16 MB flash and 8 MB octal PSRAM (ESP32-S3-N16R8,
   DevKitC-1 pin layout, two USB-C sockets).
-- A VGA adapter built on a 5x7 cm perfboard that the dev board plugs into:
-  9 colour resistors and 2 sync resistors, all 1/4 W.
+- An adapter board built on a 5x7 cm perfboard that the dev board plugs into:
+  9 colour resistors and 2 sync resistors for VGA, an audio output filter for a
+  3.5 mm jack, and a beeper.
 
-![VGA adapter board layout](docs/hardware/vga-adapter-256.png)
+![Adapter board layout](docs/hardware/vga-adapter-256.png)
 
 See [docs/hardware/README.md](docs/hardware/README.md) for the pin map, the
 resistor values and build notes.

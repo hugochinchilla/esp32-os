@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1258" height="1172" viewBox="0 0 1258 1172" font-family="Helvetica,Arial,sans-serif" xmlns:c2pa="http://c2pa.org/manifest">
-<rect width="1258" height="1172" fill="#fff"/>
-<text x="629.0" y="44" text-anchor="middle" font-size="25" font-weight="bold">VGA adapter: 256 colours, with 64-colour fallback (9 colour resistors)</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1258" height="1232" viewBox="0 0 1258 1232" font-family="Helvetica,Arial,sans-serif">
+<rect width="1258" height="1232" fill="#fff"/>
+<text x="629.0" y="44" text-anchor="middle" font-size="25" font-weight="bold">Adapter board: VGA in 256 colours, audio out and beeper</text>
 <text x="629.0" y="74" text-anchor="middle" font-size="17" fill="#444">5x7 cm perfboard (18 x 24 holes). Top view, component side, antenna end at the top.</text>
 <rect x="326.2" y="96.2" width="625.6" height="829.6" rx="10" fill="#e9d9a6" stroke="#8a7332" stroke-width="2"/>
 <circle cx="350" cy="120" r="4" fill="#fff" stroke="#b09a55"/>
@@ -262,7 +262,7 @@
 <text x="724.0" y="872" text-anchor="middle" font-size="14" fill="#333">USB sockets end</text>
 <rect x="541" y="141" width="26" height="740" fill="#222"/>
 <rect x="548" y="148" width="12" height="12" fill="#d8b23a"/>
-<text x="574" y="159" text-anchor="start" font-size="12" font-weight="normal" fill="#888">3V3</text>
+<text x="574" y="159" text-anchor="start" font-size="14" font-weight="bold" fill="#000">3V3</text>
 <rect x="548" y="182" width="12" height="12" fill="#d8b23a"/>
 <text x="574" y="193" text-anchor="start" font-size="12" font-weight="normal" fill="#888">3V3</text>
 <rect x="548" y="216" width="12" height="12" fill="#d8b23a"/>
@@ -298,9 +298,9 @@
 <rect x="548" y="726" width="12" height="12" fill="#d8b23a"/>
 <text x="574" y="737" text-anchor="start" font-size="12" font-weight="normal" fill="#888">GPIO12</text>
 <rect x="548" y="760" width="12" height="12" fill="#d8b23a"/>
-<text x="574" y="771" text-anchor="start" font-size="12" font-weight="normal" fill="#888">GPIO13</text>
+<text x="574" y="771" text-anchor="start" font-size="14" font-weight="bold" fill="#000">GPIO13</text>
 <rect x="548" y="794" width="12" height="12" fill="#d8b23a"/>
-<text x="574" y="805" text-anchor="start" font-size="12" font-weight="normal" fill="#888">GPIO14</text>
+<text x="574" y="805" text-anchor="start" font-size="14" font-weight="bold" fill="#000">GPIO14</text>
 <rect x="548" y="828" width="12" height="12" fill="#d8b23a"/>
 <text x="574" y="839" text-anchor="start" font-size="12" font-weight="normal" fill="#888">5V</text>
 <rect x="548" y="862" width="12" height="12" fill="#d8b23a"/>
@@ -352,6 +352,9 @@
 <text x="874" y="873" text-anchor="end" font-size="12" font-weight="normal" fill="#888">GND</text>
 <text x="554" y="908" text-anchor="middle" font-size="13">socket strip 1x22</text>
 <text x="894" y="908" text-anchor="middle" font-size="13">socket strip 1x22</text>
+<polyline points="452,868 452,698 384,698" fill="none" stroke="#111" stroke-width="5" stroke-linejoin="round"/>
+<polyline points="418,188 486,188 486,800 520,800" fill="none" stroke="#7d3c98" stroke-width="5" stroke-linejoin="round"/>
+<text x="502" y="582" font-size="12" fill="#7d3c98" transform="rotate(-90 502 582)">beeper wire</text>
 <line x1="384" y1="256" x2="520" y2="256" stroke="#888" stroke-width="3"/>
 <rect x="410" y="245" width="84" height="22" rx="9" fill="#f3e3c0" stroke="#c0392b" stroke-width="3"/>
 <text x="452" y="261" text-anchor="middle" font-size="14" font-weight="bold" fill="#c0392b">510 Ω</text>
@@ -450,17 +453,57 @@
 <line x1="330" y1="664" x2="308" y2="664" stroke="#333" stroke-width="2"/>
 <text x="302" y="669" text-anchor="end" font-size="15" font-weight="bold" fill="#333">VSYNC  →  VGA pin 14</text>
 <line x1="520" y1="868" x2="554" y2="868" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
-<polyline points="520,868 384,868 384,698" fill="none" stroke="#111" stroke-width="5" stroke-linejoin="round"/>
-<circle cx="384" cy="698" r="5" fill="#111"/><circle cx="520" cy="868" r="5" fill="#111"/>
+<line x1="350" y1="868" x2="520" y2="868" stroke="#111" stroke-width="7" stroke-dasharray="2 5"/>
+<text x="452" y="890" text-anchor="middle" font-size="13">bare ground wire</text>
+<circle cx="384" cy="698" r="5" fill="#111"/>
+<circle cx="452" cy="868" r="5" fill="#111"/>
+<circle cx="520" cy="868" r="5" fill="#111"/>
 <line x1="350" y1="698" x2="384" y2="698" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
 <line x1="330" y1="698" x2="308" y2="698" stroke="#000" stroke-width="2"/>
 <text x="302" y="703" text-anchor="end" font-size="15" font-weight="bold" fill="#000">GND  →  VGA pins 5 6 7 8 10</text>
-<text x="452" y="890" text-anchor="middle" font-size="13">ground wire</text>
 <text x="302" y="222" text-anchor="end" font-size="13" fill="#444">pin header 1x14, wires to the VGA socket</text>
+<line x1="384" y1="766" x2="520" y2="766" stroke="#888" stroke-width="3"/>
+<rect x="410" y="755" width="84" height="22" rx="9" fill="#f3e3c0" stroke="#b9770e" stroke-width="3"/>
+<text x="452" y="771" text-anchor="middle" font-size="14" font-weight="bold" fill="#b9770e">1 k Ω</text>
+<line x1="520" y1="766" x2="554" y2="766" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
+<line x1="350" y1="766" x2="384" y2="766" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
+<line x1="384" y1="766" x2="384" y2="800" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
+<line x1="350" y1="698" x2="350" y2="732" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
+<line x1="350" y1="834" x2="384" y2="834" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
+<line x1="350" y1="868" x2="350" y2="868" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
+<rect x="339" y="723" width="22" height="52" rx="8" fill="#e0a030" stroke="#7a5200" stroke-width="2"/>
+<text x="330" y="737" text-anchor="end" font-size="13" fill="#b9770e" font-weight="bold">100 nF</text>
+<rect x="371" y="788" width="26" height="58" rx="13" fill="#34495e" stroke="#111" stroke-width="2"/>
+<text x="384" y="805" text-anchor="middle" font-size="15" font-weight="bold" fill="#fff">+</text>
+<text x="330" y="805" text-anchor="end" font-size="13" fill="#b9770e" font-weight="bold">1 to 10 µF, + up</text>
+<circle cx="384" cy="766" r="5" fill="#666"/>
+<circle cx="520" cy="766" r="5" fill="#666"/>
+<circle cx="350" cy="732" r="5" fill="#666"/>
+<circle cx="350" cy="766" r="5" fill="#666"/>
+<rect x="337" y="821" width="26" height="60" fill="#222"/>
+<rect x="344" y="828" width="12" height="12" fill="#d8b23a"/>
+<rect x="344" y="862" width="12" height="12" fill="#d8b23a"/>
+<line x1="330" y1="834" x2="308" y2="834" stroke="#b9770e" stroke-width="2"/>
+<text x="302" y="839" text-anchor="end" font-size="15" font-weight="bold" fill="#b9770e">AUDIO OUT  →  jack tip and ring</text>
+<line x1="330" y1="868" x2="308" y2="868" stroke="#b9770e" stroke-width="2"/>
+<text x="302" y="873" text-anchor="end" font-size="15" font-weight="bold" fill="#b9770e">AUDIO GND  →  jack sleeve</text>
+<line x1="520" y1="154" x2="554" y2="154" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
+<line x1="418" y1="154" x2="418" y2="188" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
+<circle cx="469.0" cy="154" r="68.0" fill="#222" fill-opacity="0.82" stroke="#000" stroke-width="2"/>
+<circle cx="469.0" cy="154" r="7" fill="#555"/>
+<text x="469.0" y="132" text-anchor="middle" font-size="14" font-weight="bold" fill="#fff">beeper</text>
+<circle cx="418" cy="154" r="5" fill="#ddd"/>
+<circle cx="520" cy="154" r="5" fill="#ddd"/>
+<circle cx="418" cy="188" r="5" fill="#7d3c98"/>
+<circle cx="520" cy="800" r="5" fill="#7d3c98"/>
+<line x1="520" y1="800" x2="554" y2="800" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
+<circle cx="520" cy="800" r="5" fill="#7d3c98"/>
 <line x1="60" y1="972" x2="100" y2="972" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/><text x="112" y="977" font-size="15">solder bridge between neighbouring holes, on the underside</text>
-<line x1="60" y1="1002" x2="100" y2="1002" stroke="#111" stroke-width="5"/><text x="112" y="1007" font-size="15">insulated ground wire, on the underside (the only wire on the board)</text>
-<text x="60" y="1048" font-size="15">Each colour has three resistors joined at their left ends: 510 Ω on the top bit, 1 kΩ on the middle bit, 2 kΩ on the low bit.</text>
-<text x="60" y="1074" font-size="15">256 colours: red 3 bits, green 3 bits, blue 2 bits. 64 colours: 2 bits per colour. The spare low pin of a colour repeats its top bit.</text>
-<text x="60" y="1100" font-size="15">The rows of GPIO3 and GPIO46 stay empty. The right socket strip is drawn 10 holes from the left one; if your board is 9 apart, use column 16.</text>
-<text x="60" y="1126" font-size="15">Pin names follow the ESP32-S3-DevKitC-1 layout. Compare them with the labels printed on your board before soldering.</text>
-<metadata><c2pa:manifest>AAAWgmp1bWIAAAAeanVtZGMycGEAEQAQgAAAqgA4m3EDYzJwYQAAABZcanVtYgAAAEdqdW1kYzJtYQARABCAAACqADibcQN1cm46YzJwYTo3MTg5MWVhNi04NDAxLTQxODAtYTE1OS02NDk4ZmUyMjE5YTkAAAADl2p1bWIAAAApanVtZGMyYXMAEQAQgAAAqgA4m3EDYzJwYS5hc3NlcnRpb25zAAAAALxqdW1iAAAARGp1bWRjYm9yABEAEIAAAKoAOJtxE2MycGEuaW5ncmVkaWVudC52MwAAAAAYYzJzaDTYp7KtGoVwdC9/5kuMtN8AAABwY2JvcqNpZGM6Zm9ybWF0bWltYWdlL3N2Zyt4bWxqaW5zdGFuY2VJRHgseG1wOmlpZDpkODk5OWQzNC03YjM2LTQ3NmItYjAyZi02ODM3M2E0NjgxMzJscmVsYXRpb25zaGlwaHBhcmVudE9mAAAB4mp1bWIAAABBanVtZGNib3IAEQAQgAAAqgA4m3ETYzJwYS5hY3Rpb25zLnYyAAAAABhjMnNo4ag3CDd2jW+D1V71S56gJwAAAZljYm9yomdhY3Rpb25zgqJmYWN0aW9ua2MycGEub3BlbmVkanBhcmFtZXRlcnOha2luZ3JlZGllbnRzgaJjdXJseC1zZWxmI2p1bWJmPWMycGEuYXNzZXJ0aW9ucy9jMnBhLmluZ3JlZGllbnQudjNkaGFzaFggB79nJMVvBC+QWEmSEi/b1HnFxCeENOPcGwNHAJwRKaykZmFjdGlvbngdY29tLmFudGhyb3BpYy5jbGF1ZGUucHJvdmlkZWRqcGFyYW1ldGVyc6F4H2NvbS5hbnRocm9waWMub3JpZ2luLWNvbmZpZGVuY2VndW5rbm93bmtkZXNjcmlwdGlvbnhmQ2xhdWRlIHByb3ZpZGVkIHRoaXMgZmlsZSBhdCB0aGUgcmVxdWVzdCBvZiBhIHVzZXIgYW5kIG1heSBoYXZlIGNyZWF0ZWQgb3IgbW9kaWZpZWQgdGhlIGZpbGUgY29udGVudHMubXNvZnR3YXJlQWdlbnShZG5hbWVmQ2xhdWRlcmFsbEFjdGlvbnNJbmNsdWRlZPUAAADIanVtYgAAAEBqdW1kY2JvcgARABCAAACqADibcRNjMnBhLmhhc2guZGF0YQAAAAAYYzJzaGXSC8RX0euDLnx0w2cHl1MAAACAY2JvcqVjYWxnZnNoYTI1NmNwYWRMAAAAAAAAAAAAAAAAZGhhc2hYIH16bOnl5tgmpHVSMqEiVflKA1acAI076rx2XPSkZZoYZG5hbWVuanVtYmYgbWFuaWZlc3RqZXhjbHVzaW9uc4GiZXN0YXJ0GYkdZmxlbmd0aBkeBAAAAj5qdW1iAAAAJ2p1bWRjMmNsABEAEIAAAKoAOJtxA2MycGEuY2xhaW0udjIAAAACD2Nib3KlY2FsZ2ZzaGEyNTZpc2lnbmF0dXJleE1zZWxmI2p1bWJmPS9jMnBhL3VybjpjMnBhOjcxODkxZWE2LTg0MDEtNDE4MC1hMTU5LTY0OThmZTIyMTlhOS9jMnBhLnNpZ25hdHVyZWppbnN0YW5jZUlEeCx4bXA6aWlkOmVlMmIzZjM5LTI1YjgtNDI5Ny05NmQzLTVmM2Y0YmZmMGRlMXJjcmVhdGVkX2Fzc2VydGlvbnODomN1cmx4LXNlbGYjanVtYmY9YzJwYS5hc3NlcnRpb25zL2MycGEuaW5ncmVkaWVudC52M2RoYXNoWCAHv2ckxW8EL5BYSZISL9vUecXEJ4Q049wbA0cAnBEprKJjdXJseCpzZWxmI2p1bWJmPWMycGEuYXNzZXJ0aW9ucy9jMnBhLmFjdGlvbnMudjJkaGFzaFggDZXcsj5Wn2Tu7ENSo1P9RBBLeKJjslxfNBGTlNpRpxCiY3VybHgpc2VsZiNqdW1iZj1jMnBhLmFzc2VydGlvbnMvYzJwYS5oYXNoLmRhdGFkaGFzaFggTc9iR6h/gK278xYM81geii9a//5ZFwgUzL426rSLW8d0Y2xhaW1fZ2VuZXJhdG9yX2luZm+jZG5hbWVvQW50aHJvcGljIEZpbGVzZ3ZlcnNpb25lMS4wLjBrc3BlY1ZlcnNpb25lMi40LjAAABA4anVtYgAAAChqdW1kYzJjcwARABCAAACqADibcQNjMnBhLnNpZ25hdHVyZQAAABAIY2JvctKEWQISogEmGCFZAgowggIGMIIBjaADAgECAhRA5aAK7sI50L64g/oGQgU9Z1UTADAKBggqhkjOPQQDAzBJMRcwFQYDVQQKEw5BbnRocm9waWMsIFBCQzEuMCwGA1UEAxMlQW50aHJvcGljIENvbnRlbnQgQ3JlZGVudGlhbHMgUm9vdCBDQTAeFw0yNjA4MDcxODQzNTZaFw0yODA4MDYxOTQzNTZaMEQxFzAVBgNVBAoTDkFudGhyb3BpYywgUEJDMSkwJwYDVQQDEyBBbnRocm9waWMgQ2xhdWRlIENvbnRlbnQgU2lnbmluZzBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABJh6CmvLUBgFFNU0vUKlOVtE6djd17L5SuwX0LemFisBM3dkd/3cyjxFA3Qo5S46fX0/ihY0VZ7mfb9KF703t5OjWDBWMA4GA1UdDwEB/wQEAwIHgDAVBgNVHSUEDjAMBgorBgEEAYPoXgIBMAwGA1UdEwEB/wQCMAAwHwYDVR0jBBgwFoAUzlHiBIFOZFsj+OPEz5o+nMHXXMIwCgYIKoZIzj0EAwMDZwAwZAIwMXMdFJ4BetLLVY7ORuE9noqbbAZOZn/aArXyTwFAZfKrPzxF2vPoJNf1+UCdg1XGAjBwX1zd9WGqYkqmL5SFqw1QySjr1zJfpJM9+1rdDwSPLMOPOjKuiXjoU/pUUeG9RwmhY3BhZFkNngAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPZYQBkjAIhteNVlidYAXJLmIHgEghsx06GZCr3F5afNTakm1Sb1lPsAovI5OTl4GbULFPxN6tFLkIDPDTDmHFep+fY=</c2pa:manifest></metadata></svg>
+<line x1="60" y1="996" x2="100" y2="996" stroke="#111" stroke-width="5"/><line x1="60" y1="1008" x2="100" y2="1008" stroke="#7d3c98" stroke-width="5"/><text x="112" y="1007" font-size="15">insulated wires on the underside: VGA ground (black) and beeper to GPIO14 (purple)</text>
+<line x1="60" y1="1032" x2="100" y2="1032" stroke="#111" stroke-width="7" stroke-dasharray="2 5"/><text x="112" y="1037" font-size="15">bare wire along the GND row, soldered at every hole it passes (the ground rail)</text>
+<text x="60" y="1076" font-size="15">Video: each colour has 510 Ω, 1 kΩ and 2 kΩ joined at their left ends. The rows of GPIO3 and GPIO46 stay empty.</text>
+<text x="60" y="1102" font-size="15">Audio: GPIO13 through 1 kΩ. The 100 nF capacitor goes from that point to ground, the 1 to 10 µF capacitor (+ towards the resistor) to AUDIO OUT.</text>
+<text x="60" y="1128" font-size="15">Beeper: between 3V3 and GPIO14, for a piezo beeper of about 10 mm; a 12 mm one overhangs the edge a little. A magnetic or 5 V buzzer needs a transistor instead.</text>
+<text x="60" y="1154" font-size="15">The right socket strip is drawn 10 holes from the left one; if your board is 9 apart, use column 16.</text>
+<text x="60" y="1180" font-size="15">Pin names follow the ESP32-S3-DevKitC-1 layout. Compare them with the labels printed on your board before soldering.</text>
+</svg>

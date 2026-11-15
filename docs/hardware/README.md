@@ -1,8 +1,9 @@
-# VGA adapter
+# Adapter board: VGA, audio and beeper
 
 A carrier board on 5x7 cm perfboard (18 x 24 holes). The dev board plugs into
 two 1x22 socket strips, and each resistor sits in the row of its own GPIO pin,
-so the only wire on the board is ground.
+so the video part needs no wires. The board also carries the audio output filter and a
+beeper.
 
 ![Board layout](vga-adapter-256.png)
 
@@ -51,11 +52,11 @@ greys.
 | USB host data (fixed by the chip) | 19, 20 |
 | Debug UART (USB-C socket marked UART) | 43, 44 |
 | Clock chip on I2C: SDA, SCL | 1, 2 |
-| SD card: CLK, CMD, D0 | 12, 11, 13 |
-| USB power switch enable and fault, optional | 14, 21 |
-| Audio out to a 3.5 mm jack (later) | 42 |
-| Beeper (later) | 41 |
-| Spare | 38, 39, 40, 47, 48 (one of 38 or 48 is the on-board LED) |
+| Audio out to a 3.5 mm jack | 13 |
+| Beeper | 14 |
+| SD card: CLK, CMD, D0 | 39, 40, 41 |
+| USB power switch enable and fault, optional | 21, 42 |
+| Spare | 11, 12, 38, 47, 48 (one of 38 or 48 is the on-board LED) |
 | Not used: boot strapping pins | 0, 3, 45, 46 |
 | Not available: flash and PSRAM | 26 to 37 |
 
@@ -70,17 +71,33 @@ greys.
 - 1/4 W resistors are far more than needed (the worst case is about 16 mW).
   Prefer 1% parts.
 
-## Audio output (planned, not built)
+## Audio output
 
 ```
-GPIO42 ---[ 1 kΩ ]---+---||---> jack tip and ring
-                     |  1 to 10 µF
+GPIO13 ---[ 1 kΩ ]---+---|(---> AUDIO OUT: jack tip and ring
+                     |  + 1 to 10 µF
                   [100 nF]
                      |
-GND -----------------+--------> jack sleeve
+GND -----------------+--------> AUDIO GND: jack sleeve
 ```
 
 The resistor and the 100 nF capacitor smooth the pin's fast switching into an
-audio signal. The series capacitor removes the DC offset. The output suits
-amplified speakers or a line input, not a bare speaker. The beeper connects
-between GPIO41 and ground.
+audio signal. The series capacitor removes the DC offset; if it is
+electrolytic, its + leg faces the resistor. The output suits amplified
+speakers or a line input, not a bare speaker. A 3.5 mm jack's pins do not fit
+perfboard holes, so the board ends at a two-pin header and the jack is wired
+to it.
+
+## Beeper
+
+A piezo beeper sits in the top-left corner, between 3V3 and GPIO14, with one
+insulated wire under the board to GPIO14. The firmware keeps GPIO14 high when
+silent. This direct connection is only for a piezo beeper. A magnetic buzzer or
+a 5 V buzzer with built-in oscillator draws too much current for a pin and
+needs a transistor.
+
+## Ground
+
+A bare wire runs along the GND row at the bottom left and is soldered at every
+hole it passes. The audio ground pin sits on it, and one insulated wire takes
+ground from it up to the VGA ground pin.
