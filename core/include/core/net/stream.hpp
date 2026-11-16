@@ -27,6 +27,9 @@ public:
     // with one connection at a time gives the same object again for the
     // next one, which ends the earlier connection.
     virtual Stream *accept() = 0;
+    // True while it has work of its own under way that needs accept() called
+    // often (a web page half sent); the UI loop then keeps its short pace.
+    virtual bool busy() const { return false; }
 
 protected:
     ~Listener() = default;

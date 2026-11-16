@@ -48,6 +48,16 @@ public:
     // Serves the page to whoever asks, and returns the stream of a new
     // WebSocket connection (always this same object) or nullptr.
     Stream *accept() override;
+    // A request is being read or answered.
+    bool busy() const override
+    {
+        for (const Request &r : requests_) {
+            if (r.stream != nullptr) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     uint32_t pages_served() const { return pages_served_; }
 

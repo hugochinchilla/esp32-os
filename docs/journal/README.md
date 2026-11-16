@@ -51,3 +51,4 @@ Plain words, real numbers, no summaries of summaries.
 | 2026-11-16 | [One-shot fast start](2026-11-16-one-shot-fast-boot.md) | `dbg.py reboot --fast` and `boot fast-next`; why NVS and not RTC memory |
 | 2026-11-16 | [Key repeat after a long save](2026-11-16-key-repeat.md) | Why a letter appeared in the Editor after File > Save, and the fix |
 | 2026-11-16 | [The process table](2026-11-16-process-table.md) | PIDs for programs and services, windows and timers that know their owner, how the OS knows who is asking, when a process ends, and Task Manager's new list |
+| 2026-11-16 | [The message queue](2026-11-16-message-queue.md) | Backlog item 8: how another task gets work done on the desktop, what a message is, and a UI loop that sleeps until a message, serial bytes or a timer instead of looking 100 times a second |

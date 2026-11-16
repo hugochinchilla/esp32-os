@@ -9,6 +9,7 @@
 #include <ctime>
 
 #include <fcntl.h>
+#include <poll.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -173,17 +174,33 @@ int main(int argc, char **argv)
     protocol.send_hello();
     protocol.send_log("simulated board ready\n", 22);
 
+    // The loop, as on the board (firmware/os/main/main.cpp): take what has
+    // arrived, let the desktop and the remote screen work, then sleep until
+    // serial bytes come, the desktop's next timer is due or it is the
+    // network's turn. Nothing here posts messages (one thread), so the
+    // sleep is a poll() on the serial line instead of on the queue.
     uint8_t buffer[512];
     while (!system.reboot_requested) {
-        ssize_t got = read(fd, buffer, sizeof(buffer));
+        const ssize_t got = read(fd, buffer, sizeof(buffer));
         if (got > 0) {
             protocol.feed(buffer, static_cast<size_t>(got));
-        } else {
-            // Nobody has the other end open yet (or any more).
-            usleep(vnc_port.listening() ? 2000 : 10000);
         }
         screen.tick();
         remote.poll();
+        if (got == static_cast<ssize_t>(sizeof(buffer))) {
+            continue; // there may be more
+        }
+        uint32_t sleep_us = screen.idle_us();
+        const uint32_t network_us = remote.poll_interval_us();
+        sleep_us = network_us < sleep_us ? network_us : sleep_us;
+        sleep_us = sleep_us > 1000000 ? 1000000 : sleep_us;
+        sleep_us = sleep_us < 1000 ? 1000 : sleep_us;
+        pollfd line = {fd, POLLIN, 0};
+        if (poll(&line, 1, static_cast<int>((sleep_us + 999) / 1000)) > 0 && (line.revents & POLLIN) == 0) {
+            // Nobody has the other end open yet (or any more): poll() says
+            // so at once, every time.
+            usleep(sleep_us < 10000 ? sleep_us : 10000);
+        }
     }
     return 0;
 }
