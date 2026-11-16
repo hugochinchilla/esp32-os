@@ -6,6 +6,7 @@
 //   tools/dbg.py --port /dev/pts/5 screenshot out.png
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
 
 #include <fcntl.h>
 #include <termios.h>
@@ -15,6 +16,8 @@
 #include "core/fs/memory_volume.hpp"
 #include "core/shell/boot.hpp"
 #include "core/shell/shell.hpp"
+#include "core/net/wifi.hpp"
+#include "fake_wifi.hpp"
 #include "folder_volume.hpp"
 #include "core/wm/wm.hpp"
 #include "host_adapters.hpp"
@@ -98,6 +101,18 @@ int main(int argc, char **argv)
             }
         },
         nullptr);
+    // A pretend radio with a few networks, so the Network panel and the
+    // wifi commands can be tried with no hardware.
+    static host::FakeWifi radio;
+    static host::MemoryKeyStore settings;
+    radio.add("Casa Chinchilla", -48, "semillas-y-heno");
+    radio.add("Vecinos 2.4G", -74, "no-la-sabemos");
+    radio.add("Cafe & Churros", -63, "");
+    radio.utc = time(nullptr);
+    radio.has_time = true;
+    static net::Manager wifi(radio, settings);
+    shell::set_network(&wifi);
+    protocol.set_network(&wifi);
     shell::start(screen, system, storage, memory);
     protocol.set_counters(shell::picture_timings(), shell::kPictureTimings);
     screen.start();

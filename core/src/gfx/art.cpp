@@ -380,4 +380,63 @@ const Bitmap &network_icon_16()
     return bitmap;
 }
 
+/* ---- Signal bars ------------------------------------------------------------- */
+
+namespace {
+
+constexpr const char *kPadlock[7] = {".KKKK.", ".K..K.", "KKKKKK", "KYYYYK", "KYKKYK", "KYYYYK", "KKKKKK"};
+constexpr const char *kCross[7] = {"R...R.", "RR.RR.", ".RRR..", ".RRR..", "RR.RR.", "R...R.", "......"};
+
+// Four bars 2 pixels wide, 3 to 12 high, standing on row 14; a filled bar
+// is black, an empty one only a dark grey foot.
+constexpr Pixels<16> signal_pixels(int bars, bool locked)
+{
+    Pixels<16> out;
+    for (int i = 0; i < 256; i++) {
+        out.p[i] = kClear;
+    }
+    for (int b = 0; b < 4; b++) {
+        const int x = 5 + b * 3, top = 12 - b * 3;
+        const bool filled = b < bars;
+        for (int y = filled ? top : 13; y <= 14; y++) {
+            out.p[y * 16 + x] = filled ? kBlack : kDarkGrey;
+            out.p[y * 16 + x + 1] = filled ? kBlack : kDarkGrey;
+        }
+    }
+    const char *const *mark = bars < 0 ? kCross : (locked ? kPadlock : nullptr);
+    if (mark != nullptr) {
+        for (int y = 0; y < 7; y++) {
+            for (int x = 0; x < 6; x++) {
+                const char ch = mark[y][x];
+                if (ch != '.') {
+                    out.p[y * 16 + x] = ch == 'K' ? kBlack : ch == 'Y' ? rgb(7, 6, 1) : rgb(7, 0, 0);
+                }
+            }
+        }
+    }
+    return out;
+}
+
+} // namespace
+
+const Bitmap &signal_icon_16(int bars, bool locked)
+{
+    static constexpr Pixels<16> pixels[11] = {
+        signal_pixels(-1, false), signal_pixels(0, false), signal_pixels(1, false), signal_pixels(2, false),
+        signal_pixels(3, false),  signal_pixels(4, false), signal_pixels(0, true),  signal_pixels(1, true),
+        signal_pixels(2, true),   signal_pixels(3, true),  signal_pixels(4, true),
+    };
+    static constexpr Bitmap bitmaps[11] = {
+        {16, 16, pixels[0].p, kClear}, {16, 16, pixels[1].p, kClear}, {16, 16, pixels[2].p, kClear},
+        {16, 16, pixels[3].p, kClear}, {16, 16, pixels[4].p, kClear}, {16, 16, pixels[5].p, kClear},
+        {16, 16, pixels[6].p, kClear}, {16, 16, pixels[7].p, kClear}, {16, 16, pixels[8].p, kClear},
+        {16, 16, pixels[9].p, kClear}, {16, 16, pixels[10].p, kClear},
+    };
+    if (bars < 0) {
+        return bitmaps[0];
+    }
+    bars = bars > 4 ? 4 : bars;
+    return bitmaps[(locked ? 6 : 1) + bars];
+}
+
 } // namespace gfx

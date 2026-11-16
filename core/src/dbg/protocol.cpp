@@ -1,4 +1,5 @@
 #include "core/dbg/protocol.hpp"
+#include "core/net/wifi.hpp"
 
 #include <cstring>
 
@@ -163,6 +164,10 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
         }
         boot_show_(args[0], boot_context_);
         reply(type, seq, kOk, nullptr, 0);
+        break;
+
+    case kWifi:
+        wifi_command(seq, args, args_size);
         break;
 
     case kFileList:
@@ -625,6 +630,112 @@ void Protocol::send_screenshot(uint8_t seq, bool with_pointer, bool back_referen
     lock_.lock();
     send(kShotEnd, seq, tail, sizeof(tail));
     lock_.unlock();
+}
+
+/* ---- Wi-Fi ---------------------------------------------------------------------- */
+
+// The first byte says what: 0 status, 1 scan, 2 list, 3 connect, 4
+// disconnect, 5 forget. Names travel as a length byte and the bytes.
+void Protocol::wifi_command(uint8_t seq, const uint8_t *args, size_t size)
+{
+    if (wifi_ == nullptr || size == 0) {
+        reply(kWifi, seq, wifi_ == nullptr ? kUnknownCommand : kBadArguments, nullptr, 0);
+        return;
+    }
+    net::Manager &m = *wifi_;
+    uint8_t *body = chunk_;
+    size_t n = 0;
+    // A name at args[at]: copies it out and moves `at` past it.
+    char ssid[net::kSsidMax + 1];
+    size_t at = 1;
+    const auto name = [&](char *out, size_t most) {
+        if (at >= size || args[at] > most || at + 1 + args[at] > size) {
+            return false;
+        }
+        memcpy(out, args + at + 1, args[at]);
+        out[args[at]] = 0;
+        at += 1 + args[at];
+        return true;
+    };
+    switch (args[0]) {
+    case 0: { // status
+        const net::LinkStatus &l = m.link();
+        body[n++] = static_cast<uint8_t>(l.link);
+        body[n++] = static_cast<uint8_t>(m.last_failure());
+        body[n++] = m.scanning() ? 1 : 0;
+        body[n++] = m.time_known() ? 1 : 0;
+        body[n++] = static_cast<uint8_t>(l.rssi);
+        body[n++] = l.channel;
+        memcpy(body + n, l.address, 4);
+        memcpy(body + n + 4, l.gateway, 4);
+        memcpy(body + n + 8, l.mac, 6);
+        n += 14;
+        body[n++] = static_cast<uint8_t>(m.saved_count());
+        const size_t length = strlen(l.ssid);
+        body[n++] = static_cast<uint8_t>(length);
+        memcpy(body + n, l.ssid, length);
+        n += length;
+        break;
+    }
+    case 1:
+        m.scan();
+        break;
+    case 2: // list: the networks seen, then the remembered names
+        body[n++] = m.scanning() ? 1 : 0;
+        body[n++] = static_cast<uint8_t>(m.seen_count());
+        for (int i = 0; i < m.seen_count(); i++) {
+            const net::Manager::Seen &s = m.seen(i);
+            const size_t length = strlen(s.network.ssid);
+            body[n++] = static_cast<uint8_t>(s.network.rssi);
+            body[n++] = s.network.channel;
+            body[n++] = static_cast<uint8_t>(s.network.security);
+            body[n++] = static_cast<uint8_t>((s.saved ? 1 : 0) | (s.connected ? 2 : 0));
+            body[n++] = static_cast<uint8_t>(length);
+            memcpy(body + n, s.network.ssid, length);
+            n += length;
+        }
+        body[n++] = static_cast<uint8_t>(m.saved_count());
+        for (int i = 0; i < m.saved_count(); i++) {
+            const size_t length = strlen(m.saved_ssid(i));
+            if (n + 1 + length > kMaxReplyPayload - 1) {
+                break;
+            }
+            body[n++] = static_cast<uint8_t>(length);
+            memcpy(body + n, m.saved_ssid(i), length);
+            n += length;
+        }
+        break;
+    case 3: { // connect: name, remember, has password, password
+        char password[net::kPasswordMax + 1];
+        if (!name(ssid, net::kSsidMax) || ssid[0] == 0 || at + 2 > size) {
+            reply(kWifi, seq, kBadArguments, nullptr, 0);
+            return;
+        }
+        const bool remember = args[at] != 0, given = args[at + 1] != 0;
+        at += 2;
+        if (given && !name(password, net::kPasswordMax)) {
+            reply(kWifi, seq, kBadArguments, nullptr, 0);
+            return;
+        }
+        m.connect(ssid, given ? password : nullptr, remember);
+        memset(password, 0, sizeof(password));
+        break;
+    }
+    case 4:
+        m.disconnect();
+        break;
+    case 5:
+        if (!name(ssid, net::kSsidMax)) {
+            reply(kWifi, seq, kBadArguments, nullptr, 0);
+            return;
+        }
+        m.forget(ssid);
+        break;
+    default:
+        reply(kWifi, seq, kBadArguments, nullptr, 0);
+        return;
+    }
+    reply(kWifi, seq, kOk, body, n);
 }
 
 } // namespace dbg
