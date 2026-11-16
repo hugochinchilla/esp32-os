@@ -218,6 +218,26 @@ options and why each was or was not taken, is in
 - **A written record**: every piece of work adds an entry to `docs/journal/`
   (what was asked, options, choice and reasons, what was built and tested).
 
+### Dialogs and settings tools are programs (2026-11-17)
+
+Decided by the owner; the story is in
+`docs/journal/2026-11-17-dialogs-as-programs.md`.
+
+- A new dialog or settings tool (Display is the example) is a program of its
+  own, not a part of the desktop: its own row in the process table while open;
+  no memory kept while closed (window, widgets and buffers created when it
+  opens, given back when it closes); it reaches the desktop only through calls
+  any program could make; its code is a file of its own.
+- Today every program is still one fixed object on the UI task, and closing it
+  frees nothing. "No memory kept while closed" needs backlog item 19 (program
+  lifecycle); until then a new dialog meets the other points, keeps no state
+  that must survive a close apart from its settings file, and says in its
+  journal entry that this point is owed. Backlog item 34 moves the existing
+  dialogs.
+- Not taken: a FreeRTOS task per dialog now (the stack costs more internal RAM
+  than the dialog frees, and the widgets assume one task); waiting for
+  loadable programs (item 27) before changing how dialogs are written.
+
 ## Rejected
 
 | Option | Why not |
