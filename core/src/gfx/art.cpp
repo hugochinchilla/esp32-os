@@ -295,7 +295,23 @@ constexpr Ink kPictureInks[] = {{'K', kBlack}, {'W', kWhite}, {'S', rgb(3, 5, 3)
 constexpr Ink kDriveInks[] = {{'K', kBlack}, {'L', kGrey}, {'W', kWhite}, {'D', kDarkGrey}, {'N', rgb(0, 7, 0)}};
 constexpr Ink kFileInks[] = {{'K', kBlack}, {'W', kWhite}};
 
+// Folder toolbar: Back is an arrow pointing left, Up a folder with an arrow
+// rising out of it (they shared the folder picture before).
+constexpr const char *kBack16[16] = {
+    "................", "................", ".......K........", "......KK........",
+    ".....KLK........", "....KLBKKKKKKK..", "...KLBBLLLLLLK..", "..KLBBBBBBBBBK..",
+    "...KBBBBBBBBBK..", "....KBBKKKKKKK..", ".....KBK........", "......KK........",
+    ".......K........", "................", "................", "................",
+};
+constexpr Ink kBackInks[] = {{'K', kBlack}, {'B', rgb(1, 3, 3)}, {'L', rgb(4, 6, 3)}};
 
+constexpr const char *kUp16[16] = {
+    "................", ".......K........", "......KGK.......", ".....KGGGK......",
+    "....KGGGGGK.....", "...KKKKGKKKK....", "..KKKKKGK.......", ".KKKKKKGKKKKKKK.",
+    ".KHHHHKGKHHHHHK.", ".KYYYYKGKYYYYYK.", ".KYYYYKKKYYYYYK.", ".KYYYYYYYYYYYYK.",
+    ".KYYYYYYYYYYYYK.", ".KKKKKKKKKKKKKK.", "................", "................",
+};
+constexpr Ink kUpInks[] = {{'K', kBlack}, {'H', rgb(7, 7, 2)}, {'Y', rgb(7, 6, 1)}, {'G', rgb(1, 5, 0)}};
 
 } // namespace
 
@@ -406,6 +422,20 @@ const Bitmap &bin_icon_16()
 const Bitmap &bin_full_icon_16()
 {
     static constexpr Pixels<16> pixels = paint<16>(kBinFull16, kBinInks);
+    static constexpr Bitmap bitmap = {16, 16, pixels.p, kClear};
+    return bitmap;
+}
+
+const Bitmap &back_icon_16()
+{
+    static constexpr Pixels<16> pixels = paint<16>(kBack16, kBackInks);
+    static constexpr Bitmap bitmap = {16, 16, pixels.p, kClear};
+    return bitmap;
+}
+
+const Bitmap &up_icon_16()
+{
+    static constexpr Pixels<16> pixels = paint<16>(kUp16, kUpInks);
     static constexpr Bitmap bitmap = {16, 16, pixels.p, kClear};
     return bitmap;
 }
