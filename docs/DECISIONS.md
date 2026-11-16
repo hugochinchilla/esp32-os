@@ -104,6 +104,7 @@ Not scheduled. Each needs its design choices put to the owner before it is built
 | Audio player | Compact player in the spirit of late-90s players, with no visualiser and no equaliser. Opens WAV and MP3. The look must be original, not a copy of an existing player or its skins. Needs the sound output (GPIO13) working first, and a freely licensed MP3 decoder. Its sample files must be public domain, openly licensed, or made by us, with the source and licence recorded as in `third_party/samples/README.md` |
 | Mine-sweeping game | A grid puzzle of the mine-clearing kind: numbers show how many neighbours are mined. Our own name, artwork and icons; not a copy of any existing game's look |
 | Snake game | The classic grow-as-you-eat arcade game, with our own name and artwork. A good first program driven by the timer and the keyboard |
+| Screensaver | Starts after a period with no input and ends on any key or pointer movement. Three savers in the spirit of 90s ones, all our own code and art: a starfield (flying through space), flying Chinchilla mascots, and animated curves and colours. Open: idle time, where it is configured, whether it needs a password, and how it shares the screen with the window manager |
 
 ## Found on the bench
 
