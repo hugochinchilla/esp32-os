@@ -328,3 +328,39 @@ never executed on a board. That is the board turn, section 7.
   asks. They could be messages now.
 - Backlog items 10 (jobs), 12 (TTY), 18 (init) and 26 (apps on their own
   tasks) build on this.
+
+## On the board (added by the board thread, 2026-11-16)
+
+Main merged in (6440a12, with signals and the file system lock); PC tests 22
+of 22; built from a fresh sdkconfig; flashed with a normal start. Measured the
+same way on main just before, side by side:
+
+| | main | this branch |
+| --- | --- | --- |
+| Frame rate (`frames_shown` over 10 s) | 59.44 | 59.46 |
+| `dbg.py` ping, median of 50 (max) | 10.0 ms (10.6) | 0.5 ms (0.6) |
+| VNC connect by address (TCP and handshake) | 174 ms | 668 ms |
+| VNC full raw screen (first; median of three more) | 17.2 s; 10.6 s | 22.5 s; 11.3 s |
+| Idle in `dbg.py tasks`, last second | 195.7 % | 196.6 % |
+| Free internal RAM | 101,707 | 100,795 (912 bytes less) |
+| Late / missed refills | 0 / 0 | 0 / 0 |
+| UI loop rounds, idle (no viewer) | (none reported) | 22 a second |
+| Timeline line in the log | none | at 26 s: "start-up timeline complete: 200 samples (a message from the scanlog task, run on the ui task)" |
+
+- 22 rounds a second when idle is the design: with the VNC and web servers
+  listening, the network is looked at every 50 ms (20 a second), plus the
+  clock and the caret.
+- The VNC connection takes about half a second longer, likely the 50 ms look
+  at the network while waiting for a connection, several times during the
+  handshake. The raw screens were slow on both builds (about 30 KB/s against
+  160 KB/s measured earlier in the day, at the same 2 dBm), so that is the
+  network, not this branch.
+- The desktop: a 300 KB save with the hourglass on the webcam for its 0.96 s
+  and the arrow back after it, the title clean (no stray letter); K held for
+  1.5 s typed 32 letters; the caret blinks; the clock changed with the
+  minute; menus open with Alt and a letter; the pointer moves.
+- `Wm::idle_us()` does not count a waiting signal or restart (PR 17's). Today
+  signals are sent from events on the UI task and acted on at the end of the
+  same event, so nothing waits; a signal sent from another task would wait
+  for the next round, at most a second.
+
