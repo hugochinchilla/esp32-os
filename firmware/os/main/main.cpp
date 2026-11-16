@@ -89,7 +89,7 @@ const uart_port_t kDebugUart = UART_NUM_0;
 struct ScanSample {
     uint32_t ms, late, missed, max_late_us;
 };
-ScanSample s_scan_samples[200];
+EXT_RAM_BSS_ATTR ScanSample s_scan_samples[200]; // written by the scanlog task
 volatile int s_scan_count = 0;
 
 // The message queue into the UI task, made in app_main before any task
@@ -552,9 +552,9 @@ void ui_task(void *)
     static VgaPointer pointer;
     static EspSystem system;
     static EspClock clock;
-    static wm::Wm desktop(display, pointer, clock);
+    static wm::Wm desktop(display, pointer, clock); // internal: every event and repaint goes through it
     static BootInput input(desktop);
-    static dbg::Protocol protocol(sink, lock, display, pointer, input, system, "esp32-os");
+    static EXT_RAM_BSS_ATTR dbg::Protocol protocol(sink, lock, display, pointer, input, system, "esp32-os");
     protocol.set_desktop(&desktop);
     // The debug link, the remote screen and the web page have no rows in the
     // process table: they all run on this task. A service gets a row when it
@@ -627,7 +627,7 @@ void ui_task(void *)
     // started) and tx_power_dbm, 2 to 20, default 2: the radio's transmit
     // bursts put lines on the analogue picture, and at 2 dBm they are gone
     // (docs/DECISIONS.md).
-    static fs::Ini network;
+    static EXT_RAM_BSS_ATTR fs::Ini network;
     network.load(storage, "C:\\.config\\network.ini");
     const int tx_dbm = network.get_int("wifi", "tx_power_dbm", 2);
     const int8_t tx = static_cast<int8_t>((tx_dbm < 2 ? 2 : (tx_dbm > 20 ? 20 : tx_dbm)) * 4); // quarter dBm
@@ -636,7 +636,7 @@ void ui_task(void *)
         const esp_err_t err = esp_wifi_set_max_tx_power(tx);
         ESP_LOGI(TAG, "wifi transmit power %d dBm (%s)", tx / 4, esp_err_to_name(err));
     }
-    static net::Manager wifi(wifi_port(), settings_store());
+    static EXT_RAM_BSS_ATTR net::Manager wifi(wifi_port(), settings_store());
     shell::set_network(&wifi);
     protocol.set_network(&wifi);
     ESP_LOGI(TAG, "wifi %s in %lld ms", radio ? "started" : "did not start",
@@ -644,7 +644,7 @@ void ui_task(void *)
 
     // The remote screen: a VNC viewer connects to the board's address, port
     // 5900. The port opens now and viewers reach it once Wi-Fi has joined.
-    static rfb::Server remote(display, pointer, desktop, clock, memory);
+    static EXT_RAM_BSS_ATTR rfb::Server remote(display, pointer, desktop, clock, memory);
     static net::PosixTcpListener vnc_port;
     desktop.set_damage_listener([](const gfx::Rect &r, void *) { remote.damage(r); }, nullptr);
     if (radio && vnc_port.listen(rfb::kPort)) {
@@ -656,7 +656,7 @@ void ui_task(void *)
     // The same screen in a browser: http://<the board's address>/ gives a
     // viewer page, which talks VNC to the board through a WebSocket.
     static net::PosixTcpPool web_port;
-    static net::WebGate web;
+    static EXT_RAM_BSS_ATTR net::WebGate web;
     if (radio && web_port.listen(80)) {
         web.set_port(&web_port);
         web.set_page(net::viewer_page(), net::viewer_page_size());

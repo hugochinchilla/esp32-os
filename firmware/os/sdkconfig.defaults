@@ -24,6 +24,8 @@ CONFIG_LCD_RGB_ISR_IRAM_SAFE=y
 # Wi-Fi: its buffers and the network stack's go to external RAM when they
 # can, to keep internal RAM free
 CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
+# Static objects may live in external RAM (core/linker.lf puts the core's there).
+CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY=y
 # Task list for tools/dbg.py memory (stack high-water marks)
 CONFIG_FREERTOS_USE_TRACE_FACILITY=y
 # Processor time per task for tools/dbg.py tasks (docs/DECISIONS.md, "OS

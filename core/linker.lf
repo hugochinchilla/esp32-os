@@ -1,6 +1,14 @@
 # The video interrupt calls compose_pointer(), so its code and data must be
 # in internal RAM, reachable while the flash cache is busy or disabled.
+#
+# Everything else in the core keeps its static objects (.bss) in external
+# RAM: windows, dialogs, listings, rectangle lists, settings buffers, about
+# 113 KB that only the UI task touches (the owner's choice, 2026-11-17; see
+# docs/journal/2026-11-17-statics-in-psram.md). canvas stays internal: it holds
+# the 12-line paint band, written and copied for every repaint.
 [mapping:core_pointer]
 archive: libcore.a
 entries:
     pointer (noflash)
+    canvas (default)
+    * (extram_bss)

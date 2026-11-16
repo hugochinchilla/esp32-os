@@ -11,6 +11,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 
+#include "esp_attr.h"
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_netif.h"
@@ -306,7 +307,7 @@ private:
     void event(esp_event_base_t base, int32_t id, void *data)
     {
         if (base == WIFI_EVENT && id == WIFI_EVENT_SCAN_DONE) {
-            static wifi_ap_record_t records[kMaxFound];
+            static EXT_RAM_BSS_ATTR wifi_ap_record_t records[kMaxFound]; // the event task fills it
             uint16_t count = kMaxFound;
             if (esp_wifi_scan_get_ap_records(&count, records) != ESP_OK) {
                 count = 0;
