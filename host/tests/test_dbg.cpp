@@ -224,6 +224,94 @@ static void test_input()
     CHECK(rig.input.last_mouse.buttons == 1 && rig.input.last_mouse.wheel == -1);
 }
 
+static uint64_t get64(const Bytes &p, size_t at)
+{
+    uint64_t value = 0;
+    for (int i = 7; i >= 0; i--) {
+        value = (value << 8) | p[at + static_cast<size_t>(i)];
+    }
+    return value;
+}
+
+static ports::TaskInfo make_task(const char *name, uint16_t id, ports::TaskState state, uint8_t priority, int8_t core,
+                                 uint64_t run_time_us, uint32_t stack_free, bool external)
+{
+    ports::TaskInfo t = {};
+    snprintf(t.name, sizeof(t.name), "%s", name);
+    t.id = id;
+    t.state = state;
+    t.priority = priority;
+    t.core = core;
+    t.run_time_us = run_time_us;
+    t.stack_free = stack_free;
+    t.stack_external = external;
+    return t;
+}
+
+static void test_tasks()
+{
+    // A machine that keeps no task statistics: the command is unknown.
+    {
+        Rig rig;
+        auto got = rig.request(dbg::kTasks, 1, {});
+        CHECK(got.size() == 1 && got[0].payload == Bytes({dbg::kUnknownCommand}));
+    }
+    // Two tasks, every field, with a run time past 32 bits (71 minutes).
+    {
+        Rig rig;
+        rig.system.task_clock_us = 0x123456789AULL;
+        rig.system.task_list.push_back(
+            make_task("ui", 7, ports::TaskState::Running, 5, -1, 0x1FFFFFFFFULL, 9200, false));
+        rig.system.task_list.push_back(
+            make_task("IDLE1", 300, ports::TaskState::Ready, 0, 1, 42, 700, true));
+        auto got = rig.request(dbg::kTasks, 2, {});
+        CHECK(got.size() == 1 && got[0].type == (dbg::kTasks | dbg::kReplyBit) && got[0].seq == 2);
+        const Bytes &p = got[0].payload;
+        CHECK(p.size() == 1 + 11 + (19 + 2) + (19 + 5));
+        if (p.size() == 1 + 11 + (19 + 2) + (19 + 5)) {
+            CHECK(p[0] == dbg::kOk);
+            CHECK(get64(p, 1) == 0x123456789AULL);
+            CHECK(p[9] == 2 && p[10] == 2 && p[11] == 0); // cores, tasks, left out
+            size_t at = 12;
+            CHECK((p[at] | (p[at + 1] << 8)) == 7);
+            CHECK(p[at + 2] == 0 && p[at + 3] == 5 && p[at + 4] == 0xFF && p[at + 5] == 0);
+            CHECK(get64(p, at + 6) == 0x1FFFFFFFFULL);
+            CHECK((p[at + 14] | (p[at + 15] << 8)) == 9200 && p[at + 16] == 0 && p[at + 17] == 0);
+            CHECK(p[at + 18] == 2 && p[at + 19] == 'u' && p[at + 20] == 'i');
+            at += 21;
+            CHECK((p[at] | (p[at + 1] << 8)) == 300);
+            CHECK(p[at + 2] == 1 && p[at + 3] == 0 && p[at + 4] == 1 && p[at + 5] == 1);
+            CHECK(get64(p, at + 6) == 42);
+            CHECK(p[at + 18] == 5 && memcmp(&p[at + 19], "IDLE1", 5) == 0);
+        }
+    }
+    // More tasks than one reply holds: whole records only, and the count
+    // of the ones left out. Names of 15 letters have no closing zero.
+    {
+        Rig rig;
+        for (int i = 0; i < 40; i++) {
+            ports::TaskInfo t = make_task("", static_cast<uint16_t>(i + 1), ports::TaskState::Blocked, 3, 0, 1, 2, false);
+            memcpy(t.name, "fifteen-letters", 15);
+            t.name[15] = static_cast<char>('A' + i % 26); // no zero at the end
+            rig.system.task_list.push_back(t);
+        }
+        auto got = rig.request(dbg::kTasks, 3, {});
+        CHECK(got.size() == 1);
+        const Bytes &p = got[0].payload;
+        CHECK(p[0] == dbg::kOk);
+        const int sent = p[10];
+        CHECK(sent > 0 && sent <= dbg::kMaxTasks && sent + p[11] == 40);
+        CHECK(p.size() <= dbg::kMaxReplyPayload);
+        size_t at = 12;
+        for (int i = 0; i < sent && at + 19 <= p.size(); i++) {
+            CHECK((p[at] | (p[at + 1] << 8)) == i + 1);
+            CHECK(p[at + 18] == 16);
+            at += 19 + p[at + 18];
+        }
+        CHECK(at == p.size());
+    }
+}
+
 static void test_bad_frames()
 {
     Rig rig;
@@ -449,6 +537,7 @@ int main()
     test_crc();
     test_ping_and_info();
     test_input();
+    test_tasks();
     test_bad_frames();
     test_screenshot();
     test_compose_pointer();

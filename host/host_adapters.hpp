@@ -138,6 +138,53 @@ public:
         out.frames_shown = out.uptime_ms * 60 / 1000;
     }
     void reboot() override { reboot_requested = true; }
+    // The kernel's tasks: `task_list` as it is (tests fill it), or with
+    // `pretend_tasks` a made-up list that moves with the clock, so the
+    // simulator has something to show. Neither: not available.
+    int tasks(ports::TaskInfo *out, int capacity, ports::TaskTotals &totals) override
+    {
+        totals = {};
+        if (pretend_tasks) {
+            using namespace std::chrono;
+            const uint64_t now = static_cast<uint64_t>(
+                duration_cast<microseconds>(steady_clock::now() - start_).count());
+            // name, priority, core, unused stack, share of a core in 1/1000
+            static const struct {
+                const char *name;
+                uint8_t priority;
+                int8_t core;
+                uint32_t stack_free;
+                uint32_t share;
+            } pretend[] = {{"ui", 5, -1, 9200, 60},     {"IDLE0", 0, 0, 700, 930},  {"IDLE1", 0, 1, 700, 890},
+                           {"wifi", 23, 0, 3600, 15},   {"tiT", 18, 0, 1900, 5},    {"esp_timer", 22, 0, 3100, 2},
+                           {"ipc0", 24, 0, 500, 0},     {"ipc1", 24, 1, 500, 0}};
+            task_list.clear();
+            uint16_t id = 1;
+            for (const auto &p : pretend) {
+                ports::TaskInfo t = {};
+                snprintf(t.name, sizeof(t.name), "%s", p.name);
+                t.id = id++;
+                t.state = t.id == 1 ? ports::TaskState::Running
+                                    : (p.priority == 0 ? ports::TaskState::Ready : ports::TaskState::Blocked);
+                t.priority = p.priority;
+                t.core = p.core;
+                t.stack_free = p.stack_free;
+                t.run_time_us = now * p.share / 1000;
+                task_list.push_back(t);
+            }
+            task_clock_us = now;
+        }
+        int count = 0;
+        for (const ports::TaskInfo &t : task_list) {
+            if (count < capacity) {
+                out[count++] = t;
+            }
+        }
+        totals.clock_us = task_clock_us;
+        totals.cores = 2;
+        totals.left_out = static_cast<uint8_t>(task_list.size() - static_cast<size_t>(count));
+        return count;
+    }
     // Plausible facts, so the start-up screens look as on the board.
     bool fact(ports::Fact which, uint32_t &value, char *text, size_t capacity) override
     {
@@ -162,6 +209,9 @@ public:
     uint32_t free_internal_ram = 311u << 10;
     uint32_t free_external_ram = 5900u << 10;
     uint32_t scanout_us = 0; // the PC sends no video
+    std::vector<ports::TaskInfo> task_list;
+    uint64_t task_clock_us = 0;
+    bool pretend_tasks = false;
 
 private:
     std::chrono::steady_clock::time_point start_ = std::chrono::steady_clock::now();

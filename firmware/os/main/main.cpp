@@ -6,6 +6,7 @@
 // core (../../core) to the hardware.
 #include <cstdarg>
 #include <cstdio>
+#include <cstdlib>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -158,6 +159,63 @@ public:
         out.free_external_ram = static_cast<uint32_t>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
         out.frames_shown = vga_frame_count();
         out.scanout_us = vga_fill_us();
+    }
+    // Every FreeRTOS task. The kernel adds up each task's processor time
+    // at every task switch (the run-time statistics settings in
+    // sdkconfig.defaults); without them there is no list.
+    int tasks(ports::TaskInfo *out, int capacity, ports::TaskTotals &totals) override
+    {
+        totals = {};
+#if CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS && CONFIG_FREERTOS_USE_TRACE_FACILITY
+        // The kernel gives all the tasks or none, so there is room for a
+        // few more than exist now. The list is in external RAM for the
+        // length of this call; nothing stays allocated.
+        const UBaseType_t room = uxTaskGetNumberOfTasks() + 4;
+        auto *list = static_cast<TaskStatus_t *>(
+            heap_caps_malloc(room * sizeof(TaskStatus_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+        if (list == nullptr) {
+            list = static_cast<TaskStatus_t *>(malloc(room * sizeof(TaskStatus_t)));
+        }
+        if (list == nullptr) {
+            return 0;
+        }
+        configRUN_TIME_COUNTER_TYPE clock = 0;
+        const UBaseType_t count = uxTaskGetSystemState(list, room, &clock);
+        int written = 0;
+        for (UBaseType_t i = 0; i < count && written < capacity; i++) {
+            const TaskStatus_t &from = list[i];
+            ports::TaskInfo &t = out[written++];
+            t = {};
+            snprintf(t.name, sizeof(t.name), "%s", from.pcTaskName);
+            t.id = static_cast<uint16_t>(from.xTaskNumber);
+            switch (from.eCurrentState) {
+            case eRunning: t.state = ports::TaskState::Running; break;
+            case eReady: t.state = ports::TaskState::Ready; break;
+            case eBlocked: t.state = ports::TaskState::Blocked; break;
+            case eSuspended: t.state = ports::TaskState::Suspended; break;
+            case eDeleted: t.state = ports::TaskState::Deleted; break;
+            default: t.state = ports::TaskState::Unknown; break;
+            }
+            t.priority = static_cast<uint8_t>(from.uxCurrentPriority);
+#if configTASKLIST_INCLUDE_COREID
+            t.core = from.xCoreID == tskNO_AFFINITY ? -1 : static_cast<int8_t>(from.xCoreID);
+#else
+            t.core = -1;
+#endif
+            t.stack_external = esp_ptr_external_ram(from.pxStackBase);
+            t.stack_free = static_cast<uint32_t>(from.usStackHighWaterMark); // bytes on this chip
+            t.run_time_us = from.ulRunTimeCounter;
+        }
+        totals.clock_us = clock;
+        totals.cores = portNUM_PROCESSORS;
+        totals.left_out = static_cast<uint8_t>(count - static_cast<UBaseType_t>(written));
+        heap_caps_free(list);
+        return written;
+#else
+        (void)out;
+        (void)capacity;
+        return 0;
+#endif
     }
     size_t memory_report(char *out, size_t capacity) override
     {

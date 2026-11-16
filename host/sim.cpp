@@ -73,6 +73,7 @@ int main(int argc, char **argv)
     host::MemoryDisplay display(640, 480);
     host::NoLock lock;
     host::HostSystem system;
+    system.pretend_tasks = true; // tools/dbg.py tasks has a list to show
     host::MemoryPointer pointer;
     host::SteadyClock clock;
     static wm::Wm screen(display, pointer, clock);

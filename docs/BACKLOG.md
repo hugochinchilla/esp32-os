@@ -18,7 +18,7 @@ board or the merge), `done`.
 | # | Item | Size | Depends on | Board | Status |
 | --- | --- | --- | --- | --- | --- |
 | | **Phase 1: know what is running** | | | | |
-| 1 | FreeRTOS run-time statistics in the System port, shown by `tools/dbg.py` | S | | Yes | todo |
+| 1 | FreeRTOS run-time statistics in the System port, shown by `tools/dbg.py` | S | | Yes | on a branch (`claude/project-thread-d77dzk`): PC tests pass, firmware compiled, not yet run on the board |
 | 2 | Process table with PIDs. Windows and timers carry their owner. Existing services get rows | M | | | todo |
 | 3 | Per-process processor time and memory. Task Manager shows PID, time and memory columns | M | 1, 2 | Yes | todo |
 | 4 | System, protected and respawn flags | S | 2 | | todo |

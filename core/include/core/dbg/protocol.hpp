@@ -19,6 +19,8 @@ constexpr uint8_t kProtocolVersion = 1;
 // Largest payload in either direction, before framing.
 constexpr size_t kMaxRequestPayload = 1024;
 constexpr size_t kMaxReplyPayload = 1024;
+// Most tasks one kTasks reply lists (29 with the longest names fit).
+constexpr int kMaxTasks = 32;
 
 enum FrameType : uint8_t {
     // Requests from the PC. The reply has the same type with bit 7 set.
@@ -41,6 +43,7 @@ enum FrameType : uint8_t {
     kFileMakeFolder = 0x11,
     kBootScreen = 0x12,
     kMemoryReport = 0x13, // text: heaps and task stacks // draw a start-up screen now (0 self-test, 1 splash); Repaint brings the desktop back
+    kTasks = 0x14,        // the kernel's tasks: state, priority, core, run time, stack
     kWifi = 0x20,       // Wi-Fi: status, scan, list, connect, disconnect, forget
     // Sent by the board without being asked.
     kLog = 0x70,
