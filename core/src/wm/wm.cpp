@@ -1307,6 +1307,11 @@ void Wm::update()
         xor_outline(); // take it off; it goes back on top afterwards
     }
     paint(false);
+    if (damage_fn_ != nullptr) {
+        for (int i = 0; i < dirty_.size(); i++) {
+            damage_fn_(dirty_[i], damage_context_);
+        }
+    }
     dirty_.clear();
     if (outline) {
         xor_outline();
@@ -1831,6 +1836,9 @@ void Wm::xor_outline()
     const Rect screen = {0, 0, width_, height_};
     for (const Rect &band : bands) {
         const Rect s = band.intersect(screen);
+        if (damage_fn_ != nullptr && !s.empty()) {
+            damage_fn_(s, damage_context_);
+        }
         for (int y = s.y; y < s.bottom(); y++) {
             uint8_t *row = pixels + y * width_;
             for (int x = s.x + ((s.x + y) & 1); x < s.right(); x += 2) {
