@@ -35,13 +35,17 @@ void test_table()
     static proc::Table t;
     CHECK(t.count() == 0 && t.current() == proc::kNone && t.find(1) == nullptr);
 
-    // The first process is init, PID 1, whoever asks first.
-    const Pid service = t.spawn_service("dbgd", proc::kProtected);
-    CHECK(service == 2 && t.count() == 2);
-    const proc::Process *init = t.find(proc::kInit);
+    // The first process made is the root of the tree: PID 1, no parent,
+    // whatever it is called (the desktop today, init one day). It cannot be
+    // given a parent, and nothing is made by itself.
+    CHECK(t.spawn("child first", 1) == proc::kNone && t.count() == 0);
+    CHECK(t.spawn("init", proc::kNone, proc::kSystem | proc::kProtected) == proc::kRoot && t.count() == 1);
+    const proc::Process *init = t.find(proc::kRoot);
     CHECK(init != nullptr && strcmp(init->name, "init") == 0 && init->parent == proc::kNone);
     CHECK(init != nullptr && init->is(proc::kSystem) && init->is(proc::kProtected) && init->state == proc::State::Running);
-    CHECK(t.init() == 1 && t.count() == 2); // asking again makes nothing
+    // From then on "no parent" means the root's child.
+    const Pid service = t.spawn_service("dbgd", proc::kProtected);
+    CHECK(service == 2 && t.count() == 2);
     const proc::Process *dbgd = t.find(service);
     CHECK(dbgd->parent == 1 && dbgd->is(proc::kSystem) && dbgd->is(proc::kProtected) && !dbgd->is(proc::kWindowed));
 
@@ -71,11 +75,11 @@ void test_table()
     t.set_flags(editor, proc::kWindowed | proc::kRespawn);
     CHECK(t.find(editor)->is(proc::kRespawn));
 
-    // A process that ends leaves its children to init. Its number is not
+    // A process that ends leaves its children to the root. Its number is not
     // given out again: the next one is still the next.
     CHECK(t.exit(editor) && !t.alive(editor) && t.count() == 5);
-    CHECK(t.find(dialog_child)->parent == proc::kInit);
-    CHECK(!t.exit(editor) && !t.exit(99) && !t.exit(proc::kInit) && t.alive(proc::kInit));
+    CHECK(t.find(dialog_child)->parent == proc::kRoot);
+    CHECK(!t.exit(editor) && !t.exit(99) && !t.exit(proc::kRoot) && t.alive(proc::kRoot));
     CHECK(t.spawn("Culebra", desktop) == 7);
     CHECK(t.at(0).pid == 1 && t.at(1).pid == 2 && t.at(2).pid == 3 && t.at(3).pid == 5 && t.at(5).pid == 7);
 
@@ -102,9 +106,10 @@ void test_table()
     CHECK(t.exit(t.find_by_name("filler")) && t.spawn("fits again", desktop) != proc::kNone);
 
     // Round the clock: after 32767 the numbers start again at 2 (1 is
-    // init's), and skip every number still in use.
+    // the root's), and skip every number still in use.
     t.reset();
     CHECK(t.count() == 0);
+    t.spawn("init", proc::kNone, proc::kSystem | proc::kProtected);
     const Pid old_timer = t.spawn_service("desktop"); // PID 2, alive throughout
     const Pid keeper = t.spawn("keeper", old_timer);  // PID 3, alive throughout
     Pid last = keeper;
@@ -139,15 +144,16 @@ void start_again(void *context)
 void test_signals_in_the_table()
 {
     static proc::Table t;
+    t.spawn("init", proc::kNone, proc::kSystem | proc::kProtected);
     const Pid service = t.spawn_service("netd");
     const Pid guarded = t.spawn_service("desktop", proc::kProtected);
     const Pid program = t.spawn("Editor", guarded, proc::kWindowed);
     const Pid shielded = t.spawn("Console", guarded, proc::kWindowed | proc::kProtected);
 
     // Who can be signalled: nobody that is not there, nothing protected
-    // (init is), and no service yet. Refusing leaves nothing waiting.
+    // (the root here is), and no service yet. Refusing leaves nothing waiting.
     CHECK(t.signal(99, proc::Signal::Term) == proc::Sent::NoSuchProcess);
-    CHECK(t.signal(proc::kInit, proc::Signal::Kill) == proc::Sent::NotPermitted);
+    CHECK(t.signal(proc::kRoot, proc::Signal::Kill) == proc::Sent::NotPermitted);
     CHECK(t.signal(guarded, proc::Signal::Term) == proc::Sent::NotPermitted);
     CHECK(t.signal(shielded, proc::Signal::Kill) == proc::Sent::NotPermitted);
     CHECK(t.signal(service, proc::Signal::Kill) == proc::Sent::NotSupported);
@@ -168,8 +174,8 @@ void test_signals_in_the_table()
     CHECK(!t.signals_waiting() && t.signal(program, proc::Signal::Term) == proc::Sent::NoSuchProcess);
 
     // Respawn: ending the process does not start it at once. The start
-    // function waits for restart_due(), and runs with init as the current
-    // process, so the new one is init's child under a new number.
+    // function waits for restart_due(), and runs with the root as the current
+    // process, so the new one is the root's child under a new number.
     restart_table = &t;
     static const char name[] = "Taskbar";
     const Pid first = t.spawn(name, guarded, proc::kWindowed);
@@ -182,17 +188,17 @@ void test_signals_in_the_table()
         const proc::Scope as(&t, guarded);
         CHECK(t.restart_due() == 1 && t.current() == guarded);
     }
-    CHECK(restarts == 1 && restarted_by == proc::kInit && restarted_as == first + 1);
-    CHECK(t.find(restarted_as)->parent == proc::kInit && t.find(restarted_as)->is(proc::kRespawn));
+    CHECK(restarts == 1 && restarted_by == proc::kRoot && restarted_as == first + 1);
+    CHECK(t.find(restarted_as)->parent == proc::kRoot && t.find(restarted_as)->is(proc::kRespawn));
     CHECK(t.restart_due() == 0 && restarts == 1); // once per ending
     // It comes back every time it ends.
     t.exit(restarted_as);
     CHECK(t.restart_due() == 1 && restarts == 2 && restarted_as == first + 2 && t.alive(restarted_as));
-    // The flag without a start function does nothing; init is never one.
+    // The flag without a start function does nothing; the root is never one.
     const Pid flag_only = t.spawn("flag only", guarded, proc::kRespawn);
     t.exit(flag_only);
-    t.set_restart(proc::kInit, &start_again, const_cast<char *>(name));
-    CHECK(t.restart_due() == 0 && restarts == 2 && !t.find(proc::kInit)->is(proc::kRespawn));
+    t.set_restart(proc::kRoot, &start_again, const_cast<char *>(name));
+    CHECK(t.restart_due() == 0 && restarts == 2 && !t.find(proc::kRoot)->is(proc::kRespawn));
     // More endings than the list holds (8) between two safe points: the
     // extra ones are not started again, and nothing is overrun.
     Pid many[10];
@@ -309,6 +315,7 @@ void test_owners()
     m.close(plain);
 
     procs.reset();
+    procs.spawn("init", proc::kNone, proc::kSystem | proc::kProtected);
     const Pid desktop = procs.spawn_service("desktop");
     m.set_processes(&procs, desktop);
     m.start();
@@ -546,10 +553,10 @@ void test_owners()
     // A service cannot be signalled yet, and the desktop is protected... if
     // it says so (this test's desktop does not, so it reads as a service).
     CHECK(procs.signal(desktop, proc::Signal::Kill) == proc::Sent::NotSupported);
-    CHECK(procs.signal(proc::kInit, proc::Signal::Kill) == proc::Sent::NotPermitted);
+    CHECK(procs.signal(proc::kRoot, proc::Signal::Kill) == proc::Sent::NotPermitted);
 
     // Respawn: killed, the process is back after the same safe point, as
-    // init's child with a new number, with its window open again.
+    // the root's child with a new number, with its window open again.
     struct Again {
         wm::Wm *m;
         OwnedWindow *w;
@@ -576,7 +583,7 @@ void test_owners()
     procs.signal(bar1, proc::Signal::Kill);
     wait(10);
     CHECK(!procs.alive(bar1) && again.starts == 2 && again.pid != bar1 && procs.alive(again.pid));
-    CHECK(a.open() && a.owner() == again.pid && procs.find(again.pid)->parent == proc::kInit);
+    CHECK(a.open() && a.owner() == again.pid && procs.find(again.pid)->parent == proc::kRoot);
     CHECK(procs.current() == proc::kNone);
     // Closed politely, by its own close button, it comes back all the same.
     const Pid bar2 = again.pid;
@@ -664,19 +671,21 @@ void test_shell()
 {
     proc::Table &t = proc::table();
 
-    // After start-up: init is 1; the debug service (made by the adapter
-    // before the shell starts), the desktop and the Wi-Fi manager are its
-    // children, all system processes. No program runs yet.
-    const proc::Process *init = t.find(1), *dbgd = process("dbgd"), *desk = process("desktop"), *netd = process("netd");
-    CHECK(init != nullptr && strcmp(init->name, "init") == 0);
-    CHECK(dbgd != nullptr && dbgd->pid == 2 && dbgd->parent == 1 && dbgd->is(proc::kProtected));
-    CHECK(desk != nullptr && desk->pid == 3 && desk->parent == 1 && desk->is(proc::kSystem) && desk->is(proc::kProtected));
-    CHECK(netd != nullptr && netd->pid == 4 && netd->parent == 1 && netd->is(proc::kSystem) && !netd->is(proc::kProtected));
-    CHECK(t.count() == 4 && desktop.processes() == &t);
-    const Pid desk_pid = desk->pid, netd_pid = netd->pid;
-    // Timers: the caret and the clock, the desktop's look at its folder and
-    // the screensaver's are the desktop's; the Wi-Fi manager's is its own.
-    CHECK(desktop.timers_of(netd_pid) == 1 && desktop.timers_of(desk_pid) >= 3 && desktop.timers_of(0) == 0);
+    // After start-up: the desktop is PID 1, the root of the tree, and
+    // nothing else is listed. There is no init row until init is a real
+    // program. The debug link, the Wi-Fi manager, the remote screen
+    // and the web page are not tasks of their own (they run on the UI
+    // task), so they have no rows. No program runs yet.
+    const proc::Process *desk = process("desktop");
+    CHECK(desk != nullptr && desk->pid == proc::kRoot && desk->parent == proc::kNone);
+    CHECK(desk != nullptr && desk->is(proc::kSystem) && desk->is(proc::kProtected));
+    CHECK(t.count() == 1 && desktop.processes() == &t);
+    CHECK(process("init") == nullptr && process("dbgd") == nullptr && process("netd") == nullptr && process("vncd") == nullptr &&
+          process("httpd") == nullptr);
+    const Pid desk_pid = desk->pid;
+    // Timers: the caret and the clock, the desktop's look at its folder, the
+    // screensaver's and the Wi-Fi manager's are all the desktop's.
+    CHECK(desktop.timers_of(desk_pid) >= 4 && desktop.timers_of(0) == 0);
 
     // Starting the shell again (the tests do) makes no second desktop.
     CHECK(t.find_by_name("desktop") == desk_pid);
@@ -685,11 +694,11 @@ void test_shell()
     // its window. Launching it again is the same process.
     shell::launch(*shell::find_app("Welcome"));
     const proc::Process *welcome = process("Welcome");
-    CHECK(welcome != nullptr && welcome->pid == 5 && welcome->is(proc::kWindowed) && !welcome->is(proc::kSystem));
-    CHECK(welcome != nullptr && welcome->parent == proc::kInit); // launched from outside any process
-    CHECK(find("Welcome to Chinchilla")->owner() == 5 && desktop.windows_of(5) == 1);
+    CHECK(welcome != nullptr && welcome->pid == 2 && welcome->is(proc::kWindowed) && !welcome->is(proc::kSystem));
+    CHECK(welcome != nullptr && welcome->parent == proc::kRoot); // launched from outside any process
+    CHECK(find("Welcome to Chinchilla")->owner() == 2 && desktop.windows_of(2) == 1);
     shell::launch(*shell::find_app("Welcome"));
-    CHECK(t.count() == 5 && desktop.window_count() == 1);
+    CHECK(t.count() == 2 && desktop.window_count() == 1);
 
     // From the Start menu the parent is the desktop: Ctrl+Esc, Programs,
     // the first entry (About Chinchilla).
@@ -699,16 +708,16 @@ void test_shell()
     key(wm::key::Enter);
     CHECK(strcmp(title(), "About Chinchilla") == 0);
     const proc::Process *about = process("About Chinchilla");
-    CHECK(about != nullptr && about->pid == 6 && about->parent == desk_pid && desktop.active()->owner() == 6);
+    CHECK(about != nullptr && about->pid == 3 && about->parent == desk_pid && desktop.active()->owner() == 3);
 
     // Closing its last window ends the process; the others stay.
     key(wm::key::Enter); // OK
-    CHECK(process("About Chinchilla") == nullptr && t.count() == 5 && process("Welcome") != nullptr);
+    CHECK(process("About Chinchilla") == nullptr && t.count() == 2 && process("Welcome") != nullptr);
     // Started again it is a new process with a new number.
     shell::launch(*shell::find_app("About Chinchilla"));
-    CHECK(process("About Chinchilla") != nullptr && process("About Chinchilla")->pid == 7);
+    CHECK(process("About Chinchilla") != nullptr && process("About Chinchilla")->pid == 4);
     close_all();
-    CHECK(t.count() == 4);
+    CHECK(t.count() == 1);
 
     // A program opened by another is its child: a text file opened from a
     // File manager window goes to the Editor.
@@ -746,7 +755,7 @@ void test_shell()
     }
     wait(10000);
     CHECK(!t.alive(files));
-    CHECK(t.find(editor_pid)->parent == proc::kInit); // its parent ended: init takes it
+    CHECK(t.find(editor_pid)->parent == proc::kRoot); // its parent ended: the root takes it
     {
         const proc::Scope as(&t, desk_pid);
         CHECK(!shell::power_down());
@@ -759,7 +768,7 @@ void test_shell()
     // they started, without itself: End Task on the first row closes
     // Culebra and the process goes.
     close_all();
-    CHECK(t.count() == 4);
+    CHECK(t.count() == 1);
     shell::open_culebra();
     shell::launch(*shell::find_app("Widget gallery"));
     const Pid culebra = t.find_by_name("Culebra"), gallery = t.find_by_name("Widget gallery");
@@ -778,8 +787,8 @@ void test_shell()
     letter('s', kAlt);
     CHECK(strcmp(title(), "Widget gallery") == 0);
 
-    // "Show all processes": every row of the table, init first. On a
-    // protected process (init, the debug link, the desktop) End Task is
+    // "Show all processes": every row of the table, the desktop first. On a
+    // protected process (the desktop) End Task is
     // greyed out: its letter does nothing, a click does nothing, and the
     // button is drawn differently.
     key(wm::key::Delete, kCtrl | kAlt);
@@ -802,33 +811,17 @@ void test_shell()
         desktop.mouse({true, static_cast<int16_t>(at.x + 40), static_cast<int16_t>(at.y + 147), 0, 0});
     };
     const std::string usable = end_button();
-    const int rows[3] = {0, 1, 2}; // init, dbgd, desktop
-    for (const int row : rows) {
-        key(wm::key::Home);
-        for (int i = 0; i < row; i++) {
-            key(wm::key::Down);
-        }
-        CHECK(end_button() != usable);
-        letter('e', kAlt);
-        click_end();
-        wait(10000);
-        CHECK(desktop.active() == its_window && desktop.windows_of(manager) == 1 && t.count() == 6);
-    }
-    CHECK(t.alive(proc::kInit) && process("dbgd") != nullptr && process("desktop") != nullptr);
-    // The Wi-Fi manager is a service but not protected: the button can be
-    // used, and says that services cannot be ended yet. Nothing ends.
-    key(wm::key::Down); // init, dbgd, desktop, netd
-    CHECK(end_button() == usable);
+    key(wm::key::Home); // the desktop, PID 1
+    CHECK(end_button() != usable);
     letter('e', kAlt);
-    CHECK(desktop.active() != its_window && desktop.active()->owner() == manager); // its message
-    CHECK(desktop.windows_of(manager) == 2 && process("netd") != nullptr && t.count() == 6);
-    CHECK(desktop.timers_of(netd_pid) == 1);
-    key(wm::key::Enter);
-    CHECK(desktop.active() == its_window);
-    wait(7000000);
-    CHECK(desktop.active() == its_window && desktop.windows_of(manager) == 1); // nothing to force
+    click_end();
+    wait(10000);
+    CHECK(desktop.active() == its_window && desktop.windows_of(manager) == 1 && t.count() == 3);
+    CHECK(t.alive(proc::kRoot) && process("desktop") != nullptr);
+    // The next row is a program: the button can be used again.
+    key(wm::key::Down); // desktop, Widget gallery
+    CHECK(end_button() == usable);
     // A click on the button of a program's row works as before.
-    key(wm::key::Down); // Widget gallery
     click_end();
     wait(10000);
     CHECK(!t.alive(gallery) && find("Widget gallery") == nullptr);
@@ -865,7 +858,7 @@ void test_shell()
     CHECK(strcmp(title(), "Shut Down Chinchilla") == 0 && desktop.active()->owner() == desk_pid);
     key(wm::key::Escape);
     wait(10000);
-    CHECK(t.count() == 4 && t.alive(desk_pid) && t.alive(netd_pid) && desktop.window_count() == 0);
+    CHECK(t.count() == 1 && t.alive(desk_pid) && desktop.window_count() == 0);
     CHECK(desktop.timers_of(0) == 0); // nothing running that nobody owns
 }
 
@@ -883,7 +876,6 @@ int main()
     static host::FakeWifi radio;
     static host::MemoryKeyStore settings;
     static net::Manager wifi(radio, settings);
-    proc::table().spawn_service("dbgd", proc::kProtected); // as the board and the simulator do
     shell::set_network(&wifi);
     shell::start(desktop, system_, storage, memory);
     desktop.start();

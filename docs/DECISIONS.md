@@ -1128,11 +1128,11 @@ for the table, the rest for Task Manager's rows).
 - A window program ends when it has no window left at the end of the event
   that closed the last one, not at once (the Picture viewer's Open dialog
   closes before its picture window opens). Timers it left are stopped.
-- Services have Unix-style names, children of init with the system flag:
-  `dbgd` (debug link, protected), `netd` (Wi-Fi manager), `vncd` (remote
-  screen), `httpd` (browser viewer), and `desktop` (protected). They are rows
-  only: all still run on the UI task. The other option was plain names such as
-  "Remote screen".
+- **Reversed 2026-11-16 by the owner** (see "Only real tasks are listed"
+  below): the services had rows with Unix-style names, `dbgd`, `netd`, `vncd`
+  and `httpd`, that were names only, all running on the UI task. Those rows
+  are gone. `desktop` (protected) stays: it is the UI task. The names are
+  kept for the day each service is a task.
 - Task Manager lists processes: PID, name and the main window's title. By
   default the programs with windows, without itself, as before; "Show all
   processes" shows the whole table. This replaces "every window that has a
@@ -1193,17 +1193,23 @@ Task does.
 - KILL closes the process's menus and windows (dialogs first), stops its
   timers and removes its row, without `close_requested()`. `closed()` still
   runs, because window objects are used again by the next launch.
-- Protected processes (`init`, `dbgd`, `desktop`) refuse both signals. Task
-  Manager greys End Task out on them.
-- Services without windows (`netd`, `vncd`, `httpd`) cannot be signalled yet:
-  Task Manager says so. Removing only the row would leave `vncd` and `httpd`
-  running. Each gets a stop function in backlog item 5b.
+- Protected processes (`desktop` today) refuse both signals. Task Manager
+  greys End Task out on them.
+- A process without windows cannot be signalled yet (NotSupported), and Task
+  Manager has a message for it. Since the service rows were removed (see
+  "Only real tasks are listed" below) no row gives that answer today. The
+  first real service gets a stop function with its row (backlog item 5b).
+- A signal sent from another task (the shell's `kill`, later) must go
+  through the UI message queue (`msg::post`, `core/msg/queue.hpp`), so that
+  `signal()` runs on the UI task and the sleeping loop wakes at once. Signals
+  sent on the UI task, as End Task does, need nothing more. (Noted when the
+  message queue merged, 2026-11-16.)
 - End Task sends TERM. If the process is still there 5 seconds later, a box
   offers End Now (KILL) or Cancel, but only once the Task Manager is the
   window in front, so it never lands on a question the program is asking.
   End Task again on the same process offers at once. The other options were a
   box after 5 seconds whatever is on screen, or the button turning into "End
-  Now". **Asked of the owner on a card, 2026-11-16.**
+  Now". **Confirmed by the owner, 2026-11-16**, on a card with those three options.
 - Respawn: `Table::set_restart(pid, start, context)`. When such a process
   ends, for any reason, its start function runs at the next safe point as
   init, and the new process is init's child with a new PID. No process on the
@@ -1230,3 +1236,26 @@ Backlog item 9. Journal: `docs/journal/2026-11-16-file-system-lock.md`.
   rule.
 - With no lock set, `Storage` is as before (the simulator and one-thread
   tests). The board sets one at start-up.
+
+### Only real tasks are listed as processes (2026-11-16)
+
+The owner's rule, 2026-11-16: "don't advertise non real tasks, it's
+confusing". The story is in `docs/journal/2026-11-16-only-real-tasks.md`.
+
+- A row in the process table stands for something that runs: a window
+  program, or a task of its own. A service that is polled from the UI loop
+  gets no row.
+- The rows `dbgd`, `netd`, `vncd` and `httpd` are removed. The Wi-Fi
+  manager's timer is the desktop's. Before any program starts the table is
+  `desktop` 1.
+- A service gets its row, with the name planned for it, in the change that
+  makes it a task (items 14, 18 and 26).
+- There is no `init` row either, until init is a real program (item 18).
+  **The owner's decision, 2026-11-16**: "make desktop pid 1 for now". The
+  first process made is the root of the tree, PID 1, and today that is the
+  desktop. Orphans go to the root and respawned processes are its children.
+  When init exists it takes PID 1 and the desktop becomes its child. This
+  replaces "PID 1 is a row called `init` from the first moment" in "Chosen
+  for the process table", and "init is PID 1" under "OS architecture" holds
+  again from item 18.
+- The other option was to keep the rows marked "(part of the desktop)".

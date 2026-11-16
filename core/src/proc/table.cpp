@@ -31,41 +31,39 @@ Pid Table::find_by_name(const char *name) const
     return kNone;
 }
 
-Pid Table::init()
-{
-    if (!alive(kInit)) {
-        // Only ever the first row made: next_ is kInit in an empty table.
-        if (count_ != 0 || next_ != kInit) {
-            return kNone;
-        }
-        rows_[0].pid = kInit;
-        rows_[0].parent = kNone;
-        rows_[0].state = State::Running;
-        rows_[0].flags = kSystem | kProtected;
-        strcpy(rows_[0].name, "init");
-        order_[0] = 0;
-        count_ = 1;
-        next_ = kInit + 1;
-        changes_++;
-    }
-    return kInit;
-}
-
 Pid Table::spawn(const char *name, Pid parent, uint8_t flags)
 {
+    if (count_ == 0 && next_ == kRoot) {
+        // The first process made is the root of the tree: PID 1, no parent.
+        if (parent != kNone) {
+            return kNone;
+        }
+        Process &p = rows_[0];
+        p.pid = kRoot;
+        p.parent = kNone;
+        p.state = State::Running;
+        p.flags = flags;
+        strncpy(p.name, name, Process::kNameSize - 1);
+        p.name[Process::kNameSize - 1] = 0;
+        order_[0] = 0;
+        count_ = 1;
+        next_ = kRoot + 1;
+        changes_++;
+        return kRoot;
+    }
     if (parent == kNone) {
-        parent = init();
+        parent = kRoot;
     }
     const Process *above = find(parent);
     if (above == nullptr || count_ == kMaxProcesses) {
         return kNone;
     }
     // The next number not in use. After kMaxPid the count starts again at 2:
-    // 1 is init's for good.
+    // 1 is the root's for good.
     Pid pid = next_;
     for (int tries = 0; tries <= kMaxProcesses; tries++) {
-        if (pid > kMaxPid || pid <= kInit) {
-            pid = kInit + 1;
+        if (pid > kMaxPid || pid <= kRoot) {
+            pid = kRoot + 1;
         }
         if (!pid_in_use(pid)) {
             break;
@@ -94,13 +92,13 @@ Pid Table::spawn(const char *name, Pid parent, uint8_t flags)
 bool Table::exit(Pid pid)
 {
     Process *p = row(pid);
-    if (p == nullptr || pid == kInit) {
+    if (p == nullptr || pid == kRoot) {
         return false;
     }
     const int index = static_cast<int>(p - rows_);
     for (Process &other : rows_) {
         if (other.state != State::Free && other.parent == pid) {
-            other.parent = kInit;
+            other.parent = kRoot;
         }
     }
     int kept = 0;
@@ -131,8 +129,9 @@ Sent Table::signal(Pid pid, Signal signal)
         return Sent::NotPermitted;
     }
     if (!p->is(kWindowed)) {
-        // A service is a row and a name for now: there is nothing behind
-        // the row that could be stopped, so saying "ended" would be a lie.
+        // Only window programs can be ended so far. A process without
+        // windows will be a real task with a way to stop it; until that is
+        // built, saying "ended" would be a lie.
         return Sent::NotSupported;
     }
     if (p->pending == 0) {
@@ -157,7 +156,7 @@ uint8_t Table::take_signals(Pid pid)
 void Table::set_restart(Pid pid, StartFn start, void *context)
 {
     Process *p = row(pid);
-    if (p != nullptr && pid != kInit) {
+    if (p != nullptr && pid != kRoot) {
         p->flags |= kRespawn;
         p->restart = start;
         p->restart_context = context;
@@ -175,7 +174,7 @@ int Table::restart_due()
     }
     due_count_ = 0;
     for (int i = 0; i < n; i++) {
-        const Scope as_init(this, init());
+        const Scope as_root(this, kRoot);
         now[i].start(now[i].context);
     }
     return n;
@@ -205,7 +204,7 @@ void Table::reset()
         p = Process();
     }
     count_ = 0;
-    next_ = kInit;
+    next_ = kRoot;
     current_ = kNone;
     waiting_ = 0;
     due_count_ = 0;

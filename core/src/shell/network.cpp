@@ -449,13 +449,9 @@ void start_network()
     if (g_net == nullptr) {
         return;
     }
-    // The Wi-Fi manager is a service: its timer below is its own.
-    proc::Table &t = proc::table();
-    proc::Pid netd = t.find_by_name("netd");
-    if (netd == proc::kNone) {
-        netd = t.spawn_service("netd");
-    }
-    const proc::Scope as(&t, netd);
+    // The Wi-Fi manager has no row in the process table: it is driven by the
+    // timer below, on the UI task, so that timer is the desktop's. It gets a
+    // row when it is a task of its own (the owner's rule, 2026-11-16).
     g_net->set_on_time(&clock_from_network, nullptr);
     g_net->start(manager().now_us());
     g_shown_changes = g_net->changes();
