@@ -7,18 +7,22 @@
 #include <cstdint>
 
 #include "core/fs/fs.hpp"
+#include "core/gfx/canvas.hpp"
 #include "core/ports.hpp"
 
 namespace shell {
 
-constexpr uint32_t kMemoryTestBudgetUs = 250000; // the memory test stops after this
+constexpr uint32_t kMemoryTestBudgetUs = 250000; // the external memory test stops after this
+constexpr uint32_t kInternalTestBudgetUs = 20000; // and the internal one
+constexpr const char *kVersion = "v0.3";
+constexpr uint32_t kSelfTestPace = 130; // percent: how slowly the lines appear (selftest_pace)
 constexpr uint32_t kSelfTestHoldMs = 350;        // the finished self-test stays this long
 constexpr uint32_t kSplashMs = 800;
 // How long after the video starts the self-test stays up, so a monitor that
 // takes a while to show a picture still shows it ([boot] monitor_wait_ms in
 // C:\.config\boot.ini; 0: no waiting). A monitor cannot tell the board it is
 // ready (VGA is one-way), so this is a time.
-constexpr uint32_t kMonitorWaitMs = 4000;
+constexpr uint32_t kMonitorWaitMs = 2500; // the bench monitor: a picture 2.4 s after the video starts
 
 struct MemoryTestResult {
     uint32_t tested_kb = 0;
@@ -44,6 +48,7 @@ struct BootIo {
     uint32_t video_start_us = 0;
     uint32_t monitor_wait_ms = 0;
     uint32_t splash_ms = kSplashMs;
+    uint32_t pace_percent = kSelfTestPace;
     // True once a key or mouse button asks to skip the screens (may be nullptr).
     bool (*skip)(void *context) = nullptr;
     bool skipped = false; // set when that happened: the splash is skipped too
@@ -54,6 +59,7 @@ struct BootSettings {
     bool fastboot = false;                   // no start-up screens, no memory test
     uint32_t monitor_wait_ms = kMonitorWaitMs;
     uint32_t splash_ms = kSplashMs;
+    uint32_t pace_percent = kSelfTestPace;
 };
 BootSettings boot_settings(const fs::Storage &storage);
 
@@ -72,6 +78,15 @@ void show_splash(BootIo &io, bool hold = true);
 // the budget is spent or there is none left to borrow. `progress` is
 // called after each block with the KB done so far.
 MemoryTestResult test_memory(ports::Memory &memory, ports::Clock &clock, uint32_t budget_us,
-                             void (*progress)(uint32_t kb, void *context), void *context);
+                             void (*progress)(uint32_t kb, void *context), void *context, bool internal = false);
+
+// The finished self-test screen with given values (for the PC test against
+// the approved drawing).
+struct SelfTestValues {
+    const char *version, *processor;
+    uint32_t external_kb, internal_kb;
+    const char *video, *drive, *mouse, *sound;
+};
+void draw_self_test(gfx::Canvas &c, int w, int h, const SelfTestValues &values);
 
 } // namespace shell

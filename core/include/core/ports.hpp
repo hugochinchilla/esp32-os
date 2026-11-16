@@ -176,6 +176,13 @@ public:
         got = 0;
         return nullptr;
     }
+    // The same for internal RAM (the start-up test of it); release() too.
+    virtual void *borrow_internal(size_t max, size_t &got)
+    {
+        (void)max;
+        got = 0;
+        return nullptr;
+    }
     virtual void release(void *block) { (void)block; }
 
 protected:

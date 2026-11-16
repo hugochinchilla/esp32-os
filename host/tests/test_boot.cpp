@@ -3,6 +3,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <vector>
@@ -95,13 +96,17 @@ void test_failed_check()
     shell::BootIo io{display, system, memory, clock, nullptr, nullptr, nullptr, nullptr};
     // Flash fails, and so do the drives (none given).
     CHECK(shell::run_self_test(io, false) == 2);
-    // The status column shows red [FAIL] on the Flash line (the fifth).
-    const int y = 84 + 4 * 18 + 6;
-    bool red = false;
-    for (int x = 560; x < 600; x++) {
-        red = red || display.pixels()[y * 640 + x] == gfx::rgb(7, 1, 0);
-    }
-    CHECK(red);
+    // The drive line (line 8) and the summary (line 12) are red.
+    auto red_in_line = [&](int index) {
+        const int y = 24 + index * 18 + 8;
+        for (int x = 24; x < 500; x++) {
+            if (display.pixels()[y * 640 + x] == gfx::rgb(7, 1, 0)) {
+                return true;
+            }
+        }
+        return false;
+    };
+    CHECK(red_in_line(8) && red_in_line(12) && !red_in_line(3));
 }
 
 // The splash is the approved drawing, pixel for pixel: the PNG in
@@ -116,16 +121,22 @@ struct Rows : image::RowSink {
     }
 };
 
-void test_splash_matches_approved(const char *look_folder)
+// An approved drawing in docs/look/boot/, read with our own decoder.
+void read_approved(const char *look_folder, const char *name, uint8_t *approved)
 {
     static host::FolderVolume volume(look_folder);
     static fs::Storage storage;
-    storage.mount('L', volume);
+    static bool mounted = false;
+    if (!mounted) {
+        storage.mount('L', volume);
+        mounted = true;
+    }
     host::HostMemory memory;
-    static uint8_t approved[640 * 480];
     image::Decoder d;
     image::Info info;
-    CHECK(d.open(storage, "L:\\boot-e-colour-ribbon.png", memory, info) == image::Error::None);
+    char path[64];
+    snprintf(path, sizeof(path), "L:\\%s", name);
+    CHECK(d.open(storage, path, memory, info) == image::Error::None);
     CHECK(info.width == 640 && info.height == 480);
     Rows rows;
     rows.out = approved;
@@ -136,9 +147,15 @@ void test_splash_matches_approved(const char *look_folder)
         }
     }
     d.close();
+}
 
+void test_splash_matches_approved(const char *look_folder)
+{
+    static uint8_t approved[640 * 480];
+    read_approved(look_folder, "boot-e-colour-ribbon.png", approved);
     host::MemoryDisplay display(640, 480);
     host::HostSystem system;
+    host::HostMemory memory;
     host::FixedClock clock;
     shell::BootIo io{display, system, memory, clock, nullptr, nullptr, nullptr, nullptr};
     shell::show_splash(io, false);
@@ -148,6 +165,34 @@ void test_splash_matches_approved(const char *look_folder)
     }
     if (differ != 0) {
         printf("the splash differs from the approved drawing in %d pixels\n", differ);
+    }
+    CHECK(differ == 0);
+}
+
+// The self-test screen, given the values the drawing shows, is the approved
+// drawing pixel for pixel.
+void test_self_test_matches_approved(const char *look_folder)
+{
+    static uint8_t approved[640 * 480];
+    read_approved(look_folder, "boot-b-self-test.png", approved);
+    host::MemoryDisplay display(640, 480);
+    gfx::RectList clip;
+    clip.set({0, 0, 640, 480});
+    gfx::Canvas c(display.pixels(), 640, 480, clip, {0, 0, 640, 480});
+    shell::draw_self_test(c, 640, 480,
+                          {"v0.1", "ESP32-S3 dual core, 240 MHz", 8192, 512, "VGA 640x480, 256 colours", "2 MB RAM disk",
+                           "serial debug link", "none"});
+    int differ = 0, x0 = 640, y0 = 480, x1 = -1, y1 = -1;
+    for (int i = 0; i < 640 * 480; i++) {
+        if (display.pixels()[i] != approved[i]) {
+            differ++;
+            x0 = std::min(x0, i % 640); x1 = std::max(x1, i % 640);
+            y0 = std::min(y0, i / 640); y1 = std::max(y1, i / 640);
+        }
+    }
+    if (differ != 0) {
+        printf("the self-test differs from the approved drawing in %d pixels (x %d-%d, y %d-%d)\n", differ, x0, x1,
+               y0, y1);
     }
     CHECK(differ == 0);
 }
@@ -171,7 +216,7 @@ void test_waiting_and_skipping()
     io.video_start_us = 0;
     io.monitor_wait_ms = 4000;
     shell::run_self_test(io, true);
-    CHECK(clock.now >= 4000000 && clock.now < 4100000 && !io.skipped);
+    CHECK(clock.now >= 4000000 + 6 * 120 * 1300 && clock.now < 9000000 && !io.skipped);
     clock.now = 0;
     shell::show_splash(io, true);
     CHECK(clock.now >= io.splash_ms * 1000 && clock.now < io.splash_ms * 1000 + 100000);
@@ -211,6 +256,7 @@ int main(int argc, char **argv)
     test_waiting_and_skipping();
     if (argc > 1) {
         test_splash_matches_approved(argv[1]);
+        test_self_test_matches_approved(argv[1]);
     } else {
         printf("no docs/look/boot folder given: splash not compared\n");
         failures++;

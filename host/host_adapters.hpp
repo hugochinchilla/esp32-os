@@ -87,6 +87,19 @@ public:
         blocks_.push_back({p, got});
         return p;
     }
+    // The internal RAM test: a pretend 64 KB.
+    void *borrow_internal(size_t max, size_t &got) override
+    {
+        if (internal_lent_) {
+            got = 0;
+            return nullptr;
+        }
+        internal_lent_ = true;
+        got = std::min(max, static_cast<size_t>(64u << 10));
+        void *p = std::malloc(got);
+        blocks_.push_back({p, got});
+        return p;
+    }
     void release(void *block) override
     {
         for (size_t i = 0; i < blocks_.size(); i++) {
@@ -101,6 +114,7 @@ public:
 private:
     static constexpr size_t kLendable = 4u << 20, kBlock = 1536u << 10;
     size_t lent_ = 0;
+    bool internal_lent_ = false;
     std::vector<std::pair<void *, size_t>> blocks_;
 };
 
@@ -130,14 +144,14 @@ public:
         value = 0;
         switch (which) {
         case ports::Fact::Processor:
-            snprintf(text, capacity, "ESP32-S3 (simulated), 2 cores, rev 0.2, 240 MHz");
+            snprintf(text, capacity, "ESP32-S3 dual core, 240 MHz (simulated)");
             return true;
         case ports::Fact::InternalRam: value = 400u << 10; return true;
         case ports::Fact::ExternalRam: value = 8u << 20; return true;
         case ports::Fact::Flash: value = 16u << 20; return true;
         case ports::Fact::Video: value = 25000000; return true;
-        case ports::Fact::Input: snprintf(text, capacity, "Serial debug link (no USB yet)"); return true;
-        case ports::Fact::Sound: snprintf(text, capacity, "None"); return true;
+        case ports::Fact::Input: snprintf(text, capacity, "serial debug link"); return true;
+        case ports::Fact::Sound: snprintf(text, capacity, "none"); return true;
         }
         return false;
     }

@@ -1,6 +1,7 @@
 #include "core/shell/boot.hpp"
 
 #include <cstdio>
+#include <initializer_list>
 #include <cstring>
 
 #include "core/fs/ini.hpp"
@@ -11,13 +12,6 @@
 namespace shell {
 
 namespace {
-
-constexpr gfx::Colour kText = gfx::rgb(5, 5, 2);   // light grey
-constexpr gfx::Colour kValue = gfx::rgb(7, 7, 3);  // white
-constexpr gfx::Colour kOk = gfx::rgb(2, 7, 1);     // green
-constexpr gfx::Colour kFail = gfx::rgb(7, 1, 0);   // red
-constexpr gfx::Colour kHeading = gfx::rgb(7, 6, 1); // warm yellow
-constexpr int kLabelX = 32, kValueX = 200, kStatusX = 560, kTop = 84, kLineH = 18;
 
 struct Screen {
     explicit Screen(ports::Display &d) : display(d)
@@ -46,64 +40,6 @@ bool wait_until(BootIo &io, uint32_t until)
     return true;
 }
 
-// A bitmap enlarged k times, nearest neighbour.
-void blit_big(gfx::Canvas &c, const gfx::Bitmap &b, int x, int y, int k)
-{
-    for (int row = 0; row < b.height; row++) {
-        for (int col = 0; col < b.width; col++) {
-            const int p = b.pixels[row * b.width + col];
-            if (p != b.transparent) {
-                c.fill({x + col * k, y + row * k, k, k}, static_cast<gfx::Colour>(p));
-            }
-        }
-    }
-}
-
-struct Line {
-    BootIo &io;
-    Screen &screen;
-    int y;
-    char text[96];
-
-    void value(const char *v, gfx::Colour colour = kValue)
-    {
-        gfx::Canvas c = screen.canvas();
-        // Padded to a fixed width so a shorter value covers a longer one.
-        char padded[64];
-        snprintf(padded, sizeof(padded), "%-58.58s", v);
-        c.text_opaque(kValueX, y, padded, colour, gfx::kBlack);
-        snprintf(text, sizeof(text), "%s", v);
-    }
-    void status(bool ok, const char *label)
-    {
-        gfx::Canvas c = screen.canvas();
-        c.text_opaque(kStatusX, y, ok ? "[ OK ]" : "[FAIL]", ok ? kOk : kFail, gfx::kBlack);
-        if (io.log != nullptr) {
-            char line[160];
-            snprintf(line, sizeof(line), "self-test: %s: %s: %s", label, text, ok ? "OK" : "FAILED");
-            io.log(line, io.context);
-        }
-        if (io.idle != nullptr) {
-            io.idle(io.context);
-        }
-    }
-};
-
-Line begin_line(BootIo &io, Screen &s, int index, const char *label)
-{
-    Line l{io, s, kTop + index * kLineH, ""};
-    gfx::Canvas c = s.canvas();
-    char dots[40];
-    snprintf(dots, sizeof(dots), "%s ", label);
-    const int len = static_cast<int>(strlen(dots));
-    for (int i = len; i < 26; i++) {
-        dots[i] = '.';
-    }
-    dots[len < 26 ? 26 : len] = 0;
-    c.text(kLabelX, l.y, dots, kText);
-    return l;
-}
-
 void format_bytes(char *out, size_t n, uint64_t bytes)
 {
     if (bytes >= 1024u * 1024u) {
@@ -115,22 +51,6 @@ void format_bytes(char *out, size_t n, uint64_t bytes)
         }
     } else {
         snprintf(out, n, "%u KB", static_cast<unsigned>(bytes / 1024));
-    }
-}
-
-struct Progress {
-    Line *line;
-    BootIo *io;
-};
-
-void memory_progress(uint32_t kb, void *context)
-{
-    auto *p = static_cast<Progress *>(context);
-    char v[48];
-    snprintf(v, sizeof(v), "%u KB", static_cast<unsigned>(kb));
-    p->line->value(v);
-    if (p->io->idle != nullptr) {
-        p->io->idle(p->io->context);
     }
 }
 
@@ -149,6 +69,8 @@ BootSettings boot_settings(const fs::Storage &storage)
     s.fastboot = ini.get_bool("boot", "fastboot", false);
     s.monitor_wait_ms = ms(ini.get_int("boot", "monitor_wait_ms", static_cast<int>(kMonitorWaitMs)));
     s.splash_ms = ms(ini.get_int("boot", "splash_ms", static_cast<int>(kSplashMs)));
+    const int pace = ini.get_int("boot", "selftest_pace", static_cast<int>(kSelfTestPace));
+    s.pace_percent = pace < 0 ? 0u : (pace > 400 ? 400u : static_cast<uint32_t>(pace));
     return s;
 }
 
@@ -186,29 +108,32 @@ int run_quiet_checks(BootIo &io)
 }
 
 MemoryTestResult test_memory(ports::Memory &memory, ports::Clock &clock, uint32_t budget_us,
-                             void (*progress)(uint32_t kb, void *context), void *context)
+                             void (*progress)(uint32_t kb, void *context), void *context, bool internal)
 {
     MemoryTestResult r;
-    constexpr size_t kChunk = 128 * 1024; // two chunks are larger than the data cache
+    // External RAM: two chunks are larger than the data cache, so what is
+    // checked is read back from the memory itself. Internal RAM has no cache.
+    const size_t chunk = internal ? 4 * 1024 : 128 * 1024;
     constexpr int kMaxBlocks = 16;
     void *blocks[kMaxBlocks];
     int nblocks = 0;
     const uint32_t start = clock.micros();
+    uint32_t outside = 0; // time spent in progress(): not part of the budget
+    auto spent = [&]() { return clock.micros() - start - outside; };
     uint64_t done = 0;
-    while (r.ok && nblocks < kMaxBlocks && clock.micros() - start < budget_us) {
+    while (r.ok && nblocks < kMaxBlocks && spent() < budget_us) {
         size_t got = 0;
-        void *block = memory.borrow(64u * 1024 * 1024, got);
-        if (block == nullptr || got < 2 * kChunk) {
+        void *block = internal ? memory.borrow_internal(64u * 1024 * 1024, got) : memory.borrow(64u * 1024 * 1024, got);
+        if (block == nullptr || got < 2 * chunk) {
             if (block != nullptr) {
                 memory.release(block);
             }
             break;
         }
         blocks[nblocks++] = block;
-        // Write chunk i + 1 before checking chunk i, so chunk i has left the
-        // cache and is read back from the memory itself.
+        // Write chunk i + 1 before checking chunk i.
         auto *words = static_cast<volatile uint32_t *>(block);
-        const size_t per_chunk = kChunk / 4, chunks = got / kChunk;
+        const size_t per_chunk = chunk / 4, chunks = got / chunk;
         auto write = [&](size_t ch) {
             for (size_t i = ch * per_chunk; i < (ch + 1) * per_chunk; i++) {
                 words[i] = pattern(reinterpret_cast<uintptr_t>(&words[i]));
@@ -230,11 +155,13 @@ MemoryTestResult test_memory(ports::Memory &memory, ports::Clock &clock, uint32_
                     break;
                 }
             }
-            done += kChunk;
-            if (progress != nullptr && (ch % 8 == 7 || ch + 1 == chunks)) {
+            done += chunk;
+            if (progress != nullptr && (!internal || ch % 4 == 3 || ch + 1 == chunks)) {
+                const uint32_t before = clock.micros();
                 progress(static_cast<uint32_t>(done / 1024), context);
+                outside += clock.micros() - before;
             }
-            if (clock.micros() - start >= budget_us) {
+            if (spent() >= budget_us) {
                 break;
             }
         }
@@ -243,126 +170,8 @@ MemoryTestResult test_memory(ports::Memory &memory, ports::Clock &clock, uint32_
         memory.release(blocks[i]);
     }
     r.tested_kb = static_cast<uint32_t>(done / 1024);
-    r.us = clock.micros() - start;
+    r.us = spent();
     return r;
-}
-
-int run_self_test(BootIo &io, bool hold)
-{
-    Screen s(io.display);
-    {
-        gfx::Canvas c = s.canvas();
-        c.fill({0, 0, io.display.width(), io.display.height()}, gfx::kBlack);
-        blit_big(c, gfx::mascot_16(), 32, 24, 2);
-        c.text(72, 26, "Chinchilla", kHeading, true);
-        c.text(72, 42, "Self-test", kText);
-        c.text(kStatusX - 30, 26, "Version 0.3", kText);
-    }
-    int failures = 0, index = 0;
-    char v[96];
-    uint32_t value = 0;
-    auto fact_line = [&](const char *label, ports::Fact f, bool bytes) {
-        Line l = begin_line(io, s, index++, label);
-        v[0] = 0;
-        const bool ok = io.system.fact(f, value, v, sizeof(v)) && (!bytes || value > 0);
-        if (bytes && ok) {
-            format_bytes(v, sizeof(v), value);
-        } else if (!ok && v[0] == 0) {
-            snprintf(v, sizeof(v), "not found");
-        }
-        l.value(v, ok ? kValue : kFail);
-        l.status(ok, label);
-        failures += ok ? 0 : 1;
-    };
-    fact_line("Processor", ports::Fact::Processor, false);
-    fact_line("Internal RAM", ports::Fact::InternalRam, true);
-    fact_line("External RAM", ports::Fact::ExternalRam, true);
-    {
-        Line l = begin_line(io, s, index++, "Memory test");
-        Progress p{&l, &io};
-        l.value("0 KB");
-        const MemoryTestResult r = test_memory(io.memory, io.clock, kMemoryTestBudgetUs, &memory_progress, &p);
-        if (!r.ok) {
-            snprintf(v, sizeof(v), "error at 0x%08lX: wrote %08lX, read %08lX",
-                     static_cast<unsigned long>(r.bad_address), static_cast<unsigned long>(r.wrote),
-                     static_cast<unsigned long>(r.read));
-        } else if (r.tested_kb == 0) {
-            snprintf(v, sizeof(v), "no free memory to test");
-        } else {
-            snprintf(v, sizeof(v), "%u KB in %u ms", static_cast<unsigned>(r.tested_kb),
-                     static_cast<unsigned>(r.us / 1000));
-        }
-        const bool ok = r.ok && r.tested_kb > 0;
-        l.value(v, ok ? kValue : kFail);
-        l.status(ok, "Memory test");
-        failures += ok ? 0 : 1;
-    }
-    fact_line("Flash", ports::Fact::Flash, true);
-    {
-        Line l = begin_line(io, s, index++, "Drives");
-        bool ok = false;
-        v[0] = 0;
-        if (io.storage != nullptr) {
-            char letters[fs::Storage::kMaxDrives];
-            const int n = io.storage->drives(letters, fs::Storage::kMaxDrives);
-            size_t used = 0;
-            for (int i = 0; i < n; i++) {
-                ports::VolumeInfo info = {};
-                if (io.storage->info(letters[i], info) == ports::FsError::Ok) {
-                    char size[24];
-                    format_bytes(size, sizeof(size), info.total_bytes);
-                    used += static_cast<size_t>(snprintf(v + used, sizeof(v) - used, "%s%c: %s, %s",
-                                                         used ? "; " : "", letters[i], info.label, size));
-                    ok = true;
-                    if (used >= sizeof(v)) {
-                        break;
-                    }
-                }
-            }
-        }
-        if (!ok) {
-            snprintf(v, sizeof(v), "none");
-        }
-        l.value(v, ok ? kValue : kFail);
-        l.status(ok, "Drives");
-        failures += ok ? 0 : 1;
-    }
-    {
-        Line l = begin_line(io, s, index++, "Video");
-        const bool ok = io.system.fact(ports::Fact::Video, value, v, sizeof(v));
-        if (ok) {
-            snprintf(v, sizeof(v), "%dx%d, %u.%03u MHz, 256 colours", io.display.width(), io.display.height(),
-                     static_cast<unsigned>(value / 1000000), static_cast<unsigned>(value / 1000 % 1000));
-        } else {
-            snprintf(v, sizeof(v), "%dx%d, 256 colours", io.display.width(), io.display.height());
-        }
-        l.value(v, ok ? kValue : kFail);
-        l.status(ok, "Video");
-        failures += ok ? 0 : 1;
-    }
-    fact_line("Input", ports::Fact::Input, false);
-    fact_line("Sound", ports::Fact::Sound, false);
-    {
-        gfx::Canvas c = s.canvas();
-        const int y = kTop + (index + 1) * kLineH;
-        if (failures == 0) {
-            c.text(kLabelX, y, "All checks passed. Starting Chinchilla...", kText);
-        } else {
-            snprintf(v, sizeof(v), "%d check%s failed. Starting Chinchilla anyway...", failures,
-                     failures == 1 ? "" : "s");
-            c.text(kLabelX, y, v, kFail);
-        }
-    }
-    if (hold && !io.skipped) {
-        const uint32_t now = io.clock.micros();
-        uint32_t until = now + kSelfTestHoldMs * 1000;
-        const uint32_t monitor = io.video_start_us + io.monitor_wait_ms * 1000;
-        if (io.monitor_wait_ms > 0 && static_cast<int32_t>(monitor - until) > 0) {
-            until = monitor;
-        }
-        wait_until(io, until);
-    }
-    return failures;
 }
 
 // The approved splash (docs/look/boot/boot-e-colour-ribbon.png), drawn the way
@@ -375,15 +184,16 @@ const char *const kSplashMascot[16] = {
     "..GLKLLLLLLKLG..", "..GLLLLNNLLLLG..", "D.GLLLLNNLLLLG.D", ".DDGLLLLLLLLGDD.",
     "D..GGLLLLLLGG..D", "....GGGGGGGG....", "................", "................"};
 
-void splash_mascot(gfx::Canvas &c, int x, int y, int s)
+void splash_mascot(gfx::Canvas &c, int x, int y, int s, gfx::Colour outline = gfx::kDarkGrey,
+                   gfx::Colour fur = gfx::kWhite)
 {
     for (int r = 0; r < 16; r++) {
         for (int q = 0; q < 16; q++) {
             gfx::Colour col;
             switch (kSplashMascot[r][q]) {
             case 'G':
-            case 'D': col = gfx::kDarkGrey; break;
-            case 'L': col = gfx::kWhite; break;
+            case 'D': col = outline; break;
+            case 'L': col = fur; break;
             case 'P': col = gfx::rgb(7, 4, 2); break;
             case 'K': col = gfx::kBlack; break;
             case 'N': col = gfx::rgb(7, 3, 2); break;
@@ -449,6 +259,245 @@ void show_splash(BootIo &io, bool hold)
     if (hold) {
         wait_until(io, io.clock.micros() + io.splash_ms * 1000);
     }
+}
+
+// ---- The self-test screen: the approved drawing (docs/look/boot/
+// boot-b-self-test.png), as option_b() in tools/mockup/boot_drafts.py draws
+// it, with real values. ----
+
+namespace {
+
+constexpr gfx::Colour kBlackC = gfx::kBlack;
+constexpr gfx::Colour kWhiteC = gfx::rgb(7, 7, 3);
+constexpr gfx::Colour kGreyC = gfx::rgb(5, 5, 2);
+constexpr gfx::Colour kDarkC = gfx::rgb(2, 2, 1);
+constexpr gfx::Colour kYellowC = gfx::rgb(7, 7, 0);
+constexpr gfx::Colour kRedC = gfx::rgb(7, 1, 0);
+constexpr int kLeft = 24, kFirstY = 24, kStepY = 18, kLines = 13;
+constexpr uint32_t kLineMs = 120;   // between lines at 100 % pace
+constexpr uint32_t kCountStepMs = 22; // between memory count updates at 100 %
+
+// Spleen 8x16 text, every pixel of each character cell written once
+// (foreground or background), so a line can be written again without a
+// flash.
+void text16(gfx::Canvas &c, int x, int y, const char *s, gfx::Colour fg, int min_chars = 0)
+{
+    const gfx::WideFont &f = gfx::kSpleen8x16;
+    int n = 0;
+    for (; *s != 0 || n < min_chars; n++, x += f.width) {
+        const uint8_t *g = *s != 0 ? f.glyph(*s) : nullptr;
+        for (int row = 0; row < f.height; row++) {
+            const uint8_t bits = g != nullptr ? g[row] : 0;
+            for (int q = 0; q < f.width; q++) {
+                c.fill({x + q, y + row, 1, 1}, (bits & (0x80 >> q)) ? fg : kBlackC);
+            }
+        }
+        if (*s != 0) {
+            s++;
+        }
+    }
+}
+
+void line(gfx::Canvas &c, int index, const char *s, gfx::Colour colour)
+{
+    text16(c, kLeft, kFirstY + index * kStepY, s, colour, 60); // the rest of the line cleared
+}
+
+void frame(gfx::Canvas &c, int w, int h, const char *version)
+{
+    c.fill({0, 0, w, h}, kBlackC);
+    splash_mascot(c, w - 16 * 5 - 24, 16, 5, kGreyC, kWhiteC);
+    char t[48];
+    snprintf(t, sizeof(t), "Chinchilla BIOS %s", version);
+    line(c, 0, t, kWhiteC);
+    line(c, 1, "Copyleft 2026, built on nine resistors", kGreyC);
+    text16(c, kLeft, h - 40, "Press DEL to enter SETUP (there is no setup)", kDarkC);
+}
+
+void memory_line(char *out, size_t n, bool internal, uint32_t kb, bool done)
+{
+    snprintf(out, n, "%s: %6uK%s", internal ? "               " : "Memory Test   ", static_cast<unsigned>(kb),
+             done ? (internal ? " OK   (internal)" : " OK   (external)") : "");
+}
+
+struct Counting {
+    BootIo *io;
+    gfx::Canvas *c;
+    int index;
+    bool internal;
+};
+
+void count_progress(uint32_t kb, void *context)
+{
+    auto *p = static_cast<Counting *>(context);
+    char t[64];
+    memory_line(t, sizeof(t), p->internal, kb, false);
+    line(*p->c, p->index, t, kGreyC);
+    if (p->io->skip == nullptr || !p->io->skipped) {
+        wait_until(*p->io, p->io->clock.micros() + kCountStepMs * p->io->pace_percent * 10);
+    }
+}
+
+} // namespace
+
+void draw_self_test(gfx::Canvas &c, int w, int h, const SelfTestValues &v)
+{
+    frame(c, w, h, v.version);
+    char t[96];
+    snprintf(t, sizeof(t), "Main Processor : %s", v.processor);
+    line(c, 3, t, kGreyC);
+    memory_line(t, sizeof(t), false, v.external_kb, true);
+    line(c, 4, t, kGreyC);
+    memory_line(t, sizeof(t), true, v.internal_kb, true);
+    line(c, 5, t, kGreyC);
+    snprintf(t, sizeof(t), "Detecting video ....... %s", v.video);
+    line(c, 7, t, kGreyC);
+    snprintf(t, sizeof(t), "Detecting drive C: .... %s", v.drive);
+    line(c, 8, t, kGreyC);
+    snprintf(t, sizeof(t), "Detecting mouse ....... %s", v.mouse);
+    line(c, 9, t, kGreyC);
+    snprintf(t, sizeof(t), "Detecting sound ....... %s", v.sound);
+    line(c, 10, t, kGreyC);
+    line(c, 12, "Starting Chinchilla...", kYellowC);
+}
+
+int run_self_test(BootIo &io, bool hold)
+{
+    Screen s(io.display);
+    gfx::Canvas c = s.canvas();
+    const int w = io.display.width(), h = io.display.height();
+    // The header, mascot and footer at once (an all-black screen made the
+    // bench monitor take twice as long to show a picture); the lines start
+    // when the monitor shows one, monitor_wait_ms after the video started.
+    frame(c, w, h, kVersion);
+    if (hold && io.monitor_wait_ms > 0) {
+        wait_until(io, io.video_start_us + io.monitor_wait_ms * 1000);
+    }
+    const uint32_t pace_us = kLineMs * io.pace_percent * 10;
+    auto pause = [&]() {
+        if (hold && !io.skipped) {
+            wait_until(io, io.clock.micros() + pace_us);
+        }
+    };
+    auto log = [&](const char *label, const char *value, bool ok) {
+        if (io.log != nullptr) {
+            char l[160];
+            snprintf(l, sizeof(l), "self-test: %s: %s: %s", label, value, ok ? "OK" : "FAILED");
+            io.log(l, io.context);
+        }
+    };
+    int failures = 0;
+    char v[96], t[128];
+    uint32_t value = 0;
+    pause();
+
+    // The processor.
+    v[0] = 0;
+    bool ok = io.system.fact(ports::Fact::Processor, value, v, sizeof(v));
+    snprintf(t, sizeof(t), "Main Processor : %s", ok ? v : "not recognised");
+    line(c, 3, t, ok ? kGreyC : kRedC);
+    log("Processor", v, ok);
+    failures += ok ? 0 : 1;
+    pause();
+
+    // The memory tests, the count climbing as they go.
+    for (int internal = 0; internal < 2; internal++) {
+        Counting counting{&io, &c, 4 + internal, internal != 0};
+        const MemoryTestResult r =
+            test_memory(io.memory, io.clock, internal ? kInternalTestBudgetUs : kMemoryTestBudgetUs,
+                        hold ? &count_progress : nullptr, &counting, internal != 0);
+        ok = r.ok && r.tested_kb > 0;
+        if (!r.ok) {
+            snprintf(t, sizeof(t), "%s: error at %08lX", internal ? "               " : "Memory Test   ",
+                     static_cast<unsigned long>(r.bad_address));
+        } else if (r.tested_kb == 0) {
+            snprintf(t, sizeof(t), "%s: none free to test", internal ? "               " : "Memory Test   ");
+        } else {
+            memory_line(t, sizeof(t), internal != 0, r.tested_kb, true);
+        }
+        line(c, 4 + internal, t, ok ? kGreyC : kRedC);
+        snprintf(v, sizeof(v), "%uK %s in %u ms%s", static_cast<unsigned>(r.tested_kb),
+                 internal ? "internal" : "external", static_cast<unsigned>(r.us / 1000),
+                 r.ok ? "" : ", a word read back wrong");
+        log("Memory test", v, ok);
+        if (!r.ok && io.log != nullptr) {
+            snprintf(t, sizeof(t), "self-test: memory error at 0x%08lX: wrote %08lX, read %08lX",
+                     static_cast<unsigned long>(r.bad_address), static_cast<unsigned long>(r.wrote),
+                     static_cast<unsigned long>(r.read));
+            io.log(t, io.context);
+        }
+        failures += ok ? 0 : 1;
+        pause();
+    }
+
+    // Not on the screen, but checked and logged: the sizes of RAM and flash.
+    for (ports::Fact f : {ports::Fact::InternalRam, ports::Fact::ExternalRam, ports::Fact::Flash}) {
+        v[0] = 0;
+        ok = io.system.fact(f, value, v, sizeof(v)) && value > 0;
+        format_bytes(v, sizeof(v), value);
+        log(f == ports::Fact::Flash ? "Flash" : (f == ports::Fact::InternalRam ? "Internal RAM" : "External RAM"), v,
+            ok);
+        failures += ok ? 0 : 1;
+    }
+
+    // Video.
+    ok = io.system.fact(ports::Fact::Video, value, v, sizeof(v));
+    snprintf(v, sizeof(v), "VGA %dx%d, 256 colours", w, h);
+    snprintf(t, sizeof(t), "Detecting video ....... %s", v);
+    line(c, 7, t, ok ? kGreyC : kRedC);
+    log("Video", v, ok);
+    failures += ok ? 0 : 1;
+    pause();
+
+    // Drive C:.
+    ok = false;
+    snprintf(v, sizeof(v), "none");
+    ports::VolumeInfo info = {};
+    if (io.storage != nullptr && io.storage->info('C', info) == ports::FsError::Ok) {
+        char size[24];
+        format_bytes(size, sizeof(size), info.total_bytes);
+        char label[24];
+        snprintf(label, sizeof(label), "%s", info.label);
+        // "Flash disk" reads "flash disk" in the line; "RAM disk" stays.
+        if (label[0] >= 'A' && label[0] <= 'Z' && label[1] >= 'a' && label[1] <= 'z') {
+            label[0] = static_cast<char>(label[0] - 'A' + 'a');
+        }
+        snprintf(v, sizeof(v), "%s %s", size, label);
+        ok = true;
+    }
+    snprintf(t, sizeof(t), "Detecting drive C: .... %s", v);
+    line(c, 8, t, ok ? kGreyC : kRedC);
+    log("Drive C:", v, ok);
+    failures += ok ? 0 : 1;
+    pause();
+
+    // Mouse (and keyboard), sound.
+    const struct {
+        int index;
+        const char *label;
+        ports::Fact fact;
+    } facts[] = {{9, "mouse", ports::Fact::Input}, {10, "sound", ports::Fact::Sound}};
+    for (const auto &f : facts) {
+        v[0] = 0;
+        ok = io.system.fact(f.fact, value, v, sizeof(v));
+        snprintf(t, sizeof(t), "Detecting %s ....... %s", f.label, ok ? v : "not found");
+        line(c, f.index, t, ok ? kGreyC : kRedC);
+        log(f.label, v, ok);
+        failures += ok ? 0 : 1;
+        pause();
+    }
+
+    if (failures == 0) {
+        line(c, 12, "Starting Chinchilla...", kYellowC);
+    } else {
+        snprintf(t, sizeof(t), "%d check%s failed. Starting Chinchilla anyway...", failures, failures == 1 ? "" : "s");
+        line(c, 12, t, kRedC);
+    }
+    if (hold && !io.skipped) {
+        // Long enough to read the last line (longer when something failed).
+        wait_until(io, io.clock.micros() + (failures ? 3 : 1) * kSelfTestHoldMs * 1000);
+    }
+    return failures;
 }
 
 } // namespace shell

@@ -22,6 +22,7 @@ set(CORE_SRCS
     src/gfx/font_spleen12x24.cpp
     src/gfx/font_spleen32x64.cpp
     src/gfx/font_spleen6x12.cpp
+    src/gfx/font_spleen8x16.cpp
     src/gfx/rect.cpp
     src/saver/chinchillas.cpp
     src/saver/curves.cpp
