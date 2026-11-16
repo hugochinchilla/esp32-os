@@ -67,3 +67,8 @@ add_test(NAME dbg_tool
 
 add_executable(dither_eval dither_eval.cpp)
 target_link_libraries(dither_eval PRIVATE core)
+
+add_executable(test_snake tests/test_snake.cpp)
+target_link_libraries(test_snake PRIVATE core)
+add_test(NAME snake COMMAND test_snake)
+set_tests_properties(snake PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")

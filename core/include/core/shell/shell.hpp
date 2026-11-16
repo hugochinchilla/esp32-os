@@ -6,6 +6,7 @@
 #pragma once
 
 #include "core/fs/fs.hpp"
+#include "core/games/snake.hpp"
 #include "core/gfx/canvas.hpp"
 #include "core/ports.hpp"
 #include "core/wm/wm.hpp"
@@ -60,6 +61,9 @@ void open_picture(const char *path);
 void finish_picture();
 const uint32_t *picture_timings();
 constexpr int kPictureTimings = 3;
+// Culebra, the snake game. Tests: the game in its window.
+void open_culebra();
+const games::Snake &culebra_game();
 
 // Sets up the desktop icons and the Start menu, and opens the first windows.
 // `storage` holds the drives; `memory` gives the large buffers (editor,

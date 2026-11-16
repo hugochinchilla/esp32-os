@@ -118,7 +118,7 @@ Not scheduled. Each needs its design choices put to the owner before it is built
 | Power-down screen | Shut Down ends on a full screen saying "It is now safe to turn off your computer", as machines without soft power did. Wording and artwork must be our own |
 | Audio player | Compact player in the spirit of late-90s players, with no visualiser and no equaliser. Opens WAV and MP3. The look must be original, not a copy of an existing player or its skins. Needs the sound output (GPIO13) working first, and a freely licensed MP3 decoder. Its sample files must be public domain, openly licensed, or made by us, with the source and licence recorded as in `third_party/samples/README.md` |
 | Mine-sweeping game | A grid puzzle of the mine-clearing kind: numbers show how many neighbours are mined. Our own name, artwork and icons; not a copy of any existing game's look |
-| Snake game | The classic grow-as-you-eat arcade game, with our own name and artwork. A good first program driven by the timer and the keyboard |
+| Snake game | The classic grow-as-you-eat arcade game, with our own name and artwork. A good first program driven by the timer and the keyboard. Built 2026-11-16 as Culebra; see "Chosen in the snake game" |
 | Screensaver | Starts after a period with no input and ends on any key or pointer movement. Three savers in the spirit of 90s ones, all our own code and art: a starfield (flying through space), flying Chinchilla mascots, and animated curves and colours. Open: idle time, where it is configured, whether it needs a password, and how it shares the screen with the window manager |
 
 ## Found on the bench
@@ -413,6 +413,34 @@ practical. Each is easy to change.
   disk still has 1849 KB of its 2048 KB free.
 - The 16x16 picture icon is the 32x32 one with every other pixel, made at
   compile time.
+
+### Chosen in the snake game (to confirm)
+
+Culebra, the snake game, was built on a branch from the PC tests and the
+simulator only; it has not run on the board. The owner has not chosen these
+yet:
+
+- Name: Culebra (Spanish for snake). Other candidates: Sierpe, Hay Trail.
+- Look: a green striped snake with a face on pale sand, red berries, a
+  24 x 18 board of 12-pixel cells in a sunken frame. All drawn in
+  `core/src/shell/culebra.cpp`; the 16x16 icon is in `core/src/gfx/art.cpp`.
+- Rules: walls end the game (no wrapping round), as does the snake's own
+  body; the head may follow its tail. Two turns can be waiting, so quick
+  corners work. Filling the board wins.
+- Keys: arrows steer and start; Space or P pauses and carries on, and starts
+  again after the end; F2 is a new game.
+- Speed: Slow, Normal, Fast (a step every 200, 130, 80 ms) from the Game
+  menu, worth 5, 10, 20 points a berry. The speed does not rise as the snake
+  grows.
+- The game pauses by itself when another window or a menu is in use, and
+  when it is minimised. Closed in the middle of a game, it is still there,
+  paused, when opened again.
+- The best score lasts until restart; it is not saved to disk.
+- It is last in Programs (the list is otherwise alphabetical) so that other
+  branches adding programs merge cleanly; there is no Games folder yet.
+- The rules are in `core/games/snake` with no drawing or clock, tested in
+  `host/tests/test_snake.cpp`; the timer runs only while the snake moves and
+  each step repaints only the cells that changed.
 
 ## To confirm on the bench
 

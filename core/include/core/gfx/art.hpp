@@ -8,6 +8,7 @@ namespace gfx {
 
 const Bitmap &mascot_16();      // the chinchilla face, logo of the OS
 const Bitmap &folder_icon_16();
+const Bitmap &snake_icon_16();  // the snake game
 const Bitmap &text_icon_16();
 const Bitmap &network_icon_16();
 const Bitmap &settings_icon_16();

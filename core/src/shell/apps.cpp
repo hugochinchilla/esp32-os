@@ -1,4 +1,6 @@
 // The built-in programs: About Chinchilla, Welcome, Widget gallery.
+// (Larger ones have their own files: Editor, File manager, Picture viewer,
+// Culebra.)
 #include <cstdio>
 
 #include "core/gfx/art.hpp"
@@ -273,6 +275,7 @@ const App kApps[] = {
     {"Picture viewer", nullptr, &open_viewer},
     {"Welcome", nullptr, &open_welcome},
     {"Widget gallery", nullptr, &open_gallery},
+    {"Culebra", nullptr, &open_culebra},
 };
 constexpr int kAppCount = sizeof(kApps) / sizeof(kApps[0]);
 
@@ -292,6 +295,7 @@ const App *table()
         apps_with_icons[3].icon = &gfx::picture_icon_16();
         apps_with_icons[4].icon = &gfx::text_icon_16();
         apps_with_icons[5].icon = &gfx::settings_icon_16();
+        apps_with_icons[6].icon = &gfx::snake_icon_16();
         icons_set = true;
     }
     return apps_with_icons;
