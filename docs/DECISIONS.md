@@ -55,7 +55,6 @@ Last updated: 2026-11-15.
 | How the PC build shows the screen | SDL window, image files only | Open |
 | Clock chip | DS3231 module, another I2C chip | DS3231 |
 | Look and name | 95 style, 98 style, a mix; name of the OS | Open. All art must be original or freely licensed |
-| Pixel clock | 25.175 MHz (fractional divider), 25, 24 or 26.67 MHz | Pick on the bench with the test program |
 
 ## Ideas kept for later
 
@@ -73,11 +72,28 @@ Not scheduled. To be revisited once a basic OS boots.
 | Wired Ethernet | SPI module with an RJ45 socket, 5 pins | Rejected for now: a module would have to be bought |
 | Battery-backed clock | I2C clock chip with a coin cell on GPIO1 and GPIO2 | Only if parts are already at home |
 
+## Found on the bench
+
+First picture: 2026-11-16, through a VGA-to-HDMI adapter.
+
+- Pixel clock: 25.000 MHz gives a clean picture. 25.175 MHz shows shifting
+  pixels. 25.000 MHz is the default.
+- With the framebuffer sent straight from PSRAM, redrawing the screen left the
+  picture displaced sideways until the output was restarted. The test program
+  now uses bounce buffers and restarts the output in every vertical blank;
+  whether that cures it is still to be confirmed.
+- The cable's pin 10 wire is not a usable ground on its own with the adapter
+  in use. The cable's shield braid must be soldered to the board's ground.
+- The board's UART/COM socket no longer powers the board (it stopped during
+  the ground rework), but its serial link still works. The board is powered
+  from the other USB-C socket, so two cables are needed.
+
 ## To confirm on the bench
 
 - The picture is stable at 640x480 with the framebuffer in PSRAM.
 - One LCD data signal can drive two pins (GPIO17 and GPIO8).
-- Which pixel clock setting gives the cleanest picture on the monitor in use.
+- The bounce buffers stop the picture from being displaced after a redraw.
+- The colours and the four greys look right in both modes.
 - The picture stays stable with Wi-Fi active and during flash writes.
 
 ## Planned order of work

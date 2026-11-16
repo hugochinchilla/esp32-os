@@ -54,7 +54,8 @@ cable used for this build and apply to that cable only.
 | --- | --- | --- |
 | Brown | 13 | HSYNC |
 | Yellow | 14 | VSYNC |
-| White | 10 | Ground |
+| White | 10 | Ground (not enough on its own, see below) |
+| Shield braid | shell | Ground. Must be soldered to the board's ground: without it the VGA-to-HDMI adapter shares no ground with the board and shows no picture |
 
 ## Reserved and spare pins
 

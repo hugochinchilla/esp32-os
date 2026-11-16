@@ -8,3 +8,5 @@ CONFIG_SPIRAM_SPEED_80M=y
 # Recommended by Espressif for RGB output from a PSRAM framebuffer
 CONFIG_ESP32S3_DATA_CACHE_LINE_64B=y
 CONFIG_COMPILER_OPTIMIZATION_PERF=y
+# Re-align the picture at every vertical blank if the output ever slips
+CONFIG_LCD_RGB_RESTART_IN_VSYNC=y

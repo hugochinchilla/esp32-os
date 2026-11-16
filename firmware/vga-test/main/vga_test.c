@@ -49,13 +49,15 @@ static const char *TAG = "vga-test";
 #define V_RES 480
 
 /* Line-buffer size for the driver's bounce-buffer mode, in pixels.
- * 0 sends the framebuffer from PSRAM directly. Try 10 * H_RES if the picture
- * drifts or tears. */
-#define VGA_BOUNCE_PX 0
+ * 0 sends the framebuffer from PSRAM directly; on the bench that left the
+ * picture displaced sideways after every redraw until the output was
+ * restarted, so the test uses bounce buffers. */
+#define VGA_BOUNCE_PX (10 * H_RES)
 
-/* Pixel clocks to try with the 'c' key. 25.175 MHz is the VGA standard; the
- * others divide the PLL more evenly and most monitors accept them. */
-static const uint32_t s_pclk_options[] = {25175000, 25000000, 24000000, 26666666};
+/* Pixel clocks to try with the 'c' key. 25.175 MHz is the VGA standard, but
+ * on the bench it gave shifting pixels and 25.000 MHz was clean, so that is
+ * the default. */
+static const uint32_t s_pclk_options[] = {25000000, 25175000, 24000000, 26666666};
 #define NUM_PCLK (sizeof(s_pclk_options) / sizeof(s_pclk_options[0]))
 
 /* ---- State --------------------------------------------------------------- */
