@@ -420,7 +420,7 @@ int main(int argc, char **argv)
     // "Show all processes": the whole table, system processes included.
     key(wm::key::A, true);
     save("34b-task-manager-all");
-    // A protected process picked (init): End Task is greyed out.
+    // A protected process picked (the desktop): End Task is greyed out.
     key(wm::key::A + 15, true); // Alt+P: the list
     key(wm::key::Home);
     save("34c-task-manager-protected");

@@ -27,7 +27,7 @@ namespace proc {
 using Pid = int;
 
 constexpr Pid kNone = 0;
-constexpr Pid kInit = 1;      // the first process: everything descends from it
+constexpr Pid kRoot = 1;      // the first process: everything descends from it
 constexpr Pid kMaxPid = 32767; // then back to the lowest free number above 1
 
 enum class State : uint8_t {
@@ -80,20 +80,21 @@ class Table {
 public:
     static constexpr int kMaxProcesses = 32;
 
-    // The first process, made if it is not there yet: PID 1, "init", system
-    // and protected. It stands for the start-up code until init is a real
-    // program with a start-up file (backlog item 18).
-    Pid init();
-
-    // A new process. The parent must be alive, or kNone for init's children
-    // (init is made if needed). Returns kNone when the table is full or
-    // there is no such parent.
+    // A new process. The first one made in an empty table is the root of the
+    // tree: PID 1, without a parent (pass kNone), and it never ends. Today
+    // that is the desktop; init takes the place when it is a real program
+    // (backlog item 18). After that the parent must be alive, or kNone for
+    // the root's children. Returns kNone when the table is full or there is
+    // no such parent.
     Pid spawn(const char *name, Pid parent, uint8_t flags = 0);
-    // A service started by the machine: a child of init with the system flag.
+    // A system process started by the machine: a child of the root with the
+    // system flag. Only for what really is a task of its own (the desktop is
+    // the UI task). A service polled from the UI loop gets no row: a row
+    // without a task behind it says something that is not true.
     Pid spawn_service(const char *name, uint8_t flags = 0) { return spawn(name, kNone, flags | kSystem); }
 
-    // Removes the row. Its children are handed to init, as on Unix. Returns
-    // false if there is no such process, or it is init.
+    // Removes the row. Its children are handed to the root, as orphans go to init on Unix. Returns
+    // false if there is no such process, or it is the root.
     bool exit(Pid pid);
 
     // The row for a PID, nullptr if none. The pointer is good until the next
@@ -117,8 +118,8 @@ public:
 
     // Respawn: sets the flag and remembers how to start the program again.
     // When the process ends, by a signal or by itself, `start` is put on a
-    // list, and restart_due() runs the list with init as the current process
-    // (so what it starts is init's child). It is called at safe points, not
+    // list, and restart_due() runs the list with the root as the current process
+    // (so what it starts is the root's child). It is called at safe points, not
     // from inside exit(). `start` must make the new process itself, and call
     // set_restart() on it if that one is to come back too.
     void set_restart(Pid pid, StartFn start, void *context);
@@ -145,7 +146,7 @@ private:
     Process rows_[kMaxProcesses];
     uint8_t order_[kMaxProcesses] = {}; // rows in order of creation
     int count_ = 0;
-    Pid next_ = kInit;
+    Pid next_ = kRoot;
     Pid current_ = kNone;
     uint32_t changes_ = 0;
     int waiting_ = 0; // rows with a signal pending

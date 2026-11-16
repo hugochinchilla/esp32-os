@@ -556,9 +556,9 @@ void ui_task(void *)
     static BootInput input(desktop);
     static dbg::Protocol protocol(sink, lock, display, pointer, input, system, "esp32-os");
     protocol.set_desktop(&desktop);
-    // The services get rows in the process table as they start. They all
-    // still run on this task; the rows say what is there.
-    proc::table().spawn_service("dbgd", proc::kProtected);
+    // The debug link, the remote screen and the web page have no rows in the
+    // process table: they all run on this task. A service gets a row when it
+    // is a task of its own (the owner's rule, 2026-11-16).
     // The debug link answers from here on, also during the start-up screens.
     s_protocol = &protocol;
     esp_log_set_vprintf(log_to_debug_link);
@@ -649,7 +649,6 @@ void ui_task(void *)
     desktop.set_damage_listener([](const gfx::Rect &r, void *) { remote.damage(r); }, nullptr);
     if (radio && vnc_port.listen(rfb::kPort)) {
         remote.set_listener(&vnc_port);
-        proc::table().spawn_service("vncd");
         ESP_LOGI(TAG, "remote screen (VNC) on port %d", rfb::kPort);
     } else {
         ESP_LOGW(TAG, "remote screen (VNC) not available");
@@ -663,7 +662,6 @@ void ui_task(void *)
         web.set_page(net::viewer_page(), net::viewer_page_size());
         web.set_second_page("/novnc", net::novnc_page(), net::novnc_page_size());
         remote.set_listener(&web, 1);
-        proc::table().spawn_service("httpd");
         ESP_LOGI(TAG, "remote screen for a browser on port 80");
     } else {
         ESP_LOGW(TAG, "remote screen for a browser not available");
