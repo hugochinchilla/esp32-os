@@ -21,10 +21,12 @@ the walls (see [Enclosure](#enclosure)).
   GPIO11, CR2032 holder.
 - microSD socket wired for 1-bit SDMMC (CLK 39, CMD 40, D0 41), all data
   lines pulled up, card detect switch on GPIO12.
-- USB host through a CH334R hub (through-hole 12 MHz crystal) with two USB-A
-  sockets for keyboard and mouse. Port power goes through a TPS2051C
+- USB host through a CH334R four-port hub (through-hole 12 MHz crystal) with
+  four USB-A sockets in two stacked pairs: one pair on the back edge, one on
+  the front edge. Room for keyboard, mouse and for example a USB Ethernet
+  adapter. All four ports share the 0.5 A of the power switch. Port power goes through a TPS2051C
   current-limited switch: on by default, GPIO21 low turns it off, GPIO42
-  reads its overcurrent flag. ESD protection (USBLC6-2SC6) on both ports,
+  reads its overcurrent flag. ESD protection (USBLC6-2SC6) on every port,
   100 uF electrolytic on port power. Bus powered from the dev board's 5V pin.
 - A 6-pin expansion header (3V3, GPIO38, 47, 48, 5V, GND), not fitted.
 
@@ -34,12 +36,12 @@ Only two resistor values (1 k, 10 k) and two capacitor values (100 nF,
 
 ### Who fits what
 
-| Board maker (SMD, 8 different parts, 47 placements) | You (hand soldering) |
+| Board maker (SMD, 8 different parts, 49 placements) | You (hand soldering) |
 | --- | --- |
 | 1 k and 10 k resistors, 100 nF and 10 uF capacitors (0603 / 0805) | Two 1x22 sockets for the dev board |
-| CH334R hub (QSOP-16, 0.635 mm pitch) | HD15 VGA socket, stacked USB-A socket |
+| CH334R hub (QSOP-16, 0.635 mm pitch) | HD15 VGA socket, two stacked USB-A sockets |
 | DS3231MZ clock (SOIC-8) | microSD socket (SMD, 1.1 mm pitch) and CR2032 holder (SMD, big pads) |
-| TPS2051C power switch, 2x USBLC6-2SC6 | 12 MHz HC-49 crystal, 100 uF electrolytic, 3.5 mm jack, 2-pin piezo header |
+| TPS2051C power switch, 4x USBLC6-2SC6 | 12 MHz HC-49 crystal, 100 uF electrolytic, 3.5 mm jack, 2-pin piezo header |
 
 The lists are `fab/hat-bom-assembly.csv` (send to the maker) and
 `fab/hat-hand-solder.csv` (buy yourself). `fab/hat-pos-top.csv` holds only the
@@ -95,7 +97,8 @@ the scripts should be retired.
   22 mm of free wall between the VGA's right screw post and the USB-A
   socket, so a bulky VGA plug fits and its thumbscrews can be turned. The
   coin cell sits just above the VGA socket. Left edge: microSD. Right
-  edge: the dev board's two USB-C sockets. The piezo header sits inside.
+  edge: the dev board's two USB-C sockets. Front (top) edge: the second
+  USB-A pair, next to the hub. The piezo header sits inside.
 - Ground: a pour on both layers. The VGA socket's five ground pins and both
   shell lugs go to it (on the perfboard, pin 10 alone gave no picture).
 - Parts on the top side only.
@@ -111,7 +114,7 @@ the scripts should be retired.
    the value and re-run the scripts.
 2. Upload the project and look at the assembler's 3D / placement preview,
    especially the polarity of U1 to U5. If the maker builds its BOM from the
-   KiCad project (AISLER does), mark the hand-solder parts (J1 to J8, BT1,
+   KiCad project (AISLER does), mark the hand-solder parts (J1 to J9, BT1,
    Y1, C12) as "do not place" there; they are already left out of
    `hat-pos-top.csv`.
 3. The VGA socket footprint is a generic KiCad one (Tonar/Amphenol style,
@@ -128,7 +131,7 @@ the scripts should be retired.
 ![enclosure drawing](enclosure.png)
 
 The board is meant to sit on four M3 standoffs inside a printed case, with
-openings in three walls. Coordinates are in mm from the board's top-left
+openings in all four walls. Coordinates are in mm from the board's top-left
 corner (as in the drawing); heights are above the board's top surface.
 
 | Wall | Opening | Centre | Size (w x h) | Centre height |
@@ -136,6 +139,7 @@ corner (as in the drawing); heights are above the board's top surface.
 | Back | VGA D shell, plus two 3.5 mm holes 25 mm apart for the screw posts | x = 24.5 | 19 x 10 | 6.3 |
 | Back | Stacked USB-A pair | x = 67.4 | 15 x 16 | 7.8 |
 | Back | Audio jack | x = 85.5 | 7 x 7 | 3.0 |
+| Front | Second stacked USB-A pair | x = 70.2 | 15 x 16 | 7.8 |
 | Left | microSD slot (the card sticks out about 2.5 mm) | y = 15.5 | 13 x 2.5 | 1.0 |
 | Right | Dev board USB-C pair, one slot for both | y = 36.7 | 30 x 5 | 14.2 |
 

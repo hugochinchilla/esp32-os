@@ -199,12 +199,12 @@ R("R29", "10k", "+3V3", "SD_CD", "sd")
 C("C5", "100n", "+3V3", "GND", "sd")
 C("C6", "10u", "+3V3", "GND", "sd")
 
-# ---- USB hub: CH334R, bus powered, two USB-A ports ------------------------------
+# ---- USB hub: CH334R, bus powered, four USB-A ports -----------------------------
 part("U2", "Interface_USB:CH334R", "Package_SO:QSOP-16_3.9x4.9mm_P0.635mm", "CH334R",
-     {"1": None, "2": None, "3": None, "4": None, "5": "USB2_DN", "6": "USB2_DP",
+     {"1": "USB4_DN", "2": "USB4_DP", "3": "USB3_DN", "4": "USB3_DP", "5": "USB2_DN", "6": "USB2_DP",
       "7": "USB1_DN", "8": "USB1_DP", "9": None, "10": "USB_DN", "11": "USB_DP",
       "12": "+5V", "13": "HUB_3V3", "14": "GND", "15": "HUB_XO", "16": "HUB_XI"}, "usb",
-     "WCH", "CH334R", "C4154405", "USB 2.0 4-port hub controller, QSOP-16 (2 ports used)",
+     "WCH", "CH334R", "C4154405", "USB 2.0 4-port hub controller, QSOP-16",
      who="assembler")
 part("Y1", "Device:Crystal", "Crystal:Crystal_HC49-U_Vertical", "12 MHz",
      {"1": "HUB_XI", "2": "HUB_XO"}, "usb", "", "", "",
@@ -212,7 +212,7 @@ part("Y1", "Device:Crystal", "Crystal:Crystal_HC49-U_Vertical", "12 MHz",
 C("C7", "10u", "+5V", "GND", "usb")
 C("C8", "100n", "HUB_3V3", "GND", "usb")
 C("C9", "10u", "HUB_3V3", "GND", "usb")
-# Downstream power: one current-limited switch for both ports (GPIO21 on/off,
+# Downstream power: one current-limited switch (0.5 A in total) for all four ports (GPIO21 on/off,
 # GPIO42 reads overcurrent). On by default through R23.
 part("U3", "Power_Management:TPS2051CDBV", "Package_TO_SOT_SMD:SOT-23-5", "TPS2051C",
      {"1": "VBUS_DN", "2": "GND", "3": "USB_FAULT", "4": "USB_PWR_EN", "5": "+5V"}, "usb",
@@ -234,6 +234,17 @@ part("U5", "hat:USBLC6-2SC6", "Package_TO_SOT_SMD:SOT-23-6", "USBLC6-2SC6",
 part("J6", "hat:USB_A_Stacked", "Connector_USB:USB_A_Wuerth_61400826021_Horizontal_Stacked",
      "USB-A x2", {"1": "VBUS_DN", "2": "USB1_DN", "3": "USB1_DP", "4": "GND",
                   "5": "VBUS_DN", "6": "USB2_DN", "7": "USB2_DP", "8": "GND", "9": "GND"},
+     "usb", "Wurth Elektronik", "61400826021", "", "Dual stacked USB-A socket, through hole")
+# Second pair, on the front edge (ports 3 and 4 of the hub)
+part("U6", "hat:USBLC6-2SC6", "Package_TO_SOT_SMD:SOT-23-6", "USBLC6-2SC6",
+     {"1": "USB3_DP", "6": "USB3_DP", "3": "USB3_DN", "4": "USB3_DN", "5": "VBUS_DN", "2": "GND"},
+     "usb", "STMicroelectronics", "USBLC6-2SC6", "C7519", "USB ESD protection", who="assembler")
+part("U7", "hat:USBLC6-2SC6", "Package_TO_SOT_SMD:SOT-23-6", "USBLC6-2SC6",
+     {"1": "USB4_DP", "6": "USB4_DP", "3": "USB4_DN", "4": "USB4_DN", "5": "VBUS_DN", "2": "GND"},
+     "usb", "STMicroelectronics", "USBLC6-2SC6", "C7519", "USB ESD protection", who="assembler")
+part("J9", "hat:USB_A_Stacked", "Connector_USB:USB_A_Wuerth_61400826021_Horizontal_Stacked",
+     "USB-A x2", {"1": "VBUS_DN", "2": "USB3_DN", "3": "USB3_DP", "4": "GND",
+                  "5": "VBUS_DN", "6": "USB4_DN", "7": "USB4_DP", "8": "GND", "9": "GND"},
      "usb", "Wurth Elektronik", "61400826021", "", "Dual stacked USB-A socket, through hole")
 
 # ---- Expansion header (not fitted) ------------------------------------------------

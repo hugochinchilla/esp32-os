@@ -6,6 +6,6 @@ J2,1,DevKitC right,PinSocket_1x22_P2.54mm_Vertical,Wurth Elektronik,61302211821,
 J3,1,VGA,DSUB-15-HD_Female_Horizontal_P2.29x1.98mm_EdgePinOffset3.03mm_Housed_MountingHolesOffset4.94mm,Amphenol ICC,L77HDE15SD1CH4F,,"HD15 (VGA) female, right angle, through hole. Check the footprint against the part actually used",THT
 J4,1,Audio out,Jack_3.5mm_CUI_SJ1-3523N_Horizontal,Same Sky (CUI),SJ1-3523N,,"3.5 mm stereo jack, through hole; mono signal on tip and ring",THT
 J5,1,microSD,microSD_HC_Molex_104031-0811,Molex,1040310811,,"microSD socket, push-push, with card detect switch (hand solder, 1.1 mm pitch)",SMD
-J6,1,USB-A x2,USB_A_Wuerth_61400826021_Horizontal_Stacked,Wurth Elektronik,61400826021,,"Dual stacked USB-A socket, through hole",THT
+"J6,J9",2,USB-A x2,USB_A_Wuerth_61400826021_Horizontal_Stacked,Wurth Elektronik,61400826021,,"Dual stacked USB-A socket, through hole",THT
 J8,1,Piezo,PinHeader_1x02_P2.54mm_Vertical,,,,"1x2 pin header 2.54 mm, to a passive piezo sounder",THT
 Y1,1,12 MHz,Crystal_HC49-U_Vertical,,,,"Crystal 12 MHz, HC-49 through hole, 12 to 20 pF load (the hub has its own load capacitors)",THT

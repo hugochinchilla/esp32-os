@@ -50,12 +50,14 @@ def pin_x(n):
 # the dev board's USB-C sockets on the right wall).
 VGA_X = 28.8     # pin 1 of the HD15; body spans VGA_X - 19.8 .. VGA_X + 11.2
 USB_X = 63.9     # pin 1 of the USB-A pair; body spans USB_X - 3.8 .. USB_X + 10.8
+USB2_X = 73.7    # pin 1 of the second USB-A pair, on the front (top) edge, turned 180
 JACK_X = 85.5    # jack centre; the footprint draws its own notch in the edge (+-6.5 mm)
 
 # ref: (x, y, rotation in degrees), board coordinates (mm, y down)
 PLACE = {
     "J2": (SOCK_X0, J2_Y, 90), "J1": (SOCK_X0, J1_Y, 90),
     "J6": (USB_X, H - 15.66, 0),
+    "J9": (USB2_X, 15.66, 180), "U6": (65.5, 20.1, 0), "U7": (72.5, 20.1, 0),
     "J3": (VGA_X, H - 6.99, 0),
     "J4": (JACK_X, H - 4.5, 0), "J8": (96.0, 55.0, 0),
     "J5": (7.0, 15.5, 90),

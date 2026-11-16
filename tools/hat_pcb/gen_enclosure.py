@@ -31,6 +31,8 @@ def cutouts(board):
     usb = big(fp("J6"))
     vga_c = round((vga[0] + vga[-1]) / 2, 2)
     usb_c = round((usb[0] + usb[-1]) / 2, 2)
+    usb2 = big(fp("J9"))
+    usb2_c = round((usb2[0] + usb2[-1]) / 2, 2)
     devy = (gen_pcb.J2_Y + gen_pcb.J1_Y) / 2
     sd = fp("J5").GetBoundingBox(False, False)
     sd_y = round((mm(sd.GetTop(), gen_pcb.OY) + mm(sd.GetBottom(), gen_pcb.OY)) / 2, 2)
@@ -39,6 +41,7 @@ def cutouts(board):
         ("back", "VGA", vga_c, 19.0, 6.3, 10.0),
         ("back", "USB-A x2 (stacked)", usb_c, 15.0, 7.8, 16.0),
         ("back", "Audio jack", gen_pcb.JACK_X, 7.0, 3.0, 7.0),
+        ("front", "USB-A x2 (stacked)", usb2_c, 15.0, 7.8, 16.0),
         ("left", "microSD slot", sd_y, 13.0, 1.0, 2.5),
         ("right", "DevKitC-1 USB-C x2", devy, 30.0, 14.2, 5.0),
     ]
@@ -72,13 +75,17 @@ def svg(board, cuts):
             o.append(f'<circle cx="{X(x)}" cy="{Y(y)}" r="{1.6*s}" fill="white" stroke="black"/>')
             o.append(f'<text x="{X(x)}" y="{Y(y)+(3.4 if y < H/2 else -2.6)*s}" text-anchor="middle">'
                      f'M3 ({x:g}, {y:g})</text>')
-    colours = {"back": "#c0392b", "left": "#2471a3", "right": "#7d3c98"}
+    colours = {"back": "#c0392b", "front": "#b9770e", "left": "#2471a3", "right": "#7d3c98"}
     for wall, name, c, w, zc, zh in cuts:
         col = colours[wall]
         if wall == "back":
             o.append(f'<rect x="{X(c-w/2)}" y="{Y(H)-4}" width="{w*s}" height="8" fill="{col}"/>')
             o.append(f'<text x="{X(c)}" y="{Y(H)-10}" text-anchor="middle" fill="{col}">{name}</text>')
             o.append(f'<text x="{X(c)}" y="{Y(H)+20}" text-anchor="middle" fill="{col}">x = {c:g}</text>')
+        elif wall == "front":
+            o.append(f'<rect x="{X(c-w/2)}" y="{Y(0)-4}" width="{w*s}" height="8" fill="{col}"/>')
+            for i, t in enumerate([name, f"x = {c:g}, {w:g} wide", f"z = {zc:g}, {zh:g} tall"]):
+                o.append(f'<text x="{X(c)}" y="{Y(0)+20+i*14}" text-anchor="middle" fill="{col}">{t}</text>')
         else:
             xe = 0 if wall == "left" else W
             o.append(f'<rect x="{X(xe)-4}" y="{Y(c-w/2)}" width="8" height="{w*s}" fill="{col}"/>')
