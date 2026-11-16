@@ -37,3 +37,5 @@ Files so far:
 | `viewer.ini` | `[view]` | `dither`: none, bayer2, bayer4, bayer8, blue-noise, floyd-steinberg, floyd-serpentine, atkinson, jarvis-judice-ninke, stucki, sierra-lite |
 | `files.ini` | `[view]` | `show_hidden`: true or false |
 | `screensaver.ini` | `[saver]` | `saver`: none, starfield, chinchillas, curves. `wait_minutes`: 1 to 99 |
+| `boot.ini` | `[boot]` | `fastboot`: true skips the start-up screens and the memory test (the other checks still run and are logged), default false. `monitor_wait_ms`: how long after the video starts the self-test stays up, so a slow monitor shows it, 0 to 30000, default 4000 (0: no waiting). `splash_ms`: how long the splash stays, default 800. A key or mouse button skips both screens |
+| `network.ini` | `[wifi]` | `tx_power_dbm`: the radio's top transmit power, 2 to 20, default 2 (higher values put lines on the picture while connecting). `enabled`: false leaves the radio off, default true |

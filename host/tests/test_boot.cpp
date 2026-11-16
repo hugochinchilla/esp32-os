@@ -5,6 +5,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <vector>
 
 #include "core/gfx/canvas.hpp"
 #include "core/image/image.hpp"
@@ -151,12 +152,63 @@ void test_splash_matches_approved(const char *look_folder)
     CHECK(differ == 0);
 }
 
+// A clock that moves on 1 ms each time it is read.
+class SteppingClock : public ports::Clock {
+public:
+    uint32_t micros() override { return now += 1000; }
+    uint32_t now = 0;
+};
+
+// The self-test waits for the monitor; a key skips the waiting and the
+// splash; the fast start draws nothing and logs its checks.
+void test_waiting_and_skipping()
+{
+    host::MemoryDisplay display(640, 480);
+    host::HostSystem system;
+    host::HostMemory memory;
+    SteppingClock clock;
+    shell::BootIo io{display, system, memory, clock, nullptr, nullptr, nullptr, nullptr};
+    io.video_start_us = 0;
+    io.monitor_wait_ms = 4000;
+    shell::run_self_test(io, true);
+    CHECK(clock.now >= 4000000 && clock.now < 4100000 && !io.skipped);
+    clock.now = 0;
+    shell::show_splash(io, true);
+    CHECK(clock.now >= io.splash_ms * 1000 && clock.now < io.splash_ms * 1000 + 100000);
+
+    // A key during the wait: the self-test ends early, the splash is not shown.
+    static int polls = 0;
+    shell::BootIo skip_io{display, system, memory, clock, nullptr, nullptr, nullptr, nullptr};
+    skip_io.video_start_us = clock.now;
+    skip_io.monitor_wait_ms = 4000;
+    skip_io.skip = [](void *) { return ++polls > 50; };
+    const uint32_t start = clock.now;
+    shell::run_self_test(skip_io, true);
+    CHECK(skip_io.skipped && clock.now - start < 2000000);
+    std::vector<uint8_t> before(display.pixels(), display.pixels() + 640 * 480);
+    shell::show_splash(skip_io, true);
+    CHECK(memcmp(before.data(), display.pixels(), before.size()) == 0); // nothing drawn
+
+    // Fast start: nothing drawn, every check logged, the failure counted.
+    NoFlashSystem broken;
+    static int lines = 0, failed_lines = 0;
+    shell::BootIo quiet{display, broken, memory, clock, nullptr, nullptr, nullptr,
+                        [](const char *line, void *) {
+                            lines++;
+                            failed_lines += strstr(line, "FAILED") != nullptr;
+                        }};
+    CHECK(shell::run_quiet_checks(quiet) == 1);
+    CHECK(lines == 8 && failed_lines == 1); // 7 checks and "memory test skipped"
+    CHECK(memcmp(before.data(), display.pixels(), before.size()) == 0);
+}
+
 } // namespace
 
 int main(int argc, char **argv)
 {
     test_memory_fault();
     test_failed_check();
+    test_waiting_and_skipping();
     if (argc > 1) {
         test_splash_matches_approved(argv[1]);
     } else {

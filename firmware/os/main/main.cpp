@@ -15,6 +15,7 @@
 #include "esp_attr.h"
 #include "esp_chip_info.h"
 #include "esp_flash.h"
+#include "esp_wifi.h"
 #include "esp_heap_caps.h"
 #include "esp_private/esp_clk.h"
 #include "esp_memory_utils.h"
@@ -25,6 +26,7 @@
 #include "sdkconfig.h"
 
 #include "core/dbg/protocol.hpp"
+#include "core/fs/ini.hpp"
 #include "littlefs_volume.hpp"
 #include "core/net/posix_tcp.hpp"
 #include "core/net/rfb.hpp"
@@ -42,6 +44,13 @@ namespace {
 
 const char *TAG = "os";
 const uart_port_t kDebugUart = UART_NUM_0;
+
+// The scanout counters every 100 ms from start-up (scan_timeline_task).
+struct ScanSample {
+    uint32_t ms, late, missed, max_late_us;
+};
+ScanSample s_scan_samples[200];
+volatile int s_scan_count = 0;
 
 class UartSink : public ports::ByteSink {
 public:
@@ -172,6 +181,36 @@ public:
                 static_cast<unsigned>(heap_caps_get_minimum_free_size(h.caps)),
                 static_cast<unsigned>(heap_caps_get_largest_free_block(h.caps)));
         }
+        vga_scan_stats_t scan;
+        vga_scan_stats(&scan, false);
+        add("scanout since last reset: refills %u late %u missed %u worst late %u us longest fill %u us\n"
+            "  intervals <200 %u, <300 %u, <340 %u, <400 %u, <640 %u, more %u\n",
+            static_cast<unsigned>(scan.refills), static_cast<unsigned>(scan.late), static_cast<unsigned>(scan.missed),
+            static_cast<unsigned>(scan.max_late_cycles / CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ),
+            static_cast<unsigned>(scan.max_fill_cycles / CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ),
+            static_cast<unsigned>(scan.histogram[0]), static_cast<unsigned>(scan.histogram[1]),
+            static_cast<unsigned>(scan.histogram[2]), static_cast<unsigned>(scan.histogram[3]),
+            static_cast<unsigned>(scan.histogram[4]), static_cast<unsigned>(scan.histogram[5]));
+        add("  last long gap before the refill at pixel %u\n", static_cast<unsigned>(scan.last_gap_pos));
+        {
+            uint32_t late = 0, missed = 0, worst = 0;
+            int shown = 0;
+            for (int i = 0; i < s_scan_count; i++) {
+                late += s_scan_samples[i].late;
+                missed += s_scan_samples[i].missed;
+                worst = s_scan_samples[i].max_late_us > worst ? s_scan_samples[i].max_late_us : worst;
+            }
+            add("start-up timeline (%d x 100 ms): late %u, missed %u, worst late %u us\n", s_scan_count,
+                static_cast<unsigned>(late), static_cast<unsigned>(missed), static_cast<unsigned>(worst));
+            for (int i = 0; i < s_scan_count && shown < 12; i++) {
+                if (s_scan_samples[i].late || s_scan_samples[i].missed) {
+                    add("  at %u ms: late %u missed %u worst %u us\n", static_cast<unsigned>(s_scan_samples[i].ms),
+                        static_cast<unsigned>(s_scan_samples[i].late), static_cast<unsigned>(s_scan_samples[i].missed),
+                        static_cast<unsigned>(s_scan_samples[i].max_late_us));
+                    shown++;
+                }
+            }
+        }
 #if CONFIG_FREERTOS_USE_TRACE_FACILITY
         static TaskStatus_t tasks[24];
         const UBaseType_t count = uxTaskGetSystemState(tasks, 24, nullptr);
@@ -258,6 +297,43 @@ public:
 };
 
 dbg::Protocol *s_protocol;
+uint32_t s_video_start_us; // when vga_start() began sending the picture
+
+// Input goes to the desktop; while the start-up screens show, a key press or
+// a mouse button only asks to skip them (pointer movement does nothing).
+class BootInput : public ports::InputSink {
+public:
+    explicit BootInput(ports::InputSink &desktop) : desktop_(desktop) {}
+    void key(uint16_t usage, bool pressed) override
+    {
+        if (booting) {
+            skip |= pressed;
+            return;
+        }
+        desktop_.key(usage, pressed);
+    }
+    void mouse(const ports::MouseEvent &event) override
+    {
+        if (booting) {
+            skip |= event.buttons != 0;
+            return;
+        }
+        desktop_.mouse(event);
+    }
+    void text(const char *utf8) override
+    {
+        if (booting) {
+            skip = true;
+            return;
+        }
+        desktop_.text(utf8);
+    }
+    bool booting = true;
+    bool skip = false;
+
+private:
+    ports::InputSink &desktop_;
+};
 
 // Log text travels inside the protocol, so it cannot corrupt a screenshot
 // that is being sent at the same moment.
@@ -273,6 +349,24 @@ int log_to_debug_link(const char *format, va_list args)
     }
     s_protocol->send_log(text, static_cast<size_t>(size));
     return size;
+}
+
+// The scanout counters every 100 ms from start-up to 20 s, kept for
+// tools/dbg.py memory (Wi-Fi's own log lines have the same clock).
+
+void scan_timeline_task(void *)
+{
+    vga_scan_stats_t s;
+    vga_scan_stats(&s, true);
+    TickType_t wake = xTaskGetTickCount();
+    while (s_scan_count < 200) {
+        vTaskDelayUntil(&wake, pdMS_TO_TICKS(100));
+        vga_scan_stats(&s, true);
+        s_scan_samples[s_scan_count] = {static_cast<uint32_t>(esp_timer_get_time() / 1000), s.late, s.missed,
+                                        s.max_late_cycles / CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ};
+        s_scan_count = s_scan_count + 1;
+    }
+    vTaskDelete(nullptr);
 }
 
 // While the start-up screens show: answer the debug link.
@@ -309,7 +403,8 @@ void ui_task(void *)
     static EspSystem system;
     static EspClock clock;
     static wm::Wm desktop(display, pointer, clock);
-    static dbg::Protocol protocol(sink, lock, display, pointer, desktop, system, "esp32-os");
+    static BootInput input(desktop);
+    static dbg::Protocol protocol(sink, lock, display, pointer, input, system, "esp32-os");
     protocol.set_desktop(&desktop);
     // The debug link answers from here on, also during the start-up screens.
     s_protocol = &protocol;
@@ -342,19 +437,42 @@ void ui_task(void *)
 
     // Start-up screens: the real self-test, then the splash.
     static shell::BootIo boot_io{display, system, memory, clock, &storage, &boot_idle, &protocol, &boot_log};
+    const shell::BootSettings boot = shell::boot_settings(storage);
+    boot_io.video_start_us = s_video_start_us;
+    boot_io.monitor_wait_ms = boot.monitor_wait_ms;
+    boot_io.splash_ms = boot.splash_ms;
+    boot_io.skip = [](void *) { return input.skip; };
     pointer.set_visible(false);
     const int64_t test_start = esp_timer_get_time();
-    const int failed = shell::run_self_test(boot_io);
+    const int failed = boot.fastboot ? shell::run_quiet_checks(boot_io) : shell::run_self_test(boot_io);
     const int64_t splash_start = esp_timer_get_time();
-    shell::show_splash(boot_io);
+    if (!boot.fastboot) {
+        shell::show_splash(boot_io);
+    }
     const int64_t splash_end = esp_timer_get_time();
     protocol.set_boot_screens(&show_boot_screen, &boot_io);
+    input.booting = false;
+    if (boot_io.skipped) {
+        ESP_LOGI(TAG, "start-up screens skipped by a key or button");
+    }
     pointer.set_visible(true);
 
     // Wi-Fi, after the start-up screens so their timings stay as they
     // were. If the radio does not start, the Network panel says so.
     const int64_t wifi_start = esp_timer_get_time();
-    const bool radio = wifi_begin();
+    // C:\.config\network.ini [wifi]: enabled (false: the radio is not
+    // started) and tx_power_dbm, 2 to 20, default 2: the radio's transmit
+    // bursts put lines on the analogue picture, and at 2 dBm they are gone
+    // (docs/DECISIONS.md).
+    static fs::Ini network;
+    network.load(storage, "C:\\.config\\network.ini");
+    const int tx_dbm = network.get_int("wifi", "tx_power_dbm", 2);
+    const int8_t tx = static_cast<int8_t>((tx_dbm < 2 ? 2 : (tx_dbm > 20 ? 20 : tx_dbm)) * 4); // quarter dBm
+    const bool radio = network.get_bool("wifi", "enabled", true) && wifi_begin();
+    if (radio) {
+        const esp_err_t err = esp_wifi_set_max_tx_power(tx);
+        ESP_LOGI(TAG, "wifi transmit power %d dBm (%s)", tx / 4, esp_err_to_name(err));
+    }
     static net::Manager wifi(wifi_port(), settings_store());
     shell::set_network(&wifi);
     protocol.set_network(&wifi);
@@ -391,9 +509,12 @@ void ui_task(void *)
     const uint32_t first_paint_us = desktop.last_update_us();
 
     ESP_LOGI(TAG, "debug link ready at %d baud", CONFIG_ESP_CONSOLE_UART_BAUDRATE);
-    ESP_LOGI(TAG, "self-test: %d failed, %lld ms with its %u ms hold; splash %lld ms; boot to desktop %lld ms",
-             failed, (splash_start - test_start) / 1000, static_cast<unsigned>(shell::kSelfTestHoldMs),
-             (splash_end - splash_start) / 1000, (esp_timer_get_time() - boot_start) / 1000);
+    ESP_LOGI(TAG, "%s: %d failed, %lld ms (on screen until %u ms after the video started); splash %lld ms; "
+             "boot to desktop %lld ms, %lld ms after the video started",
+             boot.fastboot ? "fast start" : "self-test", failed, (splash_start - test_start) / 1000,
+             static_cast<unsigned>(boot.fastboot ? 0 : boot_io.monitor_wait_ms),
+             (splash_end - splash_start) / 1000, (esp_timer_get_time() - boot_start) / 1000,
+             (esp_timer_get_time() - s_video_start_us) / 1000);
     ESP_LOGI(TAG, "first full paint took %u us", static_cast<unsigned>(first_paint_us));
 
     static uint8_t buffer[256];
@@ -421,15 +542,30 @@ void ui_task(void *)
 
 } // namespace
 
-extern "C" void app_main(void)
+// Starts the video from core 1, so its interrupt runs there: Wi-Fi's task
+// and interrupts are on core 0 and delayed the picture's refills by up to
+// 0.7 ms (measured), enough to show stale lines now and then.
+void video_task(void *done)
 {
-    ESP_LOGI(TAG, "starting video");
+    s_video_start_us = static_cast<uint32_t>(esp_timer_get_time());
     vga_start();
     vga_set_line_hook(compose_line);
+    xSemaphoreGive(static_cast<SemaphoreHandle_t>(done));
+    vTaskDelete(nullptr);
+}
+
+extern "C" void app_main(void)
+{
+    ESP_LOGI(TAG, "starting video on core 1");
+    static StaticSemaphore_t done_buffer;
+    SemaphoreHandle_t done = xSemaphoreCreateBinaryStatic(&done_buffer);
+    xTaskCreatePinnedToCore(video_task, "video", 4096, done, 10, nullptr, 1);
+    xSemaphoreTake(done, portMAX_DELAY);
 
     // The console already set this port's speed; the driver adds buffered
     // reading and writing.
     ESP_ERROR_CHECK(uart_driver_install(kDebugUart, 4096, 0, 0, nullptr, 0));
 
     xTaskCreate(ui_task, "ui", 16384, nullptr, 5, nullptr);
+    xTaskCreate(scan_timeline_task, "scanlog", 3072, nullptr, 1, nullptr);
 }

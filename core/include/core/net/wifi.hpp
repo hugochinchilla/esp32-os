@@ -186,6 +186,7 @@ private:
     void sort_seen();
     void join_next(uint64_t now_us);
     void begin(const char *ssid, const char *password, uint64_t now_us);
+    void first_join(uint64_t now_us);
     void retry_later(uint64_t now_us);
 
     WifiPort &radio_;
@@ -201,6 +202,7 @@ private:
 
     bool started_ = false;
     bool auto_join_ = false;     // join a remembered network when one is seen
+    bool scanned_ = false;       // a scan has finished since start (first_join skips it)
     bool by_user_ = false;       // the attempt under way was asked by the user
     bool keep_ = false;          // remember it when it connects
     Saved attempt_ = {};

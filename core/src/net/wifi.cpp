@@ -194,10 +194,25 @@ void Manager::start(uint64_t now_us)
     radio_.status(link_);
     auto_join_ = saved_count_ > 0;
     if (link_.link != Link::Off) {
-        scan();
+        first_join(now_us);
     }
     (void)now_us;
     changes_++;
+}
+
+// At start-up: straight to the network joined most recently, without a
+// scan of every channel first (the radio transmitting disturbs the video);
+// only if that fails does the usual scan-and-pick follow.
+void Manager::first_join(uint64_t now_us)
+{
+    if (saved_count_ == 0) {
+        scan();
+        return;
+    }
+    tried_[0] = true;
+    by_user_ = false;
+    keep_ = false;
+    begin(saved_[0].ssid, saved_[0].password, now_us);
 }
 
 void Manager::scan()
@@ -267,6 +282,10 @@ void Manager::join_next(uint64_t now_us)
             best_saved = s;
         }
     }
+    if (best < 0 && !scanned_) {
+        scan(); // the direct first join failed: now look at what is around
+        return;
+    }
     if (best < 0) {
         retry_later(now_us);
         return;
@@ -301,6 +320,7 @@ void Manager::sort_seen()
 
 void Manager::read_results()
 {
+    scanned_ = true;
     static Network found[2 * kMaxSeen]; // the UI task only
     const int n = radio_.results(found, 2 * kMaxSeen);
     seen_count_ = 0;
@@ -334,7 +354,7 @@ void Manager::tick(uint64_t now_us)
     const int8_t rssi_before = link_.rssi;
     radio_.status(link_);
     if (before == Link::Off && link_.link != Link::Off) {
-        scan(); // the radio came up after start()
+        first_join(now_us); // the radio came up after start()
     }
     if (link_.link == Link::Connecting && attempt_start_ == 0) {
         attempt_start_ = now_us;

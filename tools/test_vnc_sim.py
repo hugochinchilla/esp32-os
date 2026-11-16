@@ -365,6 +365,7 @@ def main():
     sim = subprocess.Popen([sys.argv[1], folder, str(port), str(web)], stdout=subprocess.PIPE, text=True)
     try:
         board = dbg.Board(sim.stdout.readline().strip(), timeout=2.0)
+        dbg.wait_for_desktop(board)  # after the start-up screens, as on the board
         board.animations(False)
         _, _, shot = board.screenshot(pointer=False)
 

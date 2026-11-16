@@ -62,6 +62,28 @@ it can later be split into two over-the-air update slots of about 1.9 MB
 without moving C:). C: is LittleFS on the 12 MB above it. A larger C: with no
 room kept for updates was the alternative.
 
+### Start-up timing (2026-11-16)
+
+Decided by the owner. The self-test runs for real as before and then stays
+on screen until `monitor_wait_ms` after the video signal started (4000 by
+default), so a monitor that takes a while to lock still shows it; then the
+splash for `splash_ms` (800). Any key or mouse button skips straight to the
+desktop from either screen (pointer movement does not); the checks still run
+to the end and failures are logged. `fastboot = true` shows neither screen
+and skips the memory test. All in C:\.config\boot.ini (docs/settings.md). A
+monitor cannot tell the board it is ready (VGA is one-way, and DDC is not
+wired on the adapter board), so the wait is a time.
+
+### Wi-Fi transmit power (2026-11-16)
+
+Decided by the owner: the radio's transmit power defaults to the minimum,
+2 dBm, adjustable as `tx_power_dbm` in C:\.config\network.ini (2 to 20),
+because at full power its transmit bursts put lines on the picture while it
+connects (see Found on the bench). Joining goes straight to the remembered
+network's channel and access point (kept in NVS with the networks) instead
+of scanning every channel first, so the radio transmits less; a full scan
+follows only if it is not found there.
+
 ### Remote screen access (2026-11-16)
 
 Decided by the owner: as built. The VNC server (port 5900) and the browser
@@ -118,7 +140,6 @@ other threads do not merge their own work.
 | Details chosen in the files milestone; to confirm or overrule | See "Chosen in the files milestone" below | As built |
 | Details chosen in the image viewer milestone; to confirm or overrule | See "Chosen in the image viewer milestone" below | As built |
 | Desktop wallpaper from a picture (Settings > Display) | Yes (a picture shrunk to 640x480 in external RAM, 300 KB, repainted from it), later, never | Later: there is no Settings program yet and the desktop would need a picture store; skipped in this milestone |
-| Start-up screens and slow monitors | Wait for the monitor before the self-test (e.g. keep the self-test on screen until 3 s after the video starts), or not | Asked. On the bench monitor (through the VGA-to-HDMI adapter) the picture appears about 3.6 s after the video starts, and the self-test and splash are over 1.25 s after it, so after a restart neither is seen; they show correctly when asked for with `tools/dbg.py boot` |
 | Interlaced PNG and progressive JPEG | Support them (a whole-picture buffer for progressive JPEG: 6 bytes a pixel), keep them refused | Keep refused for now: they say "not supported" in an error box |
 | SD card in the first version | Yes, later, never | Later (pins are reserved) |
 | How two USB sockets are provided | External hub, hub module on the board, shared receiver | One socket now, space for a hub module |
@@ -240,6 +261,40 @@ First picture: 2026-11-16, through a VGA-to-HDMI adapter.
   partly the camera's compression of fine detail; it is the one pattern
   where shimmer can be seen. The longest timer slice while decoding was
   21 to 31 ms with every dither.
+- Start-up timing on the board (2026-11-16). The bench monitor shows a
+  picture about 3.1 s after a restart (2.4 s after the video starts). With
+  the defaults the self-test is on screen from then until 4.7 s (about 1.5 s
+  readable on the webcam), the splash in full until 5.5 s, the desktop at
+  5.5 s after the restart (4.95 s after the video started). A key 1.6 s
+  after the restart: the desktop is the first thing the monitor shows.
+  fastboot: the desktop 0.16 s after the video starts, the checks logged.
+  With the direct join Wi-Fi associates 0.1 s after the radio starts and has
+  its address about 1.1 s later (before: 5 s and 6 s, after a scan of every
+  channel).
+- Scanlines while Wi-Fi connects (2026-11-16). The owner saw disturbed
+  lines (not whole-picture shifts) from the first picture after a restart
+  until a few seconds after the Wi-Fi bars appeared, then once or twice more,
+  then none. By eye, back to back: Wi-Fi off at start-up, a steady picture;
+  Wi-Fi on, the lines; Wi-Fi on at 2 dBm instead of 20, no lines. The webcam
+  does not show them (its 30 different frames a second and blur hide single
+  lines). Measured in the video interrupt itself (`tools/dbg.py memory`,
+  every refill of a bounce buffer against the DMA's 320 us cadence, and a
+  100 ms timeline from start-up to 20 s): with Wi-Fi on, no refill missed its
+  deadline and the worst started 12 us late (1 to 2 us with Wi-Fi off), while
+  the owner saw the lines. So the picture data is right and the lines come
+  from the radio's transmit bursts disturbing the analogue side (supply or
+  radiation into the resistor DAC, the cable or the VGA-to-HDMI adapter).
+  Fixed in software by the 2 dBm default and the direct join (Decided). Cost
+  at 2 dBm with the owner's router (received at -64 dBm): Wi-Fi 270 KB/s
+  instead of 370 to 408, a plain 300 KB VNC full screen 1.07 s instead of
+  0.8 s, ping 0 % loss over a minute, 13 ms average. For later, in hardware:
+  the module's antenna end away from the VGA board and cable, a clip-on
+  ferrite on the VGA cable, bulk and ceramic decoupling (100 uF and 100 nF)
+  at the resistor DAC, and a stronger 5 V supply; with those a higher power
+  may be clean. Separately, the video interrupt now starts on core 1 (Wi-Fi
+  and lwIP are on core 0): neutral on the counters at start-up; before, two
+  isolated missed refills (339 and 658 us late) were seen during heavy
+  debug-link traffic.
 - Internal RAM with Wi-Fi (2026-11-16, `tools/dbg.py memory`). Before:
   internal heap 276 KB, 110 KB free, lowest 78 KB since start, largest block
   37 KB; a VNC viewer costs about 0.1 KB more. Task stacks: the UI task uses

@@ -34,6 +34,44 @@ private:
     SemaphoreHandle_t m_;
 };
 
+// Where the network was found last time (NVS, with the saved networks; never
+// logged): joining goes straight to that channel and access point instead of
+// scanning every channel, which keeps the radio's transmitting short (it
+// disturbs the analogue video, docs/DECISIONS.md).
+struct ApHint {
+    char ssid[33];
+    uint8_t bssid[6];
+    uint8_t channel;
+};
+
+bool load_hint(ApHint &h)
+{
+    nvs_handle_t handle;
+    if (nvs_open("chinchilla", NVS_READONLY, &handle) != ESP_OK) {
+        return false;
+    }
+    size_t size = sizeof(h);
+    const bool ok = nvs_get_blob(handle, "ap_hint", &h, &size) == ESP_OK && size == sizeof(h);
+    nvs_close(handle);
+    h.ssid[32] = 0;
+    return ok;
+}
+
+void save_hint(const ApHint *h)
+{
+    nvs_handle_t handle;
+    if (nvs_open("chinchilla", NVS_READWRITE, &handle) != ESP_OK) {
+        return;
+    }
+    if (h != nullptr) {
+        nvs_set_blob(handle, "ap_hint", h, sizeof(*h));
+    } else {
+        nvs_erase_key(handle, "ap_hint");
+    }
+    nvs_commit(handle);
+    nvs_close(handle);
+}
+
 net::Security security_of(wifi_auth_mode_t mode)
 {
     switch (mode) {
@@ -168,6 +206,16 @@ public:
         // strongest. With a password, nothing weaker than WPA is accepted.
         config.sta.scan_method = WIFI_ALL_CHANNEL_SCAN;
         config.sta.sort_method = WIFI_CONNECT_AP_BY_SIGNAL;
+        ApHint hint;
+        hinted_ = load_hint(hint) && strcmp(hint.ssid, ssid) == 0 && hint.channel >= 1 && hint.channel <= 14;
+        if (hinted_) {
+            // Straight to last time's channel and access point; if it is not
+            // there, the hint is dropped and the next try scans every channel.
+            config.sta.scan_method = WIFI_FAST_SCAN;
+            config.sta.channel = hint.channel;
+            config.sta.bssid_set = true;
+            memcpy(config.sta.bssid, hint.bssid, 6);
+        }
         config.sta.threshold.authmode = password[0] != 0 ? WIFI_AUTH_WPA_PSK : WIFI_AUTH_OPEN;
         config.sta.pmf_cfg.capable = true;
         config.sta.sae_pwe_h2e = WPA3_SAE_PWE_BOTH;
@@ -278,7 +326,7 @@ private:
             scanning_ = false;
         } else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
             const auto *e = static_cast<const wifi_event_sta_disconnected_t *>(data);
-            bool again = false;
+            bool again = false, drop_hint = false;
             {
                 Guard g(mutex_);
                 if (link_ == net::Link::Connected) {
@@ -298,6 +346,7 @@ private:
                     case WIFI_REASON_NO_AP_FOUND_IN_AUTHMODE_THRESHOLD:
                     case WIFI_REASON_NO_AP_FOUND_IN_RSSI_THRESHOLD:
                         why = net::Failure::NotFound;
+                        drop_hint = hinted_;
                         break;
                     default:
                         break;
@@ -313,8 +362,23 @@ private:
                 }
             }
             ESP_LOGI(TAG, "disconnected, reason %d%s", e->reason, again ? ", trying again" : "");
+            if (drop_hint) {
+                save_hint(nullptr); // the access point moved: scan every channel next time
+                hinted_ = false;
+            }
             if (again) {
                 esp_wifi_connect();
+            }
+        } else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_CONNECTED) {
+            // Remember where it was, written only when it changed (no flash
+            // write on an ordinary join).
+            const auto *e = static_cast<const wifi_event_sta_connected_t *>(data);
+            ApHint now = {}, before = {};
+            memcpy(now.ssid, e->ssid, e->ssid_len < 32 ? e->ssid_len : 32);
+            memcpy(now.bssid, e->bssid, 6);
+            now.channel = e->channel;
+            if (!load_hint(before) || memcmp(&before, &now, sizeof(now)) != 0) {
+                save_hint(&now);
             }
         } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
             const auto *e = static_cast<const ip_event_got_ip_t *>(data);
@@ -348,6 +412,7 @@ private:
     esp_netif_ip_info_t ip_ = {};
     int retries_ = 0;
     bool scanning_ = false;
+    bool hinted_ = false; // this join went straight to the remembered channel
     bool sntp_started_ = false;
     net::Network found_[kMaxFound] = {};
     int found_count_ = 0;

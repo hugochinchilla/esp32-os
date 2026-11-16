@@ -19,6 +19,7 @@ def main():
     try:
         port = sim.stdout.readline().strip()
         board = dbg.Board(port, timeout=2.0)
+        dbg.wait_for_desktop(board)  # after the start-up screens, as on the board
 
         assert board.ping() < 1.0
         info = board.info()

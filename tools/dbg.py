@@ -157,8 +157,10 @@ class Board:
         self.serial.dtr = True   # both raised: released, normal start
         self.wait_hello(5.0)
 
-    def wait_hello(self, timeout):
-        self.hello = None
+    def wait_hello(self, timeout, fresh=True):
+        """Waits for the board's hello; fresh=False accepts one already received."""
+        if fresh:
+            self.hello = None
         end = time.monotonic() + timeout
         while self.hello is None:
             if time.monotonic() > end:
@@ -491,6 +493,16 @@ class Board:
             self._read()
             self.pending.clear()
         raise DebugError("the screenshot arrived damaged twice")
+
+
+def wait_for_desktop(board, timeout=15):
+    """Waits until the start-up screens are over (the desktop has windows)."""
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        if board.windows():
+            return
+        time.sleep(0.1)
+    raise DebugError("the desktop did not start")
 
 
 def back_reference_decode(data, width):
