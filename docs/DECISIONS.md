@@ -1168,7 +1168,7 @@ Task does.
   window in front, so it never lands on a question the program is asking.
   End Task again on the same process offers at once. The other options were a
   box after 5 seconds whatever is on screen, or the button turning into "End
-  Now". **Asked of the owner on a card, 2026-11-16.**
+  Now". **Confirmed by the owner, 2026-11-16**, on a card with those three options.
 - Respawn: `Table::set_restart(pid, start, context)`. When such a process
   ends, for any reason, its start function runs at the next safe point as
   init, and the new process is init's child with a new PID. No process on the

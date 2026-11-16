@@ -295,7 +295,9 @@ Now: the Editor goes and the caret and clock carry on.
 ## 7. What is left
 
 - The board check and the merge, by the board thread.
-- To confirm with the owner: 3.2, 3.4 (asked on a card), 3.5 and 3.7.
+- To confirm with the owner: 3.2, 3.5 and 3.7. He confirmed 3.4 the same
+  evening, on a card with the three options: the offer waits for the Task
+  Manager to be in front.
 - Item 5b: signals for the services, each with a stop function.
 - INT (Ctrl+C) with the terminal (item 12), and `kill` in the shell (item
   13), which calls `proc::Table::signal` and prints its four answers.
