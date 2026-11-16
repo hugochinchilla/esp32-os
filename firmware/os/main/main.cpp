@@ -13,6 +13,7 @@
 #include "freertos/task.h"
 
 #include "driver/uart.h"
+#include "driver/uart_select.h"
 #include "esp_attr.h"
 #include "nvs.h"
 #include "nvs_flash.h"
@@ -31,6 +32,8 @@
 #include "core/dbg/protocol.hpp"
 #include "core/fs/ini.hpp"
 #include "littlefs_volume.hpp"
+#include "rtos_queue.hpp"
+#include "core/msg/queue.hpp"
 #include "core/net/posix_tcp.hpp"
 #include "core/net/rfb.hpp"
 #include "core/net/web.hpp"
@@ -88,6 +91,28 @@ struct ScanSample {
 };
 ScanSample s_scan_samples[200];
 volatile int s_scan_count = 0;
+
+// The message queue into the UI task, made in app_main before any task
+// that could post to it. The UI loop also sleeps on it.
+RtosQueue *s_queue;
+
+// The UI loop, counted for tools/dbg.py memory: how often it went round,
+// and how many of its sleeps were ended by a message or by serial bytes
+// (the others ran out: a timer was due, or it was the network's turn).
+struct LoopStats {
+    uint32_t rounds, woken, no_sleep, delivered, dropped;
+};
+LoopStats s_loop;
+
+// The serial driver's interrupt has put bytes in its buffer: wake the UI
+// task. (The driver offers this call for select(); nothing else here uses
+// select() on the serial port.)
+IRAM_ATTR void serial_wake(uart_port_t, uart_select_notif_t what, BaseType_t *woken)
+{
+    if (what == UART_SELECT_READ_NOTIF) {
+        s_queue->wake_from_isr(woken);
+    }
+}
 
 class UartSink : public ports::ByteSink {
 public:
@@ -305,6 +330,13 @@ public:
                 }
             }
         }
+        add("ui loop: %u rounds, %u sleeps ended by a message or serial bytes, %u rounds without sleep\n"
+            "  messages: %u delivered, %u dropped (their process had ended), %u refused (queue full), "
+            "at most %u of %d waiting\n",
+            static_cast<unsigned>(s_loop.rounds), static_cast<unsigned>(s_loop.woken),
+            static_cast<unsigned>(s_loop.no_sleep), static_cast<unsigned>(s_loop.delivered),
+            static_cast<unsigned>(s_loop.dropped), static_cast<unsigned>(s_queue->refused()),
+            static_cast<unsigned>(s_queue->most_waiting()), RtosQueue::kDepth);
 #if CONFIG_FREERTOS_USE_TRACE_FACILITY
         static TaskStatus_t tasks[24];
         const UBaseType_t count = uxTaskGetSystemState(tasks, 24, nullptr);
@@ -474,6 +506,16 @@ void scan_timeline_task(void *)
                                         s.max_late_cycles / CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ};
         s_scan_count = s_scan_count + 1;
     }
+    // The first message of every start: this task hands the news to the UI
+    // task, which logs it. It shows on the board that a message crosses
+    // from one task to another.
+    msg::post(
+        proc::kNone,
+        [](const msg::Message &m) {
+            ESP_LOGI(TAG, "start-up timeline complete: %u samples (a message from the scanlog task, run on the %s task)",
+                     static_cast<unsigned>(m.a), pcTaskGetName(nullptr));
+        },
+        nullptr, static_cast<uint32_t>(s_scan_count), 0, 1000);
     vTaskDelete(nullptr);
 }
 
@@ -644,15 +686,35 @@ void ui_task(void *)
              (esp_timer_get_time() - s_video_start_us) / 1000);
     ESP_LOGI(TAG, "first full paint took %u us", static_cast<unsigned>(first_paint_us));
 
+    // The loop. Each round takes everything that has arrived (serial bytes,
+    // messages from other tasks), lets the desktop run its timers and paint,
+    // gives the remote screen its turn, and then sleeps until the next
+    // thing: a message or serial bytes wake it at once; otherwise it sleeps
+    // until the desktop's next timer or the network's next turn. Nothing
+    // wakes it when the network has data, so that is still looked at by the
+    // clock (rfb::Server::poll_interval_us()).
+    constexpr uint32_t kLongestSleepUs = 1000000; // a lost wake costs a second, not the desktop
+    constexpr uint32_t kShortestSleepUs = 1000;   // the kernel makes it one tick: lower tasks always get a turn
+    constexpr int kSerialReads = 16;              // 4 KB of serial bytes per round at most
+    static msg::Inbox inbox(*s_queue);
     static uint8_t buffer[256];
     bool viewer = false;
     while (true) {
-        int got = uart_read_bytes(kDebugUart, buffer, sizeof(buffer), pdMS_TO_TICKS(10));
-        if (got > 0) {
+        bool more = false;
+        for (int reads = 0;; reads++) {
+            if (reads == kSerialReads) {
+                more = true;
+                break;
+            }
+            const int got = uart_read_bytes(kDebugUart, buffer, sizeof(buffer), 0);
+            if (got <= 0) {
+                break;
+            }
             protocol.feed(buffer, static_cast<size_t>(got));
         }
-        desktop.tick(); // timers (caret, key repeat, clock), then any painting
-        remote.poll();  // the VNC viewer: its keys and mouse in, changed screen out
+        more |= inbox.deliver(); // what other tasks asked the UI task to do
+        desktop.tick();          // timers (caret, key repeat, clock), then any painting
+        remote.poll();           // the VNC viewer: its keys and mouse in, changed screen out
         if (remote.stats().connected != viewer) {
             viewer = remote.stats().connected;
             const rfb::Server::Stats &v = remote.stats();
@@ -664,6 +726,19 @@ void ui_task(void *)
                          static_cast<unsigned>(v.bytes_sent));
             }
         }
+        uint32_t sleep_us = 0;
+        if (!more) {
+            sleep_us = desktop.idle_us();
+            const uint32_t network_us = remote.poll_interval_us();
+            sleep_us = network_us < sleep_us ? network_us : sleep_us;
+            sleep_us = sleep_us > kLongestSleepUs ? kLongestSleepUs : sleep_us;
+            sleep_us = sleep_us < kShortestSleepUs ? kShortestSleepUs : sleep_us;
+        }
+        s_loop.rounds++;
+        s_loop.no_sleep += more;
+        s_loop.delivered = inbox.delivered();
+        s_loop.dropped = inbox.dropped();
+        s_loop.woken += s_queue->sleep(sleep_us);
     }
 }
 
@@ -683,6 +758,11 @@ void video_task(void *done)
 
 extern "C" void app_main(void)
 {
+    // The message queue first: every task made from here on may post.
+    static RtosQueue queue;
+    s_queue = &queue;
+    msg::set_queue(&queue);
+
     ESP_LOGI(TAG, "starting video on core 1");
     static StaticSemaphore_t done_buffer;
     SemaphoreHandle_t done = xSemaphoreCreateBinaryStatic(&done_buffer);
@@ -692,6 +772,8 @@ extern "C" void app_main(void)
     // The console already set this port's speed; the driver adds buffered
     // reading and writing.
     ESP_ERROR_CHECK(uart_driver_install(kDebugUart, 4096, 0, 0, nullptr, 0));
+    // Serial bytes wake the UI task instead of being looked for every 10 ms.
+    uart_set_select_notif_callback(kDebugUart, &serial_wake);
 
     xTaskCreate(ui_task, "ui", 16384, nullptr, 5, nullptr);
     xTaskCreate(scan_timeline_task, "scanlog", 3072, nullptr, 1, nullptr);

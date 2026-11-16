@@ -61,6 +61,7 @@ public:
     void begin(uint8_t *pixels, int width, int height, uint32_t seed) override;
     void tick(uint64_t now_us) override;
     void end(uint64_t now_us) override;
+    uint64_t next_frame_us() const override { return first_ ? 0 : next_us_; }
 
     // The last run that ended: frames drawn, how long it showed, and the
     // slowest frame (µs).

@@ -55,6 +55,15 @@ public:
     void damage(const gfx::Rect &r);
     // Takes new viewers, reads what the viewer sent, sends what fits.
     void poll();
+    // How long the UI loop may leave before the next poll(), in µs. Nothing
+    // wakes the loop when the network has something, so it comes back by
+    // the clock: often while a viewer is connected or a web page is on its
+    // way, seldom while it only waits for someone to connect, and never
+    // (kNever) when there is nowhere to connect to.
+    static constexpr uint32_t kBusyPollUs = 10000;
+    static constexpr uint32_t kListenPollUs = 50000;
+    static constexpr uint32_t kNever = 0xFFFFFFFF;
+    uint32_t poll_interval_us() const;
     const Stats &stats() const { return stats_; }
 
 private:

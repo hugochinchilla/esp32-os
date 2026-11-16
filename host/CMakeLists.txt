@@ -102,6 +102,11 @@ add_test(NAME saver COMMAND test_saver)
 add_executable(test_proc tests/test_proc.cpp)
 target_link_libraries(test_proc PRIVATE core)
 add_test(NAME proc COMMAND test_proc)
+# The message queue into the UI task, posted to from real threads.
+find_package(Threads REQUIRED)
+add_executable(test_msg tests/test_msg.cpp)
+target_link_libraries(test_msg PRIVATE core Threads::Threads)
+add_test(NAME msg COMMAND test_msg)
 
 # Memory-port buffers live as long as the program, as on the board, so the
 # leak checker would report them; applied after every add_test above.
