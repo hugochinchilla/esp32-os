@@ -20,7 +20,7 @@ enum class Then : uint8_t { Nothing, New, Open, OpenPath, Exit };
 class EditorWindow : public wm::Window {
 public:
     EditorWindow()
-        : Window("Untitled - Editor", {150, 60, 440, 330}, &gfx::text_icon_16()), edit_({0, 0, 100, 100})
+        : Window("Untitled - Editor", {150, 60, 440, 330}, &gfx::editor_icon_16()), edit_({0, 0, 100, 100})
     {
         file_items_[0] = {"&New", &EditorWindow::menu_new, this, nullptr, nullptr, 0};
         file_items_[1] = {"&Open...", &EditorWindow::menu_open, this, nullptr, nullptr, 0};

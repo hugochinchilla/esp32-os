@@ -94,7 +94,7 @@ public:
     void paint(gfx::Canvas &c) override
     {
         Window::paint(c);
-        c.blit2x(gfx::mascot_16(), 12, 12);
+        c.blit(gfx::mascot_32(), 12, 12);
         char line[96];
         const char *p = text_;
         for (int y = 14; *p != 0; y += 13) {
@@ -177,7 +177,7 @@ MessageBox &message_window()
 class ShutDownDialog : public wm::Window {
 public:
     ShutDownDialog()
-        : Window("Shut Down Chinchilla", {0, 0, 320, 150}, &gfx::mascot_16()),
+        : Window("Shut Down Chinchilla", {0, 0, 320, 150}, &gfx::power_icon_16()),
           question_({56, 16, 240, 14}, "What do you want the computer to do?"),
           detail_({56, 34, 240, 14}, "Shut Down gets it ready to be unplugged."),
           shut_down_({312 - 3 * 75 - 2 * 6 - 10, 122 - 23 - 10, 75, 23}, "&Shut Down", &ShutDownDialog::shut_down, this),
@@ -199,7 +199,7 @@ public:
     void paint(gfx::Canvas &c) override
     {
         Window::paint(c);
-        c.blit2x(gfx::mascot_16(), 12, 12);
+        c.blit(gfx::mascot_32(), 12, 12);
     }
 
     bool key(const wm::KeyMsg &k) override
@@ -241,13 +241,21 @@ wm::MenuItem g_program_items[kMaxApps];
 wm::Menu g_programs = {g_program_items, 0};
 void open_screen_saver(void *) { screen_saver_dialog(); }
 void network_panel(void *) { open_network(); }
+void open_display(void *) { display_dialog(); }
+// A right click on the desktop: a menu with what can be done to it.
+wm::MenuItem g_desktop_items[] = {
+    {"&Display...", &open_display, nullptr, nullptr, nullptr, 0},
+};
+wm::Menu g_desktop_menu = {g_desktop_items, 1};
+void desktop_menu(int x, int y, void *) { manager().open_menu(g_desktop_menu, x, y); }
 wm::MenuItem g_settings_items[] = {
     {"&Control Panel", nullptr, nullptr, nullptr, nullptr, wm::kMenuDisabled},
     {"&Taskbar...", nullptr, nullptr, nullptr, nullptr, wm::kMenuDisabled},
     {"&Network", &network_panel, nullptr, nullptr, nullptr, wm::kMenuDisabled},
-    {"&Screen Saver...", &open_screen_saver, nullptr, nullptr, nullptr, 0},
+    {"&Screen Saver...", &open_screen_saver, nullptr, nullptr, &gfx::saver_icon_16(), 0},
+    {"&Display...", &open_display, nullptr, nullptr, &gfx::display_icon_16(), 0},
 };
-wm::Menu g_settings = {g_settings_items, 4};
+wm::Menu g_settings = {g_settings_items, 5};
 wm::MenuItem g_start_items[5];
 wm::Menu g_start = {g_start_items, 5};
 
@@ -582,9 +590,9 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
     g_programs.count = n;
     g_start_items[0] = {"&Programs", nullptr, nullptr, &g_programs, &gfx::folder_icon_16(), 0};
     g_start_items[1] = {"&Settings", nullptr, nullptr, &g_settings, &gfx::settings_icon_16(), 0};
-    g_start_items[2] = {"&Run...", nullptr, nullptr, nullptr, &gfx::text_icon_16(), wm::kMenuDisabled};
+    g_start_items[2] = {"&Run...", nullptr, nullptr, nullptr, &gfx::run_icon_16(), wm::kMenuDisabled};
     g_start_items[3] = {nullptr, nullptr, nullptr, nullptr, nullptr, wm::kMenuSeparator};
-    g_start_items[4] = {"Sh&ut Down...", &shut_down, nullptr, nullptr, &gfx::mascot_16(), 0};
+    g_start_items[4] = {"Sh&ut Down...", &shut_down, nullptr, nullptr, &gfx::power_icon_16(), 0};
     wm.set_start_menu(&g_start, "Chinchilla");
     wm.set_attention_key(&attention_key, nullptr);
 
@@ -604,6 +612,8 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
     refresh_desktop_files(true);
     g_file_timer = wm.start_timer(2000000, 2000000, &desktop_files_tick, nullptr);
     install_screen_saver();
+    install_display();
+    wm.set_desktop_menu(&desktop_menu, nullptr);
     start_network();
     // The desktop starts with no windows open (the owner's choice).
 }

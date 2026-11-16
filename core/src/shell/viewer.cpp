@@ -256,7 +256,7 @@ void set_dither(image::Dither d);
 
 class ViewerWindow : public wm::Window {
 public:
-    ViewerWindow() : Window("Picture viewer", {110, 40, 420, 360}, &gfx::picture_icon_16())
+    ViewerWindow() : Window("Picture viewer", {110, 40, 420, 360}, &gfx::viewer_icon_16())
     {
         file_items_[0] = {"&Open...", &ViewerWindow::menu_open, this, nullptr, nullptr, 0};
         file_items_[1] = {nullptr, nullptr, nullptr, nullptr, nullptr, wm::kMenuSeparator};

@@ -54,6 +54,10 @@ void open_task_manager();
 constexpr int kScreenSaverMinutes = 5, kScreenSaverMaxMinutes = 99;
 void screen_saver_dialog();
 
+// The Display dialog (Start > Settings > Display, or a right click on the
+// desktop): the desktop's colour and pattern.
+void display_dialog();
+
 // File dialogs, for any program. Modal to `owner`. `chosen` gets the full
 // path ("C:\docs\notes.txt") when the user picks one; nothing on Cancel.
 // Save As asks before replacing an existing file.

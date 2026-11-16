@@ -1,6 +1,6 @@
 // The screensaver's settings: which one, after how many minutes, and a
-// preview. Opened from Start > Settings; to become a tab of a Display
-// window once there is a Control Panel (docs/DECISIONS.md).
+// preview. Opened from Start > Settings; to become a part of the Display
+// window (display.cpp) one day (docs/DECISIONS.md).
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -84,7 +84,7 @@ const char *const *names()
 class SaverDialog : public wm::Window {
 public:
     SaverDialog()
-        : Window("Screen Saver", {0, 0, 300, 250}, &gfx::settings_icon_16()),
+        : Window("Screen Saver", {0, 0, 300, 250}, &gfx::saver_icon_16()),
           group_({8, 6, 276, 170}, "Screen saver"),
           list_({18, 24, 256, 60}, names(), 1 + saver::kCount),
           wait_label_({18, 99, 36, 14}, "Wait:"),

@@ -59,6 +59,7 @@ to flash back, since a mistake there cuts the link used to diagnose it.
 Items 1, 2, 6, 9, 12 and 13 touch different files and can be separate branches
 at the same time.
 | | **The look** | | | | |
-| 28 | Taskbar without the dead quick-launch icons; Back and Up with their own icons in the File manager | S | | | on a branch (`claude/project-thread-ikdply`). [Journal](journal/2026-11-16-icons.md) |
-| 29 | Refined icons for every program, at 32x32 and 16x16. The owner picks from drawn proposals | M | | | doing (`claude/project-thread-ikdply`): proposals being drawn |
+| 28 | Taskbar without the dead quick-launch icons; Back and Up with their own icons in the File manager | S | | | done (checked on the board 2026-11-16). [Journal](journal/2026-11-16-icons.md) |
+| 29 | Refined icons for every program, at 32x32 and 16x16. The owner picks from drawn proposals | M | | | on a branch (`claude/project-thread-ikdply`): the owner chose, all applied. [Journal](journal/2026-11-16-icon-proposals.md) |
 | 30 | Quick-launch icons by the Start button that launch something | S | 29 | | todo |
+| 31 | Desktop background: 16 colours and 10 patterns, chosen in a Display dialog (Start > Settings, or a right click on the desktop) | S | | Yes | on a branch (`claude/project-thread-ikdply`). [Journal](journal/2026-11-17-desktop-background.md) |

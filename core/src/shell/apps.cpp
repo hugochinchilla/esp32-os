@@ -43,7 +43,7 @@ public:
     void paint(gfx::Canvas &c) override
     {
         Window::paint(c);
-        c.blit2x(gfx::mascot_16(), 12, 10);
+        c.blit(gfx::mascot_32(), 10, 10);
     }
 
     bool key(const wm::KeyMsg &k) override
@@ -88,7 +88,7 @@ const char kWelcomeText[] =
 class WelcomeWindow : public wm::Window {
 public:
     WelcomeWindow()
-        : Window("Welcome to Chinchilla", {96, 30, 400, 280}, &gfx::text_icon_16()),
+        : Window("Welcome to Chinchilla", {96, 30, 400, 280}, &gfx::welcome_icon_16()),
           text_({6, 6, 100, 100}, kWelcomeText)
     {
         file_items_[0] = {"&Close", &close_window, this, nullptr, nullptr, 0};
@@ -131,7 +131,7 @@ const char *const kFruit[] = {"Apple",   "Banana", "Cherry", "Fig",    "Grape",
 class GalleryWindow : public wm::Window {
 public:
     GalleryWindow()
-        : Window("Widget gallery", {120, 60, 460, 316}, &gfx::folder_icon_16()),
+        : Window("Widget gallery", {120, 60, 460, 316}, &gfx::gallery_icon_16()),
           buttons_({8, 4, 136, 104}, "Buttons"),
           push_({18, 22, 112, 23}, "Push me", &GalleryWindow::pushed, this),
           pushes_({18, 50, 116, 14}, "Pushed 0 times"),
@@ -278,15 +278,15 @@ struct Entry {
 };
 const Entry kApps[] = {
     {{"About Chinchilla", nullptr, &open_about}, &gfx::mascot_16},
-    {{"Cactus Patch", nullptr, &open_cactus_patch}, &cactus_patch_icon},
+    {{"Cactus Patch", nullptr, &open_cactus_patch}, &gfx::cactus_icon_16},
     {{"Culebra", nullptr, &open_culebra}, &gfx::snake_icon_16},
-    {{"Defragmenter", nullptr, &open_defragmenter}, &gfx::drive_icon_16},
-    {{"Editor", nullptr, &open_editor}, &gfx::text_icon_16},
-    {{"File manager", nullptr, &open_file_manager}, &gfx::folder_icon_16},
-    {{"Picture viewer", nullptr, &open_viewer}, &gfx::picture_icon_16},
-    {{"Task Manager", nullptr, &open_task_manager}, &gfx::settings_icon_16},
-    {{"Welcome", nullptr, &open_welcome}, &gfx::text_icon_16},
-    {{"Widget gallery", nullptr, &open_gallery}, &gfx::settings_icon_16},
+    {{"Defragmenter", nullptr, &open_defragmenter}, &gfx::defrag_icon_16},
+    {{"Editor", nullptr, &open_editor}, &gfx::editor_icon_16},
+    {{"File manager", nullptr, &open_file_manager}, &gfx::files_icon_16},
+    {{"Picture viewer", nullptr, &open_viewer}, &gfx::viewer_icon_16},
+    {{"Task Manager", nullptr, &open_task_manager}, &gfx::tasks_icon_16},
+    {{"Welcome", nullptr, &open_welcome}, &gfx::welcome_icon_16},
+    {{"Widget gallery", nullptr, &open_gallery}, &gfx::gallery_icon_16},
 };
 constexpr int kAppCount = sizeof(kApps) / sizeof(kApps[0]);
 

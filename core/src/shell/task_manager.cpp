@@ -64,7 +64,7 @@ public:
 
     TaskManager()
         : Window("Task Manager", {0, 0, kClientW + 2 * kBorder, kClientH + kClientTop + kBorder},
-                 &gfx::settings_icon_16()),
+                 &gfx::tasks_icon_16()),
           heading_({8, 6, 200, 14}, "&Processes running:"),
           columns_({30, 22, 290, 14}, "  PID  Name              Window"),
           list_({8, 36, 320, 94}, titles_, 0, &TaskManager::row_picked, this),
@@ -158,7 +158,7 @@ private:
     {
         auto *self = static_cast<TaskManager *>(context);
         const wm::Window *w = shell::manager().main_window_of(self->pids_[index]);
-        return w != nullptr ? w->icon() : &gfx::settings_icon_16();
+        return w != nullptr ? w->icon() : &gfx::service_icon_16();
     }
 
     // The PID of the row picked, if that process is still there.
