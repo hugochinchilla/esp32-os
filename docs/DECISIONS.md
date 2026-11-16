@@ -1150,7 +1150,7 @@ and not yet run on it. The options and the reasons are in
   by the time it is delivered, and its function runs as that process. PID 0
   is the OS itself and is always delivered. The other options were numbered
   messages to windows, as Windows did, or a bare function with no address.
-  **Put to the owner on a card.**
+  **Confirmed by the owner, 2026-11-16**, on a card with those three options.
 - The queue holds 32 messages (0.8 KB of internal RAM with its wake-up
   semaphore, none from the heap). When it is full the sender chooses: give
   up at once, or wait for room for a given time.

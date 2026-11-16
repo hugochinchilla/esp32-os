@@ -145,7 +145,17 @@ context, two 32-bit values and the PID.
 ## 4. What was chosen, by whom, and why
 
 Built with the options marked above. 3.1 and 3.2 were put to the owner as
-they are the ones later work leans on; the entry is updated with his answer.
+they are the ones later work leans on.
+
+**3.1, what a message is: the owner chose C**, a function addressed to a
+process, on a card with the three options (2026-11-16). The reason given
+with the recommendation: saves on a worker task need exactly this, since the
+job outlives the window and the PID check makes that safe, and it reuses the
+process table. Numbered messages to windows were not taken because every
+window would need a message function that none has today; a bare function
+because a message that outlives its program would crash the machine.
+
+3.2, the network's pace, is still his to confirm.
 
 ## 5. What was built
 
