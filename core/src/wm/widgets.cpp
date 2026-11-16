@@ -181,14 +181,34 @@ void Button::paint(Canvas &c)
     const int tw = label_width(text_);
     const int tx = (r.w - 4 - tw) / 2 + d, ty = (r.h - 4 - kTextH) / 2 + d;
     around({0, 0, r.w - 4, r.h - 4}, {tx, ty, tw, kTextH}, [&](const Rect &a) { inner.fill(a, kGrey); });
+    if (!enabled_) {
+        // Etched, as greyed-out menu items are: dark grey over a white copy
+        // one pixel down and right.
+        inner.fill({tx, ty, tw + 1, kTextH + 1}, kGrey);
+        label(inner, tx + 1, ty + 1, text_, gfx::kWhite);
+        label(inner, tx, ty, text_, gfx::kDarkGrey);
+        return;
+    }
     label_opaque(inner, tx, ty, text_, kBlack, kGrey);
     if (has_focus()) {
         c.focus_rect(r.inset(4).offset(d, d));
     }
 }
 
+void Button::set_enabled(bool on)
+{
+    if (on != enabled_) {
+        enabled_ = on;
+        pressed_ = false;
+        invalidate();
+    }
+}
+
 void Button::mouse(const MouseMsg &m)
 {
+    if (!enabled_) {
+        return;
+    }
     const bool in = inside(rect, m);
     const bool was = pressed_;
     switch (m.kind) {
@@ -215,6 +235,9 @@ void Button::mouse(const MouseMsg &m)
 
 bool Button::key(const KeyMsg &k)
 {
+    if (!enabled_) {
+        return false;
+    }
     if (k.usage == key::Space || k.usage == key::Enter) {
         if (k.pressed) {
             click();
@@ -226,7 +249,7 @@ bool Button::key(const KeyMsg &k)
 
 void Button::click()
 {
-    if (on_click_ != nullptr) {
+    if (enabled_ && on_click_ != nullptr) {
         on_click_(*this, context_);
     }
 }

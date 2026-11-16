@@ -229,11 +229,42 @@ void test_task_manager()
     desktop.text("unsaved");
     CHECK(strcmp(title(), "notes.txt* - Editor") == 0);
 
-    // End Task closes it at once, unsaved changes and all, and the Task
-    // Manager stays in front. The list follows: the next End Task closes
-    // what moved up into that row.
+    // End Task asks first (TERM): the Editor, with unsaved changes, puts
+    // its question up in front and stays. Nothing was saved or lost.
     ctrl_alt_del();
+    key(wm::key::Home);
+    key(wm::key::Down); // Welcome, Editor, Widget gallery
     letter('e', kAlt);
+    CHECK(find("notes.txt* - Editor") != nullptr && strcmp(title(), "Editor") == 0);
+    CHECK(desktop.window_count() == 5 && no_stale_pixels());
+    // Cancel: the Editor goes on. Force is not offered behind the user's
+    // back, however long it takes: only once the Task Manager is in front.
+    key(wm::key::Escape);
+    CHECK(strcmp(title(), "notes.txt* - Editor") == 0);
+    wait(7000000);
+    CHECK(strcmp(title(), "notes.txt* - Editor") == 0 && desktop.window_count() == 4);
+    ctrl_alt_del();
+    CHECK(strcmp(title(), "End Task") == 0 && desktop.window_count() == 5);
+    CHECK(no_stale_pixels());
+    // Cancel there too: the program stays, and the offer is not repeated.
+    key(wm::key::Escape);
+    wait(7000000);
+    CHECK(strcmp(title(), "Task Manager") == 0 && find("notes.txt* - Editor") != nullptr);
+    // End Task once more sends TERM again, and the Editor asks again. This
+    // time the question is left open and the Task Manager brought back:
+    // before the few seconds are up nothing is offered, after them it is.
+    // (There is one message box, so the offer takes the question's place.)
+    letter('e', kAlt);
+    CHECK(strcmp(title(), "Editor") == 0);
+    ctrl_alt_del();
+    wait(3000000);
+    CHECK(strcmp(title(), "Task Manager") == 0);
+    wait(3000000);
+    CHECK(strcmp(title(), "End Task") == 0);
+    // End Now (KILL): the Editor goes, unsaved changes and all, and the
+    // Task Manager is in front with the list up to date.
+    key(wm::key::Enter);
+    wait(10000);
     CHECK(find("notes.txt* - Editor") == nullptr && desktop.window_count() == 3);
     CHECK(strcmp(title(), "Task Manager") == 0);
     char saved[4096];
@@ -241,8 +272,12 @@ void test_task_manager()
     storage.read_file("C:\\Documents\\notes.txt", saved, sizeof(saved), n);
     CHECK(std::string(saved, n).find("unsaved") == std::string::npos);
     CHECK(no_stale_pixels());
+    wait(7000000);
+    CHECK(strcmp(title(), "Task Manager") == 0 && desktop.window_count() == 3); // nothing left to offer
 
-    // A program with a dialog open: End Task takes the dialog with it.
+    // A program with a dialog open: End Task brings the dialog forward, and
+    // the program stays. End Task on it a second time offers force at once;
+    // End Now takes the dialog with the program.
     shell::open_in_editor("C:\\Documents\\notes.txt");
     letter('f', kAlt);
     letter('a'); // Save As
@@ -251,8 +286,24 @@ void test_task_manager()
     CHECK(strcmp(title(), "Task Manager") == 0);
     key(wm::key::End); // Welcome, Widget gallery, Editor
     letter('e', kAlt);
+    CHECK(strcmp(title(), "Save As") == 0 && find("notes.txt - Editor") != nullptr);
+    ctrl_alt_del();
+    letter('e', kAlt);
+    CHECK(strcmp(title(), "End Task") == 0);
+    letter('e', kAlt); // End Now, by its letter
+    wait(10000);
     CHECK(find("Save As") == nullptr && find("notes.txt - Editor") == nullptr);
-    CHECK(desktop.window_count() == 3);
+    CHECK(desktop.window_count() == 3 && strcmp(title(), "Task Manager") == 0);
+    CHECK(no_stale_pixels());
+
+    // A program with nothing to ask closes at once, as its close button
+    // would make it, and force is never offered.
+    key(wm::key::End); // Welcome, Widget gallery
+    letter('e', kAlt);
+    CHECK(find("Widget gallery") == nullptr && desktop.window_count() == 2);
+    wait(7000000);
+    CHECK(strcmp(title(), "Task Manager") == 0 && desktop.window_count() == 2);
+    shell::launch(*shell::find_app("Widget gallery"));
 
     // A window opened behind its back shows up within a second.
     shell::launch(*shell::find_app("About Chinchilla"));
