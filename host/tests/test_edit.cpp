@@ -1,9 +1,11 @@
 // Tests for the multi-line text editing widget and the clipboard.
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <string>
 #include <vector>
 
+#include "core/gfx/canvas.hpp"
 #include "core/wm/text_edit.hpp"
 #include "core/wm/wm.hpp"
 #include "../host_adapters.hpp"
@@ -249,6 +251,100 @@ static void test_mouse()
     CHECK(rig.no_stale_pixels());
 }
 
+/* ---- Painting: no flashes ------------------------------------------------------ */
+
+// Pixel write counts during one step, to prove a paint draws each pixel at
+// most once (no erase-then-draw, which flashes with one screen buffer) and
+// only where something changed.
+struct Writes {
+    std::vector<uint8_t> counts = std::vector<uint8_t>(640 * 480, 0);
+    Writes() { gfx::Canvas::count_writes(counts.data()); }
+    ~Writes() { gfx::Canvas::count_writes(nullptr); }
+    void reset() { std::fill(counts.begin(), counts.end(), 0); }
+    int most() const { return *std::max_element(counts.begin(), counts.end()); }
+    int touched() const
+    {
+        int n = 0;
+        for (uint8_t c : counts) {
+            n += c != 0;
+        }
+        return n;
+    }
+    gfx::Rect bounds() const
+    {
+        gfx::Rect b;
+        for (int i = 0; i < 640 * 480; i++) {
+            if (counts[i] != 0) {
+                b = gfx::bounding(b, {i % 640, i / 640, 1, 1});
+            }
+        }
+        return b;
+    }
+    // At most once everywhere inside `area`.
+    bool once_in(const gfx::Rect &area) const
+    {
+        for (int y = area.y; y < area.bottom(); y++) {
+            for (int x = area.x; x < area.right(); x++) {
+                if (counts[y * 640 + x] > 1) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+};
+
+static void test_paint_once()
+{
+    Rig rig;
+    rig.wm.set_animations(true);
+    rig.load("first line\nsecond line\nthird line\n");
+    rig.w.edit.select(3, 3);
+    Writes writes;
+    const gfx::Rect c = rig.w.client();
+    const gfx::Rect edit = rig.w.edit.rect.offset(c.x, c.y);
+
+    // A caret blink touches only the caret's 12 pixels, once. (First let
+    // the clock's first second pass, which repaints the taskbar clock.)
+    rig.clock.now += 1100000;
+    rig.wm.tick();
+    rig.wm.caret_moved();
+    rig.wm.update();
+    writes.reset();
+    rig.clock.now += wm::Wm::kBlinkUs;
+    rig.wm.tick();
+    CHECK(writes.most() == 1 && writes.touched() == 12);
+    writes.reset();
+    rig.clock.now += wm::Wm::kBlinkUs;
+    rig.wm.tick(); // and back on
+    CHECK(writes.most() == 1 && writes.touched() == 12);
+
+    // Typing a character repaints its line only, each pixel once.
+    writes.reset();
+    rig.wm.text("x");
+    CHECK(writes.most() == 1);
+    const gfx::Rect b = writes.bounds();
+    CHECK(b.h <= wm::TextEdit::kLineHeight + 1 && b.w <= edit.w);
+    CHECK(rig.no_stale_pixels());
+
+    // Enter moves the lines below: they repaint, still once each.
+    writes.reset();
+    rig.key(wm::key::Enter);
+    CHECK(writes.most() == 1);
+
+    // Moving the caret repaints the two lines involved, once.
+    writes.reset();
+    rig.key(Down);
+    CHECK(writes.most() == 1 && writes.bounds().h <= 2 * wm::TextEdit::kLineHeight + 1);
+
+    // A selection and a full repaint of the window: once inside the editor.
+    rig.w.edit.select(2, 20);
+    writes.reset();
+    rig.wm.repaint_all();
+    CHECK(writes.once_in(edit));
+    CHECK(rig.no_stale_pixels());
+}
+
 int main()
 {
     test_load_save();
@@ -256,6 +352,7 @@ int main()
     test_undo_and_clipboard();
     test_scrolling_and_large_files();
     test_mouse();
+    test_paint_once();
     if (failures == 0) {
         printf("all tests passed\n");
     }

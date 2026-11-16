@@ -75,6 +75,13 @@ bool Widget::caret_shown() const
     return wm == nullptr || wm->caret_visible();
 }
 
+void Widget::invalidate_part(const Rect &r)
+{
+    if (window_ != nullptr) {
+        window_->invalidate_client(r.intersect({0, 0, rect.w, rect.h}).offset(rect.x, rect.y));
+    }
+}
+
 void Widget::invalidate()
 {
     if (window_ != nullptr) {
@@ -169,8 +176,23 @@ void Window::close()
 
 void Window::paint(gfx::Canvas &c)
 {
+    // The face colour only where no widget paints, so nothing is drawn
+    // twice (with one screen buffer, a fill followed by the widget on top
+    // shows as a flash).
     const Rect c_rect = client();
-    c.fill({0, 0, c_rect.w, c_rect.h}, gfx::kGrey);
+    static gfx::RectList background; // ponytail: one UI task, so one list will do
+    background.set({0, 0, c_rect.w, c_rect.h});
+    for (int i = 0; i < widget_count_; i++) {
+        if (widgets_[i]->opaque()) {
+            background.subtract(widgets_[i]->rect);
+        }
+    }
+    if (background.overflowed()) {
+        background.set({0, 0, c_rect.w, c_rect.h}); // too many pieces: the plain way
+    }
+    for (int i = 0; i < background.size(); i++) {
+        c.fill(background[i], gfx::kGrey);
+    }
     for (int i = 0; i < widget_count_; i++) {
         gfx::Canvas wc = c.sub(widgets_[i]->rect);
         widgets_[i]->paint(wc);

@@ -105,6 +105,36 @@ int label_width(const char *text)
     return Canvas::text_width(plain);
 }
 
+// The same with the background in one pass (no erase before drawing).
+int label_opaque(Canvas &c, int x, int y, const char *text, gfx::Colour fg, gfx::Colour bg)
+{
+    char plain[96];
+    const int at = strip_access(text, plain, sizeof(plain));
+    c.text_opaque(x, y, plain, fg, bg);
+    if (at >= 0) {
+        char before[96];
+        memcpy(before, plain, at);
+        before[at] = 0;
+        const char one[2] = {plain[at], 0};
+        c.hline(x + Canvas::text_width(before), y + 11, Canvas::text_width(one), fg);
+    }
+    return Canvas::text_width(plain);
+}
+
+// Calls fn for the parts of `area` outside `hole` (up to four rectangles).
+template <typename Fn> void around(const Rect &area, const Rect &hole, Fn fn)
+{
+    const Rect h = hole.intersect(area);
+    if (h.empty()) {
+        fn(area);
+        return;
+    }
+    fn(Rect(area.x, area.y, area.w, h.y - area.y));
+    fn(Rect(area.x, h.bottom(), area.w, area.bottom() - h.bottom()));
+    fn(Rect(area.x, h.y, h.x - area.x, h.h));
+    fn(Rect(h.right(), h.y, area.right() - h.right(), h.h));
+}
+
 // Caption next to a check box or radio button, with the focus rectangle.
 void caption(Canvas &c, int x, int h, const char *text, bool focus)
 {
@@ -126,8 +156,14 @@ bool inside(const Rect &r, const MouseMsg &m)
 
 void Label::paint(Canvas &c)
 {
-    c.fill({0, 0, rect.w, rect.h}, kGrey);
-    label(c, 0, (rect.h - kTextH) / 2, text_, kBlack, bold_);
+    const int y = (rect.h - kTextH) / 2;
+    if (bold_) {
+        c.fill({0, 0, rect.w, rect.h}, kGrey); // ponytail: opaque text has no bold yet
+        label(c, 0, y, text_, kBlack, true);
+        return;
+    }
+    around({0, 0, rect.w, rect.h}, {0, y, label_width(text_), kTextH}, [&](const Rect &r) { c.fill(r, kGrey); });
+    label_opaque(c, 0, y, text_, kBlack, kGrey);
 }
 
 /* ---- Button ----------------------------------------------------------------- */
@@ -139,11 +175,13 @@ void Button::paint(Canvas &c)
         c.edge(r, kBlack, kBlack);
         r = r.inset(1);
     }
-    c.button(r, pressed_ ? gfx::ButtonLook::Pressed : gfx::ButtonLook::Raised);
+    c.button_frame(r, pressed_ ? gfx::ButtonLook::Pressed : gfx::ButtonLook::Raised);
     const int d = pressed_ ? 1 : 0;
     Canvas inner = c.sub(r.inset(2));
     const int tw = label_width(text_);
-    label(inner, (r.w - 4 - tw) / 2 + d, (r.h - 4 - kTextH) / 2 + d, text_, kBlack);
+    const int tx = (r.w - 4 - tw) / 2 + d, ty = (r.h - 4 - kTextH) / 2 + d;
+    around({0, 0, r.w - 4, r.h - 4}, {tx, ty, tw, kTextH}, [&](const Rect &a) { inner.fill(a, kGrey); });
+    label_opaque(inner, tx, ty, text_, kBlack, kGrey);
     if (has_focus()) {
         c.focus_rect(r.inset(4).offset(d, d));
     }
@@ -301,31 +339,57 @@ void TextField::get(char *out, int capacity) const
     to_utf8(chars_, length_, out, capacity);
 }
 
+Rect TextField::caret_rect() const
+{
+    return {2 + 1 + (caret_ - scroll_) * 6, 2 + (rect.h - 4 - kTextH) / 2, 1, kTextH};
+}
+
 void TextField::paint(Canvas &c)
 {
     const Rect r = {0, 0, rect.w, rect.h};
     c.sunken(r);
-    c.fill(r.inset(2), kWhite);
+    const Rect area = {0, 0, rect.w - 4, rect.h - 4};
     Canvas inner = c.sub(r.inset(2));
     const int y = (rect.h - 4 - kTextH) / 2;
     const bool focus = has_focus();
     const int s0 = selection_start(), s1 = selection_end();
-    for (int i = scroll_; i < length_; i++) {
-        const int x = 2 + (i - scroll_) * 6;
-        if (x >= rect.w) {
-            break;
-        }
-        char one[3];
-        to_utf8(&chars_[i], 1, one, sizeof(one));
+    const int caret_x = focus && caret_shown() ? 1 + (caret_ - scroll_) * 6 : -1;
+    // Above and below the text, and the two pixels left of it (the caret may
+    // be in the second).
+    inner.fill({0, 0, area.w, y}, kWhite);
+    inner.fill({0, y + kTextH, area.w, area.h - y - kTextH}, kWhite);
+    inner.fill({0, y, caret_x == 1 ? 1 : 2, kTextH}, kWhite);
+    if (caret_x == 1) {
+        inner.fill({1, y, 1, kTextH}, kBlack);
+    }
+    // The characters, in runs of the same look, each pixel once.
+    int x = 2;
+    for (int i = scroll_; i < length_ && x < area.w;) {
         const bool chosen = focus && i >= s0 && i < s1;
-        if (chosen) {
-            inner.fill_rgb({x, y, 6, kTextH}, kHighlight);
+        char run[2 * kCapacity + 1];
+        int n = 0, count = 0;
+        while (i < length_ && (focus && i >= s0 && i < s1) == chosen && x + count * 6 < area.w) {
+            const uint8_t ch = chars_[i++];
+            if (ch < 0x80) {
+                run[n++] = static_cast<char>(ch);
+            } else {
+                run[n++] = static_cast<char>(0xC0 | (ch >> 6));
+                run[n++] = static_cast<char>(0x80 | (ch & 0x3F));
+            }
+            count++;
         }
-        inner.text(x, y, one, chosen ? kWhite : kBlack);
+        run[n] = 0;
+        const int cx = caret_x > x && caret_x < x + count * 6 ? caret_x : -1;
+        if (chosen) {
+            inner.text_opaque(x, y, run, kWhite, kHighlight, cx);
+        } else {
+            inner.text_opaque(x, y, run, kBlack, kWhite, cx);
+        }
+        x += count * 6;
     }
-    if (focus && caret_shown()) {
-        inner.vline(1 + (caret_ - scroll_) * 6, y, kTextH, kBlack);
-    }
+    // The caret just after the last character sits in that character's
+    // cell (drawn above); right of the text is white.
+    inner.fill({x, y, area.w - x, kTextH}, kWhite);
 }
 
 int TextField::index_at(int x) const
@@ -508,23 +572,33 @@ Rect ScrollBar::thumb() const
 
 void ScrollBar::paint(Canvas &c)
 {
-    const Rect r = {0, 0, rect.w, rect.h};
-    c.checker(r);
     const Rect first = vertical_ ? Rect(0, 0, rect.w, kThickness) : Rect(0, 0, kThickness, rect.h);
     const Rect last = vertical_ ? Rect(0, rect.h - kThickness, rect.w, kThickness)
                                 : Rect(rect.w - kThickness, 0, kThickness, rect.h);
-    c.button(first, held_ == -1 ? gfx::ButtonLook::Pressed : gfx::ButtonLook::Raised);
-    c.button(last, held_ == 1 ? gfx::ButtonLook::Pressed : gfx::ButtonLook::Raised);
-    const int d1 = held_ == -1 ? 1 : 0, d2 = held_ == 1 ? 1 : 0;
-    if (vertical_) {
-        c.pattern(first.x + 4 + d1, first.y + 6 + d1, kUp, 4, kBlack);
-        c.pattern(last.x + 4 + d2, last.y + 6 + d2, kDown, 4, kBlack);
-    } else {
-        c.pattern(first.x + 6 + d1, first.y + 4 + d1, kLeftGlyph, 7, kBlack);
-        c.pattern(last.x + 6 + d2, last.y + 4 + d2, kRightGlyph, 7, kBlack);
-    }
+    // The track between the arrows, around the thumb.
+    const Rect track = vertical_ ? Rect(0, kThickness, rect.w, rect.h - 2 * kThickness)
+                                 : Rect(kThickness, 0, rect.w - 2 * kThickness, rect.h);
     if (maximum_ > 0) {
+        around(track, thumb(), [&](const Rect &r) { c.checker(r); });
         c.button(thumb(), gfx::ButtonLook::Raised);
+    } else {
+        c.checker(track);
+    }
+    // The arrow buttons: edges, then the arrow with the face around it, so
+    // no pixel is drawn twice.
+    auto arrow = [&](const Rect &b, bool held, const char *const *glyph, int rows, int gx, int gy) {
+        c.button_frame(b, held ? gfx::ButtonLook::Pressed : gfx::ButtonLook::Raised);
+        const int d = held ? 1 : 0;
+        const Rect g = {b.x + gx + d, b.y + gy + d, static_cast<int>(strlen(glyph[0])), rows};
+        around(b.inset(2), g, [&](const Rect &a) { c.fill(a, kGrey); });
+        c.pattern_opaque(g.x, g.y, glyph, rows, kBlack, kGrey);
+    };
+    if (vertical_) {
+        arrow(first, held_ == -1, kUp, 4, 4, 6);
+        arrow(last, held_ == 1, kDown, 4, 4, 6);
+    } else {
+        arrow(first, held_ == -1, kLeftGlyph, 7, 6, 4);
+        arrow(last, held_ == 1, kRightGlyph, 7, 6, 4);
     }
 }
 
@@ -653,30 +727,45 @@ void ListBox::paint(Canvas &c)
     c.sunken(r);
     const bool bar = bar_.maximum() > 0;
     const Rect rows = {2, 2, rect.w - 4 - (bar ? ScrollBar::kThickness : 0), rect.h - 4};
-    c.fill(rows, kWhite);
     Canvas inner = c.sub(rows);
     const int top = bar_.value();
     const int rh = row_height();
-    for (int i = 0; i <= visible_rows() && top + i < count_; i++) {
+    int y = 0;
+    for (int i = 0; i <= visible_rows() && top + i < count_; i++, y += rh) {
         const int index = top + i;
-        Rect row = {0, i * rh, rows.w, rh};
+        const Rect row = {0, y, rows.w, rh};
         const bool chosen = index == selected_;
+        const int tw = Canvas::text_width(items_[index]);
         int tx = 2;
+        Rect hl = row; // the highlighted part when chosen
         if (icon_ != nullptr) {
-            if (const gfx::Bitmap *b = icon_(index, context_)) {
-                inner.blit(*b, 2, row.y + 1);
+            const Rect cell = {0, y, 20, rh};
+            const gfx::Bitmap *b = icon_(index, context_);
+            if (b != nullptr) {
+                const Rect at = {2, y + 1, b->width, b->height};
+                around(cell, at, [&](const Rect &a) { inner.fill(a, kWhite); });
+                inner.blit_opaque(*b, 2, y + 1, kWhite);
+            } else {
+                inner.fill(cell, kWhite);
             }
             tx = 22;
-            row = {20, row.y, Canvas::text_width(items_[index]) + 4, rh};
+            hl = {20, y, tw + 4, rh};
+            inner.fill({hl.right(), y, rows.w - hl.right(), rh}, kWhite);
         }
+        const int ty = y + (rh - kTextH) / 2;
+        const Rect cells = {tx, ty, tw, kTextH};
         if (chosen) {
-            inner.fill_rgb(row, kHighlight);
-        }
-        inner.text(tx, row.y + (rh - kTextH) / 2, items_[index], chosen ? kWhite : kBlack);
-        if (chosen && has_focus()) {
-            inner.focus_rect(row);
+            around(hl, cells, [&](const Rect &a) { inner.fill_rgb(a, kHighlight); });
+            inner.text_opaque(tx, ty, items_[index], kWhite, kHighlight);
+            if (has_focus()) {
+                inner.focus_rect(hl);
+            }
+        } else {
+            around(hl, cells, [&](const Rect &a) { inner.fill(a, kWhite); });
+            inner.text_opaque(tx, ty, items_[index], kBlack, kWhite);
         }
     }
+    inner.fill({0, y, rows.w, rows.h - y}, kWhite);
     if (bar) {
         Canvas bc = c.sub(bar_.rect);
         bar_.paint(bc);
@@ -778,20 +867,24 @@ void TextArea::paint(Canvas &c)
 {
     const Rect r = {0, 0, rect.w, rect.h};
     c.sunken(r);
-    c.fill(r.inset(2), kWhite);
+    const Rect area = {0, 0, rect.w - 4, rect.h - 4};
     Canvas inner = c.sub(r.inset(2));
-    // One line at a time, copied out so it can end in a zero.
+    // One band of 13 rows per line, each pixel once; copied out so the line
+    // can end in a zero.
     char line[128];
     const char *p = text_;
     int y = 3;
-    while (*p != 0 && y < rect.h) {
+    inner.fill({0, 0, area.w, y}, kWhite);
+    while (*p != 0 && y < area.h) {
         int n = 0;
         while (p[n] != 0 && p[n] != '\n' && n < static_cast<int>(sizeof(line)) - 1) {
             line[n] = p[n];
             n++;
         }
         line[n] = 0;
-        inner.text(4, y, line, kBlack);
+        const Rect band = {0, y, area.w, 13};
+        around(band, {4, y, Canvas::text_width(line), kTextH}, [&](const Rect &a) { inner.fill(a, kWhite); });
+        inner.text_opaque(4, y, line, kBlack, kWhite);
         p += n;
         while (*p != 0 && *p != '\n') {
             p++; // the rest of an over-long line
@@ -801,6 +894,7 @@ void TextArea::paint(Canvas &c)
         }
         y += 13;
     }
+    inner.fill({0, y, area.w, area.h - y}, kWhite);
 }
 
 } // namespace wm

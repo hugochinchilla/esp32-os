@@ -125,6 +125,7 @@ public:
     bool focusable() const override { return true; }
     bool key(const KeyMsg &k) override;
     void text(const char *utf8) override;
+    Rect caret_rect() const override;
 
     // The text as UTF-8 (at most 2 bytes per character plus the zero).
     void get(char *out, int capacity) const;
@@ -254,6 +255,7 @@ class GroupFrame : public Widget {
 public:
     GroupFrame(const Rect &r, const char *caption) : Widget(r), caption_(caption) {}
     void paint(gfx::Canvas &c) override;
+    bool opaque() const override { return false; } // only its lines: the window fills inside
 
 private:
     const char *caption_;

@@ -113,6 +113,13 @@ public:
     virtual char access() const { return 0; }
 
     bool has_focus() const;
+    // Whether the widget covers all of its rect when it paints (the window
+    // does not paint its background there, so nothing is drawn twice).
+    virtual bool opaque() const { return true; }
+    // Where the caret is, in widget coordinates: all a blink repaints.
+    virtual Rect caret_rect() const { return {0, 0, rect.w, rect.h}; }
+    // Asks for a part of the widget (widget coordinates) to be painted again.
+    void invalidate_part(const Rect &r);
     // The window manager, through the window (nullptr before it opens).
     Wm *manager() const;
     // Whether a caret should be drawn now (it blinks).

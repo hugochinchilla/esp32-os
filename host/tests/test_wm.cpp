@@ -833,6 +833,21 @@ static void test_timers_and_clock()
     CHECK(rig.wm.caret_visible());
     rig.wm.set_animations(true);
 
+    // A blink repaints the caret's 12 pixels only, each once.
+    {
+        std::vector<uint8_t> counts(640 * 480, 0);
+        gfx::Canvas::count_writes(counts.data());
+        rig.wait(wm::Wm::kBlinkUs);
+        gfx::Canvas::count_writes(nullptr);
+        int touched = 0, most = 0;
+        for (uint8_t n : counts) {
+            touched += n != 0;
+            most = n > most ? n : most;
+        }
+        CHECK(touched == 12 && most == 1);
+        rig.wait(wm::Wm::kBlinkUs);
+    }
+
     // A held key repeats after a pause; letting go stops it.
     char text[64];
     rig.key(wm::key::End);

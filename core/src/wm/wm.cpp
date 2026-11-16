@@ -1442,16 +1442,28 @@ void Wm::paint_frame(Canvas &c, Window &w)
 {
     const Rect &f = w.frame_;
     const int b = Window::kBorder;
-    // The border strips and the title area; the client area is the window's.
-    c.fill({f.x, f.y, f.w, Window::kClientTop}, gfx::kGrey);
-    c.fill({f.x, f.bottom() - b, f.w, b}, gfx::kGrey);
-    c.fill({f.x, f.y, b, f.h}, gfx::kGrey);
-    c.fill({f.right() - b, f.y, b, f.h}, gfx::kGrey);
+    const Rect title = {f.x + b, f.y + b, f.w - 2 * b, Window::kTitleHeight};
+    // Each pixel once: the grey border inside the two-pixel edge, around the
+    // title bar, client area and menu bar; the fade around the buttons.
+    static RectList parts; // ponytail: one UI task
+    parts.set(f.inset(2));
+    parts.subtract(w.client());
+    parts.subtract(title);
+    parts.subtract(w.menu_bar_rect());
+    for (int i = 0; i < parts.size(); i++) {
+        c.fill(parts[i], gfx::kGrey);
+    }
     c.raised(f);
 
     const bool active = active_ == &w;
-    const Rect title = {f.x + b, f.y + b, f.w - 2 * b, Window::kTitleHeight};
-    c.fill_fade(title, active ? kActiveFrom : kInactiveFrom, active ? kActiveTo : kInactiveTo);
+    parts.set(title);
+    for (Part p : {Part::Close, Part::Maximize, Part::Minimize}) {
+        parts.subtract(title_button(w, p));
+    }
+    for (int i = 0; i < parts.size(); i++) {
+        c.fill_fade(parts[i], active ? kActiveFrom : kInactiveFrom, active ? kActiveTo : kInactiveTo, false,
+                    &title);
+    }
     if (w.icon_ != nullptr) {
         c.blit(*w.icon_, f.x + 5, f.y + 6);
     }
@@ -1671,14 +1683,16 @@ void Wm::blink(void *self)
     Wm &wm = *static_cast<Wm *>(self);
     wm.caret_on_ = !wm.caret_on_;
     if (wm.animations_ && wm.active_ != nullptr && wm.active_->focus() != nullptr) {
-        wm.active_->focus()->invalidate();
+        Widget *w = wm.active_->focus();
+        w->invalidate_part(w->caret_rect()); // only the caret
     }
 }
 
 void Wm::caret_moved()
 {
     if (!caret_on_ && active_ != nullptr && active_->focus() != nullptr) {
-        active_->focus()->invalidate();
+        Widget *w = active_->focus();
+        w->invalidate_part(w->caret_rect());
     }
     caret_on_ = true;
     stop_timer(blink_timer_);

@@ -36,6 +36,8 @@ Colour dither_t(Rgb c, unsigned t)
 
 } // namespace
 
+uint8_t *Canvas::write_counts_ = nullptr;
+
 Colour dither(Rgb c, int x, int y)
 {
     return dither_t(c, kBayer[y & 3][x & 3]);
@@ -70,7 +72,10 @@ template <typename Fn> void Canvas::each(const Rect &r, Fn fn)
 
 void Canvas::put(int x, int y, Colour c)
 {
-    each({x, y, 1, 1}, [&](const Rect &s) { pixels_[s.y * width_ + s.x] = c; });
+    each({x, y, 1, 1}, [&](const Rect &s) {
+        pixels_[s.y * width_ + s.x] = c;
+        mark(s.x, s.y, 1);
+    });
 }
 
 void Canvas::fill(const Rect &r, Colour c)
@@ -79,6 +84,7 @@ void Canvas::fill(const Rect &r, Colour c)
         uint8_t *row = pixels_ + s.y * width_ + s.x;
         for (int y = 0; y < s.h; y++, row += width_) {
             memset(row, c, s.w);
+            mark(s.x, s.y + y, s.w);
         }
     });
 }
@@ -110,15 +116,19 @@ void Canvas::fill_rgb(const Rect &r, Rgb c)
             for (int x = s.x; x < s.right(); x++) {
                 row[x] = t[x & 3];
             }
+            mark(s.x, y, s.w);
         }
     });
 }
 
-void Canvas::fill_fade(const Rect &r, Rgb from, Rgb to, bool vertical)
+void Canvas::fill_fade(const Rect &r, Rgb from, Rgb to, bool vertical, const Rect *span_rect)
 {
+    // The fade runs across `span_rect` (r itself by default): a part of a
+    // title bar is filled with its share of the whole fade.
+    const Rect &whole = span_rect != nullptr ? *span_rect : r;
     if (vertical) {
-        const int vspan = r.h > 1 ? r.h - 1 : 1;
-        const int sy0 = r.y + oy_;
+        const int vspan = whole.h > 1 ? whole.h - 1 : 1;
+        const int sy0 = whole.y + oy_;
         each(r, [&](const Rect &s) {
             for (int y = s.y; y < s.bottom(); y++) {
                 const int i = y - sy0;
@@ -135,12 +145,13 @@ void Canvas::fill_fade(const Rect &r, Rgb from, Rgb to, bool vertical)
                 for (int x = s.x; x < s.right(); x++) {
                     p[x] = row4[x & 3];
                 }
+                mark(s.x, y, s.w);
             }
         });
         return;
     }
-    const int span = r.w > 1 ? r.w - 1 : 1;
-    const int sx0 = r.x + ox_; // screen x of the fade's first column
+    const int span = whole.w > 1 ? whole.w - 1 : 1;
+    const int sx0 = whole.x + ox_; // screen x of the fade's first column
     each(r, [&](const Rect &s) {
         for (int x = s.x; x < s.right(); x++) {
             const int i = x - sx0;
@@ -156,6 +167,7 @@ void Canvas::fill_fade(const Rect &r, Rgb from, Rgb to, bool vertical)
             uint8_t *p = pixels_ + s.y * width_ + x;
             for (int y = s.y; y < s.bottom(); y++, p += width_) {
                 *p = column[y & 3];
+                mark(x, y, 1);
             }
         }
     });
@@ -181,16 +193,18 @@ void Canvas::checker(const Rect &r)
             for (int x = s.x; x < s.right(); x++) {
                 row[x] = ((x + y) & 1) ? kWhite : kGrey;
             }
+            mark(s.x, y, s.w);
         }
     });
 }
 
 void Canvas::edge(const Rect &r, Colour tl, Colour br)
 {
+    // Four lines that never share a pixel.
     hline(r.x, r.y, r.w - 1, tl);
-    vline(r.x, r.y, r.h - 1, tl);
+    vline(r.x, r.y + 1, r.h - 2, tl);
     hline(r.x, r.bottom() - 1, r.w, br);
-    vline(r.right() - 1, r.y, r.h, br);
+    vline(r.right() - 1, r.y, r.h - 1, br);
 }
 
 void Canvas::raised(const Rect &r)
@@ -203,6 +217,17 @@ void Canvas::sunken(const Rect &r)
 {
     edge(r, kDarkGrey, kWhite);
     edge(r.inset(1), kBlack, kGrey);
+}
+
+void Canvas::button_frame(const Rect &r, ButtonLook look)
+{
+    if (look == ButtonLook::Raised) {
+        edge(r, kWhite, kBlack);
+        edge(r.inset(1), kGrey, kDarkGrey);
+    } else {
+        edge(r, kBlack, kWhite);
+        edge(r.inset(1), kDarkGrey, kGrey);
+    }
 }
 
 void Canvas::button(const Rect &r, ButtonLook look)
@@ -232,6 +257,7 @@ void Canvas::blit(const Bitmap &b, int x, int y)
             for (int col = 0; col < s.w; col++) {
                 if (src[col] != b.transparent) {
                     dst[col] = src[col];
+                    mark(s.x + col, s.y + row, 1);
                 }
             }
         }
@@ -248,6 +274,7 @@ void Canvas::blit_selected(const Bitmap &b, int x, int y, Colour tint)
             for (int col = 0; col < s.w; col++) {
                 if (src[col] != b.transparent) {
                     dst[col] = ((s.x + col + s.y + row) & 1) ? tint : src[col];
+                    mark(s.x + col, s.y + row, 1);
                 }
             }
         }
@@ -265,10 +292,20 @@ void Canvas::blit2x(const Bitmap &b, int x, int y)
                 uint8_t p = src[(bx + col) / 2];
                 if (p != b.transparent) {
                     dst[col] = p;
+                    mark(s.x + col, s.y + row, 1);
                 }
             }
         }
     });
+}
+
+void Canvas::pattern_opaque(int x, int y, const char *const *rows, int count, Colour fg, Colour bg)
+{
+    for (int r = 0; r < count; r++) {
+        for (int q = 0; rows[r][q] != 0; q++) {
+            put(x + q, y + r, rows[r][q] == 'X' ? fg : bg);
+        }
+    }
 }
 
 void Canvas::pattern(int x, int y, const char *const *rows, int count, Colour c)
@@ -321,12 +358,93 @@ int Canvas::text(int x, int y, const char *s, Colour c, bool bold)
                     const int px = gx + col;
                     if ((bits & (0x80u >> col)) && px >= part.x && px < part.right()) {
                         dst[px] = c;
+                        mark(px, py, 1);
                     }
                 }
             }
         }
     });
     return x + len * advance;
+}
+
+template <typename BgFn>
+int Canvas::text_cells(int x, int y, const char *s, Colour fg, BgFn bg, int caret_x)
+{
+    const Font &f = kSpleen6x12;
+    int len = 0;
+    for (const char *p = s; next_latin1(p) != 0;) {
+        len++;
+    }
+    const int sx0 = x + ox_, sy0 = y + oy_;
+    const int scaret = caret_x >= 0 ? caret_x + ox_ : -1;
+    each({x, y, len * f.width, f.height}, [&](const Rect &part) {
+        for (int py = part.y; py < part.bottom(); py++) {
+            const int row = py - sy0;
+            uint8_t *dst = pixels_ + py * width_;
+            // Walk the characters that cross this part.
+            const char *p = s;
+            int index = 0;
+            uint8_t code = 0;
+            int cell_x = sx0;
+            for (int px = part.x; px < part.right(); px++) {
+                const int want = (px - sx0) / f.width;
+                while (index <= want) {
+                    code = next_latin1(p);
+                    cell_x = sx0 + index * f.width;
+                    index++;
+                }
+                const int col = px - cell_x;
+                // The caret is always black, even on a selection.
+                dst[px] = px == scaret ? kBlack : ((f.glyph(code)[row] & (0x80u >> col)) ? fg : bg(px, py));
+            }
+            mark(part.x, py, part.w);
+        }
+    });
+    return x + len * f.width;
+}
+
+int Canvas::text_opaque(int x, int y, const char *s, Colour fg, Colour bg, int caret_x)
+{
+    return text_cells(x, y, s, fg, [bg](int, int) { return bg; }, caret_x);
+}
+
+int Canvas::text_opaque(int x, int y, const char *s, Colour fg, Rgb bg, int caret_x)
+{
+    Colour tile[4][4];
+    for (int ty = 0; ty < 4; ty++) {
+        for (int tx = 0; tx < 4; tx++) {
+            tile[ty][tx] = dither_t(bg, kBayer[ty][tx]);
+        }
+    }
+    return text_cells(x, y, s, fg, [&tile](int px, int py) { return tile[py & 3][px & 3]; }, caret_x);
+}
+
+void Canvas::blit_opaque(const Bitmap &b, int x, int y, Colour bg)
+{
+    each({x, y, b.width, b.height}, [&](const Rect &s) {
+        const int bx = s.x - (x + ox_), by = s.y - (y + oy_);
+        for (int row = 0; row < s.h; row++) {
+            const uint8_t *src = b.pixels + (by + row) * b.width + bx;
+            uint8_t *dst = pixels_ + (s.y + row) * width_ + s.x;
+            for (int col = 0; col < s.w; col++) {
+                dst[col] = src[col] != b.transparent ? src[col] : bg;
+            }
+            mark(s.x, s.y + row, s.w);
+        }
+    });
+}
+
+void Canvas::fill_around(const Rect &area, const Rect &hole, Colour c)
+{
+    const Rect h = hole.intersect(area);
+    if (h.empty()) {
+        fill(area, c);
+        return;
+    }
+    fill({area.x, area.y, area.w, h.y - area.y}, c);                  // above
+    fill({area.x, h.bottom(), area.w, area.bottom() - h.bottom()}, c); // below
+    fill({area.x, h.y, h.x - area.x, h.h}, c);                         // left
+    fill({h.right(), h.y, area.right() - h.right(), h.h}, c);          // right
 }
 
 void Canvas::text_up(int x, int y, const char *s, Colour c, bool bold)

@@ -86,6 +86,49 @@ Rect TextEdit::text_rect() const
     return {2, 2, rect.w - 4 - kBar, rect.h - 4 - kBar};
 }
 
+void TextEdit::invalidate_text()
+{
+    invalidate_part(text_rect());
+}
+
+void TextEdit::invalidate_lines(int first, int last)
+{
+    if (first > last) {
+        const int t = first;
+        first = last;
+        last = t;
+    }
+    const int rows = visible_rows() + 1;
+    int r0 = first - top_line_, r1 = last - top_line_;
+    if (r1 < 0 || r0 > rows) {
+        return;
+    }
+    r0 = r0 < 0 ? 0 : r0;
+    r1 = r1 > rows ? rows : r1;
+    const Rect t = text_rect();
+    // Row r covers 1 + r*13 .. 1 + (r+1)*13 inside the text area; the last
+    // one also takes what is below it.
+    const int y0 = t.y + (r0 == 0 ? 0 : 1 + r0 * kLineHeight);
+    const int y1 = r1 >= rows ? t.bottom() : t.y + 1 + (r1 + 1) * kLineHeight;
+    invalidate_part({t.x, y0, t.w, y1 - y0});
+}
+
+int TextEdit::line_of(size_t pos) const
+{
+    return pos >= top_ ? top_line_ + count_lines(top_, pos) : top_line_ - count_lines(pos, top_);
+}
+
+Rect TextEdit::caret_rect() const
+{
+    const int row = caret_line() - top_line_;
+    const int col = column_of(caret_) - left_col_;
+    if (row < 0 || row > visible_rows() || col < 0) {
+        return {};
+    }
+    const Rect t = text_rect();
+    return {t.x + 1 + col * 6, t.y + 1 + row * kLineHeight, 1, kLineHeight - 1};
+}
+
 int TextEdit::visible_rows() const
 {
     const int rows = (text_rect().h - 2) / kLineHeight;
@@ -282,6 +325,7 @@ void TextEdit::replace(size_t from, size_t to, const uint8_t *data, size_t size,
         undo_valid_ = false;
     }
 
+    const int first_line = line_of(from);
     const int lines_removed = count_lines(from, to);
     int lines_added = 0;
     for (size_t i = 0; i < size; i++) {
@@ -308,14 +352,21 @@ void TextEdit::replace(size_t from, size_t to, const uint8_t *data, size_t size,
     const int cols = column_of(line_end(caret_));
     longest_ = cols > longest_ ? cols : longest_;
     modified_ = true;
-    changed();
+    changed(first_line, lines_added != 0 || lines_removed != 0);
 }
 
-void TextEdit::changed()
+void TextEdit::changed(int first_line, bool lines_moved)
 {
+    const int top = top_line_, left = left_col_;
     keep_caret_visible();
     sync_bars();
-    invalidate();
+    if (top_line_ != top || left_col_ != left) {
+        invalidate_text(); // scrolled: all the text moved
+    } else if (lines_moved) {
+        invalidate_lines(first_line, top_line_ + visible_rows() + 1);
+    } else {
+        invalidate_lines(first_line, caret_line());
+    }
     if (on_change_ != nullptr) {
         on_change_(*this, on_change_context_);
     }
@@ -361,7 +412,7 @@ void TextEdit::undo()
     }
     caret_ = anchor_ = pos + removed;
     modified_ = true;
-    changed();
+    changed(line_of(pos), true);
 }
 
 void TextEdit::copy()
@@ -394,10 +445,23 @@ void TextEdit::select_all()
 
 void TextEdit::select(size_t from, size_t to)
 {
+    const int old_a = line_of(anchor_), old_c = line_of(caret_);
+    const int top = top_line_, left = left_col_;
     anchor_ = from < length() ? from : length();
     caret_ = to < length() ? to : length();
     keep_caret_visible();
-    invalidate();
+    if (top_line_ != top || left_col_ != left) {
+        invalidate_text();
+        return;
+    }
+    // The lines the old and the new selection touch.
+    int lo = old_a < old_c ? old_a : old_c, hi = old_a < old_c ? old_c : old_a;
+    const int na = line_of(anchor_), nc = line_of(caret_);
+    lo = na < lo ? na : lo;
+    lo = nc < lo ? nc : lo;
+    hi = na > hi ? na : hi;
+    hi = nc > hi ? nc : hi;
+    invalidate_lines(lo, hi);
 }
 
 /* ---- Lines -------------------------------------------------------------------- */
@@ -492,7 +556,7 @@ void TextEdit::scroll_to_line(int line)
         top_ = previous_line(top_);
         top_line_--;
     }
-    invalidate();
+    invalidate_text();
 }
 
 void TextEdit::keep_caret_visible()
@@ -507,10 +571,10 @@ void TextEdit::keep_caret_visible()
     const int col = column_of(caret_), cols = visible_columns();
     if (col < left_col_) {
         left_col_ = col;
-        invalidate();
+        invalidate_text();
     } else if (col >= left_col_ + cols) {
         left_col_ = col - cols + 1;
-        invalidate();
+        invalidate_text();
     }
     sync_bars();
 }
@@ -518,40 +582,43 @@ void TextEdit::keep_caret_visible()
 void TextEdit::sync_bars()
 {
     const int rows = visible_rows(), cols = visible_columns();
+    const int vmax = vbar_.maximum(), vval = vbar_.value(), hmax = hbar_.maximum(), hval = hbar_.value();
     vbar_.set_range(line_count_ > rows ? line_count_ - rows : 0, rows);
     hbar_.set_range(longest_ + 1 > cols ? longest_ + 1 - cols : 0, cols);
     // Quietly: setting the value here must not scroll again.
     vbar_.set_value_quietly(top_line_);
     hbar_.set_value_quietly(left_col_);
+    // The bars live inside this widget: repaint them here when they moved.
+    if (vbar_.maximum() != vmax || vbar_.value() != vval) {
+        invalidate_part(vbar_.rect);
+    }
+    if (hbar_.maximum() != hmax || hbar_.value() != hval) {
+        invalidate_part(hbar_.rect);
+    }
 }
 
 void TextEdit::v_scrolled(ScrollBar &bar, void *context)
 {
     auto *t = static_cast<TextEdit *>(context);
     t->scroll_to_line(bar.value());
-    t->invalidate();
 }
 
 void TextEdit::h_scrolled(ScrollBar &bar, void *context)
 {
     auto *t = static_cast<TextEdit *>(context);
     t->left_col_ = bar.value();
-    t->invalidate();
+    t->invalidate_text();
 }
 
 /* ---- Caret movement ----------------------------------------------------------- */
 
 void TextEdit::move_caret(size_t to, bool extend, bool keep_column)
 {
-    caret_ = to > length() ? length() : to;
-    if (!extend) {
-        anchor_ = caret_;
-    }
+    to = to > length() ? length() : to;
     if (!keep_column) {
         want_column_ = -1;
     }
-    keep_caret_visible();
-    invalidate();
+    select(extend ? anchor_ : to, to);
 }
 
 size_t TextEdit::word_left(size_t pos) const
@@ -730,7 +797,7 @@ void TextEdit::mouse(const MouseMsg &m)
         if (m.kind == MouseKind::Up) {
             in_bar_ = 0;
         }
-        invalidate();
+        invalidate_part(bar.rect);
         return;
     }
     switch (m.kind) {
@@ -770,7 +837,6 @@ void TextEdit::paint(Canvas &c)
     const Rect r = {0, 0, rect.w, rect.h};
     c.sunken(r);
     const Rect t = text_rect();
-    c.fill(t, gfx::kWhite);
     c.fill({t.right(), t.bottom(), kBar, kBar}, gfx::kGrey); // corner between the bars
     {
         Canvas vb = c.sub(vbar_.rect);
@@ -778,17 +844,22 @@ void TextEdit::paint(Canvas &c)
         Canvas hb = c.sub(hbar_.rect);
         hbar_.paint(hb);
     }
+    Canvas inner = c.sub(t);
     if (buf_ == nullptr) {
+        inner.fill({0, 0, t.w, t.h}, gfx::kWhite);
         return;
     }
-    Canvas inner = c.sub(t);
+    // Each pixel once (one screen buffer: drawing white and then the text
+    // would show as a flash). A row is 13 pixels: 12 of text and a line.
     const bool focus = has_focus();
+    const bool caret_on = focus && caret_shown();
     const size_t s0 = selection_start(), s1 = selection_end();
     const int rows = visible_rows() + 1, cols = visible_columns() + 1;
-    size_t line = top_;
     const size_t len = length();
-    for (int row = 0; row < rows; row++) {
-        const int y = 1 + row * kLineHeight;
+    inner.fill({0, 0, t.w, 1}, gfx::kWhite); // the line above the first row
+    size_t line = top_;
+    int y = 1;
+    for (int row = 0; row < rows && y < t.h; row++, y += kLineHeight) {
         // The visible cells of this line: one character each, tabs as spaces.
         uint8_t cells[160];
         bool chosen[160];
@@ -811,11 +882,25 @@ void TextEdit::paint(Canvas &c)
             }
             col = next;
         }
+        // Past the end of the cells shown, the line goes on (or ends) here.
+        while (i < len && at(i) != '\n') {
+            i++;
+        }
         if (i == caret_ && caret_col < 0) {
             caret_col = col;
         }
-        // A selected line end shows as one highlighted space.
         const bool eol_chosen = i < len && i >= s0 && i < s1;
+        const int caret_x = caret_on && caret_col >= left_col_ ? 1 + (caret_col - left_col_) * 6 : -1;
+        // Two pixels left of the text (the caret can be in the second).
+        if (caret_x == 1) {
+            inner.fill({0, y, 1, kLineHeight}, gfx::kWhite);
+            inner.fill({1, y, 1, kLineHeight - 1}, gfx::kBlack);
+            inner.fill({1, y + kLineHeight - 1, 1, 1}, gfx::kWhite);
+        } else {
+            inner.fill({0, y, 2, kLineHeight}, gfx::kWhite);
+        }
+        // The text in runs of the same look; the line under each run in its
+        // background colour.
         for (int a = 0; a < count;) {
             int b = a;
             while (b < count && chosen[b] == chosen[a]) {
@@ -833,24 +918,31 @@ void TextEdit::paint(Canvas &c)
                 }
             }
             run[n] = 0;
-            const int x = 2 + a * 6;
+            const int x = 2 + a * 6, w = (b - a) * 6;
+            const int cx = caret_x > x && caret_x < x + w ? caret_x : -1;
             if (chosen[a]) {
-                inner.fill_rgb({x, y, (b - a) * 6, kLineHeight}, kHighlight);
+                inner.text_opaque(x, y, run, gfx::kWhite, kHighlight, cx);
+                inner.fill_rgb({x, y + kLineHeight - 1, w, 1}, kHighlight);
+            } else {
+                inner.text_opaque(x, y, run, gfx::kBlack, gfx::kWhite, cx);
+                inner.fill({x, y + kLineHeight - 1, w, 1}, gfx::kWhite);
             }
-            inner.text(x, y, run, chosen[a] ? gfx::kWhite : gfx::kBlack);
             a = b;
         }
-        if (eol_chosen && col >= left_col_) {
-            inner.fill_rgb({2 + (col - left_col_) * 6, y, 6, kLineHeight}, kHighlight);
+        int x = 2 + count * 6;
+        // A selected line end shows as one highlighted cell.
+        if (eol_chosen && col >= left_col_ && x < t.w) {
+            inner.fill_rgb({x, y, 6, kLineHeight}, kHighlight);
+            x += 6;
         }
-        if (focus && caret_col >= left_col_ && caret_shown()) {
-            inner.vline(1 + (caret_col - left_col_) * 6, y, kLineHeight - 1, gfx::kBlack);
-        }
+        inner.fill({x, y, t.w - x, kLineHeight}, gfx::kWhite);
         if (i >= len) {
+            y += kLineHeight;
             break;
         }
-        line = line_end(line) + 1;
+        line = i + 1;
     }
+    inner.fill({0, y, t.w, t.h - y}, gfx::kWhite); // below the last line
 }
 
 } // namespace wm

@@ -66,7 +66,7 @@ public:
     void fill_rgb(const Rect &r, Rgb c);
     // A left-to-right fade across `r`, dithered (the 98 title bar); with
     // `vertical`, top to bottom.
-    void fill_fade(const Rect &r, Rgb from, Rgb to, bool vertical = false);
+    void fill_fade(const Rect &r, Rgb from, Rgb to, bool vertical = false, const Rect *span = nullptr);
     // A dotted rectangle (every other pixel), as round focused widgets.
     void focus_rect(const Rect &r);
     // The white and grey weave (pressed-in taskbar buttons, scroll tracks).
@@ -77,6 +77,8 @@ public:
     void raised(const Rect &r); // window edge, two pixels
     void sunken(const Rect &r); // text fields, lists
     void button(const Rect &r, ButtonLook look);
+    // Only the edges of a button: for buttons that fill their own inside.
+    void button_frame(const Rect &r, ButtonLook look);
 
     void blit(const Bitmap &b, int x, int y);
     // Same, with every other visible pixel in `tint` (a selected icon).
@@ -85,10 +87,28 @@ public:
     void blit2x(const Bitmap &b, int x, int y);
     // Small shapes given as strings, 'X' for a set pixel (button glyphs).
     void pattern(int x, int y, const char *const *rows, int count, Colour c);
+    // The same with the blanks in `bg`: every pixel of the shape's box once.
+    void pattern_opaque(int x, int y, const char *const *rows, int count, Colour fg, Colour bg);
 
     // Text in Spleen 6x12, top left at (x, y). UTF-8, Latin-1 characters.
     // Bold doubles each pixel sideways. Returns the x after the text.
     int text(int x, int y, const char *s, Colour c, bool bold = false);
+    // Text with its background in one pass: every pixel of each character
+    // cell is written once, in `fg` or `bg` (no erase before drawing, so
+    // nothing flashes). `caret_x`, if not -1, is a column drawn in black (a
+    // text caret, black). Returns the x after the text.
+    int text_opaque(int x, int y, const char *s, Colour fg, Colour bg, int caret_x = -1);
+    // The same over a dithered background colour (a selection).
+    int text_opaque(int x, int y, const char *s, Colour fg, Rgb bg, int caret_x = -1);
+    // A bitmap with its clear pixels in `bg`, each pixel written once.
+    void blit_opaque(const Bitmap &b, int x, int y, Colour bg);
+    // `area` without `hole`: up to four rectangles.
+    void fill_around(const Rect &area, const Rect &hole, Colour c);
+
+    // Tests only: when set, every pixel written adds one to its counter
+    // (one byte per screen pixel), to check that paints do not draw twice.
+    static void count_writes(uint8_t *counts) { write_counts_ = counts; }
+
     // Text turned a quarter left, reading upwards; (x, y) is the bottom left
     // corner of the first character.
     void text_up(int x, int y, const char *s, Colour c, bool bold = false);
@@ -104,6 +124,17 @@ private:
     // drawn, in screen coordinates.
     template <typename Fn> void each(const Rect &r, Fn fn);
     void put(int x, int y, Colour c); // one pixel, drawing coordinates
+    void mark(int x, int y, int w) const // the write counter, if on
+    {
+        if (write_counts_ != nullptr) {
+            uint8_t *p = write_counts_ + y * width_ + x;
+            for (int i = 0; i < w; i++) {
+                p[i]++;
+            }
+        }
+    }
+    template <typename BgFn> int text_cells(int x, int y, const char *s, Colour fg, BgFn bg, int caret_x);
+    static uint8_t *write_counts_;
 
     uint8_t *pixels_;
     int width_, height_;

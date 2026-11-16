@@ -94,15 +94,23 @@ public:
     bool focusable() const override { return true; }
     bool key(const KeyMsg &k) override;
     void text(const char *utf8) override;
+    Rect caret_rect() const override;
 
 private:
+    // What to repaint: the text area, some lines (numbers, clipped to what
+    // shows), a scroll bar if it changed.
+    void invalidate_text();
+    void invalidate_lines(int first, int last);
+    int line_of(size_t pos) const; // line number of a position
     // Gap buffer.
     void move_gap(size_t pos);
     void raw_insert(size_t pos, const uint8_t *data, size_t size);
     void raw_erase(size_t from, size_t to);
     // An edit with undo: replaces [from, to) with `data`.
     void replace(size_t from, size_t to, const uint8_t *data, size_t size, bool typing);
-    void changed();
+    // After an edit starting on `first_line`: keeps the caret in view and
+    // repaints that line, or down to the bottom when lines came or went.
+    void changed(int first_line, bool lines_moved);
 
     // Lines.
     size_t line_start(size_t pos) const;
