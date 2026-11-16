@@ -162,6 +162,9 @@ int main(int argc, char **argv)
 
     shell::start(desktop, system_, storage, memory);
     desktop.start();
+    desktop.set_animations(false);
+    save("00c-desktop-at-start"); // no windows; welcome.txt on the desktop
+    shell::open_demo_windows();
     desktop.set_animations(false); // the caret stays on: pictures do not depend on timing
     save("01-desktop");
 
@@ -309,6 +312,7 @@ int main(int argc, char **argv)
     // landscape.jpg, mascot.bmp, test card.png.
     key(wm::key::Backspace);
     key(wm::key::Home);
+    key(wm::key::Right); // docs, Documents, pictures
     key(wm::key::Right);
     key(wm::key::Enter);
     save("23-pictures-folder");

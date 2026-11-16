@@ -69,6 +69,9 @@ void input_dialog(wm::Window *owner, const char *title, const char *prompt, cons
 // Opens a file with the program for its kind (by extension). Returns
 // false, after saying so, when there is none.
 bool open_file(const char *path);
+// Welcome and About, as the desktop used to start: the PC picture tests and
+// the simulator's tool tests use them (the board starts with no windows).
+void open_demo_windows();
 // A File manager window on a folder; nullptr for My Board (the drives).
 void open_folder(const char *path);
 // The Editor with a file (nullptr: a new, empty one).

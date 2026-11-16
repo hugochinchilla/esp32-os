@@ -132,6 +132,7 @@ int main(int argc, char **argv)
     shell::set_network(&wifi);
     protocol.set_network(&wifi);
     shell::start(screen, system, storage, memory);
+    shell::open_demo_windows(); // what the debug-tool tests drive
     protocol.set_counters(shell::picture_timings(), shell::kPictureTimings);
     screen.start();
 

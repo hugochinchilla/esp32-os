@@ -215,11 +215,27 @@ void test_waiting_and_skipping()
     shell::BootIo io{display, system, memory, clock, nullptr, nullptr, nullptr, nullptr};
     io.video_start_us = 0;
     io.monitor_wait_ms = 4000;
+    io.hold_s = 0;
     shell::run_self_test(io, true);
     CHECK(clock.now >= 4000000 + 6 * 120 * 1300 && clock.now < 9000000 && !io.skipped);
     clock.now = 0;
+    io.splash_ms = 800;
     shell::show_splash(io, true);
     CHECK(clock.now >= io.splash_ms * 1000 && clock.now < io.splash_ms * 1000 + 100000);
+    // The default: no splash at all, nothing drawn and no time spent.
+    std::vector<uint8_t> shown(display.pixels(), display.pixels() + 640 * 480);
+    io.splash_ms = 0;
+    clock.now = 0;
+    display.pixels()[0] = 0x5A;
+    shell::show_splash(io, true);
+    CHECK(clock.now < 10000 && display.pixels()[0] == 0x5A);
+    display.pixels()[0] = shown[0];
+    // The countdown: five more seconds, "Booting in 1" last.
+    io.hold_s = 5;
+    clock.now = 0;
+    io.monitor_wait_ms = 0;
+    shell::run_self_test(io, true);
+    CHECK(clock.now >= 5000000 && !io.skipped);
 
     // A key during the wait: the self-test ends early, the splash is not shown.
     static int polls = 0;

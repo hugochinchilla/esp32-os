@@ -85,6 +85,23 @@ and skips the memory test. All in C:\.config\boot.ini (docs/settings.md). A
 monitor cannot tell the board it is ready (VGA is one-way, and DDC is not
 wired on the adapter board), so the wait is a time.
 
+Revised again (2026-11-16, the owner): when the lines are done the finished
+screen stays with "Press any key to continue" and "Booting in 5" counting to
+1 (`selftest_hold_s`, default 5, 0 for none); a key goes on at once. The
+splash is hidden by default (`splash_ms` 0: not drawn at all, no blank
+frame); its code and its exact picture test stay. The desktop starts with no
+windows open (Welcome and About are no longer launched).
+
+### Files on the desktop (2026-11-16)
+
+Decided by the owner: the desktop shows the files in C:\Documents\Desktop as
+icons after the system icons (My Board, Documents, Network, Recycle Bin, which
+stay), a picture by file type and the name below; a double-click opens the
+file with its program, or the folder in the File manager. The icons follow
+changes to the folder. A welcome.txt is put there on a new drive and once on
+an existing one; C:\.config\desktop.ini remembers it, so a deleted copy never
+comes back.
+
 ### Wi-Fi transmit power (2026-11-16)
 
 Decided by the owner: the radio's transmit power defaults to the minimum,
@@ -791,6 +808,20 @@ tested on the PC only (not yet compiled for or run on the board).
   `C:\.config\network.ini`). Two boards on one network would be told apart
   by the component itself, which adds a number to the second.
 - Firmware 1.28 MB with it (1.21 MB before).
+
+### Chosen for the files on the desktop (2026-11-16, to confirm)
+
+- Icons go in columns down the left, 70 px apart, a new column (76 px to the
+  right) when one is full: 5 rows at 640 x 480. Folders first, then files by
+  name ignoring case, as in the File manager.
+- At most 20 files show (24 icons in all); the rest are not shown.
+- Folders in the desktop folder show and open in the File manager.
+- Names starting with a dot are hidden. Names longer than 11 characters are
+  cut to 9 and "..".
+- The folder is read again every 2 s (a few directory reads) instead of
+  hooks in every program that writes files.
+- The Documents icon still opens C:\docs, not C:\Documents. Put to the owner:
+  move docs into Documents, or point the icon at C:\Documents.
 
 ## To confirm on the bench
 

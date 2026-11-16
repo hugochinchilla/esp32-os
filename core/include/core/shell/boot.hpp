@@ -17,7 +17,8 @@ constexpr uint32_t kInternalTestBudgetUs = 20000; // and the internal one
 constexpr const char *kVersion = "v0.3";
 constexpr uint32_t kSelfTestPace = 130; // percent: how slowly the lines appear (selftest_pace)
 constexpr uint32_t kSelfTestHoldMs = 350;        // the finished self-test stays this long
-constexpr uint32_t kSplashMs = 800;
+constexpr uint32_t kSplashMs = 0; // the owner: hidden by default (splash_ms)
+constexpr uint32_t kSelfTestHoldS = 5; // the finished self-test counts down this long (selftest_hold_s)
 // How long after the video starts the self-test stays up, so a monitor that
 // takes a while to show a picture still shows it ([boot] monitor_wait_ms in
 // C:\.config\boot.ini; 0: no waiting). A monitor cannot tell the board it is
@@ -49,6 +50,7 @@ struct BootIo {
     uint32_t monitor_wait_ms = 0;
     uint32_t splash_ms = kSplashMs;
     uint32_t pace_percent = kSelfTestPace;
+    uint32_t hold_s = kSelfTestHoldS;
     // True once a key or mouse button asks to skip the screens (may be nullptr).
     bool (*skip)(void *context) = nullptr;
     bool skipped = false; // set when that happened: the splash is skipped too
@@ -60,6 +62,7 @@ struct BootSettings {
     uint32_t monitor_wait_ms = kMonitorWaitMs;
     uint32_t splash_ms = kSplashMs;
     uint32_t pace_percent = kSelfTestPace;
+    uint32_t hold_s = kSelfTestHoldS;
 };
 BootSettings boot_settings(const fs::Storage &storage);
 

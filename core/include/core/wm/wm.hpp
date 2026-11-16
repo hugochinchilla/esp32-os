@@ -49,7 +49,7 @@ class Wm : public ports::InputSink, public ports::Desktop {
 public:
     static constexpr int kMaxWindows = 16;
     static constexpr int kMaxPopups = 4;  // a menu and its open submenus
-    static constexpr int kMaxIcons = 12;
+    static constexpr int kMaxIcons = 24; // in columns, top to bottom, then left to right
     static constexpr int kTaskbarHeight = 28;
     static constexpr int kOutline = 3;        // width of the outline while dragging
     static constexpr uint32_t kDoubleClickUs = 500000;

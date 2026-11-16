@@ -69,6 +69,8 @@ BootSettings boot_settings(const fs::Storage &storage)
     s.fastboot = ini.get_bool("boot", "fastboot", false);
     s.monitor_wait_ms = ms(ini.get_int("boot", "monitor_wait_ms", static_cast<int>(kMonitorWaitMs)));
     s.splash_ms = ms(ini.get_int("boot", "splash_ms", static_cast<int>(kSplashMs)));
+    const int hold = ini.get_int("boot", "selftest_hold_s", static_cast<int>(kSelfTestHoldS));
+    s.hold_s = hold < 0 ? 0u : (hold > 60 ? 60u : static_cast<uint32_t>(hold));
     const int pace = ini.get_int("boot", "selftest_pace", static_cast<int>(kSelfTestPace));
     s.pace_percent = pace < 0 ? 0u : (pace > 400 ? 400u : static_cast<uint32_t>(pace));
     return s;
@@ -240,8 +242,8 @@ void nine(gfx::Canvas &c, int x, int y, int size, int gap, int lit)
 
 void show_splash(BootIo &io, bool hold)
 {
-    if (hold && io.skipped) {
-        return; // straight to the desktop
+    if (hold && (io.skipped || io.splash_ms == 0)) {
+        return; // straight to the desktop (splash_ms = 0: not shown at all)
     }
     Screen s(io.display);
     gfx::Canvas c = s.canvas();
@@ -494,8 +496,18 @@ int run_self_test(BootIo &io, bool hold)
         line(c, 12, t, kRedC);
     }
     if (hold && !io.skipped) {
-        // Long enough to read the last line (longer when something failed).
-        wait_until(io, io.clock.micros() + (failures ? 3 : 1) * kSelfTestHoldMs * 1000);
+        if (io.hold_s > 0) {
+            // The finished screen stays, counting down; a key goes on at once.
+            line(c, 14, "Press any key to continue", kGreyC);
+            for (uint32_t left = io.hold_s; left > 0 && !io.skipped; left--) {
+                snprintf(t, sizeof(t), "Booting in %u", static_cast<unsigned>(left));
+                line(c, 15, t, kWhiteC);
+                wait_until(io, io.clock.micros() + 1000000);
+            }
+        } else {
+            // Long enough to read the last line (longer when something failed).
+            wait_until(io, io.clock.micros() + (failures ? 3 : 1) * kSelfTestHoldMs * 1000);
+        }
     }
     return failures;
 }

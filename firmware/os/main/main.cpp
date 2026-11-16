@@ -455,6 +455,7 @@ void ui_task(void *)
     boot_io.monitor_wait_ms = boot.monitor_wait_ms;
     boot_io.splash_ms = boot.splash_ms;
     boot_io.pace_percent = boot.pace_percent;
+    boot_io.hold_s = boot.hold_s;
     boot_io.skip = [](void *) { return input.skip; };
     pointer.set_visible(false);
     const int64_t test_start = esp_timer_get_time();

@@ -43,7 +43,7 @@ constexpr int kClockW = 60;
 constexpr int kTrayW = 20; // a tray icon, left of the clock
 
 // Desktop icons (tools/mockup/desktop.py).
-constexpr int kIconX = 6, kIconY = 8, kIconStep = 70;
+constexpr int kIconX = 6, kIconY = 8, kIconStep = 70, kIconColumn = 76;
 
 // Menus.
 constexpr int kMenuEdge = 3;
@@ -522,7 +522,10 @@ int Wm::taskbar_index_at(int x, int y) const
 
 Rect Wm::desktop_icon_rect(int index) const
 {
-    return {kIconX - 4, kIconY + index * kIconStep, 72, 50};
+    // Columns down the left, as many rows as fit above the taskbar.
+    const int rows = (height_ - kTaskbarHeight - kIconY) / kIconStep;
+    const int col = rows > 0 ? index / rows : 0, row = rows > 0 ? index % rows : index;
+    return {kIconX - 4 + col * kIconColumn, kIconY + row * kIconStep, 72, 50};
 }
 
 /* ---- Input --------------------------------------------------------------- */
@@ -1566,7 +1569,7 @@ void Wm::paint_desktop(const RectList &clip)
             continue;
         }
         const DesktopIcon &icon = icons_[i];
-        const int x = kIconX, y = kIconY + i * kIconStep;
+        const int x = r.x + 4, y = r.y;
         const bool selected = i == selected_icon_;
         if (icon.picture != nullptr) {
             if (selected) {

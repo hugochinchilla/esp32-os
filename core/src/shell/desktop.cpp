@@ -2,6 +2,9 @@
 #include <cstdio>
 #include <cstring>
 
+#include <algorithm>
+#include <strings.h>
+#include "core/fs/ini.hpp"
 #include "core/gfx/art.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/text_edit.hpp"
@@ -272,7 +275,148 @@ void open_documents(void *)
     open_folder("C:\\docs");
 }
 
-wm::DesktopIcon g_icons[4];
+// The system icons, then the files in C:\Documents\Desktop.
+constexpr int kSystemIcons = 4;
+constexpr const char *kDesktopFolder = "C:\\Documents\\Desktop";
+wm::DesktopIcon g_icons[wm::Wm::kMaxIcons];
+struct DesktopFile {
+    char path[fs::kMaxPath];
+    char label[16];
+};
+DesktopFile g_files[wm::Wm::kMaxIcons - kSystemIcons];
+uint32_t g_files_signature = 0;
+int g_file_timer = 0;
+
+void open_desktop_file(void *context)
+{
+    const DesktopFile &f = *static_cast<const DesktopFile *>(context);
+    ports::DirEntry e;
+    if (storage().stat(f.path, e) == ports::FsError::Ok && e.folder) {
+        open_folder(f.path);
+    } else if (!open_file(f.path)) {
+        message_box("Desktop", "There is no program for this kind of file yet.");
+    }
+}
+
+const gfx::Bitmap *file_picture(const char *name, bool folder)
+{
+    if (folder) {
+        return &gfx::folder_icon_32();
+    }
+    char ext[8];
+    fs::path::extension(name, ext, sizeof(ext));
+    for (const char *e : {"txt", "log", "ini", "md"}) {
+        if (strcmp(ext, e) == 0) {
+            return &gfx::text_icon_32();
+        }
+    }
+    for (const char *e : {"png", "jpg", "jpeg", "bmp"}) {
+        if (strcmp(ext, e) == 0) {
+            return &gfx::picture_icon_32();
+        }
+    }
+    return &gfx::file_icon_32();
+}
+
+// Reads C:\Documents\Desktop again; the icons change only if the files did.
+// ponytail: looked at every 2 s (a few directory reads), so files put there
+// any way (File manager, a save, tools/dbg.py put) appear without hooks.
+void refresh_desktop_files(bool force)
+{
+    uint32_t signature = 2166136261u;
+    int n = 0;
+    struct Found {
+        char name[64];
+        bool folder;
+    };
+    static Found found[wm::Wm::kMaxIcons - kSystemIcons];
+    for (int i = 0; n < wm::Wm::kMaxIcons - kSystemIcons; i++) {
+        ports::DirEntry e;
+        if (storage().entry(kDesktopFolder, i, e) != ports::FsError::Ok) {
+            break;
+        }
+        if (e.name[0] == '.') {
+            continue; // hidden
+        }
+        snprintf(found[n].name, sizeof(found[n].name), "%s", e.name);
+        found[n].folder = e.folder;
+        for (const char *c = e.name; *c != 0; c++) {
+            signature = (signature ^ static_cast<uint8_t>(*c)) * 16777619u;
+        }
+        signature = (signature ^ (e.folder ? 1u : 2u)) * 16777619u;
+        n++;
+    }
+    signature ^= static_cast<uint32_t>(n);
+    if (!force && signature == g_files_signature) {
+        return;
+    }
+    g_files_signature = signature;
+    // Folders first, then by name, ignoring case, as in the File manager.
+    std::sort(found, found + n, [](const Found &a, const Found &b) {
+        if (a.folder != b.folder) {
+            return a.folder;
+        }
+        return strcasecmp(a.name, b.name) < 0;
+    });
+    for (int i = 0; i < n; i++) {
+        DesktopFile &f = g_files[i];
+        if (snprintf(f.path, sizeof(f.path), "%s\\%s", kDesktopFolder, found[i].name) >= static_cast<int>(sizeof(f.path))) {
+            f.path[0] = 0; // too long to open; cannot happen with 64-byte names
+        }
+        // Long names are cut to fit under the icon.
+        if (strlen(found[i].name) > 11) {
+            snprintf(f.label, sizeof(f.label), "%.9s..", found[i].name);
+        } else {
+            snprintf(f.label, sizeof(f.label), "%.11s", found[i].name);
+        }
+        g_icons[kSystemIcons + i] = {f.label, file_picture(found[i].name, found[i].folder), &open_desktop_file, &f};
+    }
+    manager().set_desktop_icons(g_icons, kSystemIcons + n);
+}
+
+void desktop_files_tick(void *) { refresh_desktop_files(false); }
+
+// The welcome text, put on the desktop once: if it is deleted it does not
+// come back (C:\.config\desktop.ini remembers).
+void welcome_file()
+{
+    fs::Ini ini;
+    load_settings("desktop", ini);
+    if (ini.get_bool("welcome", "created", false)) {
+        return;
+    }
+    storage().make_folder("C:\\Documents");
+    storage().make_folder(kDesktopFolder);
+    static const char kText[] =
+        "Welcome to Chinchilla\r\n"
+        "=====================\r\n"
+        "\r\n"
+        "Chinchilla is a small desktop in the style of the late 1990s, running on\r\n"
+        "an ESP32-S3 with a VGA monitor. Everything you see is drawn by the board\r\n"
+        "itself, 640 x 480 in 256 colours.\r\n"
+        "\r\n"
+        "Getting around\r\n"
+        "  - Start (bottom left) > Programs lists the programs.\r\n"
+        "  - Double-click an icon on the desktop to open it. Files you put in\r\n"
+        "    C:\\Documents\\Desktop show up here as icons.\r\n"
+        "  - My Board shows the drives; C: is the flash disk and keeps your files.\r\n"
+        "\r\n"
+        "Keys\r\n"
+        "  - Ctrl+Alt+Del opens the Task Manager.\r\n"
+        "  - Alt+F4 closes a window. Alt and a letter opens a menu.\r\n"
+        "  - A key during start-up goes straight to the desktop.\r\n"
+        "\r\n"
+        "Settings\r\n"
+        "  Each program keeps its settings in a plain text file in C:\\.config\r\n"
+        "  (for example boot.ini, network.ini, viewer.ini). The File manager shows\r\n"
+        "  that folder with View > Show hidden files. You can edit them here,\r\n"
+        "  in the Editor.\r\n"
+        "\r\n"
+        "You can delete this file; it will not come back.\r\n";
+    storage().write_file("C:\\Documents\\Desktop\\welcome.txt", kText, sizeof(kText) - 1);
+    ini.set_bool("welcome", "created", true);
+    save_settings("desktop", ini);
+}
 
 } // namespace
 
@@ -354,10 +498,17 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
         g_settings_items[2].icon = &gfx::network_icon_16();
         g_settings_items[2].flags = 0;
     }
-    wm.set_desktop_icons(g_icons, 4);
+    wm.set_desktop_icons(g_icons, kSystemIcons);
+    welcome_file();
+    refresh_desktop_files(true);
+    g_file_timer = wm.start_timer(2000000, 2000000, &desktop_files_tick, nullptr);
     install_screen_saver();
     start_network();
+    // The desktop starts with no windows open (the owner's choice).
+}
 
+void open_demo_windows()
+{
     launch(*find_app("Welcome"));
     launch(*find_app("About Chinchilla"));
 }
