@@ -10,6 +10,8 @@ Output (default /mnt/project-files/look/sounds/):
                                    filter (1 kOhm + 100 nF, about 1.6 kHz) and
                                    8-bit samples: roughly what the jack gives
   round2/...                       the owner's round-one picks with his changes
+  final/...                        the five sounds he chose; 8-bit copies also
+                                   go to docs/sounds/ in the repository
 
 The piezo beeper (GPIO14) gets no system sounds: it is kept for the modem.
 
@@ -466,6 +468,19 @@ def main():
     save("round2", "dialog-wood-error", dialog_b("error"), "Wood knock, error: unchanged from round one.")
     save("round2", "bell-kalimba-short-1", bell_b_short(0.10, 0.08), "Kalimba, shorter: about a third of a second.")
     save("round2", "bell-kalimba-short-2", bell_b_short(0.055, 0), "Kalimba, shortest: a dry quarter-second pluck.")
+
+    # The final set, chosen by the owner on 2026-11-16.  The 8-bit copies in
+    # docs/sounds/ are what the firmware will ship.
+    repo = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "docs", "sounds")
+    for nm, x, blurb in [
+        ("boot", boot_c_quiet_bell(), "Boot chime: glass pad with a quiet bell."),
+        ("close", close_a_mellow(2), "Session close: the mellow, low sunset."),
+        ("alert", dialog_b("alert"), "Alert dialog: rising wood knock."),
+        ("error", dialog_b("error"), "Error dialog: low double wood knock."),
+        ("bell", bell_b_short(0.10, 0.08), "Bell: short kalimba pluck."),
+    ]:
+        save("final", nm, x, blurb)
+        write_wav(os.path.join(repo, nm + ".wav"), finish(x), bits=8)
 
     with open(f"{OUT}/manifest.tsv", "w") as f:
         f.write("category\tname\tseconds\tbytes_8bit_22k\tdescription\n")
