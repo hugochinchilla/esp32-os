@@ -756,10 +756,23 @@ tested on the PC only (not yet compiled for or run on the board).
   repository at that release's commit
   (`63107bd06d9e1f6136ff21aeda8cd62cbf0d433e`), not from npm: the npm
   package holds no files a browser can load directly, and a commit cannot be
-  changed afterwards, where a version tag could. The browser's integrity
-  check (SRI) would only cover the first of noVNC's about 50 files.
-- Costs: the viewing computer needs the internet; whoever serves those
-  files could control the board's keyboard and mouse; and noVNC warns that it
+  changed afterwards, where a version tag could.
+- Integrity (added after the board check, 2026-11-16): the page carries the
+  SHA-384 hash of each of the 52 noVNC files it loads, as the `integrity`
+  part of an import map, and the browser refuses any file that does not
+  match; the page then says so and points to the built-in viewer. So a CDN
+  that served altered files could stop `/novnc` from working but not run
+  its own code against the board. The hashes are made from a clone of noVNC
+  at the pinned commit by `tools/novnc_integrity.py`
+  (`core/src/net/novnc_files.inc`, 9.5 KB in the page); changing the pinned
+  version means running it again. What is left: a browser too old to know
+  import-map integrity ignores the hashes and loads the files unchecked
+  (current Chrome, Safari and Firefox know it; the exact first versions
+  have not been looked up), and the page itself comes from the board over
+  plain http, like everything else it serves. One bundled file with a
+  single hash was the alternative; noVNC publishes no such file, so it
+  would have meant hosting our own build somewhere.
+- Costs: the viewing computer needs the internet, and noVNC warns that it
   wants an https page, which the board does not have. It worked without one
   in Chromium against the simulator (same picture as the built-in viewer,
   mouse and keys), with the CDN's files served from a local copy because

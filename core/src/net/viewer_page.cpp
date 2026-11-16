@@ -248,8 +248,11 @@ start();
 
 // The same screen with noVNC (https://novnc.com, MPL 2.0), which is not kept
 // on the board: the browser fetches it from the jsDelivr CDN, from noVNC's
-// GitHub repository at the exact commit of release 1.7.0, so what loads can
-// never change. The viewing computer needs the internet for it.
+// GitHub repository at the exact commit of release 1.7.0. The page carries
+// the hash of each of noVNC's files (novnc_files.inc, made by
+// tools/novnc_integrity.py), and the browser refuses a file that does not
+// match, so the CDN cannot serve the board's viewers anything else. The
+// viewing computer needs the internet for it.
 const char kNoVnc[] = R"page(<!doctype html>
 <html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -260,13 +263,17 @@ html,body{margin:0;height:100%;background:#202020;overflow:hidden}
 #s{position:fixed;left:0;right:0;bottom:8px;text-align:center;font:13px sans-serif;color:#bbb}
 </style></head><body>
 <div id="screen"></div><div id="s">Loading noVNC...</div>
+<script type="importmap">{"integrity":{
+)page"
+#include "novnc_files.inc"
+R"page(}}</script>
 <script type="module">
 const note = document.getElementById('s');
 let RFB;
 try {
   RFB = (await import('https://cdn.jsdelivr.net/gh/novnc/noVNC@63107bd06d9e1f6136ff21aeda8cd62cbf0d433e/core/rfb.js')).default;
 } catch (e) {
-  note.innerHTML = 'noVNC could not be loaded (it comes from the internet). <a href="/" style="color:#9cf">Use the built-in viewer</a>.';
+  note.innerHTML = 'noVNC could not be loaded: no internet, or its files are not the expected ones. <a href="/" style="color:#9cf">Use the built-in viewer</a>.';
   throw e;
 }
 function connect() {
