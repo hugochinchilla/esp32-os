@@ -77,6 +77,43 @@ void test_animation(int index)
     CHECK(screen != first); // another seed, another run
 }
 
+// A remote screen hears about every pixel that changes, and not about the
+// whole screen each frame.
+void test_reports_changes()
+{
+    for (int i = 0; i < saver::kCount; i++) {
+        Bytes screen(kW * kH, 0), told(kW * kH, 0);
+        saver::Screen s = {screen.data(), kW, kH,
+                           [](const gfx::Rect &r, void *context) {
+                               auto &grid = *static_cast<Bytes *>(context);
+                               for (int y = r.y; y < r.bottom(); y++) {
+                                   for (int x = r.x; x < r.right(); x++) {
+                                       if (x >= 0 && y >= 0 && x < kW && y < kH) {
+                                           grid[y * kW + x] = 1;
+                                       }
+                                   }
+                               }
+                           },
+                           &told};
+        saver::animation(i).start(s, 4242);
+        long reported = 0;
+        for (int frame = 0; frame < 300; frame++) {
+            const Bytes before = screen;
+            std::fill(told.begin(), told.end(), 0);
+            saver::animation(i).step(s);
+            for (int p = 0; p < kW * kH; p++) {
+                if (screen[p] != before[p] && !told[p]) {
+                    printf("%s: frame %d changed a pixel it did not report\n", saver::animation(i).name(), frame);
+                    failures++;
+                    return;
+                }
+                reported += told[p];
+            }
+        }
+        CHECK(reported / 300 < kW * kH / 8);
+    }
+}
+
 // A small screen: nothing assumes 640x480.
 void test_small_screen()
 {
@@ -328,6 +365,7 @@ int main()
         test_animation(i);
     }
     test_small_screen();
+    test_reports_changes();
     test_idle_and_wake();
     test_shell();
     if (failures == 0) {

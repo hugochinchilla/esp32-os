@@ -18,6 +18,16 @@ struct Screen {
     uint8_t *pixels; // one RRRGGGBB byte per pixel
     int width;
     int height;
+    // Told which parts change, for a remote screen (may be nullptr).
+    void (*changed)(const gfx::Rect &r, void *context) = nullptr;
+    void *context = nullptr;
+
+    void touch(const gfx::Rect &r) const
+    {
+        if (changed != nullptr && !r.empty()) {
+            changed(r, context);
+        }
+    }
 };
 
 class Animation {

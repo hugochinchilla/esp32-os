@@ -72,7 +72,7 @@ public:
         for (Curve &curve : curves_) {
             if (curve.count == kTrail) {
                 // The oldest copy goes; what it crossed is mended below.
-                draw(s, curve.trail[(curve.head + 1) % kTrail], gfx::kBlack);
+                draw(s, curve.trail[(curve.head + 1) % kTrail], gfx::kBlack, true);
                 curve.count--;
             }
             for (int i = 0; i < kPoints; i++) {
@@ -120,7 +120,7 @@ private:
     }
 
     // A closed quadratic B-spline round the control points.
-    static void draw(const Screen &s, const Shape &shape, uint8_t colour)
+    static void draw(const Screen &s, const Shape &shape, uint8_t colour, bool report)
     {
         for (int i = 0; i < kPoints; i++) {
             const int j = (i + 1) % kPoints, k = (i + 2) % kPoints;
@@ -133,20 +133,26 @@ private:
                 const int x = (a * shape.x[i] + b * shape.x[j] + c * shape.x[k] + d / 2) / d;
                 const int y = (a * shape.y[i] + b * shape.y[j] + c * shape.y[k] + d / 2) / d;
                 line(s, px, py, x, y, colour);
+                if (report) {
+                    s.touch({px < x ? px : x, py < y ? py : y, (px < x ? x - px : px - x) + 1,
+                             (py < y ? y - py : py - y) + 1});
+                }
                 px = x;
                 py = y;
             }
         }
     }
 
-    // Every copy, oldest first, so the newest lies on top.
+    // Every copy, oldest first, so the newest lies on top. Only the newest
+    // is news to a remote screen: the others mend what the erased copy crossed,
+    // which was reported with it.
     void draw_all(const Screen &s)
     {
         for (int age = kTrail - 1; age >= 0; age--) {
             for (const Curve &curve : curves_) {
                 if (age < curve.count) {
                     const Shape &shape = curve.trail[(curve.head - age + kTrail) % kTrail];
-                    draw(s, shape, shape.colour);
+                    draw(s, shape, shape.colour, age == 0);
                 }
             }
         }

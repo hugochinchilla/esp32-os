@@ -68,7 +68,12 @@ add_executable(render_net_scenes tests/render_net_scenes.cpp)
 target_link_libraries(render_net_scenes PRIVATE core)
 add_test(NAME net_pictures
          COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/check_pictures.py $<TARGET_FILE:render_net_scenes>)
-set_tests_properties(net net_pictures PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
+add_executable(test_rfb tests/test_rfb.cpp)
+target_link_libraries(test_rfb PRIVATE core)
+add_test(NAME rfb COMMAND test_rfb)
+add_test(NAME vnc_tool
+         COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/test_vnc_sim.py $<TARGET_FILE:sim> $<TARGET_FILE:test_rfb>)
+set_tests_properties(net net_pictures rfb vnc_tool PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
 
 add_executable(dither_eval dither_eval.cpp)
 target_link_libraries(dither_eval PRIVATE core)

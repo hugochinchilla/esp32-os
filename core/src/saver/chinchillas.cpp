@@ -123,6 +123,7 @@ private:
         if (r.empty()) {
             return;
         }
+        s.touch(r);
         const gfx::Bitmap &face = gfx::mascot_16();
         uint8_t row[kMaxScale * 16 * 2 + 16]; // the widest area: a sprite and where it was
         const bool fits = r.w <= static_cast<int>(sizeof(row));

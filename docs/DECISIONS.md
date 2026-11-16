@@ -104,6 +104,7 @@ other threads do not merge their own work.
 | Remote keyboard, mouse and screen for a person | VNC server, web page, debug tool only | VNC server |
 | How apps are delivered | Built into the firmware, or loadable from disk | Built in first, behind an app interface. Still the owner's question; the shell works on that assumption: programs are entries in a table (`core/include/core/shell/shell.hpp`: name, icon, open function) that the Start menu and desktop icons launch the same way |
 | Shell details chosen while building menus, the Start menu and widgets; to confirm or overrule | See "Chosen in the shell milestone" below | As built |
+| Who may use the remote screen | As built (VNC on 5900 and the browser page on 80 for anyone on the local network, no password, always on with Wi-Fi); off by default with a switch in a settings file; a password (VNC authentication, and the same for the page) | Asked. Anything that can reach the board on the network gets full mouse and keyboard control. Nothing is reachable from the internet unless the router forwards the ports |
 | A RAM disk as well as C: | Drop it, or keep a small one as a separate temporary drive | Dropped with LittleFS, since nothing needs it; the RAM disk code stays for the PC tests and the simulator |
 | Details chosen in the files milestone; to confirm or overrule | See "Chosen in the files milestone" below | As built |
 | Details chosen in the image viewer milestone; to confirm or overrule | See "Chosen in the image viewer milestone" below | As built |
@@ -230,6 +231,18 @@ First picture: 2026-11-16, through a VGA-to-HDMI adapter.
   partly the camera's compression of fine detail; it is the one pattern
   where shimmer can be seen. The longest timer slice while decoding was
   21 to 31 ms with every dither.
+- Remote screen on the board (2026-11-16, PR 7's VNC and browser parts).
+  VNC on port 5900: colours exact (0 pixels differ from the board's own
+  screenshot), mouse and keys work, a full screen takes 0.37 s with ZRLE
+  (4.5 KB) and 1.9 s as plain pixels (300 KB, about 160 KB/s over Wi-Fi).
+  The browser page on port 80 connects within a second in Chromium, takes
+  mouse and keys, takes over from a VNC client (which is let go) and hands
+  back to the next one. 59.5 frames a second and a steady picture with
+  either viewer. Free internal RAM 141 KB with a viewer connected; firmware
+  1.21 MB. Both listen on every address of the board, start whenever the
+  radio starts, cannot be switched off, and ask for no password (see Still
+  open). There is no VNC viewer on the laptop: `tools/rfb_client.py` checks
+  the server.
 - Wi-Fi on the board (2026-11-16, PR 7's Wi-Fi part). The radio starts in
   70 ms after the start-up screens; a scan takes 2.9 s; after a restart the
   board joins the remembered network on its own about 5 s after the radio
@@ -493,6 +506,9 @@ practical. Each is easy to change.
 - Curves and Colours: two closed curves, each round four points that bounce
   off the edges of the screen, each with a trail of 12 copies running through
   the colour wheel, the two on opposite sides of it.
+- A remote screen (VNC, the browser viewer) shows the saver too: each saver
+  reports the parts of the screen it changes, never the whole screen, and a
+  key or click from the remote side wakes it like any other.
 - Default saver: Flying Chinchillas. No password. Both confirmed by the
   owner, 2026-11-16.
 - The dialog: a list ((None) and the three), the wait in minutes (1 to 99),
@@ -540,6 +556,43 @@ Put to the owner as options; built on the recommended one until he answers.
 - ESP-IDF v5.5 does install in the cloud container (the firmware of this
   milestone was compiled and linked there, not run): `tools/setup-cloud-idf.sh`.
 
+### Chosen in the remote screen milestone (2026-11-16)
+
+- Who may connect: anyone on the same Wi-Fi network, no password (the
+  owner's choice, 2026-11-16; the options were no password, a VNC password,
+  or off until switched on). The viewer sees and controls everything.
+- The server speaks RFB 3.3, 3.7 and 3.8 on port 5900, in the core
+  (`core/net/rfb.hpp`), and runs on the UI task a little at a time (at most
+  4 ms of encoding per round) without ever waiting for the network.
+- One viewer at a time. A new viewer takes over from the one connected.
+- Only what changed is sent: the window manager reports each rectangle it
+  paints, kept as a grid of 16x16 cells and sent as rectangles of up to
+  64x64.
+- The pointer is not part of the picture: its shape goes to the viewer
+  (cursor pseudo-encoding), so moving the mouse costs no screen updates. A
+  viewer without that feature sees no pointer from the board, only its own.
+- Pixels: the viewer's own format (8, 16 or 32 bits, or a colour map), by a
+  table of the 256 screen colours.
+- Compression: ZRLE (one colour, a palette of up to 16, or plain, then
+  zlib), with our own small zlib compressor (fixed codes, 32 KB window)
+  to stay free of a library and its memory. Viewers without ZRLE get plain
+  pixels. Memory: about 190 KB of external RAM plus the compressor's, taken
+  at the first connection.
+- Keys: a key that exists on the US layout with the same Shift state goes
+  in as that key; anything else goes in as text. Keys still held when the
+  viewer leaves are released.
+- In a browser (asked 2026-11-16, to confirm; built on the recommended
+  option): the board serves one small page of its own at
+  `http://<address>/` (port 80, about 9 KB, in the firmware), a viewer
+  written for this server only. The other options put to the owner: the
+  full noVNC kept on C: and served by the board, noVNC kept on the owner's
+  computer, or no browser viewer. The page talks VNC through a WebSocket to
+  the same port (`core/net/web.hpp`), which noVNC could use too. It asks for
+  8-bit pixels with the colour map and ZRLE, unpacked with the browser's
+  own zlib (`DecompressionStream`); a browser without it gets plain pixels.
+  The web server answers nothing else: one page, one WebSocket, up to four
+  requests at a time. Like the VNC port, no password.
+
 ## To confirm on the bench
 
 - The picture is stable at 640x480 with the framebuffer in PSRAM.
@@ -551,6 +604,12 @@ Put to the owner as options; built on the recommended one until he answers.
   the clock is set from the network; free internal RAM with Wi-Fi up; the
   picture stays stable and the frame rate holds during a scan and while
   connected.
+- Remote screen (compiled and linked for the board, never run there): a VNC
+  viewer connects to the board's address, and a browser opens
+  `http://<address>/`; the picture is right; keys and mouse work; how long a full-screen update takes and how the desktop feels
+  meanwhile; the VGA picture stays stable with a viewer connected. If
+  updates are slow, the UI loop's 10 ms pace (FreeRTOS at 100 ticks a
+  second) is the first thing to look at.
 
 ## Planned order of work
 

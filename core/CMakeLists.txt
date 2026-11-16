@@ -25,6 +25,10 @@ set(CORE_SRCS
     src/saver/curves.cpp
     src/saver/runner.cpp
     src/saver/starfield.cpp
+    src/net/deflate.cpp
+    src/net/rfb.cpp
+    src/net/viewer_page.cpp
+    src/net/web.cpp
     src/net/wifi.cpp
     src/shell/apps.cpp
     src/shell/boot.cpp

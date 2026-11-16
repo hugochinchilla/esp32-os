@@ -95,6 +95,7 @@ private:
 
     static void dot(const Screen &s, const Star &star, uint8_t c)
     {
+        s.touch({star.px, star.py, star.size, star.size});
         for (int dy = 0; dy < star.size; dy++) {
             for (int dx = 0; dx < star.size; dx++) {
                 put(s, star.px + dx, star.py + dy, c);

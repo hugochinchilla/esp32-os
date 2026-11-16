@@ -114,6 +114,14 @@ public:
     void start_screen_saver();
     void stop_screen_saver();
     bool screen_saver_active() const { return saver_on_; }
+    // The screensaver says which part of the screen it changed, for whoever
+    // listens for painting (a remote screen).
+    void screen_saver_drew(const Rect &r)
+    {
+        if (damage_fn_ != nullptr) {
+            damage_fn_(r, damage_context_);
+        }
+    }
 
     // Caret blinking: widgets draw their caret only while this is true.
     bool caret_visible() const { return caret_on_ || !animations_; }
@@ -121,6 +129,15 @@ public:
 
     // The window that blocks `w` (a modal dialog), or nullptr.
     Window *blocker(const Window &w) const;
+
+    // Told about every part of the screen as it is painted (a remote screen
+    // sends those parts on).
+    using DamageFn = void (*)(const Rect &r, void *context);
+    void set_damage_listener(DamageFn fn, void *context)
+    {
+        damage_fn_ = fn;
+        damage_context_ = context;
+    }
 
     // Marks part of the screen for painting; update() paints it.
     void invalidate(const Rect &r);
@@ -253,6 +270,8 @@ private:
     int menu_entry_ = -1;
 
     gfx::RectList dirty_;
+    DamageFn damage_fn_ = nullptr;
+    void *damage_context_ = nullptr;
     gfx::RectList region_;
 
     int pointer_x_, pointer_y_;

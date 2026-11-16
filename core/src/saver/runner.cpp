@@ -33,7 +33,8 @@ void clear(const Screen &s)
 
 void Runner::begin(uint8_t *pixels, int width, int height, uint32_t seed)
 {
-    screen_ = {pixels, width, height};
+    screen_ = {pixels, width, height,
+               [](const gfx::Rect &r, void *self) { static_cast<Runner *>(self)->wm_.screen_saver_drew(r); }, this};
     clear(screen_);
     animation(index_).start(screen_, seed);
     first_ = true;
