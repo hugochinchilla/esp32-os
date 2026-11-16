@@ -360,6 +360,18 @@ private:
     char text_[fs::kMaxPath] = "";
 };
 
+// The groove under the toolbar: a dark line over a white one. A widget, so
+// the window's grey is not painted under it first.
+class Groove : public wm::Widget {
+public:
+    explicit Groove(const gfx::Rect &r) : Widget(r) {}
+    void paint(gfx::Canvas &c) override
+    {
+        c.hline(0, 0, rect.w, gfx::kDarkGrey);
+        c.hline(0, 1, rect.w, gfx::kWhite);
+    }
+};
+
 void close_window(void *context) { static_cast<wm::Window *>(context)->close(); }
 
 class FolderWindow : public wm::Window {
@@ -370,6 +382,7 @@ public:
         : Window("My Board", {96, 28, 400, 300}, &gfx::folder_icon_16()),
           back_({4, 0, 44, 34}, "Back", &gfx::folder_icon_16(), &FolderWindow::back, this),
           up_({50, 0, 44, 34}, "Up", &gfx::folder_icon_16(), &FolderWindow::up, this),
+          groove_({0, 36, 100, 2}),
           address_label_({4, 44, 46, 14}, "Address"),
           address_({50, 40, 100, 20}, true, &gfx::folder_icon_16()),
           view_({0, 64, 100, 100}, listing_, &FolderWindow::opened, &FolderWindow::selected, &FolderWindow::dragged,
@@ -380,6 +393,7 @@ public:
         add(view_);
         add(back_);
         add(up_);
+        add(groove_);
         add(address_label_);
         add(address_);
         add(objects_);
@@ -420,19 +434,13 @@ public:
     {
         const gfx::Rect c = client();
         address_.rect = {50, 40, c.w - 54, 20};
+        groove_.rect = {0, 36, c.w, 2};
         view_.rect = {0, 64, c.w, c.h - 64 - 22};
         objects_.rect = {0, c.h - 20, c.w - 120, 20};
         free_.rect = {c.w - 118, c.h - 20, 118, 20};
         view_.layout();
     }
 
-    void paint(gfx::Canvas &c) override
-    {
-        Window::paint(c);
-        const gfx::Rect cl = client();
-        c.hline(0, 36, cl.w, gfx::kDarkGrey);
-        c.hline(0, 37, cl.w, gfx::kWhite);
-    }
 
     bool key(const wm::KeyMsg &k) override
     {
@@ -737,6 +745,7 @@ private:
     char message_[200] = "";
     Listing listing_;
     ToolButton back_, up_;
+    Groove groove_;
     wm::Label address_label_;
     Panel address_;
     FolderView view_;

@@ -208,6 +208,12 @@ public:
     static constexpr int kDragPath = 160;
     void begin_drag(const char *path);
     bool item_dragging() const { return capture_ == Capture::Item; }
+    // Files let go on the desktop away from the icons go to `drop`.
+    void set_desktop_drop(void (*drop)(const char *path, void *context), void *context)
+    {
+        desktop_drop_ = drop;
+        desktop_drop_context_ = context;
+    }
     int drop_icon() const { return drop_icon_; }
     uint32_t last_update_us() const { return last_update_us_; }
     // Time to handle the last input event, painting included.
@@ -331,6 +337,9 @@ private:
     char drag_path_[kDragPath] = "";
     int drop_icon_ = -1;
     Window *drop_window_ = nullptr;
+    bool desktop_target_ = false;
+    void (*desktop_drop_)(const char *path, void *context) = nullptr;
+    void *desktop_drop_context_ = nullptr;
 
     // Double clicks: the target of the last press and when it happened.
     int last_target_ = -1;

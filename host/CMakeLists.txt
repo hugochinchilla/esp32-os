@@ -30,6 +30,8 @@ add_executable(test_edit tests/test_edit.cpp)
 target_link_libraries(test_edit PRIVATE core)
 
 add_executable(test_shell tests/test_shell.cpp)
+add_executable(test_paint tests/test_paint.cpp)
+target_link_libraries(test_paint PRIVATE core)
 target_link_libraries(test_shell PRIVATE core)
 
 add_executable(test_image tests/test_image.cpp)
@@ -52,6 +54,7 @@ add_test(NAME image COMMAND test_image ${CMAKE_CURRENT_BINARY_DIR}/pictures)
 set_tests_properties(image PROPERTIES FIXTURES_REQUIRED pictures)
 add_test(NAME edit COMMAND test_edit)
 add_test(NAME shell COMMAND test_shell)
+add_test(NAME paint COMMAND test_paint)
 
 add_executable(test_boot tests/test_boot.cpp)
 target_link_libraries(test_boot PRIVATE core)

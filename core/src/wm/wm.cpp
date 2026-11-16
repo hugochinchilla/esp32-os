@@ -623,6 +623,17 @@ void Wm::handle_key(uint16_t usage, bool pressed)
     if (screen_fn_ != nullptr) {
         return;
     }
+    if (pressed && usage == key::Escape && capture_ == Capture::Item) {
+        set_outline(outline_, false);
+        set_drop_icon(-1);
+        if (drop_window_ != nullptr) {
+            drop_window_->drag_over(nullptr, -1, -1);
+            drop_window_ = nullptr;
+        }
+        desktop_target_ = false;
+        capture_ = Capture::Swallow; // the release that follows does nothing
+        return;
+    }
     const KeyMsg k = {usage, pressed, mods_};
     bool used = false;
     if (pressed) {
@@ -1106,6 +1117,7 @@ void Wm::update_drop_target()
     const int x = pointer_x_, y = pointer_y_;
     int icon = -1;
     Window *target = nullptr;
+    bool on_desktop = false;
     if (!taskbar().contains(x, y)) {
         Window *w = window_under(x, y);
         Window *sys = system_modal();
@@ -1117,14 +1129,20 @@ void Wm::update_drop_target()
                 }
             }
         } else if (sys == nullptr) {
+            bool on_icon = false;
             for (int i = 0; i < icon_count_; i++) {
-                if (icons_[i].drop != nullptr && desktop_icon_rect(i).contains(x, y) &&
-                    (icons_[i].path == nullptr || strcmp(icons_[i].path, drag_path_) != 0)) {
-                    icon = i;
+                if (desktop_icon_rect(i).contains(x, y)) {
+                    on_icon = true;
+                    if (icons_[i].drop != nullptr &&
+                        (icons_[i].path == nullptr || strcmp(icons_[i].path, drag_path_) != 0)) {
+                        icon = i;
+                    }
                 }
             }
+            on_desktop = !on_icon && desktop_drop_ != nullptr;
         }
     }
+    desktop_target_ = on_desktop;
     set_drop_icon(icon);
     if (drop_window_ != nullptr && drop_window_ != target) {
         drop_window_->drag_over(nullptr, -1, -1);
@@ -1182,10 +1200,14 @@ void Wm::on_release()
         snprintf(path, sizeof(path), "%s", drag_path_);
         const int icon = drop_icon_;
         Window *target = drop_window_;
+        const bool on_desktop = desktop_target_;
         set_drop_icon(-1);
         drop_window_ = nullptr;
+        desktop_target_ = false;
         if (icon >= 0 && icon < icon_count_) {
             icons_[icon].drop(path, icons_[icon].context);
+        } else if (on_desktop) {
+            desktop_drop_(path, desktop_drop_context_);
         } else if (target != nullptr) {
             target->drag_over(nullptr, -1, -1);
             const Rect c = target->client();
@@ -1660,8 +1682,15 @@ void Wm::paint(bool painter)
 void Wm::paint_desktop(const RectList &clip)
 {
     const Rect screen = {0, 0, width_, height_};
+    static RectList around; // ponytail: one UI task
+    around = clip;
+    for (int i = 0; i < icon_count_; i++) {
+        around.subtract(desktop_icon_rect(i));
+    }
+    const bool split = !around.overflowed();
+    Canvas plain(display_.pixels(), width_, height_, split ? around : clip, screen);
+    plain.fill_rgb(screen, kDesktop);
     Canvas c(display_.pixels(), width_, height_, clip, screen);
-    c.fill_rgb(screen, kDesktop);
     const Rect bounds = clip.bounds();
     for (int i = 0; i < icon_count_; i++) {
         const Rect r = desktop_icon_rect(i);
@@ -1671,6 +1700,10 @@ void Wm::paint_desktop(const RectList &clip)
         const DesktopIcon &icon = icons_[i];
         const int x = r.x + 4, y = r.y;
         const bool selected = i == selected_icon_ || i == drop_icon_;
+        const auto draw = [&](Canvas &c) {
+        if (split) {
+            c.fill_rgb(r, kDesktop);
+        }
         if (icon.picture != nullptr) {
             if (selected) {
                 c.blit_selected(*icon.picture, x + 16, y, gfx::rgb(0, 0, 2));
@@ -1687,6 +1720,12 @@ void Wm::paint_desktop(const RectList &clip)
             c.text(tx + 1, y + 35, icon.label, gfx::kBlack);
             c.text(tx, y + 34, icon.label, gfx::kWhite);
         }
+        };
+        if (split) {
+            c.layered(r, draw);
+        } else {
+            draw(c); // the background is down already
+        }
     }
 }
 
@@ -1700,7 +1739,11 @@ void Wm::paint_window(Window &w, const RectList &clip)
     }
     const Rect c = w.client();
     Canvas client(pixels, width_, height_, clip, c, c.x, c.y);
-    w.paint(client);
+    if (w.layered()) {
+        client.layered({0, 0, c.w, c.h}, [&](Canvas &l) { w.paint(l); });
+    } else {
+        w.paint(client);
+    }
 }
 
 void Wm::paint_frame(Canvas &c, Window &w)
@@ -1721,14 +1764,10 @@ void Wm::paint_frame(Canvas &c, Window &w)
     c.raised(f);
 
     const bool active = active_ == &w;
-    parts.set(title);
-    for (Part p : {Part::Close, Part::Maximize, Part::Minimize}) {
-        parts.subtract(title_button(w, p));
-    }
-    for (int i = 0; i < parts.size(); i++) {
-        c.fill_fade(parts[i], active ? kActiveFrom : kInactiveFrom, active ? kActiveTo : kInactiveTo, false,
-                    &title);
-    }
+    // The title bar in one pass: fade, icon, title and buttons layered in a
+    // scratch band, each screen pixel written once.
+    c.layered(title, [&](Canvas &c) {
+    c.fill_fade(title, active ? kActiveFrom : kInactiveFrom, active ? kActiveTo : kInactiveTo);
     if (w.icon_ != nullptr) {
         c.blit(*w.icon_, f.x + 5, f.y + 6);
     }
@@ -1762,11 +1801,13 @@ void Wm::paint_frame(Canvas &c, Window &w)
             c.pattern(r.x + 4 + d, r.y + 3 + d, kMinGlyph, 8, ink);
         }
     }
+    });
 }
 
 void Wm::paint_menu_bar(Canvas &c, Window &w)
 {
     const Rect bar = w.menu_bar_rect();
+    c.layered(bar, [&](Canvas &c) {
     c.fill(bar, gfx::kGrey);
     for (int i = 0; i < w.menu_bar_->count; i++) {
         const Rect r = menu_bar_entry(w, i);
@@ -1777,13 +1818,15 @@ void Wm::paint_menu_bar(Canvas &c, Window &w)
         const int d = open ? 1 : 0;
         draw_label(c, r.x + 6 + d, r.y + 2 + d, w.menu_bar_->entries[i].label, gfx::kBlack);
     }
+    });
 }
 
 void Wm::paint_popup(int level, const RectList &clip)
 {
     const Popup &p = popups_[level];
     const Rect &r = p.rect;
-    Canvas c(display_.pixels(), width_, height_, clip, r);
+    Canvas screen(display_.pixels(), width_, height_, clip, r);
+    screen.layered(r, [&](Canvas &c) {
     c.fill(r, gfx::kGrey);
     c.raised(r);
     if (p.start) {
@@ -1825,6 +1868,7 @@ void Wm::paint_popup(int level, const RectList &clip)
                       disabled && !hover ? gfx::kDarkGrey : ink);
         }
     }
+    });
 }
 
 void Wm::paint_taskbar(const RectList &clip)
@@ -1832,7 +1876,8 @@ void Wm::paint_taskbar(const RectList &clip)
     uint8_t *pixels = display_.pixels();
     const Rect bar = taskbar();
     const int ty = bar.y;
-    Canvas c(pixels, width_, height_, clip, bar);
+    Canvas screen(pixels, width_, height_, clip, bar);
+    screen.layered(bar, [&](Canvas &c) {
     c.fill(bar, gfx::kGrey);
     c.hline(0, ty + 1, width_, gfx::kWhite);
 
@@ -1885,6 +1930,7 @@ void Wm::paint_taskbar(const RectList &clip)
     char time[12];
     snprintf(time, sizeof(time), "%d:%02d %s", h % 12 == 0 ? 12 : h % 12, m, h < 12 ? "AM" : "PM");
     c.text(clock.x + (kClockW - Canvas::text_width(time)) / 2, ty + 9, time, gfx::kBlack);
+    });
 }
 
 /* ---- Timers and clock ------------------------------------------------------- */

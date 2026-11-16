@@ -224,6 +224,7 @@ public:
         set_default(&connect_);
     }
 
+    bool layered() const override { return true; } // the picture over the face
     void paint(gfx::Canvas &c) override
     {
         Window::paint(c);

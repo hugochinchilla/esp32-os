@@ -72,6 +72,7 @@ public:
         return {0, 0, rect.w - (need_v_ ? t : 0), rect.h - (need_h_ ? t : 0)};
     }
 
+    bool layered() const override { return false; } // the picture, painted once already
     void paint(gfx::Canvas &c) override
     {
         const gfx::Rect a = area();

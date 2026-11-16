@@ -555,6 +555,30 @@ int main(int argc, char **argv)
         mouse(fx, fy, 0);
         expect(!there("C:\\readme.txt") && there("C:\\Documents\\readme.txt"), "the drop did not move readme.txt");
     }
+    // Into Documents: Desktop, espa\xc3\xb1ol.txt, notes.txt, readme.txt, todo.txt.
+    // readme.txt dragged out with Escape pressed on the way: nothing moves;
+    // dragged onto the empty desktop: it goes into C:\Documents\Desktop.
+    shell::open_folder("C:\\Documents");
+    for (int pass = 0; pass < 2; pass++) {
+        wm::Window *w = desktop.active();
+        const gfx::Rect c = w->client();
+        const int fx = c.x + 2 + 10 + 38 + 3 * 76, fy = c.y + 64 + 2 + 8 + 16;
+        mouse(fx, fy, 0);
+        mouse(fx, fy, 1);
+        mouse(fx + 10, fy + 10, 1);
+        mouse(560, 420, 1);
+        if (pass == 0) {
+            key(wm::key::Escape);
+        }
+        mouse(560, 420, 0);
+        if (pass == 0) {
+            expect(there("C:\\Documents\\readme.txt"), "Escape did not cancel the drag");
+        } else {
+            expect(!there("C:\\Documents\\readme.txt") && there("C:\\Documents\\Desktop\\readme.txt"),
+                   "the drop on the desktop did not move readme.txt");
+        }
+        desktop.activate(*w);
+    }
     while (desktop.active() != nullptr) {
         desktop.close(*desktop.active());
     }

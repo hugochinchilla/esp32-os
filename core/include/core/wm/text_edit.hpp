@@ -88,6 +88,7 @@ public:
     // After the widget's rect changed.
     void layout();
 
+    bool layered() const override { return false; } // painted once already, line by line
     void paint(gfx::Canvas &c) override;
     bool wants_mouse() const override { return true; }
     void mouse(const MouseMsg &m) override;

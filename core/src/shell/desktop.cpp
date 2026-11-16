@@ -90,6 +90,7 @@ public:
         shell::manager().add(*this);
     }
 
+    bool layered() const override { return true; } // the picture over the face
     void paint(gfx::Canvas &c) override
     {
         Window::paint(c);
@@ -194,6 +195,7 @@ public:
         set_default(&shut_down_);
     }
 
+    bool layered() const override { return true; } // the picture over the face
     void paint(gfx::Canvas &c) override
     {
         Window::paint(c);
@@ -297,6 +299,27 @@ void open_desktop_file(void *context)
         open_folder(f.path);
     } else if (!open_file(f.path)) {
         message_box("Desktop", "There is no program for this kind of file yet.");
+    }
+}
+
+// A file let go on the desktop itself goes into C:\Documents\Desktop
+// (nothing happens if it is there already).
+void drop_on_desktop(const char *path, void *)
+{
+    char parent[fs::kMaxPath];
+    fs::path::parent(path, parent, sizeof(parent));
+    if (strcasecmp(parent, kDesktopFolder) == 0) {
+        return;
+    }
+    storage().make_folder("C:\\Documents");
+    storage().make_folder(kDesktopFolder);
+    const ports::FsError e = move_to_folder(path, kDesktopFolder);
+    files_changed();
+    if (e != ports::FsError::Ok) {
+        static char text[fs::kMaxPath + 60];
+        snprintf(text, sizeof(text), "Cannot move '%s':\n%s.", fs::path::name(path),
+                 e == ports::FsError::Exists ? "there is one with that name there already" : fs::error_text(e));
+        message_box("Move", text);
     }
 }
 
@@ -565,6 +588,7 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
         g_settings_items[2].flags = 0;
     }
     wm.set_desktop_icons(g_icons, kSystemIcons);
+    wm.set_desktop_drop(&drop_on_desktop, nullptr);
     move_old_documents();
     welcome_file();
     refresh_desktop_files(true);

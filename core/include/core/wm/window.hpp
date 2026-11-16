@@ -116,6 +116,11 @@ public:
     // Whether the widget covers all of its rect when it paints (the window
     // does not paint its background there, so nothing is drawn twice).
     virtual bool opaque() const { return true; }
+    // An opaque widget is painted through a scratch band (Canvas::layered),
+    // so text and icons over its background reach the screen in one write
+    // per pixel. Big widgets that already paint each pixel once say false
+    // (the band runs their paint once per 12 lines).
+    virtual bool layered() const { return true; }
     // Where the caret is, in widget coordinates: all a blink repaints.
     virtual Rect caret_rect() const { return {0, 0, rect.w, rect.h}; }
     // Asks for a part of the widget (widget coordinates) to be painted again.
@@ -235,6 +240,11 @@ public:
     virtual void menu_opening(int /*entry*/) {}
     // Called after the window was closed.
     virtual void closed() {}
+    // The whole client area painted through a scratch band (see
+    // Canvas::layered), for windows that draw over their widgets' background:
+    // widgets that are not opaque (group frames), or an override of paint()
+    // that adds pictures (say true). Big windows should not.
+    virtual bool layered() const;
     // A file dragged over the client area (client coordinates): return true
     // if it would be taken there (and show where). path is nullptr when the
     // drag has left the window or ended.

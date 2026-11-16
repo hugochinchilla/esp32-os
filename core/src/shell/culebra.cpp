@@ -161,6 +161,7 @@ public:
 
     void cell_changed(int col, int row) { invalidate_part(cell_rect(col, row)); }
 
+    bool layered() const override { return false; } // painted once already, and often
     void paint(gfx::Canvas &c) override
     {
         c.sunken({0, 0, rect.w, rect.h});

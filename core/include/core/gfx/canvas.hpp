@@ -113,6 +113,33 @@ public:
     // `area` without `hole`: up to four rectangles.
     void fill_around(const Rect &area, const Rect &hole, Colour c);
 
+    // Layers in one pass: `paint(Canvas &)` draws `r` (drawing coordinates)
+    // with the usual calls, background first, covering every pixel of `r`;
+    // it runs into a scratch band of kBandRows lines, band by band, and each
+    // band is copied to the screen once. So text and icons over a background
+    // never show half drawn (one screen buffer, no flashes).
+    static constexpr int kBandRows = 12;
+    template <typename Fn> void layered(const Rect &r, Fn paint)
+    {
+        if (!counting_) {
+            paint(*this); // already in a scratch band
+            return;
+        }
+        const Rect s = r.offset(ox_, oy_).intersect(limit_);
+        for (int y = s.y; y < s.bottom(); y += kBandRows) {
+            const Rect band = {s.x, y, s.w, s.bottom() - y < kBandRows ? s.bottom() - y : kBandRows};
+            if (!touches(band)) {
+                continue;
+            }
+            RectList whole;
+            whole.set(band);
+            Canvas scratch(band_ - band.y * width_, width_, height_, whole, band, ox_, oy_);
+            scratch.counting_ = false;
+            paint(scratch);
+            copy_band(band);
+        }
+    }
+
     // Tests only: when set, every pixel written adds one to its counter
     // (one byte per screen pixel), to check that paints do not draw twice.
     static void count_writes(uint8_t *counts) { write_counts_ = counts; }
@@ -134,7 +161,7 @@ private:
     void put(int x, int y, Colour c); // one pixel, drawing coordinates
     void mark(int x, int y, int w) const // the write counter, if on
     {
-        if (write_counts_ != nullptr) {
+        if (write_counts_ != nullptr && counting_) {
             uint8_t *p = write_counts_ + y * width_ + x;
             for (int i = 0; i < w; i++) {
                 p[i]++;
@@ -142,7 +169,19 @@ private:
         }
     }
     template <typename BgFn> int text_cells(int x, int y, const char *s, Colour fg, BgFn bg, int caret_x);
+    void copy_band(const Rect &band); // scratch band to the screen, through the clip
+    bool touches(const Rect &r) const
+    {
+        for (int i = 0; i < clip_.size(); i++) {
+            if (clip_[i].overlaps(r)) {
+                return true;
+            }
+        }
+        return false;
+    }
     static uint8_t *write_counts_;
+    static uint8_t band_[kBandRows * 640];
+    bool counting_ = true; // false for the scratch band
 
     uint8_t *pixels_;
     int width_, height_;

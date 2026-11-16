@@ -37,6 +37,18 @@ Colour dither_t(Rgb c, unsigned t)
 } // namespace
 
 uint8_t *Canvas::write_counts_ = nullptr;
+uint8_t Canvas::band_[kBandRows * 640];
+
+void Canvas::copy_band(const Rect &band)
+{
+    for (int i = 0; i < clip_.size(); i++) {
+        const Rect part = clip_[i].intersect(band);
+        for (int y = part.y; y < part.bottom(); y++) {
+            memcpy(pixels_ + y * width_ + part.x, band_ + (y - band.y) * width_ + part.x, part.w);
+            mark(part.x, y, part.w);
+        }
+    }
+}
 
 namespace {
 
@@ -90,7 +102,9 @@ Canvas::Canvas(uint8_t *pixels, int width, int height, const RectList &clip, con
 Canvas Canvas::sub(const Rect &r) const
 {
     Rect screen = r.offset(ox_, oy_).intersect(limit_);
-    return Canvas(pixels_, width_, height_, clip_, screen, ox_ + r.x, oy_ + r.y);
+    Canvas c(pixels_, width_, height_, clip_, screen, ox_ + r.x, oy_ + r.y);
+    c.counting_ = counting_;
+    return c;
 }
 
 template <typename Fn> void Canvas::each(const Rect &r, Fn fn)

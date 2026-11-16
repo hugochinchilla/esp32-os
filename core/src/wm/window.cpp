@@ -174,6 +174,16 @@ void Window::close()
     }
 }
 
+bool Window::layered() const
+{
+    for (int i = 0; i < widget_count_; i++) {
+        if (!widgets_[i]->opaque()) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void Window::paint(gfx::Canvas &c)
 {
     // The face colour only where no widget paints, so nothing is drawn
@@ -194,8 +204,16 @@ void Window::paint(gfx::Canvas &c)
         c.fill(background[i], gfx::kGrey);
     }
     for (int i = 0; i < widget_count_; i++) {
-        gfx::Canvas wc = c.sub(widgets_[i]->rect);
-        widgets_[i]->paint(wc);
+        Widget &w = *widgets_[i];
+        if (w.opaque() && w.layered()) {
+            c.layered(w.rect, [&](gfx::Canvas &l) {
+                gfx::Canvas wc = l.sub(w.rect);
+                w.paint(wc);
+            });
+        } else {
+            gfx::Canvas wc = c.sub(w.rect);
+            w.paint(wc);
+        }
     }
 }
 
