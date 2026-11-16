@@ -84,7 +84,7 @@ const char *const *names()
 class SaverDialog : public wm::Window {
 public:
     SaverDialog()
-        : Window("Screen Saver", {0, 0, 300, 250}, &gfx::settings_icon_16()),
+        : Window("Screen Saver", {0, 0, 300, 250}, &gfx::saver_icon_16()),
           group_({8, 6, 276, 170}, "Screen saver"),
           list_({18, 24, 256, 60}, names(), 1 + saver::kCount),
           wait_label_({18, 99, 36, 14}, "Wait:"),

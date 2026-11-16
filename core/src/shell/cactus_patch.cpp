@@ -3,6 +3,7 @@
 // are in core/games/cactus.hpp; this is the window: the status row (cacti
 // left, the mascot's face, seconds), the field and the menus. All of its
 // pictures are original, drawn here as text rows.
+#include "core/gfx/art.hpp"
 #include <cstdio>
 
 #include "core/games/cactus.hpp"
@@ -61,15 +62,6 @@ constexpr Colour kLine = rgb(5, 4, 1);       // between open tiles
 
 constexpr Ink kCactusInks[] = {{'G', rgb(0, 4, 0)}, {'L', rgb(3, 7, 1)}, {'B', rgb(4, 2, 0)},
                                {'R', rgb(6, 2, 0)}, {'T', rgb(4, 1, 0)}};
-
-// The program's icon: a cactus in a pot.
-constexpr const char *kIcon[16] = {
-    "................", ".......GG.......", "......GLGG......", "......GLGG..G...",
-    "..G...GLGG.GG...", ".GG...GLGG.GG...", ".GG...GLGGGGG...", ".GGGGGGLGGGG....",
-    "..GGGGGLGG......", "......GLGG......", "......GLGG......", "....TTTTTTTT....",
-    "....RRRRRRRR....", ".....RRRRRR.....", ".....RRRRRR.....", "................",
-};
-constexpr Pixels<16> kIconPixels = draw(kIcon, kCactusInks);
 
 // Pictures inside a tile are 12x12.
 constexpr const char *kCactus[12] = {
@@ -134,7 +126,6 @@ constexpr const char *kFaceGlad[16] = { // eyes shut in a smile
 constexpr Pixels<16> kFacePixels[4] = {draw(kFaceCalm, kFaceInks), draw(kFaceCareful, kFaceInks),
                                        draw(kFaceOuch, kFaceInks), draw(kFaceGlad, kFaceInks)};
 
-const gfx::Bitmap kIconBitmap = {16, 16, kIconPixels.p, kClear};
 const gfx::Bitmap kCactusBitmap = {12, 12, kCactusPixels.p, kClear};
 const gfx::Bitmap kMarkerBitmap = {12, 12, kMarkerPixels.p, kClear};
 const gfx::Bitmap kWrongBitmap = {12, 12, kWrongPixels.p, kClear};
@@ -207,7 +198,7 @@ public:
     static constexpr int kMaxSeconds = 999;
     enum Face : uint8_t { kCalm, kCareful, kOuch, kGlad };
 
-    CactusWindow() : Window("Cactus Patch", {0, 0, 200, 200}, &kIconBitmap)
+    CactusWindow() : Window("Cactus Patch", {0, 0, 200, 200}, &gfx::cactus_icon_16())
     {
         set_resizable(false);
         game_items_[0] = {"&New game", &CactusWindow::new_game_action, this, nullptr, nullptr, 0};
@@ -608,7 +599,6 @@ CactusWindow &cactus_window()
 
 } // namespace
 
-const gfx::Bitmap &cactus_patch_icon() { return kIconBitmap; }
 
 void open_cactus_patch()
 {

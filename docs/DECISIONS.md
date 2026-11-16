@@ -589,6 +589,12 @@ practical. Each is easy to change.
   128 pixels wide, title bar (and menu bar) plus 24 pixels high.
 - Welcome now opens at x = 96 so it does not cover the desktop icons; About
   at (300, 190).
+- Every program has its own icon at 32x32 and 16x16, drawn by
+  `tools/mockup/icon_proposals.py` and chosen by the owner on 2026-11-16
+  (sheets in `docs/look/icons/`). The Editor's is a spiral notepad and a
+  pencil, his pick of three. The 16x16 serves the Start menu, title bar,
+  taskbar and Task Manager; there is no smaller size. A process with no
+  window shows a cog. This replaces the borrowed icons listed below.
 - Icons reused where there is no special one yet: Run uses the text icon,
   Shut Down the mascot; Settings has a new control-panel icon.
 

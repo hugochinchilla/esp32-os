@@ -900,5 +900,71 @@ def main():
     ], 3, os.path.join(out, "files.png"))
 
 
+# ---- The chosen icons as C++ for core/src/gfx/art.cpp -------------------------
+# python3 tools/mockup/icon_proposals.py --cpp   prints the generated block.
+
+CHOSEN = [  # accessor name, 32x32, 16x16
+    ("editor_icon", editor_a32, editor_a16),
+    ("folder_icon", folder_icon32, folder_icon16),
+    ("files_icon", files32, files16),
+    ("text_icon", text32, text16),
+    ("picture_icon", picture32, picture16),
+    ("viewer_icon", viewer32, viewer16),
+    ("tasks_icon", tasks32, tasks16),
+    ("defrag_icon", defrag32, defrag16),
+    ("snake_icon", snake32, snake16),
+    ("cactus_icon", cactus32, cactus16),
+    ("network_icon", network32, network16),
+    ("saver_icon", saver32, saver16),
+    ("settings_icon", settings32, settings16),
+    ("welcome_icon", welcome32, welcome16),
+    ("gallery_icon", gallery32, gallery16),
+    ("power_icon", power32, power16),
+    ("run_icon", run32, run16),
+    ("service_icon", service32, service16),
+    ("mascot", mascot32, None),
+]
+KEYS = "KWBSRYOPGDLNTHCEFIJMQUVXZabcdefghij"
+
+
+def cpp_one(name, icon):
+    s = icon.size
+    inks, rows = {}, []
+    for y in range(s):
+        row = ""
+        for x in range(s):
+            p = icon.im.getpixel((x, y))
+            if p[3] == 0:
+                row += "."
+                continue
+            if p not in inks:
+                inks[p] = KEYS[len(inks)]
+            row += inks[p]
+        rows.append(row)
+    per = 2 if s == 32 else 4
+    out = "const Bitmap &%s_%d()\n{\n    static constexpr const char *rows[%d] = {\n" % (name, s, s)
+    for k in range(0, s, per):
+        out += "        " + ", ".join('"%s"' % r for r in rows[k:k + per]) + ",\n"
+    out += "    };\n    static constexpr Ink inks[] = {\n"
+    for p, key in inks.items():
+        out += "        {'%s', rgb(%d, %d, %d)},\n" % (key, round(p[0] * 7 / 255), round(p[1] * 7 / 255),
+                                                     round(p[2] * 3 / 255))
+    out += "    };\n    static constexpr Pixels<%d> pixels = paint<%d>(rows, inks);\n" % (s, s)
+    out += "    static constexpr Bitmap bitmap = {%d, %d, pixels.p, kClear};\n    return bitmap;\n}\n\n" % (s, s)
+    return out
+
+
+def cpp():
+    out = ""
+    for name, big, small in CHOSEN:
+        out += cpp_one(name, big())
+        if small is not None:
+            out += cpp_one(name, small())
+    return out
+
+
 if __name__ == "__main__":
-    main()
+    if "--cpp" in sys.argv:
+        sys.stdout.write(cpp())
+    else:
+        main()

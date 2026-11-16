@@ -309,7 +309,7 @@ public:
 
     DefragWindow()
         : Window("Defragmenter", {0, 0, kClientW + 2 * kBorder, kClientH + kClientTop + kBorder},
-                 &gfx::drive_icon_16()),
+                 &gfx::defrag_icon_16()),
           about_({8, 6, kMapW, 14}, "A pretend disk, tidied for old times' sake. No drive is touched."),
           map_(8, 24, disk_),
           status_({8, kMapH + 30, kMapW, 14}, status_text_),
