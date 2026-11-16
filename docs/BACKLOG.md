@@ -63,3 +63,6 @@ at the same time.
 | 29 | Refined icons for every program, at 32x32 and 16x16. The owner picks from drawn proposals | M | | | on a branch (`claude/project-thread-ikdply`): the owner chose, all applied. [Journal](journal/2026-11-16-icon-proposals.md) |
 | 30 | Quick-launch icons by the Start button that launch something | S | 29 | | todo |
 | 31 | Desktop background: 16 colours and 10 patterns, chosen in a Display dialog (Start > Settings, or a right click on the desktop) | S | | Yes | on a branch (`claude/project-thread-ikdply`). [Journal](journal/2026-11-17-desktop-background.md) |
+| | **Chinchilla off the board** | | | | |
+| 32 | Chinchilla as a desktop program for Linux: a window (SDL2) on the same `core/`, the real mouse and keyboard, sound, a folder of the PC as C:. Not an emulator of the ESP32: no real Wi-Fi, no memory limits, much faster than the board | M | | | todo. [Journal](journal/2026-11-17-chinchilla-on-a-pc.md) |
+| 33 | Chinchilla in a web browser (WebAssembly): a link anyone can open, C: kept in the browser, the page published somewhere (GitHub Pages?) | M | 32 | | todo |
