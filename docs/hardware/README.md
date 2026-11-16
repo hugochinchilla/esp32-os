@@ -1,5 +1,9 @@
 # Adapter board: VGA, audio and beeper
 
+A printed circuit board version with the clock chip, microSD and a USB hub
+added is in [`hardware/hat/`](../../hardware/hat/README.md) (prototype, not
+yet built).
+
 A carrier board on 5x7 cm perfboard (18 x 24 holes). The dev board plugs into
 two 1x22 socket strips, and each resistor sits in the row of its own GPIO pin,
 so the video part needs no wires. The board also carries the audio output filter and a
@@ -68,7 +72,9 @@ cable used for this build and apply to that cable only.
 | Beeper | 14 |
 | SD card: CLK, CMD, D0 | 39, 40, 41 |
 | USB power switch enable and fault, optional | 21, 42 |
-| Spare | 11, 12, 38, 47, 48 (one of 38 or 48 is the on-board LED) |
+| Clock chip alarm output (hat PCB) | 11 |
+| SD card detect (hat PCB) | 12 |
+| Spare | 38, 47, 48 (one of 38 or 48 is the on-board LED); 11 and 12 too on the perfboard adapter |
 | Not used: boot strapping pins | 0, 3, 45, 46 |
 | Not available: flash and PSRAM | 26 to 37 |
 

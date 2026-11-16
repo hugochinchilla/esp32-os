@@ -43,6 +43,7 @@ resistor values and build notes.
 | --- | --- |
 | `docs/DECISIONS.md` | What has been decided, what was rejected, and what is still open |
 | `docs/hardware/` | VGA adapter pin map, resistor values and board diagram |
+| `hardware/hat/` | KiCad project and fabrication files for the hat PCB (prototype): VGA, audio, clock chip, microSD, USB hub |
 | `docs/debug-protocol.md` | The serial protocol for screenshots and injected input |
 | `core/` | The portable part of the OS (C++). Depends on no hardware; builds for the board and for a PC |
 | `firmware/os/` | The OS firmware: ESP-IDF project with the ESP32 adapters for `core/` |
@@ -50,7 +51,7 @@ resistor values and build notes.
 | `host/` | PC build: unit tests and picture tests for `core/`, and a simulated board |
 | `third_party/` | Freely licensed files from elsewhere: the Spleen font |
 | `ci/` | GitHub Actions workflow to copy into `.github/workflows/` |
-| `tools/` | `dbg.py`, the debug tool; `check_pictures.py`, the picture tests; `gen_font.py`, the font table generator; `mockup/`, the script that drew the target look; the setup script for Arch-based systems; the script that regenerates the board diagram |
+| `tools/` | `dbg.py`, the debug tool; `check_pictures.py`, the picture tests; `gen_font.py`, the font table generator; `mockup/`, the script that drew the target look; the setup script for Arch-based systems; the script that regenerates the board diagram; `hat_pcb/`, the scripts that generate the hat PCB |
 
 ## Tests on the PC
 

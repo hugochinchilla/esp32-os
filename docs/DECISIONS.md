@@ -22,7 +22,7 @@ Last updated: 2026-11-16.
 | Keyboard and mouse | USB host on GPIO19 and GPIO20, later. Until then, input is injected over serial or the network | No USB breakout boards on hand yet |
 | Two USB devices | Through a hub (external, or a hub module on the board), or one receiver shared by keyboard and mouse | The chip has a single USB port |
 | Clock | NTP when online. A battery-backed clock chip (I2C on GPIO1, GPIO2) only if it can be built from parts already at home | The chip has no battery input for its own clock; no new purchases |
-| No purchased modules | Nothing is bought for this project. Extras are built from parts on hand or not at all | Owner's choice |
+| No purchased modules | Replaced 2026-11-16 for the hat PCB: an assembled board is ordered from a PCB maker. Otherwise nothing is bought; extras are built from parts on hand or not at all | Owner's choice |
 | Networking order | 1. Serial only, for debugging and screen dumps. 2. Wi-Fi, once a basic OS boots. 3. Later: network over the second USB-C socket, and dial-up over serial | Wi-Fi leaves the serial port free for debugging while the system is in use |
 | Language and base | C++ on ESP-IDF, with FreeRTOS underneath. Our own kernel layer (app model, app scheduling, messages, file system layer) sits on top of it | Every Espressif driver works directly, which carries the least risk for video, USB and Wi-Fi |
 | First code | A VGA test program in ESP-IDF (C) showing 64-colour and 256-colour test cards | Proves the wiring before anything else is built on it |
@@ -38,6 +38,8 @@ Last updated: 2026-11-16.
 | Look | Windows 98 style: fading title bars, toolbar and address bar in folder windows, quick-launch icons by the Start button. Target picture: `docs/look/target-98.png`, drawn by `tools/mockup/desktop.py` | Owner's choice between 95 and 98 previews |
 | Name and mascot | The OS is called Chinchilla. Its logo and mascot is a chinchilla face, shown on the Start button. The 16x16 sketch in `tools/mockup/desktop.py` is the starting point | Owner's choice |
 | Colours that the board cannot show exactly | Made from a fixed 4x4 dot pattern of the two nearest colours (ordered dither), per colour channel. Used for the desktop colour, title bars and their fade. Lines one pixel wide always use exact colours | Blue has only four levels, so navy, teal and mid-grey do not exist as plain colours |
+| Hat PCB | An assembled two-layer PCB (100 x 78 mm) that the dev board plugs into: VGA ladders (510 / 1k / 2k, 100 ohm sync), audio out and jack, piezo, DS3231MZ clock with CR2032, microSD (1-bit SDMMC, card detect on GPIO12), CH334R two-port USB hub with TPS2051C port power switch (GPIO21, GPIO42) and ESD protection. Design in `hardware/hat/`, generated from `tools/hat_pcb/parts.py` | Owner's choice of extras, 2026-11-16. CH334R because the owner suggested it and European assemblers (AISLER) buy LCSC parts; one switch for both ports keeps the reserved pins' meaning |
+| Where to order the hat | AISLER (Germany) suggested; Eurocircuits and Beta Layout as alternatives, JLCPCB as the cheap non-EU comparison. See `hardware/hat/README.md` | Native KiCad upload, instant price, one-board minimum, sources LCSC parts |
 | Testing | Three layers: unit tests of the core on the PC, test-first where practical; framebuffer snapshots compared with stored images; a small number of on-device tests through the serial debug protocol. Signal timing is checked on the bench, not by tests | Fast feedback for most of the code, and checks that can run without hardware |
 
 ## Rejected
@@ -60,11 +62,11 @@ Last updated: 2026-11-16.
 | Window manager details chosen while building step 4, closest to the 98 look; to confirm or overrule | See the list under "Chosen in step 4" below | As built |
 | Remote keyboard, mouse and screen for a person | VNC server, web page, debug tool only | VNC server |
 | How apps are delivered | Built into the firmware, or loadable from disk | Built in first, behind an app interface |
-| SD card in the first version | Yes, later, never | Later (pins are reserved) |
-| How two USB sockets are provided | External hub, hub module on the board, shared receiver | One socket now, space for a hub module |
+| SD card in the first version | Yes, later, never | Socket is on the hat PCB; firmware later |
+| How two USB sockets are provided | External hub, hub module on the board, shared receiver | Decided for the hat PCB: CH334R hub chip on the board |
 | A PC build of the desktop for testing | Yes, no | Decided: yes. See Decided |
 | How the PC build shows the screen | SDL window, image files only | Open |
-| Clock chip | DS3231 module, another I2C chip | DS3231 |
+| Clock chip | DS3231 module, another I2C chip | Decided for the hat PCB: DS3231MZ on the board |
 
 ## Ideas kept for later
 
