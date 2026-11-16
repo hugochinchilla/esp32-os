@@ -87,9 +87,9 @@ First picture: 2026-11-16, through a VGA-to-HDMI adapter.
   0.475 V average, which is about 0.66 V peak (95 % of VGA full white).
 - The cable's pin 10 wire is not a usable ground on its own with the adapter
   in use. The cable's shield braid must be soldered to the board's ground.
-- The board's UART/COM socket no longer powers the board (it stopped during
-  the ground rework), but its serial link still works. The board is powered
-  from the other USB-C socket, so two cables are needed.
+- During the ground rework the UART/COM socket stopped powering the board for
+  about 20 minutes and then recovered by itself, which points to a
+  self-resetting fuse tripped by a momentary short. One cable is enough again.
 
 ## To confirm on the bench
 
