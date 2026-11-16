@@ -1194,6 +1194,11 @@ Task does.
   Manager has a message for it. Since the service rows were removed (see
   "Only real tasks are listed" below) no row gives that answer today. The
   first real service gets a stop function with its row (backlog item 5b).
+- A signal sent from another task (the shell's `kill`, later) must go
+  through the UI message queue (`msg::post`, `core/msg/queue.hpp`), so that
+  `signal()` runs on the UI task and the sleeping loop wakes at once. Signals
+  sent on the UI task, as End Task does, need nothing more. (Noted when the
+  message queue merged, 2026-11-16.)
 - End Task sends TERM. If the process is still there 5 seconds later, a box
   offers End Now (KILL) or Cancel, but only once the Task Manager is the
   window in front, so it never lands on a question the program is asking.
