@@ -13,6 +13,8 @@
 
 #include "driver/uart.h"
 #include "esp_attr.h"
+#include "nvs.h"
+#include "nvs_flash.h"
 #include "esp_chip_info.h"
 #include "esp_flash.h"
 #include "esp_wifi.h"
@@ -39,6 +41,39 @@
 #include "core/video/pointer.hpp"
 #include "vga.h"
 #include "wifi.hpp"
+
+// tools/dbg.py reboot --fast arms a one-shot fast start: a word in NVS
+// (RTC memory was tried first, but the reset after flashing clears it on
+// this board; NVS survives that, and flashing does not erase it).
+constexpr const char *kFastNextKey = "fast_next";
+
+void arm_fast_next()
+{
+    nvs_handle_t h;
+    if (nvs_flash_init() == ESP_OK && nvs_open("chinchilla", NVS_READWRITE, &h) == ESP_OK) {
+        nvs_set_u32(h, kFastNextKey, shell::kFastBootMagic);
+        nvs_commit(h);
+        nvs_close(h);
+    }
+}
+
+// Read once at start-up; the flash is written only when it was armed.
+bool take_fast_next()
+{
+    nvs_handle_t h;
+    if (nvs_flash_init() != ESP_OK || nvs_open("chinchilla", NVS_READWRITE, &h) != ESP_OK) {
+        return false;
+    }
+    uint32_t word = 0;
+    nvs_get_u32(h, kFastNextKey, &word);
+    const bool armed = shell::take_one_shot_fast_boot(word);
+    if (armed) {
+        nvs_erase_key(h, kFastNextKey);
+        nvs_commit(h);
+    }
+    nvs_close(h);
+    return armed;
+}
 
 namespace {
 
@@ -259,6 +294,7 @@ public:
         }
         return false;
     }
+    void arm_fast_boot() override { arm_fast_next(); }
     void reboot() override
     {
         uart_wait_tx_done(kDebugUart, pdMS_TO_TICKS(200));
@@ -450,7 +486,11 @@ void ui_task(void *)
 
     // Start-up screens: the real self-test, then the splash.
     static shell::BootIo boot_io{display, system, memory, clock, &storage, &boot_idle, &protocol, &boot_log};
-    const shell::BootSettings boot = shell::boot_settings(storage);
+    shell::BootSettings boot = shell::boot_settings(storage);
+    if (take_fast_next()) {
+        boot.fastboot = true;
+        ESP_LOGI(TAG, "one-shot fast boot (armed by tools/dbg.py; boot.ini unchanged)");
+    }
     boot_io.video_start_us = s_video_start_us;
     boot_io.monitor_wait_ms = boot.monitor_wait_ms;
     boot_io.splash_ms = boot.splash_ms;

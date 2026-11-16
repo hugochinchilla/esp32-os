@@ -46,3 +46,4 @@ Plain words, real numbers, no summaries of summaries.
 | 2026-11-16 | [Painting each pixel once](2026-11-16-painting-once.md) | Overdraw counted, a 12-line scratch band, before and after |
 | 2026-11-16 | [Slow-pointer submenus](2026-11-16-start-menu-submenus.md) | Why a slow pointer closed Start > Programs, and the fix |
 | 2026-11-16 | [Internal RAM](2026-11-16-internal-ram.md) | Where the 512 KB of internal SRAM goes, what Wi-Fi costs, wired alternatives and cheap wins (report, nothing applied) |
+| 2026-11-16 | [One-shot fast start](2026-11-16-one-shot-fast-boot.md) | `dbg.py reboot --fast` and `boot fast-next`; why NVS and not RTC memory |

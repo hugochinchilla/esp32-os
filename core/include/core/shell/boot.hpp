@@ -66,6 +66,18 @@ struct BootSettings {
 };
 BootSettings boot_settings(const fs::Storage &storage);
 
+// A one-shot fast boot for debug restarts (tools/dbg.py reboot --fast): the
+// board keeps `word` where a restart and a flashing leave it (NVS). True
+// once if it holds the magic value, which it then clears; boot.ini is not
+// touched.
+constexpr uint32_t kFastBootMagic = 0x46415354; // "FAST"
+inline bool take_one_shot_fast_boot(uint32_t &word)
+{
+    const bool armed = word == kFastBootMagic;
+    word = 0;
+    return armed;
+}
+
 // Fast start: the cheap checks only (no memory test), nothing drawn; each
 // result goes to io.log. Returns the number of failed checks.
 int run_quiet_checks(BootIo &io);

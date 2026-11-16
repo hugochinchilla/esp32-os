@@ -319,7 +319,7 @@ class Board:
     def boot_screen(self, which):
         """Shows a start-up screen again ("selftest" runs the checks again,
         "splash"); repaint() brings the desktop back."""
-        self.request(BOOT_SCREEN, bytes([{"selftest": 0, "splash": 1}[which]]))
+        self.request(BOOT_SCREEN, bytes([{"selftest": 0, "splash": 1, "fast-next": 2}[which]]))
 
     # ---- Wi-Fi
 
@@ -451,9 +451,9 @@ class Board:
         """Paints the whole screen again; returns the time it took in µs."""
         return struct.unpack("<I", self.request(REPAINT))[0]
 
-    def reboot(self):
+    def reboot(self, fast=False):
         try:
-            self.request(REBOOT)
+            self.request(REBOOT, bytes([1]) if fast else b"")
         except PortClosed:
             pass  # the simulated board closes its port as it exits
 
@@ -624,7 +624,9 @@ def main(argv=None):
     sub.add_parser("ping", help="check that the board answers")
     sub.add_parser("info", help="screen size and firmware name")
     sub.add_parser("stats", help="uptime, free memory, counters")
-    sub.add_parser("reboot", help="restart the board")
+    p = sub.add_parser("reboot", help="restart the board")
+    p.add_argument("--fast", action="store_true",
+                   help="this one start without the start-up screens (boot.ini unchanged)")
     sub.add_parser("windows", help="list the windows, bottom to top")
     p = sub.add_parser("ls", help="list a folder on the board (default C:\\)")
     p.add_argument("folder", nargs="?", default="C:\\")
@@ -646,7 +648,8 @@ def main(argv=None):
     sub.add_parser("repaint", help="paint the whole screen again and time it")
     sub.add_parser("memory", help="where the memory goes: heaps and task stacks")
     p = sub.add_parser("boot", help="show a start-up screen again (repaint brings the desktop back)")
-    p.add_argument("screen", choices=["selftest", "splash"])
+    p.add_argument("screen", choices=["selftest", "splash", "fast-next"],
+                   help="fast-next: show nothing, make the next start a fast one (for before flashing)")
     p = sub.add_parser("wifi", help="Wi-Fi: status, scan, connect (asks for the password), disconnect, forget")
     p.add_argument("action", nargs="?", default="status",
                    choices=["status", "scan", "list", "connect", "disconnect", "forget"])
@@ -704,7 +707,7 @@ def main(argv=None):
             for name, value in board.stats().items():
                 print("%s: %s" % (name, value))
         elif args.command == "reboot":
-            board.reboot()
+            board.reboot(fast=args.fast)
         elif args.command == "windows":
             for w in board.windows():
                 print("%(id)d z%(z)d %(x)d,%(y)d %(w)dx%(h)d %(state)s%(f)s  %(title)s"
@@ -748,7 +751,10 @@ def main(argv=None):
             print(board.memory_report(), end="")
         elif args.command == "boot":
             board.boot_screen(args.screen)
-            print("showing the %s screen; dbg.py repaint brings the desktop back" % args.screen)
+            if args.screen == "fast-next":
+                print("the next start skips the start-up screens, once")
+            else:
+                print("showing the %s screen; dbg.py repaint brings the desktop back" % args.screen)
         elif args.command == "wifi":
             wifi_command(board, args)
         elif args.command == "monitor":
