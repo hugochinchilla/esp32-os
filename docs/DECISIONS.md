@@ -80,8 +80,11 @@ First picture: 2026-11-16, through a VGA-to-HDMI adapter.
   pixels. 25.000 MHz is the default.
 - With the framebuffer sent straight from PSRAM, redrawing the screen left the
   picture displaced sideways until the output was restarted. The test program
-  now uses bounce buffers and restarts the output in every vertical blank;
-  whether that cures it is still to be confirmed.
+  now uses bounce buffers and restarts the output in every vertical blank,
+  which cured it.
+- The blue mirror pin works: the four greys show no tint. Measured on a white
+  screen at the VGA plug, adapter connected: red 0.485 V, green 0.485 V, blue
+  0.475 V average, which is about 0.66 V peak (95 % of VGA full white).
 - The cable's pin 10 wire is not a usable ground on its own with the adapter
   in use. The cable's shield braid must be soldered to the board's ground.
 - The board's UART/COM socket no longer powers the board (it stopped during
@@ -91,8 +94,6 @@ First picture: 2026-11-16, through a VGA-to-HDMI adapter.
 ## To confirm on the bench
 
 - The picture is stable at 640x480 with the framebuffer in PSRAM.
-- One LCD data signal can drive two pins (GPIO17 and GPIO8).
-- The bounce buffers stop the picture from being displaced after a redraw.
 - The colours and the four greys look right in both modes.
 - The picture stays stable with Wi-Fi active and during flash writes.
 
