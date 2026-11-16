@@ -39,6 +39,8 @@ gfx::Rect centred(const wm::Wm &wm, int w, int h);
 // Cactus Patch (cactus_patch.cpp): its Start menu entry.
 void open_cactus_patch();
 
+// Puts the desktop background in place with its settings (display.cpp).
+void install_display();
 // Puts the screensaver in place with its settings (screensaver.cpp).
 void install_screen_saver();
 

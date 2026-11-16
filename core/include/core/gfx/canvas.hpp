@@ -72,6 +72,10 @@ public:
     void vline(int x, int y, int h, Colour c);
     // Exact where the board has the colour, dithered otherwise.
     void fill_rgb(const Rect &r, Rgb c);
+    // The same with an 8x8 pattern over it: a set bit (the top bit of a row
+    // is its left pixel) is drawn in `ink`. The pattern is fixed to the
+    // screen, like the dither, so parts painted apart join up.
+    void fill_pattern(const Rect &r, Rgb paper, Rgb ink, const uint8_t rows[8]);
     // A left-to-right fade across `r`, dithered (the 98 title bar); with
     // `vertical`, top to bottom.
     void fill_fade(const Rect &r, Rgb from, Rgb to, bool vertical = false, const Rect *span = nullptr);

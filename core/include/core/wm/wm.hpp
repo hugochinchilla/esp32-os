@@ -150,6 +150,24 @@ public:
     void set_desktop_icons(const DesktopIcon *icons, int count);
     void set_start_menu(Menu *menu, const char *banner);
 
+    // The desktop behind everything: a colour and, over it, an 8x8 pattern
+    // drawn in `ink` (the top bit of a row is its left pixel; all rows 0:
+    // the plain colour).
+    struct Backdrop {
+        gfx::Rgb colour;
+        gfx::Rgb ink;
+        uint8_t pattern[8];
+    };
+    void set_backdrop(const Backdrop &backdrop);
+    const Backdrop &backdrop() const { return backdrop_; }
+    // A right click on the desktop away from the icons calls `menu` with
+    // the pointer's place (the shell opens a menu there).
+    void set_desktop_menu(void (*menu)(int x, int y, void *context), void *context)
+    {
+        desktop_menu_ = menu;
+        desktop_menu_context_ = context;
+    }
+
     // A 16x16 icon in the tray, left of the clock (nullptr: none). A click
     // on it calls `click`.
     void set_tray_icon(const gfx::Bitmap *icon, void (*click)(void *context) = nullptr,
@@ -393,6 +411,10 @@ private:
     Window *drop_window_ = nullptr;
     bool desktop_target_ = false;
     void (*desktop_drop_)(const char *path, void *context) = nullptr;
+    Backdrop backdrop_ = {{58, 110, 165}, {0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0}};
+    void fill_backdrop(gfx::Canvas &c, const Rect &r) const;
+    void (*desktop_menu_)(int x, int y, void *context) = nullptr;
+    void *desktop_menu_context_ = nullptr;
     void *desktop_drop_context_ = nullptr;
 
     // Double clicks: the target of the last press and when it happened.

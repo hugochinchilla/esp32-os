@@ -16,7 +16,6 @@ using gfx::RectList;
 namespace {
 
 // Colours from tools/mockup/desktop.py (98 style).
-constexpr Rgb kDesktop = {58, 110, 165};
 constexpr Rgb kActiveFrom = {0, 0, 128}, kActiveTo = {16, 132, 208};
 constexpr Rgb kInactiveFrom = {128, 128, 128}, kInactiveTo = {192, 192, 192};
 constexpr Rgb kHighlight = {0, 0, 128};                         // chosen menu item
@@ -1169,6 +1168,17 @@ void Wm::on_right_press()
     }
     Window *w = window_under(pointer_x_, pointer_y_);
     Window *sys = system_modal();
+    if (w == nullptr && sys == nullptr && desktop_menu_ != nullptr) {
+        // The desktop itself, away from the icons.
+        for (int i = 0; i < icon_count_; i++) {
+            if (desktop_icon_rect(i).contains(pointer_x_, pointer_y_)) {
+                return;
+            }
+        }
+        const proc::Scope desktop(procs_, desktop_pid_);
+        desktop_menu_(pointer_x_, pointer_y_, desktop_menu_context_);
+        return;
+    }
     if (w == nullptr || (sys != nullptr && sys != w) || blocker(*w) != nullptr ||
         part_at(*w, pointer_x_, pointer_y_) != Part::Client) {
         return;
@@ -1954,6 +1964,25 @@ void Wm::paint(bool painter)
     }
 }
 
+void Wm::set_backdrop(const Backdrop &backdrop)
+{
+    backdrop_ = backdrop;
+    invalidate({0, 0, width_, height_});
+}
+
+void Wm::fill_backdrop(Canvas &c, const Rect &r) const
+{
+    bool plain = true;
+    for (int i = 0; i < 8; i++) {
+        plain = plain && backdrop_.pattern[i] == 0;
+    }
+    if (plain) {
+        c.fill_rgb(r, backdrop_.colour);
+    } else {
+        c.fill_pattern(r, backdrop_.colour, backdrop_.ink, backdrop_.pattern);
+    }
+}
+
 void Wm::paint_desktop(const RectList &clip)
 {
     const Rect screen = {0, 0, width_, height_};
@@ -1964,7 +1993,7 @@ void Wm::paint_desktop(const RectList &clip)
     }
     const bool split = !around.overflowed();
     Canvas plain(display_.pixels(), width_, height_, split ? around : clip, screen);
-    plain.fill_rgb(screen, kDesktop);
+    fill_backdrop(plain, screen);
     Canvas c(display_.pixels(), width_, height_, clip, screen);
     const Rect bounds = clip.bounds();
     for (int i = 0; i < icon_count_; i++) {
@@ -1977,7 +2006,7 @@ void Wm::paint_desktop(const RectList &clip)
         const bool selected = i == selected_icon_ || i == drop_icon_;
         const auto draw = [&](Canvas &c) {
         if (split) {
-            c.fill_rgb(r, kDesktop);
+            fill_backdrop(c, r);
         }
         if (icon.picture != nullptr) {
             if (selected) {

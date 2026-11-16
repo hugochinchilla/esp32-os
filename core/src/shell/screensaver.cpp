@@ -1,6 +1,6 @@
 // The screensaver's settings: which one, after how many minutes, and a
-// preview. Opened from Start > Settings; to become a tab of a Display
-// window once there is a Control Panel (docs/DECISIONS.md).
+// preview. Opened from Start > Settings; to become a part of the Display
+// window (display.cpp) one day (docs/DECISIONS.md).
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>

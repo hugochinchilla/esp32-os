@@ -4,6 +4,7 @@
 // in host/tests/pictures/.
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -500,6 +501,67 @@ int main(int argc, char **argv)
     }
     save("37f-after-screen-saver");
     key(wm::key::Escape); // closes the dialog
+
+    // The desktop's background. A right click on the desktop gives a menu
+    // with Display...; there a colour and a pattern, shown by Apply, taken
+    // back by Escape, kept by OK.
+    {
+        const auto check = [&](bool ok, const char *what) {
+            if (!ok) {
+                printf("Display: %s\n", what);
+                failures++;
+            }
+        };
+        mouse(400, 300, 0);
+        mouse(400, 300, 2);
+        mouse(400, 300, 0);
+        check(desktop.menu_open(), "a right click on the desktop opens its menu");
+        save("37p-desktop-menu");
+        centre_of(desktop.popup_item(0, 0), x, y);
+        click(x, y);
+        check(desktop.active() != nullptr && strcmp(desktop.active()->title(), "Display") == 0, "the dialog opens");
+        save("37q-display-dialog");
+        key(wm::key::Right);            // Teal
+        key(0x13, true);                // Alt+P: the patterns
+        for (int i = 0; i < 4; i++) {
+            key(wm::key::Right);        // Bricks
+        }
+        save("37r-display-teal-bricks");
+        check(desktop.backdrop().colour.r == 58, "nothing changes before Apply");
+        key(0x04, true);                // Alt+A: Apply
+        check(desktop.backdrop().colour.g == 128 && desktop.backdrop().pattern[0] == 0xFF, "Apply shows it");
+        save("37s-display-applied");
+        key(wm::key::Escape);
+        check(desktop.backdrop().colour.r == 58 && desktop.backdrop().pattern[0] == 0, "Escape takes it back");
+        // Kept by OK, in desktop.ini.
+        shell::display_dialog();
+        for (int i = 0; i < 9; i++) {
+            key(wm::key::Right);        // Sand
+        }
+        key(0x13, true);
+        key(wm::key::Down);
+        key(wm::key::Right);            // Diamonds
+        key(wm::key::Enter);
+        check(desktop.backdrop().colour.r == 208 && desktop.backdrop().pattern[0] == 0x10, "OK keeps it");
+        fs::Ini ini;
+        char value[32] = "";
+        check(shell::load_settings("desktop", ini) && ini.get("background", "colour", value, sizeof(value)) &&
+                  strcmp(value, "sand") == 0,
+              "the colour is in desktop.ini");
+        check(ini.get("background", "pattern", value, sizeof(value)) && strcmp(value, "diamonds") == 0,
+              "the pattern is in desktop.ini");
+        save("37t-desktop-sand-diamonds");
+        // Back to how it was, for the pictures that follow.
+        shell::display_dialog();
+        for (int i = 0; i < 9; i++) {
+            key(wm::key::Left);
+        }
+        key(0x13, true);
+        key(wm::key::Up);
+        key(wm::key::Left);
+        key(wm::key::Enter);
+        check(desktop.backdrop().colour.r == 58 && desktop.backdrop().pattern[0] == 0, "and back");
+    }
 
     // The Trash. Empty at first, from its desktop icon.
     const auto there = [&](const char *path) {

@@ -589,6 +589,12 @@ practical. Each is easy to change.
   128 pixels wide, title bar (and menu bar) plus 24 pixels high.
 - Welcome now opens at x = 96 so it does not cover the desktop icons; About
   at (300, 190).
+- The desktop's background is one of 16 named colours with one of 10
+  patterns of 8x8 over it (the first is none), drawn in a darker shade of
+  the colour. Chosen in the Display dialog, from Start > Settings >
+  Display or a right click on the desktop; kept in `desktop.ini`. Asked for
+  by the owner on 2026-11-17; the lists and the shade are the agent's
+  defaults, his to change. The default is the blue it always was.
 - Every program has its own icon at 32x32 and 16x16, drawn by
   `tools/mockup/icon_proposals.py` and chosen by the owner on 2026-11-16
   (sheets in `docs/look/icons/`). The Editor's is a spiral notepad and a

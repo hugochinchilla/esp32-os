@@ -58,3 +58,4 @@ Plain words, real numbers, no summaries of summaries.
 | 2026-11-16 | [VNC connect times](2026-11-16-vnc-connect.md) | Five connects on main, the network spread, and a correction to the PR 18 transfer figure |
 | 2026-11-16 | [Icons: the inventory, the taskbar and the folder toolbar](2026-11-16-icons.md) | Which icons exist and at what sizes, the quick-launch icons taken out, Back and Up told apart |
 | 2026-11-16 | [Icon proposals, and the Editor's new icon](2026-11-16-icon-proposals.md) | Three ideas for the Editor, one for each other program; the owner chose the notepad and pencil |
+| 2026-11-17 | [The desktop's colour and pattern](2026-11-17-desktop-background.md) | 16 colours and 10 patterns, the Display dialog, a right click on the desktop |

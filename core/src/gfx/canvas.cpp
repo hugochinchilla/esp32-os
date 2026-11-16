@@ -172,6 +172,27 @@ void Canvas::fill_rgb(const Rect &r, Rgb c)
     });
 }
 
+void Canvas::fill_pattern(const Rect &r, Rgb paper, Rgb ink, const uint8_t rows[8])
+{
+    // 8x8 holds both the pattern and two turns of the 4x4 dither.
+    Colour tile[8][8];
+    for (int y = 0; y < 8; y++) {
+        for (int x = 0; x < 8; x++) {
+            tile[y][x] = dither_t((rows[y] & (0x80 >> x)) != 0 ? ink : paper, kBayer[y & 3][x & 3]);
+        }
+    }
+    each(r, [&](const Rect &s) {
+        for (int y = s.y; y < s.bottom(); y++) {
+            const Colour *t = tile[y & 7];
+            uint8_t *row = pixels_ + y * width_;
+            for (int x = s.x; x < s.right(); x++) {
+                row[x] = t[x & 7];
+            }
+            mark(s.x, y, s.w);
+        }
+    });
+}
+
 void Canvas::fill_fade(const Rect &r, Rgb from, Rgb to, bool vertical, const Rect *span_rect)
 {
     // The fade runs across `span_rect` (r itself by default): a part of a

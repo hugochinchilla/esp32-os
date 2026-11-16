@@ -574,6 +574,31 @@ def saver16():
     return i
 
 
+def display32():
+    """Display: a screen showing a desktop with a patterned background."""
+    i = Icon(32)
+    monitor32(i, 2, 2, 27, 20, BLUE)
+    stand32(i, 15, 22, 7)
+    for y in range(6, 18, 2):
+        for x in range(6 + (y // 2) % 2 * 2, 26, 4):
+            i.dot(x, y, PALE)
+    i.box(9, 8, 19, 15, W)
+    i.fill(10, 9, 18, 10, NAVY)
+    i.fill(6, 17, 25, 18, G)
+    return i
+
+
+def display16():
+    i = Icon(16)
+    i.box(1, 1, 14, 11, G)
+    i.fill(3, 3, 12, 9, BLUE)
+    for x, y in ((4, 4), (8, 4), (11, 5), (6, 6), (10, 7), (4, 8), (8, 8)):
+        i.dot(x, y, PALE)
+    i.fill(6, 12, 9, 12, K)
+    i.box(4, 13, 11, 14, G)
+    return i
+
+
 def power32():
     """Shut Down: the power sign on a red key."""
     i = Icon(32)
@@ -885,6 +910,7 @@ def main():
         cell(cactus32(), cactus16(), "Cactus Patch", "un cactus en su maceta"),
         cell(network32(), network16(), "Network", "dos equipos unidos por un cable"),
         cell(saver32(), saver16(), "Screen Saver", "pantalla con cielo de noche"),
+        cell(display32(), display16(), "Display", "pantalla con un escritorio"),
         cell(settings32(), settings16(), "Settings", "panel con tres mandos"),
         cell(welcome32(), welcome16(), "Welcome", "un libro abierto"),
         cell(gallery32(), gallery16(), "Widget gallery", "ventana con controles"),
@@ -916,6 +942,7 @@ CHOSEN = [  # accessor name, 32x32, 16x16
     ("cactus_icon", cactus32, cactus16),
     ("network_icon", network32, network16),
     ("saver_icon", saver32, saver16),
+    ("display_icon", display32, display16),
     ("settings_icon", settings32, settings16),
     ("welcome_icon", welcome32, welcome16),
     ("gallery_icon", gallery32, gallery16),

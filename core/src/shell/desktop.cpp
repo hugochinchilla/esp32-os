@@ -241,13 +241,21 @@ wm::MenuItem g_program_items[kMaxApps];
 wm::Menu g_programs = {g_program_items, 0};
 void open_screen_saver(void *) { screen_saver_dialog(); }
 void network_panel(void *) { open_network(); }
+void open_display(void *) { display_dialog(); }
+// A right click on the desktop: a menu with what can be done to it.
+wm::MenuItem g_desktop_items[] = {
+    {"&Display...", &open_display, nullptr, nullptr, nullptr, 0},
+};
+wm::Menu g_desktop_menu = {g_desktop_items, 1};
+void desktop_menu(int x, int y, void *) { manager().open_menu(g_desktop_menu, x, y); }
 wm::MenuItem g_settings_items[] = {
     {"&Control Panel", nullptr, nullptr, nullptr, nullptr, wm::kMenuDisabled},
     {"&Taskbar...", nullptr, nullptr, nullptr, nullptr, wm::kMenuDisabled},
     {"&Network", &network_panel, nullptr, nullptr, nullptr, wm::kMenuDisabled},
     {"&Screen Saver...", &open_screen_saver, nullptr, nullptr, &gfx::saver_icon_16(), 0},
+    {"&Display...", &open_display, nullptr, nullptr, &gfx::display_icon_16(), 0},
 };
-wm::Menu g_settings = {g_settings_items, 4};
+wm::Menu g_settings = {g_settings_items, 5};
 wm::MenuItem g_start_items[5];
 wm::Menu g_start = {g_start_items, 5};
 
@@ -604,6 +612,8 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
     refresh_desktop_files(true);
     g_file_timer = wm.start_timer(2000000, 2000000, &desktop_files_tick, nullptr);
     install_screen_saver();
+    install_display();
+    wm.set_desktop_menu(&desktop_menu, nullptr);
     start_network();
     // The desktop starts with no windows open (the owner's choice).
 }
