@@ -61,6 +61,8 @@ Last updated: 2026-11-16.
 | Remote keyboard, mouse and screen for a person | VNC server, web page, debug tool only | VNC server |
 | How apps are delivered | Built into the firmware, or loadable from disk | Built in first, behind an app interface. Still the owner's question; the shell works on that assumption: programs are entries in a table (`core/include/core/shell/shell.hpp`: name, icon, open function) that the Start menu and desktop icons launch the same way |
 | Shell details chosen while building menus, the Start menu and widgets; to confirm or overrule | See "Chosen in the shell milestone" below | As built |
+| File system on the flash | LittleFS, FAT | Asked; until it is chosen, C: is a RAM disk (lost at restart) behind the storage port, and nothing writes the flash |
+| Details chosen in the files milestone; to confirm or overrule | See "Chosen in the files milestone" below | As built |
 | SD card in the first version | Yes, later, never | Later (pins are reserved) |
 | How two USB sockets are provided | External hub, hub module on the board, shared receiver | One socket now, space for a hub module |
 | A PC build of the desktop for testing | Yes, no | Decided: yes. See Decided |
@@ -116,6 +118,25 @@ First picture: 2026-11-16, through a VGA-to-HDMI adapter.
   default port of `tools/dbg.py`.
 - A webcam (Logitech StreamCam, `/dev/video4`) watches the monitor, so what
   the monitor really shows can be checked from the PC with `ffmpeg`.
+- Files milestone (2026-11-16): 22 steps, including My Board, the docs
+  folder, a file opened in the Editor, Save As, the changes question, Rename
+  and Delete, are pixel-identical on the board and in the PC render (clock
+  masked), with no stale pixels after any step. On the board: a file edited
+  and saved, then reopened, kept the change; a 150 KB file sent with `put`
+  appeared after Refresh and came back with `get` byte for byte (3.0 s each
+  way); a folder was created, renamed and deleted through the File manager;
+  a click on the Editor while Save As was open left Save As in front; the
+  clock set to 11:59:50 showed 12:00:02 PM twelve seconds later. Times:
+  typing in a 335 KB file 13.5 ms per character (the visible text is
+  repainted), 38 ms for the first character after jumping from the end to
+  the start (the gap moves the whole file once), PageDown 0.03 ms plus
+  painting; full repaint 32 ms with the Editor open; 59.5 frames a second,
+  no receive errors. Free RAM at start-up: 318.7 KB internal (327.6 KB in the
+  shell milestone: the File manager windows, the file dialogs and the larger
+  debug-link buffers take about 9 KB) and 5.91 MB external (the 2 MB RAM disk
+  and the 64 KB clipboard); opening the Editor takes another 0.6 MB external
+  (its 512 KB text and 64 KB undo). Icons and pointer shapes moved from RAM
+  to flash on the way (15 KB).
 - Shell milestone (2026-11-16): 14 steps (Start menu, launching each
   program, the gallery's menus, typing "año" into the text field, resizing,
   desktop icon double click, Shut Down dialog) are pixel-identical on the
@@ -186,14 +207,14 @@ practical. Each is easy to change.
 - Double click: two presses within 0.5 s and 4 pixels.
 - Desktop icons sit in a fixed column (as in the target picture) and cannot be
   dragged yet. A selected icon has a navy label and every other pixel of the
-  picture tinted. My Board opens About Chinchilla; Documents, Network and
-  Recycle Bin open a "not available yet" message box.
-- Message boxes and dialogs are not modal: other windows still work while
-  they are open.
-- Fixed-size dialogs keep all three title buttons, with maximise greyed (98
-  shows only the close button on dialogs).
-- The text field's caret does not blink and scroll bar arrows do not repeat
-  while held: both need a timer, which comes later.
+  picture tinted. Network and Recycle Bin open a "not available yet" message
+  box. (My Board and Documents open the File manager since the files
+  milestone.)
+- ~~Message boxes and dialogs are not modal~~: replaced, they are modal now.
+- ~~Fixed-size dialogs keep all three title buttons~~: replaced, dialogs show
+  only the close button.
+- ~~The caret does not blink, scroll arrows do not repeat~~: replaced, both
+  work with the timers.
 - Key presses type through a US keyboard layout. Accented letters and ñ are
   typed with the debug link's Text command (`tools/dbg.py text "año"`) until
   real keyboards and layouts arrive.
@@ -203,6 +224,38 @@ practical. Each is easy to change.
   at (300, 190).
 - Icons reused where there is no special one yet: Run uses the text icon,
   Shut Down the mascot; Settings has a new control-panel icon.
+
+### Chosen in the files milestone (to confirm)
+
+- The taskbar clock is 12-hour ("12:46 PM"), as in the target picture. It
+  counts from 12:00 AM at start-up until set (`tools/dbg.py time set`).
+- Timings: caret blinks every 0.53 s; held keys repeat after 0.5 s, then 30
+  times a second; held scroll arrows after 0.4 s, then 20 a second; a
+  submenu opens after resting 0.3 s on its entry.
+- Modal: a message box is modal to the window that was in use when it
+  opened; Shut Down holds the whole desktop. Dialogs that belong to a window
+  have no taskbar button; the owner's button shows pressed instead.
+- Text files are Latin-1, as 98 wrote them; file and folder names are kept
+  in UTF-8. Files read with CRLF line ends are written back with CRLF; new
+  files get CRLF too.
+- Names: up to 63 characters, compared without regard to case, none of
+  \ / : * ? " < > |, no space or dot at the end.
+- The RAM disk is 2 MB of external RAM, labelled "RAM disk", with at most
+  256 files and folders. Its readme.txt says that it is lost at restart.
+- The File manager opens folders in the same window (Back and Up), at most
+  three File manager windows. My Board lists the drives. Deleting a folder
+  deletes everything in it, after a question that says so. New Folder and
+  Rename ask for the name in a small dialog (98 edits the name in place).
+  Icons per extension: text (.txt .log .ini .md), picture (.png .jpg .bmp
+  .gif), other files a blank page. Only text files open (in the Editor);
+  others say there is no program yet.
+- The Editor is one window (98 Notepad opens one per file). Files up to
+  512 KB; Undo is one step that a second Undo redoes, as in Notepad. The
+  title shows a * after the name while there are unsaved changes. No
+  Ctrl+S (Notepad 98 had none); Save is in the File menu. No word wrap.
+  Menus show no shortcut keys yet.
+- The text field and the list box do not use the clipboard yet; the Editor
+  does (Ctrl+X, C, V, Shift+Delete).
 
 ## To confirm on the bench
 
@@ -220,11 +273,11 @@ practical. Each is easy to change.
    resizing, menus and menu bars, taskbar, and the widgets (label, buttons,
    check box, radio button, text field, scroll bars, list box, group frame,
    text area).
-5. Desktop shell, file system and file manager. Shell parts done
-   2026-11-16 (Start menu, desktop icons, program table, message box, Shut
-   Down dialog, Widget gallery). The file system waits for the owner's
-   decision on how files are stored; the file manager comes after it.
-6. Text editor, then image viewer.
+5. Desktop shell, file system and file manager. Shell done 2026-11-16 (Start
+   menu, desktop icons, program table, message box, Shut Down dialog, Widget
+   gallery); storage port, RAM disk and File manager done 2026-11-16. The file
+   system on the flash waits for the owner's choice (LittleFS or FAT).
+6. Text editor, then image viewer. Editor done 2026-11-16.
 7. Wi-Fi, NTP, remote display.
 8. USB host board, SD card.
 9. Network over USB and dial-up over serial.

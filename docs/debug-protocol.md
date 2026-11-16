@@ -38,7 +38,8 @@ Before encoding, a frame is:
 | 0 to 1024 | Payload (at most 256 towards the board) |
 | 2 | CRC-16/CCITT-FALSE of everything before it, low byte first |
 
-All numbers are little-endian.
+All numbers are little-endian. Requests carry at most 1024 bytes of payload,
+replies at most 1024.
 
 ## Commands
 
@@ -58,6 +59,13 @@ and the same sequence number. Every reply payload starts with a status byte:
 | 0x08 | Windows | None | The windows as JSON text, see below |
 | 0x09 | Repaint | None | Time taken in µs (4). The board paints the whole screen again |
 | 0x0A | Text | Text, UTF-8 | None. The characters are typed into the focused window (Latin-1 letters such as ñ and é work) |
+| 0x0B | Time | None, or hours, minutes, seconds (1 each) | Hours, minutes, seconds of the taskbar clock (after setting it) |
+| 0x0C | Animations | On (1): 0 or 1 | None. Off keeps the caret shown, so screenshots do not depend on when they are taken |
+| 0x0D | File list | Start index (2), folder path | Count (1), more follow (1), then per entry: folder (1), size (4), name length (1), name |
+| 0x0E | File read | Offset (4), path | File size (4), then up to 1019 bytes of the file from the offset |
+| 0x0F | File write | Offset (4), flags (1: bit 0 creates or empties the file first), path length (1), path, data | None |
+| 0x10 | File delete | Path | None. A file, or an empty folder |
+| 0x11 | Make folder | Path | None |
 
 - The board replies to Key, Mouse and Text before acting on them, so an event
   that restarts the board (Restart in the Shut Down dialog) still gets its
@@ -117,6 +125,15 @@ with encoding 2; a flat colour takes 4.7 KB with either; noise costs 0.8 %
 more than the raw picture with either. On the board a screenshot of the
 desktop takes 0.4 seconds with encoding 2 (2.2 seconds with encoding 1),
 including opening the port.
+
+## Files
+
+Paths are written `C:\docs\notes.txt` and are UTF-8. File errors come back
+with status 3, followed by the error code (`ports::FsError`) and its text,
+such as "not found" or "the folder is not empty". `tools/dbg.py` has
+`ls`, `get`, `put`, `rm` and `mkdir`; `put` sends about 1000 bytes per
+request (150 KB takes 3 seconds each way on the board). C: on the board is a
+RAM disk: what is put there is lost at restart.
 
 ## Windows
 

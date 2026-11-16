@@ -6,9 +6,10 @@ A 90s-style desktop operating environment (think Windows 95/98) for the
 ESP32-S3, with VGA output from GPIO pins, Wi-Fi, and USB keyboard and mouse.
 
 Status: **the desktop runs on the board.** Overlapping, resizable windows in
-the 98 look with menus, a taskbar and Start menu, desktop icons, the first
-widgets and three built-in programs, plus a debug protocol for screenshots
-and injected keyboard and mouse events. No files yet.
+the 98 look with menus, a taskbar with a clock and the Start menu, desktop
+icons, widgets, an Editor and a File manager on a RAM disk, plus a debug
+protocol for screenshots, injected input and file transfer. The file system
+on the flash is not chosen yet, so files are lost at restart.
 
 ## What it will be
 
@@ -63,7 +64,8 @@ ctest --test-dir build/host --output-on-failure
 ```
 
 `build/host/sim` is a simulated board: it prints a port name that
-`tools/dbg.py --port <name>` can talk to.
+`tools/dbg.py --port <name>` can talk to. `build/host/sim <folder>` also shows
+that folder of the PC as drive D:.
 
 The picture tests draw the desktop through a series of steps and compare
 each screen with `host/tests/pictures/`. After an intended change to the
