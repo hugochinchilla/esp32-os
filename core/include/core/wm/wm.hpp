@@ -63,6 +63,8 @@ public:
     int pointer_y() const { return pointer_y_; }
     bool dragging() const { return capture_ == Capture::Drag; }
     uint32_t last_update_us() const { return last_update_us_; }
+    // Time to handle the last input event, painting included.
+    uint32_t last_event_us() const { return last_event_us_; }
 
 private:
     enum class Capture : uint8_t { None, Drag, TitleButton, Client, Taskbar };
@@ -110,6 +112,7 @@ private:
     bool outline_shown_ = false;
 
     uint32_t last_update_us_ = 0;
+    uint32_t last_event_us_ = 0;
 };
 
 } // namespace wm

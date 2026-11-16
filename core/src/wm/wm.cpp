@@ -310,14 +310,17 @@ int Wm::taskbar_index_at(int x, int y) const
 
 void Wm::key(uint16_t usage, bool pressed)
 {
+    const uint32_t start = clock_.micros();
     if (active_ != nullptr) {
         active_->key(usage, pressed);
     }
     update();
+    last_event_us_ = clock_.micros() - start;
 }
 
 void Wm::mouse(const ports::MouseEvent &event)
 {
+    const uint32_t start = clock_.micros();
     int x = event.absolute ? event.x : pointer_x_ + event.x;
     int y = event.absolute ? event.y : pointer_y_ + event.y;
     x = x < 0 ? 0 : (x >= width_ ? width_ - 1 : x);
@@ -336,6 +339,7 @@ void Wm::mouse(const ports::MouseEvent &event)
         on_release();
     }
     update();
+    last_event_us_ = clock_.micros() - start;
 }
 
 void Wm::on_press()
@@ -784,7 +788,8 @@ size_t Wm::describe_windows(char *out, size_t capacity)
                  active_ == &w ? "true" : "false");
         puts(number);
     }
-    snprintf(number, sizeof(number), "],\"update_us\":%u}", static_cast<unsigned>(last_update_us_));
+    snprintf(number, sizeof(number), "],\"update_us\":%u,\"event_us\":%u}",
+             static_cast<unsigned>(last_update_us_), static_cast<unsigned>(last_event_us_));
     puts(number);
     if (full) {
         // Too long for the buffer: say so in valid JSON instead.
