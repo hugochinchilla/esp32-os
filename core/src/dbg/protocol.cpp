@@ -213,6 +213,11 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
     }
 
     case kBootScreen:
+        if (args_size == 1 && args[0] == 2) {
+            system_.arm_fast_boot(); // 2: no screen, the next start is a fast one
+            reply(type, seq, kOk, nullptr, 0);
+            break;
+        }
         if (boot_show_ == nullptr || args_size != 1 || args[0] > 1) {
             reply(type, seq, boot_show_ == nullptr ? kUnknownCommand : kBadArguments, nullptr, 0);
             break;
@@ -255,6 +260,9 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
     }
 
     case kReboot:
+        if (args_size >= 1 && (args[0] & 1)) {
+            system_.arm_fast_boot(); // bit 0: the next start is a fast one
+        }
         reply(type, seq, kOk, nullptr, 0);
         system_.reboot();
         break;

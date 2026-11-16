@@ -55,7 +55,7 @@ and the same sequence number. Every reply payload starts with a status byte:
 | 0x04 | Key | Key code (2), pressed (1: 1 down, 0 up) | None |
 | 0x05 | Mouse | Mode (1: 0 movement, 1 position), x (2, signed), y (2, signed), buttons (1), wheel (1, signed) | None |
 | 0x06 | Stats | None | 4-byte numbers: uptime in ms, free internal RAM, free external RAM, frames shown, frames received, receive errors, key events, mouse events, time spent filling video lines in µs (wraps; the first firmware sent only the first eight) |
-| 0x07 | Reboot | None | None. The board restarts after replying |
+| 0x07 | Reboot | None, or one byte of flags: bit 0 makes the next start a fast one (no start-up screens), once | None. The board restarts after replying |
 | 0x08 | Windows | None | The windows as JSON text, see below |
 | 0x09 | Repaint | None | Time taken in µs (4). The board paints the whole screen again |
 | 0x0A | Text | Text, UTF-8 | None. The characters are typed into the focused window (Latin-1 letters such as ñ and é work) |
@@ -66,7 +66,7 @@ and the same sequence number. Every reply payload starts with a status byte:
 | 0x0F | File write | Offset (4), flags (1: bit 0 creates or empties the file first), path length (1), path, data | None |
 | 0x10 | File delete | Path | None. A file, or an empty folder |
 | 0x11 | Make folder | Path | None |
-| 0x12 | Boot screen | Which (1): 0 self-test, 1 splash | None. Repaint brings the desktop back |
+| 0x12 | Boot screen | One byte: 0 the self-test again, 1 the splash, 2 nothing shown but the next start is a fast one, once | None. Repaint brings the desktop back |
 | 0x13 | Memory report | None | Text: heaps, video timing and task stacks |
 | 0x14 | Tasks | None | The kernel's tasks, see below. Unknown command when the firmware keeps no run-time statistics |
 

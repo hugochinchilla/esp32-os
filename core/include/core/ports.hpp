@@ -268,6 +268,8 @@ public:
         return false;
     }
     virtual void reboot() = 0;
+    // The next start is a fast one (no start-up screens), once.
+    virtual void arm_fast_boot() {}
 
 protected:
     ~System() = default;

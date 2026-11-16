@@ -41,3 +41,9 @@ Files so far:
 | `desktop.ini` | `[welcome]` | `created`: true once welcome.txt has been put in C:\Documents\Desktop, so a deleted copy does not come back; set it to false to get it again |
 | `desktop.ini` | `[documents]` | `moved`: true once an old C:\docs has been moved into C:\Documents (done by itself at start-up) |
 | `network.ini` | `[wifi]` | `tx_power_dbm`: the radio's top transmit power, 2 to 20, default 2 (higher values put lines on the picture while connecting). `enabled`: false leaves the radio off, default true |
+
+A one-shot fast start for debugging: `tools/dbg.py reboot --fast`, or
+`tools/dbg.py boot fast-next` before flashing, makes the next start behave as
+`fastboot = true` once (no self-test screen, no countdown, no monitor wait, no
+splash, no memory test) and logs "one-shot fast boot". boot.ini is not
+changed; the start after that is normal again. The flag is kept in NVS.

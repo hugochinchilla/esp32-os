@@ -908,6 +908,19 @@ tested on the PC only (not yet compiled for or run on the board).
 - The folder is read again every 2 s (a few directory reads) instead of
   hooks in every program that writes files.
 
+### One-shot fast start for debug restarts (2026-11-16)
+
+Asked for by the owner: restarts made by the agents skip the deliberately slow
+start-up. `tools/dbg.py reboot --fast` (Reboot with flag bit 0) or
+`tools/dbg.py boot fast-next` (Boot screen 2, for before flashing) arms one
+fast start: the next boot behaves as `fastboot = true`, logs "one-shot fast
+boot", and clears the flag; boot.ini is untouched. The flag is a word in NVS:
+RTC no-init memory was tried first and survives a software restart, but the
+reset after flashing cleared it on this board. The agents use it for their
+own restarts and post-flash restarts, except when the start-up screens are
+what is being tested or shown. Measured: desktop 0.27 s after the video
+starts, against 11.3 s for a normal start.
+
 ### Submenus with a slow pointer (2026-11-16)
 
 Found by the owner: moving slowly from Programs into its submenu closed it.
