@@ -18,6 +18,7 @@ Needs pyserial, which the ESP-IDF environment (get_idf) already has.
 """
 import argparse
 import binascii
+import json
 import os
 import struct
 import sys
@@ -27,6 +28,7 @@ import zlib
 PROTOCOL_VERSION = 1
 
 PING, INFO, SCREENSHOT, KEY, MOUSE, STATS, REBOOT = 1, 2, 3, 4, 5, 6, 7
+WINDOWS, REPAINT = 8, 9
 LOG, HELLO, SHOT_DATA, SHOT_END = 0x70, 0x71, 0x72, 0x73
 REPLY = 0x80
 
@@ -275,6 +277,14 @@ class Board:
     def mouse(self, x=0, y=0, buttons=0, absolute=False, wheel=0):
         self.request(MOUSE, struct.pack("<BhhBb", 1 if absolute else 0, x, y, buttons, wheel))
 
+    def windows(self):
+        """The windows, bottom to top, as a list of dicts."""
+        return json.loads(self.request(WINDOWS).decode("utf-8"))["windows"]
+
+    def repaint(self):
+        """Paints the whole screen again; returns the time it took in µs."""
+        return struct.unpack("<I", self.request(REPAINT))[0]
+
     def reboot(self):
         try:
             self.request(REBOOT)
@@ -370,6 +380,8 @@ def main(argv=None):
     sub.add_parser("info", help="screen size and firmware name")
     sub.add_parser("stats", help="uptime, free memory, counters")
     sub.add_parser("reboot", help="restart the board")
+    sub.add_parser("windows", help="list the windows, bottom to top")
+    sub.add_parser("repaint", help="paint the whole screen again and time it")
     sub.add_parser("monitor", help="show the board's log text until Ctrl+C")
 
     p = sub.add_parser("screenshot", help="save the screen as a PNG")
@@ -416,6 +428,12 @@ def main(argv=None):
                 print("%s: %s" % (name, value))
         elif args.command == "reboot":
             board.reboot()
+        elif args.command == "windows":
+            for w in board.windows():
+                print("%(id)d z%(z)d %(x)d,%(y)d %(w)dx%(h)d %(state)s%(f)s  %(title)s"
+                      % dict(w, f=" focused" if w["focused"] else ""))
+        elif args.command == "repaint":
+            print("repainted in %d us" % board.repaint())
         elif args.command == "monitor":
             while True:
                 board._read()

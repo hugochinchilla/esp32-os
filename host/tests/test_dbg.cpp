@@ -7,7 +7,6 @@
 #include "core/dbg/cobs.hpp"
 #include "core/dbg/crc.hpp"
 #include "core/dbg/protocol.hpp"
-#include "core/demo/demo_screen.hpp"
 #include "core/video/pointer.hpp"
 #include "../host_adapters.hpp"
 
@@ -364,44 +363,6 @@ static void test_compose_pointer()
     CHECK(got == background);
 }
 
-static void test_demo_screen()
-{
-    host::MemoryDisplay display(640, 480);
-    host::MemoryPointer pointer;
-    demo::DemoScreen screen(display, pointer);
-    screen.draw();
-    Bytes picture(display.pixels(), display.pixels() + 640 * 480);
-    video::PointerState state = pointer.state();
-    CHECK(state.visible && state.shape != nullptr);
-    CHECK(state.x == 320 && state.y == 240);
-    CHECK(state.shape->width == video::arrow_pointer().width);
-
-    // Moving the pointer never touches the picture in memory.
-    screen.mouse({true, 10, 10, 0, 0});
-    CHECK(screen.pointer_x() == 10 && screen.pointer_y() == 10);
-    CHECK(pointer.state().x == 10 && pointer.state().y == 10);
-    CHECK(memcmp(picture.data(), display.pixels(), picture.size()) == 0);
-
-    // The pointer stops at the edges.
-    screen.mouse({false, 5000, 5000, 0, 0});
-    CHECK(screen.pointer_x() == 639 && screen.pointer_y() == 479);
-    CHECK(pointer.state().x == 639 && pointer.state().y == 479);
-    screen.mouse({false, -5000, -5000, 0, 0});
-    CHECK(pointer.state().x == 0 && pointer.state().y == 0);
-    CHECK(memcmp(picture.data(), display.pixels(), picture.size()) == 0);
-
-    // A key press and a mouse button change the picture; letting go restores it.
-    screen.key(0x04, true);
-    CHECK(memcmp(picture.data(), display.pixels(), picture.size()) != 0);
-    screen.key(0x04, false);
-    CHECK(memcmp(picture.data(), display.pixels(), picture.size()) == 0);
-    screen.mouse({false, 0, 0, 1, 0});
-    CHECK(memcmp(picture.data(), display.pixels(), picture.size()) != 0);
-    screen.mouse({false, 0, 0, 0, 0});
-    CHECK(memcmp(picture.data(), display.pixels(), picture.size()) == 0);
-    screen.key(500, true); // out of range: ignored
-}
-
 static void test_screenshot_pointer()
 {
     Rig rig;
@@ -441,7 +402,6 @@ int main()
     test_bad_frames();
     test_screenshot();
     test_compose_pointer();
-    test_demo_screen();
     test_screenshot_pointer();
     if (failures == 0) {
         printf("all tests passed\n");

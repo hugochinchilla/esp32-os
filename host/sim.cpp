@@ -12,7 +12,8 @@
 #include <unistd.h>
 
 #include "core/dbg/protocol.hpp"
-#include "core/demo/demo_screen.hpp"
+#include "core/shell/demo_desktop.hpp"
+#include "core/wm/wm.hpp"
 #include "host_adapters.hpp"
 
 namespace {
@@ -58,11 +59,14 @@ int main()
     host::NoLock lock;
     host::HostSystem system;
     host::MemoryPointer pointer;
-    demo::DemoScreen screen(display, pointer);
+    host::SteadyClock clock;
+    static wm::Wm screen(display, pointer, clock);
     FdSink sink(fd);
     dbg::Protocol protocol(sink, lock, display, pointer, screen, system, "sim");
+    protocol.set_desktop(&screen);
 
-    screen.draw();
+    shell::open_demo_windows(screen);
+    screen.start();
 
     // A real board first prints start-up text that is not part of the
     // protocol, then says hello.

@@ -46,6 +46,24 @@ private:
     video::PointerState state_ = {};
 };
 
+class SteadyClock : public ports::Clock {
+public:
+    uint32_t micros() override
+    {
+        using namespace std::chrono;
+        return static_cast<uint32_t>(
+            duration_cast<microseconds>(steady_clock::now().time_since_epoch()).count());
+    }
+};
+
+// A clock that only moves when told to, so pictures and timings in tests
+// do not depend on the speed of the computer.
+class FixedClock : public ports::Clock {
+public:
+    uint32_t micros() override { return now; }
+    uint32_t now = 0;
+};
+
 class NoLock : public ports::Lock {
 public:
     void lock() override {}

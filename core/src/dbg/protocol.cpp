@@ -140,6 +140,29 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
         system_.reboot();
         break;
 
+    case kWindows: {
+        if (desktop_ == nullptr) {
+            reply(type, seq, kUnknownCommand, nullptr, 0);
+            break;
+        }
+        // chunk_ is free between screenshots; the reply has one byte of status.
+        char *json = reinterpret_cast<char *>(chunk_);
+        size_t size = desktop_->describe_windows(json, kMaxReplyPayload - 1);
+        reply(type, seq, kOk, chunk_, size);
+        break;
+    }
+
+    case kRepaint: {
+        if (desktop_ == nullptr) {
+            reply(type, seq, kUnknownCommand, nullptr, 0);
+            break;
+        }
+        uint8_t body[4];
+        put32(body, desktop_->repaint_all());
+        reply(type, seq, kOk, body, sizeof(body));
+        break;
+    }
+
     default:
         reply(type, seq, kUnknownCommand, nullptr, 0);
         break;
@@ -168,9 +191,9 @@ void Protocol::send(uint8_t type, uint8_t seq, const uint8_t *payload, size_t si
 
 void Protocol::reply(uint8_t type, uint8_t seq, Status status, const uint8_t *body, size_t size)
 {
-    uint8_t payload[kMaxRequestPayload + 1];
-    if (size > kMaxRequestPayload) {
-        size = kMaxRequestPayload;
+    uint8_t payload[kMaxReplyPayload];
+    if (size > kMaxReplyPayload - 1) {
+        size = kMaxReplyPayload - 1;
     }
     payload[0] = status;
     if (size > 0) {

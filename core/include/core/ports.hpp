@@ -58,6 +58,27 @@ protected:
     ~Pointer() = default;
 };
 
+// A free-running microsecond counter, for timing (wraps).
+class Clock {
+public:
+    virtual uint32_t micros() = 0;
+
+protected:
+    ~Clock() = default;
+};
+
+// What the debug link can ask of the desktop.
+class Desktop {
+public:
+    // The windows as JSON text; returns its length (at most capacity - 1).
+    virtual size_t describe_windows(char *out, size_t capacity) = 0;
+    // Paints the whole screen again; returns how long it took in µs.
+    virtual uint32_t repaint_all() = 0;
+
+protected:
+    ~Desktop() = default;
+};
+
 struct MouseEvent {
     bool absolute;   // true: x, y are a screen position. false: a movement.
     int16_t x;

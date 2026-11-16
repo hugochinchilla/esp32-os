@@ -4,7 +4,14 @@ set(CORE_SRCS
     src/dbg/cobs.cpp
     src/dbg/crc.cpp
     src/dbg/protocol.cpp
-    src/demo/demo_screen.cpp
+    src/gfx/art.cpp
+    src/gfx/canvas.cpp
+    src/gfx/font_spleen6x12.cpp
+    src/gfx/rect.cpp
+    src/shell/demo_desktop.cpp
+    src/wm/widgets.cpp
+    src/wm/window.cpp
+    src/wm/wm.cpp
     src/video/pointer.cpp
     src/video/pointer_shapes.cpp
 )

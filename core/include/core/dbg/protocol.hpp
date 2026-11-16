@@ -24,6 +24,8 @@ enum FrameType : uint8_t {
     kMouse = 0x05,
     kStats = 0x06,
     kReboot = 0x07,
+    kWindows = 0x08, // list of windows as JSON
+    kRepaint = 0x09, // paint the whole screen again, reply with the time taken
     // Sent by the board without being asked.
     kLog = 0x70,
     kHello = 0x71,
@@ -60,6 +62,10 @@ public:
     // the link is busy for too long.
     void send_log(const char *text, size_t size);
 
+    // Optional: the desktop to answer kWindows and kRepaint. Without it they
+    // are unknown commands.
+    void set_desktop(ports::Desktop *desktop) { desktop_ = desktop; }
+
     uint32_t frames_received() const { return frames_received_; }
     uint32_t receive_errors() const { return receive_errors_; }
 
@@ -77,6 +83,7 @@ private:
     ports::InputSink &input_;
     ports::System &system_;
     const char *firmware_name_;
+    ports::Desktop *desktop_ = nullptr;
 
     bool overflow_ = false;
     size_t rx_size_ = 0;

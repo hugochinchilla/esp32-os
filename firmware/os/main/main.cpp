@@ -1,5 +1,6 @@
-// Start of the OS firmware. For now it brings up the screen, shows the demo
-// screen from the core, and answers the debug protocol on the serial port.
+// Start of the OS firmware. It brings up the screen, runs the window manager
+// with the demo windows from the core, and answers the debug protocol on the
+// serial port.
 //
 // This file holds the ESP32 adapters: the pieces that connect the portable
 // core (../../core) to the hardware.
@@ -19,7 +20,8 @@
 #include "sdkconfig.h"
 
 #include "core/dbg/protocol.hpp"
-#include "core/demo/demo_screen.hpp"
+#include "core/shell/demo_desktop.hpp"
+#include "core/wm/wm.hpp"
 #include "core/ports.hpp"
 #include "core/video/pointer.hpp"
 #include "vga.h"
@@ -144,6 +146,11 @@ public:
     }
 };
 
+class EspClock : public ports::Clock {
+public:
+    uint32_t micros() override { return static_cast<uint32_t>(esp_timer_get_time()); }
+};
+
 dbg::Protocol *s_protocol;
 
 // Log text travels inside the protocol, so it cannot corrupt a screenshot
@@ -162,22 +169,29 @@ int log_to_debug_link(const char *format, va_list args)
     return size;
 }
 
-void debug_task(void *)
+// The UI task: the window manager runs here, and input (for now injected
+// through the debug link) arrives here as events, one at a time.
+void ui_task(void *)
 {
     static UartSink sink;
     static RtosLock lock;
     static VgaDisplay display;
     static VgaPointer pointer;
     static EspSystem system;
-    static demo::DemoScreen screen(display, pointer);
-    static dbg::Protocol protocol(sink, lock, display, pointer, screen, system, "esp32-os");
+    static EspClock clock;
+    static wm::Wm desktop(display, pointer, clock);
+    static dbg::Protocol protocol(sink, lock, display, pointer, desktop, system, "esp32-os");
+    protocol.set_desktop(&desktop);
 
-    screen.draw();
+    shell::open_demo_windows(desktop);
+    desktop.start();
+    const uint32_t first_paint_us = desktop.last_update_us();
 
     s_protocol = &protocol;
     esp_log_set_vprintf(log_to_debug_link);
     protocol.send_hello();
     ESP_LOGI(TAG, "debug link ready at %d baud", CONFIG_ESP_CONSOLE_UART_BAUDRATE);
+    ESP_LOGI(TAG, "first full paint took %u us", static_cast<unsigned>(first_paint_us));
 
     static uint8_t buffer[256];
     while (true) {
@@ -185,6 +199,7 @@ void debug_task(void *)
         if (got > 0) {
             protocol.feed(buffer, static_cast<size_t>(got));
         }
+        desktop.update(); // anything a window asked to repaint on its own
     }
 }
 
@@ -200,5 +215,5 @@ extern "C" void app_main(void)
     // reading and writing.
     ESP_ERROR_CHECK(uart_driver_install(kDebugUart, 4096, 0, 0, nullptr, 0));
 
-    xTaskCreate(debug_task, "debug", 8192, nullptr, 5, nullptr);
+    xTaskCreate(ui_task, "ui", 16384, nullptr, 5, nullptr);
 }

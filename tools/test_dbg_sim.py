@@ -43,20 +43,39 @@ def main():
         _, _, nudged = board.screenshot()
         assert nudged[55 * 640 + 105] == 0x00
 
-        # A held key and a held button each change the picture; releasing restores it.
-        board.key("a", True)
-        board.mouse(buttons=1)
-        _, _, held = board.screenshot()
-        assert held != nudged
-        board.key("a", False)
-        board.mouse(buttons=0)
-        _, _, released = board.screenshot()
-        assert released == nudged
+        # The demo desktop: Welcome below, About on top with the focus.
+        windows = board.windows()
+        assert [w["title"] for w in windows] == ["Welcome to Chinchilla", "About Chinchilla"], windows
+        about = windows[1]
+        assert about["focused"] and about["state"] == "normal"
 
-        board.type_text("Hi 1\n")
+        # Drag About by its title bar with mouse events.
+        grab_x, grab_y = about["x"] + 150, about["y"] + 10
+        board.mouse(grab_x, grab_y, absolute=True)
+        board.mouse(grab_x, grab_y, buttons=1, absolute=True)
+        board.mouse(grab_x - 60, grab_y - 50, buttons=1, absolute=True)
+        board.mouse(grab_x - 100, grab_y - 80, buttons=1, absolute=True)
+        board.mouse(grab_x - 100, grab_y - 80, buttons=0, absolute=True)
+        moved_about = board.windows()[1]
+        assert (moved_about["x"], moved_about["y"]) == (about["x"] - 100, about["y"] - 80), moved_about
+
+        # What is on the screen equals a full repaint: nothing stale.
+        _, _, before = board.screenshot(pointer=False)
+        assert board.repaint() >= 0
+        _, _, after = board.screenshot(pointer=False)
+        assert before == after
+        # The title bar moved with the window (dark blue at its left end).
+        assert after[(moved_about["y"] + 8) * 640 + moved_about["x"] + 5] != after[(about["y"] + 8) * 640 + about["x"] + 5]
+
+        # Enter presses About's OK button, which closes it.
+        board.tap("enter")
+        windows = board.windows()
+        assert [w["title"] for w in windows] == ["Welcome to Chinchilla"], windows
+        assert windows[0]["focused"]
+
         stats = board.stats()
-        assert stats["keys"] == 2 + 2 * 5 + 2, stats  # a, H i space 1 enter, shift
-        assert stats["mouse_events"] == 4, stats
+        assert stats["keys"] == 2, stats
+        assert stats["mouse_events"] == 7, stats
         assert stats["receive_errors"] == 0, stats
 
         try:
@@ -67,7 +86,7 @@ def main():
 
         with tempfile.TemporaryDirectory() as folder:
             path = os.path.join(folder, "shot.png")
-            dbg.write_png(path, width, height, released)
+            dbg.write_png(path, width, height, after)
             with open(path, "rb") as f:
                 assert f.read(8) == b"\x89PNG\r\n\x1a\n"
 
