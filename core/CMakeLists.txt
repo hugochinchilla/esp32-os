@@ -5,6 +5,7 @@ set(CORE_SRCS
     src/dbg/crc.cpp
     src/dbg/protocol.cpp
     src/fs/fs.cpp
+    src/fs/ini.cpp
     src/fs/memory_volume.cpp
     src/fs/sample_pictures.cpp
     src/image/blue_noise.cpp
@@ -29,6 +30,7 @@ set(CORE_SRCS
     src/shell/file_manager.cpp
     src/shell/listing.cpp
     src/shell/network.cpp
+    src/shell/settings.cpp
     src/shell/viewer.cpp
     src/wm/text_edit.cpp
     src/wm/widgets.cpp

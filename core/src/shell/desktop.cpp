@@ -7,6 +7,7 @@
 #include "core/wm/text_edit.hpp"
 #include "core/wm/widgets.hpp"
 #include "internal.hpp"
+#include "listing.hpp"
 
 namespace shell {
 
@@ -315,6 +316,11 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
     g_memory = &memory;
     constexpr size_t kClipboard = 64 * 1024;
     wm::clipboard::init(static_cast<uint8_t *>(memory.allocate(kClipboard)), kClipboard);
+    {
+        fs::Ini files; // File manager settings: hidden files shown or not
+        load_settings("files", files);
+        Listing::show_hidden = files.get_bool("view", "show_hidden", false);
+    }
 
     const int n = app_count() < kMaxApps ? app_count() : kMaxApps;
     for (int i = 0; i < n; i++) {

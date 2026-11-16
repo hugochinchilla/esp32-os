@@ -280,6 +280,18 @@ public:
         if (!memory_ready()) {
             return;
         }
+        if (!settings_read_) {
+            settings_read_ = true;
+            load_settings("viewer", settings_);
+            char id[32];
+            if (settings_.get("view", "dither", id, sizeof(id))) {
+                for (int i = 0; i < image::kDitherCount; i++) {
+                    if (strcmp(id, image::dither_info(static_cast<image::Dither>(i)).id) == 0) {
+                        dither_ = static_cast<image::Dither>(i);
+                    }
+                }
+            }
+        }
         if (path == nullptr) {
             show(*this);
             open_file_dialog(this, "C:\\pictures", &ViewerWindow::chosen, this);
@@ -468,6 +480,8 @@ public:
     void use_dither(image::Dither d)
     {
         dither_ = d;
+        settings_.set("view", "dither", image::dither_info(d).id); // kept for the next start
+        save_settings("viewer", settings_);
         again();
     }
 
@@ -486,7 +500,9 @@ private:
     int timer_ = 0;
     uint64_t started_us_ = 0;
     bool fit_ = true;
-    image::Dither dither_ = image::Dither::FloydSteinberg; // kept while the board runs
+    image::Dither dither_ = image::Dither::FloydSteinberg; // and in settings.ini
+    bool settings_read_ = false;
+    fs::Ini settings_; // C:\.config\viewer.ini
     int last_w_ = 0, last_h_ = 0;
     PictureView view_;
     StatusBar status_;

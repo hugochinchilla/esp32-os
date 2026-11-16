@@ -42,6 +42,17 @@ Last updated: 2026-11-16.
 | Memory test at start-up | Real and on by default, decided by the owner: writes and reads back an address-dependent pattern over external RAM borrowed from the heap (never memory in use) for about 250 ms, counting KB on screen; a wrong word is shown with its address and logged, and the start goes on. On the board it covers 4992 KB in 254 ms (about 20 MB/s written and read back), of roughly 6 MB free at that point; all of it would take about 0.31 s | Real figures, a quick flash |
 | Testing | Three layers: unit tests of the core on the PC, test-first where practical; framebuffer snapshots compared with stored images; a small number of on-device tests through the serial debug protocol. Signal timing is checked on the bench, not by tests | Fast feedback for most of the code, and checks that can run without hardware |
 
+### File system on the flash (2026-11-16)
+
+Decided by the owner: LittleFS (chosen over FAT), as C:, so files stay across
+restarts. The joltwallet/littlefs component (pinned to 1.23.1) behind the same
+storage port; a new or unreadable drive is formatted and gets the sample files.
+Names ignore case on it too, as on the RAM disk (the drive code looks a name
+up without regard to case when it does not exist as written). Code and
+constants run from PSRAM (CONFIG_SPIRAM_XIP_FROM_PSRAM), because writing the
+flash otherwise turns the cache off and the picture shakes (see Found on the
+bench).
+
 ### Program settings (2026-11-16)
 
 Decided by the owner. Each program keeps its settings in its own plain text
@@ -85,12 +96,12 @@ other threads do not merge their own work.
 | Remote keyboard, mouse and screen for a person | VNC server, web page, debug tool only | VNC server |
 | How apps are delivered | Built into the firmware, or loadable from disk | Built in first, behind an app interface. Still the owner's question; the shell works on that assumption: programs are entries in a table (`core/include/core/shell/shell.hpp`: name, icon, open function) that the Start menu and desktop icons launch the same way |
 | Shell details chosen while building menus, the Start menu and widgets; to confirm or overrule | See "Chosen in the shell milestone" below | As built |
-| File system on the flash | LittleFS, FAT | Asked; until it is chosen, C: is a RAM disk (lost at restart) behind the storage port, and nothing writes the flash |
+| Flash layout (provisional) | As built: app area 0x10000-0x400000 (3.94 MB, one app now; it can later be split into two OTA slots of about 1.9 MB without moving C:), C: LittleFS the 12 MB above it; or a larger C: with no room kept for OTA | As built. The app is 607 KB now (the Wi-Fi branch's 1.10 MB fits); with code run from PSRAM (see Found on the bench) the app's size also comes out of external RAM |
+| A RAM disk as well as C: | Drop it, or keep a small one as a separate temporary drive | Dropped with LittleFS, since nothing needs it; the RAM disk code stays for the PC tests and the simulator |
 | Details chosen in the files milestone; to confirm or overrule | See "Chosen in the files milestone" below | As built |
 | Details chosen in the image viewer milestone; to confirm or overrule | See "Chosen in the image viewer milestone" below | As built |
 | Desktop wallpaper from a picture (Settings > Display) | Yes (a picture shrunk to 640x480 in external RAM, 300 KB, repainted from it), later, never | Later: there is no Settings program yet and the desktop would need a picture store; skipped in this milestone |
 | Start-up screens and slow monitors | Wait for the monitor before the self-test (e.g. keep the self-test on screen until 3 s after the video starts), or not | Asked. On the bench monitor (through the VGA-to-HDMI adapter) the picture appears about 3.6 s after the video starts, and the self-test and splash are over 1.25 s after it, so after a restart neither is seen; they show correctly when asked for with `tools/dbg.py boot` |
-| Picture viewer settings surviving a restart | Keep them in a settings file once there is a flash file system and a settings store, or not | Until then the dithering chosen in the viewer lasts until restart; this needs the file system choice first |
 | Interlaced PNG and progressive JPEG | Support them (a whole-picture buffer for progressive JPEG: 6 bytes a pixel), keep them refused | Keep refused for now: they say "not supported" in an error box |
 | SD card in the first version | Yes, later, never | Later (pins are reserved) |
 | How two USB sockets are provided | External hub, hub module on the board, shared receiver | One socket now, space for a hub module |
@@ -212,6 +223,23 @@ First picture: 2026-11-16, through a VGA-to-HDMI adapter.
   partly the camera's compression of fine detail; it is the one pattern
   where shimmer can be seen. The longest timer slice while decoding was
   21 to 31 ms with every dither.
+- C: on LittleFS (2026-11-16). Mounting takes 6 to 11 ms; 12 MB, 11 MB
+  free with the samples. Through the debug link a 60 KB file goes onto the
+  flash in 3.0 s (the link is the limit); the Editor saves a 293 KB file in
+  3.3 s (about 90 KB/s, the UI waits meanwhile). A file put on the drive, a
+  file saved from the Editor, the viewer's dithering (C:\.config\viewer.ini)
+  and Show hidden files (C:\.config\files.ini) all survive a restart.
+- The picture shook while the flash was written (2026-11-16, first seen by the
+  owner with the LittleFS build): every other frame had bands shifted
+  sideways (frame-to-frame change up to 38.8 against 0.4 when still) for the
+  whole write, and two debug-link frames were lost, because writing the flash
+  turns the cache off and the bounce-buffer refill cannot read the
+  framebuffer in PSRAM. Fixed with CONFIG_SPIRAM_XIP_FROM_PSRAM and
+  CONFIG_LCD_RGB_ISR_IRAM_SAFE (Espressif's advice for RGB panels with a PSRAM
+  framebuffer): 0 shaken frames while writing, 59.5 frames a second, no lost
+  frames, and debug-link writes 2.6 times faster. It costs external RAM for
+  the app's code and constants (about 610 KB now); a full repaint still takes
+  27.5 ms.
 - Start-up screens (2026-11-16): self-test 624 ms (the checks 274 ms, of
   which the memory test 254 ms, then the 350 ms hold), splash 511 ms, from
   the start of the UI task to the desktop 1247 ms; the first full paint of
@@ -453,10 +481,9 @@ Put to the owner as options; built on the recommended one until he answers.
 - Wi-Fi power saving is off (a remote screen would lag by 100 to 300 ms).
 - The debug link can scan, connect, disconnect and forget
   (`tools/dbg.py wifi`); it never returns a password.
-- Firmware size with Wi-Fi: 1.10 MB (556 KB before), over the default 1 MB
-  app partition, so the build uses ESP-IDF's built-in "large single app"
-  table (1.5 MB app, `nvs` kept). A custom table for a flash file system
-  must keep `nvs` and `phy_init` and give the app at least 2 MB.
+- Firmware size with Wi-Fi: 1.10 MB (556 KB before), over ESP-IDF's
+  default 1 MB app partition; it fits the 3.94 MB app area of the LittleFS
+  partition table, which also keeps `nvs` (24 KB) and `phy_init`.
 - ESP-IDF v5.5 does install in the cloud container (the firmware of this
   milestone was compiled and linked there, not run): `tools/setup-cloud-idf.sh`.
 

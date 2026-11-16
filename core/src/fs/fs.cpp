@@ -311,12 +311,23 @@ void add_samples(Storage &storage, char drive)
     folder("docs");
     folder("pictures");
     folder("system");
-    file("readme.txt",
-         "Chinchilla RAM disk\r\n"
-         "\r\n"
-         "This drive lives in the board's external RAM.\r\n"
-         "Everything on it is lost when the board restarts.\r\n"
-         "Use the computer (tools/dbg.py get) to keep files.\r\n");
+    ports::VolumeInfo info = {};
+    storage.info(drive, info);
+    if (info.keeps_files) {
+        file("readme.txt",
+             "Chinchilla flash disk\r\n"
+             "\r\n"
+             "This drive lives in the board's flash memory.\r\n"
+             "Files on it stay when the board restarts.\r\n"
+             "These samples were put here when the drive was first formatted.\r\n");
+    } else {
+        file("readme.txt",
+             "Chinchilla RAM disk\r\n"
+             "\r\n"
+             "This drive lives in the board's external RAM.\r\n"
+             "Everything on it is lost when the board restarts.\r\n"
+             "Use the computer (tools/dbg.py get) to keep files.\r\n");
+    }
     file("docs\\notes.txt",
          "Shopping list for the VGA board\r\n"
          "\r\n"
@@ -329,8 +340,7 @@ void add_samples(Storage &storage, char drive)
     file("docs\\todo.txt",
          "To do\r\n"
          "\r\n"
-         "- file system on the flash\r\n"
-         "- Wi-Fi and the clock from the network\r\n"
+                  "- Wi-Fi and the clock from the network\r\n"
          "- USB keyboard and mouse\r\n"
          "- image viewer\r\n");
     // Text files are Latin-1, as 98 wrote them (names are kept in UTF-8).
