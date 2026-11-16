@@ -34,3 +34,9 @@ in the same change whenever a decision is made or reversed.
   when firmware code has not been compiled, and always that it has not run.
 - Do not add Microsoft icons, fonts or bitmaps. All art must be original or
   freely licensed.
+- Keep the written record (the owner's request, 2026-11-16: he is filming the
+  project and uses it to tell the story). Every piece of work adds an entry to
+  `docs/journal/` in the same change, as `docs/journal/README.md` describes:
+  what was asked, the options considered, what was chosen and why, why the
+  others were not, what was built and how it was tested. Update the item's
+  status in `docs/BACKLOG.md` too.
