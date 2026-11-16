@@ -156,6 +156,15 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
         reply(type, seq, kOk, nullptr, 0);
         break;
 
+    case kBootScreen:
+        if (boot_show_ == nullptr || args_size != 1 || args[0] > 1) {
+            reply(type, seq, boot_show_ == nullptr ? kUnknownCommand : kBadArguments, nullptr, 0);
+            break;
+        }
+        boot_show_(args[0], boot_context_);
+        reply(type, seq, kOk, nullptr, 0);
+        break;
+
     case kFileList:
     case kFileRead:
     case kFileWrite:

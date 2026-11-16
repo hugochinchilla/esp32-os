@@ -13,6 +13,7 @@
 
 #include "core/dbg/protocol.hpp"
 #include "core/fs/memory_volume.hpp"
+#include "core/shell/boot.hpp"
 #include "core/shell/shell.hpp"
 #include "folder_volume.hpp"
 #include "core/wm/wm.hpp"
@@ -83,6 +84,20 @@ int main(int argc, char **argv)
         storage.mount('D', *pc);
     }
     protocol.set_storage(&storage);
+    // The start-up screens, as on the board (the same memory test, over
+    // ordinary memory of the PC).
+    static shell::BootIo boot_io{display, system, memory, clock, &storage, nullptr, nullptr, nullptr};
+    shell::run_self_test(boot_io);
+    shell::show_splash(boot_io);
+    protocol.set_boot_screens(
+        [](int which, void *) {
+            if (which == 0) {
+                shell::run_self_test(boot_io, false);
+            } else {
+                shell::show_splash(boot_io, false);
+            }
+        },
+        nullptr);
     shell::start(screen, system, storage, memory);
     protocol.set_counters(shell::picture_timings(), shell::kPictureTimings);
     screen.start();

@@ -19,6 +19,7 @@ set(CORE_SRCS
     src/gfx/font_spleen6x12.cpp
     src/gfx/rect.cpp
     src/shell/apps.cpp
+    src/shell/boot.cpp
     src/shell/desktop.cpp
     src/shell/dialogs.cpp
     src/shell/editor.cpp

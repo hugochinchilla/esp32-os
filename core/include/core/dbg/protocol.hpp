@@ -35,6 +35,7 @@ enum FrameType : uint8_t {
     kFileWrite = 0x0F,  // part of a file
     kFileDelete = 0x10, // a file or an empty folder
     kFileMakeFolder = 0x11,
+    kBootScreen = 0x12, // draw a start-up screen now (0 self-test, 1 splash); Repaint brings the desktop back
     // Sent by the board without being asked.
     kLog = 0x70,
     kHello = 0x71,
@@ -80,6 +81,12 @@ public:
     void set_desktop(ports::Desktop *desktop) { desktop_ = desktop; }
     // Optional: the drives for the file commands.
     void set_storage(fs::Storage *storage) { storage_ = storage; }
+    // Draws start-up screen `which` (0 self-test, 1 splash) on request.
+    void set_boot_screens(void (*show)(int which, void *context), void *context)
+    {
+        boot_show_ = show;
+        boot_context_ = context;
+    }
     // More numbers for the end of the stats reply (programs' own timings).
     void set_counters(const uint32_t *values, int count)
     {
@@ -113,6 +120,8 @@ private:
     size_t rx_size_ = 0;
     uint32_t frames_received_ = 0;
     const uint32_t *counters_ = nullptr;
+    void (*boot_show_)(int which, void *context) = nullptr;
+    void *boot_context_ = nullptr;
     int counter_count_ = 0;
     uint32_t receive_errors_ = 0;
     uint32_t keys_ = 0;

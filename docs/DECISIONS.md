@@ -38,6 +38,8 @@ Last updated: 2026-11-16.
 | Look | Windows 98 style: fading title bars, toolbar and address bar in folder windows, quick-launch icons by the Start button. Target picture: `docs/look/target-98.png`, drawn by `tools/mockup/desktop.py` | Owner's choice between 95 and 98 previews |
 | Name and mascot | The OS is called Chinchilla. Its logo and mascot is a chinchilla face, shown on the Start button. The 16x16 sketch in `tools/mockup/desktop.py` is the starting point | Owner's choice |
 | Colours that the board cannot show exactly | Made from a fixed 4x4 dot pattern of the two nearest colours (ordered dither), per colour channel. Used for the desktop colour, title bars and their fade. Lines one pixel wide always use exact colours | Blue has only four levels, so navy, teal and mid-grey do not exist as plain colours |
+| Start-up | A quick real self-test screen (each line printed when its check has finished, with the value found; a failed check shows in red and the start goes on), then a splash with the mascot, the name and a ribbon of the 256 colours for about 500 ms, then the desktop. Chosen by the owner, 2026-11-16 | Shows what the machine has, in the spirit of a 90s PC, without slowing the start much |
+| Memory test at start-up | Real and on by default, decided by the owner: writes and reads back an address-dependent pattern over external RAM borrowed from the heap (never memory in use) for about 250 ms, counting KB on screen; a wrong word is shown with its address and logged, and the start goes on. On the board it covers 4992 KB in 254 ms (about 20 MB/s written and read back), of roughly 6 MB free at that point; all of it would take about 0.31 s | Real figures, a quick flash |
 | Testing | Three layers: unit tests of the core on the PC, test-first where practical; framebuffer snapshots compared with stored images; a small number of on-device tests through the serial debug protocol. Signal timing is checked on the bench, not by tests | Fast feedback for most of the code, and checks that can run without hardware |
 
 ## Rejected
@@ -68,6 +70,7 @@ Last updated: 2026-11-16.
 | Details chosen in the files milestone; to confirm or overrule | See "Chosen in the files milestone" below | As built |
 | Details chosen in the image viewer milestone; to confirm or overrule | See "Chosen in the image viewer milestone" below | As built |
 | Desktop wallpaper from a picture (Settings > Display) | Yes (a picture shrunk to 640x480 in external RAM, 300 KB, repainted from it), later, never | Later: there is no Settings program yet and the desktop would need a picture store; skipped in this milestone |
+| Start-up screens and slow monitors | Wait for the monitor before the self-test (e.g. keep the self-test on screen until 3 s after the video starts), or not | Asked. On the bench monitor (through the VGA-to-HDMI adapter) the picture appears about 3.6 s after the video starts, and the self-test and splash are over 1.25 s after it, so after a restart neither is seen; they show correctly when asked for with `tools/dbg.py boot` |
 | Picture viewer settings surviving a restart | Keep them in a settings file once there is a flash file system and a settings store, or not | Until then the dithering chosen in the viewer lasts until restart; this needs the file system choice first |
 | Interlaced PNG and progressive JPEG | Support them (a whole-picture buffer for progressive JPEG: 6 bytes a pixel), keep them refused | Keep refused for now: they say "not supported" in an error box |
 | SD card in the first version | Yes, later, never | Later (pins are reserved) |
@@ -187,6 +190,14 @@ First picture: 2026-11-16, through a VGA-to-HDMI adapter.
   partly the camera's compression of fine detail; it is the one pattern
   where shimmer can be seen. The longest timer slice while decoding was
   21 to 31 ms with every dither.
+- Start-up screens (2026-11-16): self-test 624 ms (the checks 274 ms, of
+  which the memory test 254 ms, then the 350 ms hold), splash 511 ms, from
+  the start of the UI task to the desktop 1247 ms; the first full paint of
+  the desktop 29 ms. Firmware 556 KB. Both screens are pixel-identical to
+  the PC pictures (the self-test apart from its values, which differ from
+  the simulator's). The webcam shows both when asked for with `tools/dbg.py
+  boot`, but not after a restart: the monitor needs about 3.6 s to show a
+  picture once the video starts (see "Still open").
 - Image viewer milestone (2026-11-16): all 33 PC render steps, including
   the 11 new ones (pictures folder, the viewer with each dither, fitted and
   actual size with scroll bars, the Open dialog, the mascot BMP, the test

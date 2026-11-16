@@ -21,6 +21,9 @@ uint8_t *vga_framebuffer(void);
 /* Number of frames sent to the monitor since start. */
 uint32_t vga_frame_count(void);
 
+/* The pixel clock the panel was set up with, in Hz. */
+uint32_t vga_pixel_clock_hz(void);
+
 /* Called for every piece of picture on its way to the monitor, after it was
  * copied from the framebuffer: `pixels` holds `count` pixels starting at
  * pixel number `first` of the frame (first == 0 starts a new frame). Runs in

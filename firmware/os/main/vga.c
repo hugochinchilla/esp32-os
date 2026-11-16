@@ -156,6 +156,11 @@ uint8_t *vga_framebuffer(void)
     return s_framebuffer;
 }
 
+uint32_t vga_pixel_clock_hz(void)
+{
+    return PIXEL_CLOCK_HZ;
+}
+
 uint32_t vga_frame_count(void)
 {
     return s_frames;

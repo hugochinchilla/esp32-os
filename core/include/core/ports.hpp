@@ -167,6 +167,16 @@ protected:
 class Memory {
 public:
     virtual void *allocate(size_t bytes) = 0;
+    // For the start-up memory test only: the largest free block of external
+    // RAM, at most `max` bytes, lent until release(). Nothing in use is ever
+    // lent. nullptr (got = 0) when there is none.
+    virtual void *borrow(size_t max, size_t &got)
+    {
+        (void)max;
+        got = 0;
+        return nullptr;
+    }
+    virtual void release(void *block) { (void)block; }
 
 protected:
     ~Memory() = default;
@@ -180,9 +190,29 @@ struct SystemStats {
     uint32_t scanout_us; // time spent filling video lines since start (wraps)
 };
 
+// Facts about the machine for the start-up self-test. Each is read when
+// asked; false when it could not be read.
+enum class Fact : uint8_t {
+    Processor,   // text: e.g. "ESP32-S3, 2 cores, rev 0.2, 240 MHz"
+    InternalRam, // value: bytes
+    ExternalRam, // value: bytes
+    Flash,       // value: bytes
+    Video,       // value: pixel clock in Hz
+    Input,       // text: where keys and mouse come from
+    Sound,       // text: the sound output
+};
+
 class System {
 public:
     virtual void stats(SystemStats &out) = 0;
+    virtual bool fact(Fact which, uint32_t &value, char *text, size_t capacity)
+    {
+        (void)which;
+        (void)text;
+        (void)capacity;
+        value = 0;
+        return false;
+    }
     virtual void reboot() = 0;
 
 protected:

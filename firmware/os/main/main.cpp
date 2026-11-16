@@ -13,7 +13,11 @@
 
 #include "driver/uart.h"
 #include "esp_attr.h"
+#include "esp_chip_info.h"
+#include "esp_flash.h"
 #include "esp_heap_caps.h"
+#include "esp_private/esp_clk.h"
+#include "esp_psram.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_timer.h"
@@ -21,6 +25,7 @@
 
 #include "core/dbg/protocol.hpp"
 #include "core/fs/memory_volume.hpp"
+#include "core/shell/boot.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/wm.hpp"
 #include "core/ports.hpp"
@@ -139,6 +144,43 @@ public:
         out.frames_shown = vga_frame_count();
         out.scanout_us = vga_fill_us();
     }
+    bool fact(ports::Fact which, uint32_t &value, char *text, size_t capacity) override
+    {
+        value = 0;
+        switch (which) {
+        case ports::Fact::Processor: {
+            esp_chip_info_t info;
+            esp_chip_info(&info);
+            const char *model = info.model == CHIP_ESP32S3 ? "ESP32-S3" : "an unexpected chip";
+            snprintf(text, capacity, "%s, %d core%s, rev %d.%d, %d MHz", model, info.cores,
+                     info.cores == 1 ? "" : "s", info.revision / 100, info.revision % 100,
+                     esp_clk_cpu_freq() / 1000000);
+            return info.model == CHIP_ESP32S3;
+        }
+        case ports::Fact::InternalRam:
+            value = static_cast<uint32_t>(heap_caps_get_total_size(MALLOC_CAP_INTERNAL));
+            return value > 0;
+        case ports::Fact::ExternalRam:
+            value = static_cast<uint32_t>(esp_psram_get_size());
+            return value > 0;
+        case ports::Fact::Flash: {
+            uint32_t size = 0;
+            const bool ok = esp_flash_get_size(nullptr, &size) == ESP_OK;
+            value = size;
+            return ok && size > 0;
+        }
+        case ports::Fact::Video:
+            value = vga_pixel_clock_hz();
+            return true;
+        case ports::Fact::Input:
+            snprintf(text, capacity, "Serial debug link (no USB yet)");
+            return true;
+        case ports::Fact::Sound:
+            snprintf(text, capacity, "None");
+            return true;
+        }
+        return false;
+    }
     void reboot() override
     {
         uart_wait_tx_done(kDebugUart, pdMS_TO_TICKS(200));
@@ -154,6 +196,20 @@ public:
     {
         return heap_caps_calloc(1, bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     }
+    // The memory test: the largest free block, taken from the heap so
+    // nothing in use is touched, and given back afterwards.
+    void *borrow(size_t max, size_t &got) override
+    {
+        got = heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM);
+        got = got > max ? max : got;
+        got &= ~static_cast<size_t>(3);
+        void *p = got != 0 ? heap_caps_malloc(got, MALLOC_CAP_SPIRAM) : nullptr;
+        if (p == nullptr) {
+            got = 0;
+        }
+        return p;
+    }
+    void release(void *block) override { heap_caps_free(block); }
 };
 
 class EspClock : public ports::Clock {
@@ -179,6 +235,29 @@ int log_to_debug_link(const char *format, va_list args)
     return size;
 }
 
+// While the start-up screens show: answer the debug link.
+void boot_idle(void *context)
+{
+    static uint8_t buffer[256];
+    const int got = uart_read_bytes(kDebugUart, buffer, sizeof(buffer), 0);
+    if (got > 0) {
+        static_cast<dbg::Protocol *>(context)->feed(buffer, static_cast<size_t>(got));
+    }
+}
+
+void boot_log(const char *line, void *) { ESP_LOGI(TAG, "%s", line); }
+
+// The debug link asks for a start-up screen again (dbg.py boot).
+void show_boot_screen(int which, void *context)
+{
+    auto &io = *static_cast<shell::BootIo *>(context);
+    if (which == 0) {
+        shell::run_self_test(io, false);
+    } else {
+        shell::show_splash(io, false);
+    }
+}
+
 // The UI task: the window manager runs here, and input (for now injected
 // through the debug link) arrives here as events, one at a time.
 void ui_task(void *)
@@ -192,6 +271,11 @@ void ui_task(void *)
     static wm::Wm desktop(display, pointer, clock);
     static dbg::Protocol protocol(sink, lock, display, pointer, desktop, system, "esp32-os");
     protocol.set_desktop(&desktop);
+    // The debug link answers from here on, also during the start-up screens.
+    s_protocol = &protocol;
+    esp_log_set_vprintf(log_to_debug_link);
+    protocol.send_hello();
+    const int64_t boot_start = esp_timer_get_time();
 
     // C: a RAM disk in external RAM. ponytail: lost at restart until the
     // owner picks a flash file system (docs/DECISIONS.md).
@@ -202,15 +286,27 @@ void ui_task(void *)
     storage.mount('C', ram_disk);
     fs::add_samples(storage, 'C');
     protocol.set_storage(&storage);
+
+    // Start-up screens: the real self-test, then the splash.
+    static shell::BootIo boot_io{display, system, memory, clock, &storage, &boot_idle, &protocol, &boot_log};
+    pointer.set_visible(false);
+    const int64_t test_start = esp_timer_get_time();
+    const int failed = shell::run_self_test(boot_io);
+    const int64_t splash_start = esp_timer_get_time();
+    shell::show_splash(boot_io);
+    const int64_t splash_end = esp_timer_get_time();
+    protocol.set_boot_screens(&show_boot_screen, &boot_io);
+    pointer.set_visible(true);
+
     shell::start(desktop, system, storage, memory);
     protocol.set_counters(shell::picture_timings(), shell::kPictureTimings);
     desktop.start();
     const uint32_t first_paint_us = desktop.last_update_us();
 
-    s_protocol = &protocol;
-    esp_log_set_vprintf(log_to_debug_link);
-    protocol.send_hello();
     ESP_LOGI(TAG, "debug link ready at %d baud", CONFIG_ESP_CONSOLE_UART_BAUDRATE);
+    ESP_LOGI(TAG, "self-test: %d failed, %lld ms with its %u ms hold; splash %lld ms; boot to desktop %lld ms",
+             failed, (splash_start - test_start) / 1000, static_cast<unsigned>(shell::kSelfTestHoldMs),
+             (splash_end - splash_start) / 1000, (esp_timer_get_time() - boot_start) / 1000);
     ESP_LOGI(TAG, "first full paint took %u us", static_cast<unsigned>(first_paint_us));
 
     static uint8_t buffer[256];

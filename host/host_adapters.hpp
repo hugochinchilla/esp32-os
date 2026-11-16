@@ -2,7 +2,9 @@
 // do-nothing versions of the rest.
 #pragma once
 
+#include <algorithm>
 #include <chrono>
+#include <cstdio>
 #include <cstdlib>
 #include <cstdint>
 #include <vector>
@@ -70,6 +72,36 @@ public:
 class HostMemory : public ports::Memory {
 public:
     void *allocate(size_t bytes) override { return std::calloc(1, bytes); }
+    // The start-up memory test borrows from a pretend 4 MB of free memory,
+    // in blocks of at most 1.5 MB, so it behaves the same on every PC.
+    void *borrow(size_t max, size_t &got) override
+    {
+        const size_t left = kLendable - lent_;
+        got = std::min(std::min(max, left), kBlock);
+        void *p = got != 0 ? std::malloc(got) : nullptr;
+        if (p == nullptr) {
+            got = 0;
+            return nullptr;
+        }
+        lent_ += got;
+        blocks_.push_back({p, got});
+        return p;
+    }
+    void release(void *block) override
+    {
+        for (size_t i = 0; i < blocks_.size(); i++) {
+            if (blocks_[i].first == block) {
+                std::free(block);
+                blocks_.erase(blocks_.begin() + static_cast<long>(i));
+                return; // what was lent stays counted: the test borrows once
+            }
+        }
+    }
+
+private:
+    static constexpr size_t kLendable = 4u << 20, kBlock = 1536u << 10;
+    size_t lent_ = 0;
+    std::vector<std::pair<void *, size_t>> blocks_;
 };
 
 class NoLock : public ports::Lock {
@@ -91,6 +123,23 @@ public:
         out.frames_shown = out.uptime_ms * 60 / 1000;
     }
     void reboot() override { reboot_requested = true; }
+    // Plausible facts, so the start-up screens look as on the board.
+    bool fact(ports::Fact which, uint32_t &value, char *text, size_t capacity) override
+    {
+        value = 0;
+        switch (which) {
+        case ports::Fact::Processor:
+            snprintf(text, capacity, "ESP32-S3 (simulated), 2 cores, rev 0.2, 240 MHz");
+            return true;
+        case ports::Fact::InternalRam: value = 400u << 10; return true;
+        case ports::Fact::ExternalRam: value = 8u << 20; return true;
+        case ports::Fact::Flash: value = 16u << 20; return true;
+        case ports::Fact::Video: value = 25000000; return true;
+        case ports::Fact::Input: snprintf(text, capacity, "Serial debug link (no USB yet)"); return true;
+        case ports::Fact::Sound: snprintf(text, capacity, "None"); return true;
+        }
+        return false;
+    }
 
     bool reboot_requested = false;
 

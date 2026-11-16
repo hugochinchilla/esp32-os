@@ -7,6 +7,7 @@
 #include <string>
 
 #include "core/fs/memory_volume.hpp"
+#include "core/shell/boot.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/wm.hpp"
 #include "../host_adapters.hpp"
@@ -21,9 +22,11 @@ wm::Wm desktop(display, pointer, clock_);
 std::string folder;
 int failures = 0;
 
-void save(const char *name)
+void save(const char *name, bool update = true)
 {
-    desktop.update(); // paint what direct calls (not events) changed
+    if (update) {
+        desktop.update(); // paint what direct calls (not events) changed
+    }
     std::string path = folder + "/" + name + ".raw";
     FILE *f = fopen(path.c_str(), "wb");
     if (f == nullptr || fwrite(display.pixels(), 1, 640 * 480, f) != 640 * 480) {
@@ -105,6 +108,17 @@ int main(int argc, char **argv)
     static fs::MemoryVolume ram_disk(memory.allocate(2 << 20), 2 << 20, "RAM disk");
     storage.mount('C', ram_disk);
     fs::add_samples(storage, 'C');
+    // The start-up screens (the clock stands still: the memory test takes
+    // all 4 MB the PC adapter lends, and nothing waits).
+    shell::BootIo boot{display, system_, memory, clock_, &storage, nullptr, nullptr, nullptr};
+    if (shell::run_self_test(boot, false) != 0) {
+        printf("self-test failed on the PC\n");
+        failures++;
+    }
+    save("00a-boot-self-test", false);
+    shell::show_splash(boot, false);
+    save("00b-boot-splash", false);
+
     shell::start(desktop, system_, storage, memory);
     desktop.start();
     desktop.set_animations(false); // the caret stays on: pictures do not depend on timing
