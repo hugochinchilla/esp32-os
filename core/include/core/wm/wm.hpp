@@ -27,6 +27,10 @@ struct DesktopIcon {
     const gfx::Bitmap *picture;
     void (*open)(void *context);
     void *context;
+    // The file the icon stands for: such icons can be dragged.
+    const char *path = nullptr;
+    // Takes a dragged file let go on the icon; nullptr: not a drop target.
+    void (*drop)(const char *path, void *context) = nullptr;
 };
 
 // A screensaver: takes the whole screen over after a while with no input.
@@ -196,12 +200,21 @@ public:
     int pointer_y() const { return pointer_y_; }
     uint8_t modifiers() const { return mods_; }
     bool dragging() const { return capture_ == Capture::Drag || capture_ == Capture::Resize; }
+
+    // Drag and drop of a file: called by a window while the left button is
+    // held (from its mouse handler); an outline follows the pointer until
+    // the button is let go over a desktop icon with a drop function or a
+    // window whose drag_over() takes it, or anywhere else (nothing happens).
+    static constexpr int kDragPath = 160;
+    void begin_drag(const char *path);
+    bool item_dragging() const { return capture_ == Capture::Item; }
+    int drop_icon() const { return drop_icon_; }
     uint32_t last_update_us() const { return last_update_us_; }
     // Time to handle the last input event, painting included.
     uint32_t last_event_us() const { return last_event_us_; }
 
 private:
-    enum class Capture : uint8_t { None, Drag, Resize, TitleButton, Client, Taskbar, Menu, Swallow };
+    enum class Capture : uint8_t { None, Drag, Resize, TitleButton, Client, Taskbar, Menu, Swallow, Icon, Item };
 
     struct Popup {
         Menu *menu;
@@ -309,6 +322,15 @@ private:
     Rect resize_from_;
     Rect outline_;
     bool outline_shown_ = false;
+
+    // Drag and drop: the icon pressed (Capture::Icon), the file carried and
+    // the target under the pointer (Capture::Item).
+    void update_drop_target();
+    void set_drop_icon(int icon);
+    int pressed_icon_ = -1;
+    char drag_path_[kDragPath] = "";
+    int drop_icon_ = -1;
+    Window *drop_window_ = nullptr;
 
     // Double clicks: the target of the last press and when it happened.
     int last_target_ = -1;

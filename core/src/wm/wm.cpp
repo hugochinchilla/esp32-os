@@ -192,6 +192,9 @@ void Wm::close(Window &w)
         }
     }
     count_--;
+    if (drop_window_ == &w) {
+        drop_window_ = nullptr;
+    }
     if (captured_ == &w) {
         if (outline_shown_) {
             set_outline(outline_, false);
@@ -339,7 +342,14 @@ void Wm::cycle_windows()
 void Wm::set_desktop_icons(const DesktopIcon *icons, int count)
 {
     icons_ = icons;
-    icon_count_ = count < kMaxIcons ? count : kMaxIcons;
+    count = count < kMaxIcons ? count : kMaxIcons;
+    if (count != icon_count_) {
+        // Icons came or went, so the others moved: nothing stays selected.
+        selected_icon_ = -1;
+        drop_icon_ = -1;
+        pressed_icon_ = -1;
+    }
+    icon_count_ = count;
     invalidate(work_area());
 }
 
@@ -859,6 +869,11 @@ void Wm::on_press()
         }
         if (double_click(hit >= 0 ? hit : -2) && hit >= 0 && icons_[hit].open != nullptr) {
             icons_[hit].open(icons_[hit].context);
+        } else if (hit >= 0 && icons_[hit].path != nullptr) {
+            capture_ = Capture::Icon;
+            pressed_icon_ = hit;
+            grab_dx_ = x;
+            grab_dy_ = y;
         }
         return;
     }
@@ -1044,9 +1059,77 @@ void Wm::on_move()
         captured_->mouse({MouseKind::Move, x - c.x, y - c.y});
         break;
     }
+    case Capture::Icon:
+        if ((x - grab_dx_) * (x - grab_dx_) + (y - grab_dy_) * (y - grab_dy_) > 16 && pressed_icon_ >= 0 && pressed_icon_ < icon_count_) {
+            begin_drag(icons_[pressed_icon_].path);
+        }
+        break;
+    case Capture::Item:
+        set_outline({x - 16, y - 16, 32, 32}, true);
+        update_drop_target();
+        break;
     default:
         break;
     }
+}
+
+void Wm::begin_drag(const char *path)
+{
+    if (path == nullptr || path[0] == 0 || buttons_ == 0) {
+        return;
+    }
+    snprintf(drag_path_, sizeof(drag_path_), "%s", path);
+    capture_ = Capture::Item;
+    captured_ = nullptr;
+    set_outline({pointer_x_ - 16, pointer_y_ - 16, 32, 32}, true);
+    update_drop_target();
+}
+
+void Wm::set_drop_icon(int icon)
+{
+    if (icon == drop_icon_) {
+        return;
+    }
+    if (drop_icon_ >= 0 && drop_icon_ < icon_count_) {
+        invalidate(desktop_icon_rect(drop_icon_));
+    }
+    drop_icon_ = icon;
+    if (icon >= 0) {
+        invalidate(desktop_icon_rect(icon));
+    }
+}
+
+// What is under the pointer: a desktop icon that takes files (shown
+// selected), or a window that says it would take this one.
+void Wm::update_drop_target()
+{
+    const int x = pointer_x_, y = pointer_y_;
+    int icon = -1;
+    Window *target = nullptr;
+    if (!taskbar().contains(x, y)) {
+        Window *w = window_under(x, y);
+        Window *sys = system_modal();
+        if (w != nullptr) {
+            if ((sys == nullptr || sys == w) && blocker(*w) == nullptr && part_at(*w, x, y) == Part::Client) {
+                const Rect c = w->client();
+                if (w->drag_over(drag_path_, x - c.x, y - c.y)) {
+                    target = w;
+                }
+            }
+        } else if (sys == nullptr) {
+            for (int i = 0; i < icon_count_; i++) {
+                if (icons_[i].drop != nullptr && desktop_icon_rect(i).contains(x, y) &&
+                    (icons_[i].path == nullptr || strcmp(icons_[i].path, drag_path_) != 0)) {
+                    icon = i;
+                }
+            }
+        }
+    }
+    set_drop_icon(icon);
+    if (drop_window_ != nullptr && drop_window_ != target) {
+        drop_window_->drag_over(nullptr, -1, -1);
+    }
+    drop_window_ = target;
 }
 
 void Wm::on_release()
@@ -1091,6 +1174,23 @@ void Wm::on_release()
     case Capture::Client: {
         const Rect c = w->client();
         w->mouse({MouseKind::Up, pointer_x_ - c.x, pointer_y_ - c.y});
+        break;
+    }
+    case Capture::Item: {
+        set_outline(outline_, false);
+        char path[kDragPath];
+        snprintf(path, sizeof(path), "%s", drag_path_);
+        const int icon = drop_icon_;
+        Window *target = drop_window_;
+        set_drop_icon(-1);
+        drop_window_ = nullptr;
+        if (icon >= 0 && icon < icon_count_) {
+            icons_[icon].drop(path, icons_[icon].context);
+        } else if (target != nullptr) {
+            target->drag_over(nullptr, -1, -1);
+            const Rect c = target->client();
+            target->dropped(path, pointer_x_ - c.x, pointer_y_ - c.y);
+        }
         break;
     }
     case Capture::Menu: {
@@ -1570,7 +1670,7 @@ void Wm::paint_desktop(const RectList &clip)
         }
         const DesktopIcon &icon = icons_[i];
         const int x = r.x + 4, y = r.y;
-        const bool selected = i == selected_icon_;
+        const bool selected = i == selected_icon_ || i == drop_icon_;
         if (icon.picture != nullptr) {
             if (selected) {
                 c.blit_selected(*icon.picture, x + 16, y, gfx::rgb(0, 0, 2));

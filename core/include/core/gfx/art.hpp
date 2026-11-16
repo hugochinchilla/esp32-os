@@ -24,6 +24,9 @@ const Bitmap &board_icon_32(); // the ESP32 board: My Board
 const Bitmap &folder_icon_32();
 const Bitmap &network_icon_32();
 const Bitmap &bin_icon_32();
+const Bitmap &bin_full_icon_32(); // the Trash with something in it
+const Bitmap &bin_icon_16();
+const Bitmap &bin_full_icon_16();
 const Bitmap &text_icon_32();
 const Bitmap &picture_icon_32();
 const Bitmap &drive_icon_32();

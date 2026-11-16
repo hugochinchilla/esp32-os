@@ -486,6 +486,102 @@ int main(int argc, char **argv)
     save("37f-after-screen-saver");
     key(wm::key::Escape); // closes the dialog
 
+    // The Trash. Empty at first, from its desktop icon.
+    const auto there = [&](const char *path) {
+        ports::DirEntry e;
+        return storage.stat(path, e) == ports::FsError::Ok;
+    };
+    const auto expect = [&](bool ok, const char *what) {
+        if (!ok) {
+            printf("Trash: %s\n", what);
+            failures++;
+        }
+    };
+    centre_of(desktop.desktop_icon_rect(3), x, y);
+    double_click(x, y);
+    save("37g-trash-empty");
+    while (desktop.active() != nullptr) {
+        desktop.close(*desktop.active());
+    }
+    // Delete in the File manager asks, then moves the file to the Trash,
+    // whose icon fills.
+    shell::open_folder("C:\\docs");
+    key(wm::key::Home); // espa\xc3\xb1ol.txt
+    key(wm::key::Delete);
+    save("37h-move-to-trash");
+    key(wm::key::Enter); // Yes
+    expect(!there("C:\\docs\\espa\xc3\xb1ol.txt") && there("C:\\.trash\\espa\xc3\xb1ol.txt"), "Delete did not move the file");
+    while (desktop.active() != nullptr) {
+        desktop.close(*desktop.active());
+    }
+    centre_of(desktop.desktop_icon_rect(3), x, y);
+    double_click(x, y);
+    key(wm::key::Home);
+    save("37i-trash-full"); // with where it came from
+    // File > Restore puts it back.
+    key(0x09, true); // Alt+F
+    key(0x15);       // R
+    expect(there("C:\\docs\\espa\xc3\xb1ol.txt") && !there("C:\\.trash\\espa\xc3\xb1ol.txt"), "Restore did not put it back");
+    while (desktop.active() != nullptr) {
+        desktop.close(*desktop.active());
+    }
+    // A desktop file dragged onto the Trash: an outline follows the pointer
+    // and the Trash is highlighted; let go, the file is in the Trash.
+    int tx, ty;
+    centre_of(desktop.desktop_icon_rect(4), x, y); // welcome.txt
+    centre_of(desktop.desktop_icon_rect(3), tx, ty);
+    mouse(x, y, 0);
+    mouse(x, y, 1);
+    mouse(x + 10, y - 10, 1);
+    mouse(tx, ty, 1);
+    save("37j-dragging-to-trash");
+    mouse(tx, ty, 0);
+    save("37k-dropped-in-trash");
+    expect(!there("C:\\Documents\\Desktop\\welcome.txt") && there("C:\\.trash\\welcome.txt"), "the drop did not trash welcome.txt");
+    // In the File manager: readme.txt dragged onto the docs folder moves there.
+    shell::open_folder("C:\\");
+    {
+        wm::Window *w = desktop.active();
+        const gfx::Rect c = w->client();
+        // docs, Documents, pictures, system, then readme.txt on the second row.
+        const int fx = c.x + 2 + 10 + 38, fy = c.y + 64 + 2 + 8 + 16;
+        mouse(fx, fy + 66, 0);
+        mouse(fx, fy + 66, 1);
+        mouse(fx + 10, fy + 50, 1);
+        mouse(fx, fy, 1);
+        save("37l-dragging-to-folder");
+        mouse(fx, fy, 0);
+        expect(!there("C:\\readme.txt") && there("C:\\docs\\readme.txt"), "the drop did not move readme.txt");
+    }
+    while (desktop.active() != nullptr) {
+        desktop.close(*desktop.active());
+    }
+    // Empty Trash asks first, saying how many.
+    centre_of(desktop.desktop_icon_rect(3), x, y);
+    double_click(x, y);
+    key(0x09, true); // Alt+F
+    key(0x08);       // E
+    save("37m-empty-trash");
+    key(wm::key::Enter); // Yes
+    expect(!there("C:\\.trash\\welcome.txt"), "Empty Trash left welcome.txt");
+    save("37n-trash-emptied");
+    while (desktop.active() != nullptr) {
+        desktop.close(*desktop.active());
+    }
+    // The same name deleted twice: the second is numbered in the Trash.
+    shell::open_folder("C:\\docs");
+    for (int i = 0; i < 2; i++) {
+        storage.write_file("C:\\docs\\a.txt", "a", 1);
+        key(0x3E); // F5
+        key(wm::key::Home); // a.txt
+        key(wm::key::Delete);
+        key(wm::key::Enter); // Yes
+    }
+    expect(there("C:\\.trash\\a.txt") && there("C:\\.trash\\a (2).txt"), "the second a.txt was not numbered");
+    while (desktop.active() != nullptr) {
+        desktop.close(*desktop.active());
+    }
+
     // Shut Down from the Start menu: Enter picks Shut Down, and the screen
     // says the power can go.
     centre_of(desktop.taskbar_button(-1), x, y);

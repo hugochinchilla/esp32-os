@@ -235,6 +235,12 @@ public:
     virtual void menu_opening(int /*entry*/) {}
     // Called after the window was closed.
     virtual void closed() {}
+    // A file dragged over the client area (client coordinates): return true
+    // if it would be taken there (and show where). path is nullptr when the
+    // drag has left the window or ended.
+    virtual bool drag_over(const char * /*path*/, int /*x*/, int /*y*/) { return false; }
+    // The file let go over the client area, after drag_over() said yes.
+    virtual void dropped(const char * /*path*/, int /*x*/, int /*y*/) {}
 
 protected:
     ~Window() = default;

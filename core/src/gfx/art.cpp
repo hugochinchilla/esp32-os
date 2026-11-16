@@ -158,10 +158,31 @@ constexpr const char *kBin32[32] = {
     "................................", "................................",
 };
 
+// The bin with something in it: no lid, crumpled paper above the top, the
+// lid leaning against its side.
+constexpr const char *kBinFull32[32] = {
+    "................................", "..............KKKKK.............",
+    ".............KWWWWWK............", ".............KWDWWDKKKKK........",
+    "..........KKKKWWDWWKWWDWK.......", ".........KWDWKWWWDWKDWWWK.......",
+    ".........KWWDKWDWWWKWDWWK.......", ".........KWDWKWWWWWKWWDWK.......",
+    "........KKKKKKKKKKKKKKKK........", "...KKKK.KGGGGGGGGGGGGGGK........",
+    "...KGGK.KGGGGGGGGGGGGGGK........", "...KGGK.KGGGDGGGDGGGDGGK........",
+    "...KGGK.KGGGDGGGDGGGDGGK........", "...KGGK.KGGGDGGGDGGGDGGK........",
+    "...KGGK.KGGGDGGGDGGGDGGK........", ".KKKGGK.KGGGDGGGDGGGDGGK........",
+    ".KGKGGK.KGGGDGGGDGGGDGGK........", ".KGKGGK.KGGGDGGGDGGGDGGK........",
+    ".KGKGGK.KGGGDGGGDGGGDGGK........", ".KGKGGK.KGGGDGGGDGGGDGGK........",
+    ".KGKGGK.KGGGDGGGDGGGDGGK........", ".KGKGGK.KGGGDGGGDGGGDGGK........",
+    ".KKKGGK.KGGGDGGGDGGGDGGK........", "...KGGK.KGGGDGGGDGGGDGGK........",
+    "...KGGK.KGGGDGGGDGGGDGGK........", "...KGGK.KGGGDGGGDGGGDGGK........",
+    "...KGGK.KGGGGGGGGGGGGGGK........", "...KGGK.KGGGGGGGGGGGGGGK........",
+    "...KKKK.KKKKKKKKKKKKKKKK........", "................................",
+    "................................", "................................",
+};
+
 constexpr Ink kBoardInks[] = {{'K', kBlack}, {'P', rgb(0, 3, 1)}, {'G', kGrey}, {'O', rgb(6, 5, 0)}};
 constexpr Ink kFolderInks32[] = {{'K', kBlack}, {'T', rgb(6, 5, 0)}, {'Y', rgb(7, 6, 1)}, {'H', rgb(7, 7, 2)}};
 constexpr Ink kNetInks32[] = {{'K', kBlack}, {'S', rgb(1, 5, 3)}, {'G', kGrey}};
-constexpr Ink kBinInks[] = {{'K', kBlack}, {'G', kGrey}, {'D', kDarkGrey}};
+constexpr Ink kBinInks[] = {{'K', kBlack}, {'G', kGrey}, {'D', kDarkGrey}, {'W', kWhite}};
 
 constexpr const char *kText32[32] = {
     "................................", "................................",
@@ -342,6 +363,29 @@ const Bitmap &bin_icon_32()
 {
     static constexpr Pixels<32> pixels = paint<32>(kBin32, kBinInks);
     static constexpr Bitmap bitmap = {32, 32, pixels.p, kClear};
+    return bitmap;
+}
+
+const Bitmap &bin_full_icon_32()
+{
+    static constexpr Pixels<32> pixels = paint<32>(kBinFull32, kBinInks);
+    static constexpr Bitmap bitmap = {32, 32, pixels.p, kClear};
+    return bitmap;
+}
+
+const Bitmap &bin_icon_16()
+{
+    static constexpr Pixels<32> big = paint<32>(kBin32, kBinInks);
+    static constexpr Pixels<16> pixels = half(big);
+    static constexpr Bitmap bitmap = {16, 16, pixels.p, kClear};
+    return bitmap;
+}
+
+const Bitmap &bin_full_icon_16()
+{
+    static constexpr Pixels<32> big = paint<32>(kBinFull32, kBinInks);
+    static constexpr Pixels<16> pixels = half(big);
+    static constexpr Bitmap bitmap = {16, 16, pixels.p, kClear};
     return bitmap;
 }
 

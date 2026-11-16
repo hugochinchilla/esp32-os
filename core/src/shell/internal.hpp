@@ -32,4 +32,28 @@ void install_screen_saver();
 // power-down screen.
 void attention_key(void *context);
 
+// The Trash (trash.cpp): C:\.trash, with C:\.config\trash.ini remembering
+// where each entry came from.
+constexpr const char *kTrashFolder = "C:\\.trash";
+bool in_trash(const char *path);  // C:\.trash or inside it
+bool trashable(const char *path); // on C:, not a drive, not in the Trash
+ports::FsError to_trash(const char *path);
+ports::FsError remove_tree(const char *path, int depth = 0); // for good
+int trash_count();
+ports::FsError empty_trash();
+bool trash_origin(const char *name, char *out, int capacity);
+ports::FsError restore_from_trash(const char *name);
+// Drag and drop between folders (same drive); into the Trash trashes.
+ports::FsError move_to_folder(const char *path, const char *folder);
+// The Delete command: asks, then moves to the Trash (on C:) or deletes for
+// good (in the Trash, on other drives).
+void delete_asking(const char *path);
+// Dragged to the Trash: moved without asking on C:, asks elsewhere.
+void drop_in_trash(const char *path);
+void open_trash();
+// After files moved or went away: the desktop, the File manager windows
+// and the Trash window read their folders again.
+void files_changed();
+void refresh_folder_windows(); // file_manager.cpp
+
 } // namespace shell

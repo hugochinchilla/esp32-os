@@ -95,12 +95,19 @@ windows open (Welcome and About are no longer launched).
 ### Files on the desktop (2026-11-16)
 
 Decided by the owner: the desktop shows the files in C:\Documents\Desktop as
-icons after the system icons (My Board, Documents, Network, Recycle Bin, which
+icons after the system icons (My Board, Documents, Network, Trash, which
 stay), a picture by file type and the name below; a double-click opens the
 file with its program, or the folder in the File manager. The icons follow
 changes to the folder. A welcome.txt is put there on a new drive and once on
 an existing one; C:\.config\desktop.ini remembers it, so a deleted copy never
 comes back.
+
+### Trash (2026-11-16)
+
+Asked for by the owner: deleting a file or folder moves it to the Trash; the
+Trash icon on the desktop opens the Trash window, also when it is empty;
+files and folders can be dragged onto the Trash icon or window from the File
+manager and from the desktop; the Trash window's File menu has Empty Trash.
 
 ### Wi-Fi transmit power (2026-11-16)
 
@@ -822,6 +829,31 @@ tested on the PC only (not yet compiled for or run on the board).
   hooks in every program that writes files.
 - The Documents icon still opens C:\docs, not C:\Documents. Put to the owner:
   move docs into Documents, or point the icon at C:\Documents.
+
+### Chosen for the Trash (2026-11-16, to confirm)
+
+- The Trash is the hidden folder C:\.trash. A name already there gets a
+  number: "notes (2).txt". C:\.config\trash.ini remembers where each entry
+  came from, so File > Restore puts it back (numbered if the name is taken
+  again, its folder made again if it is gone). The status bar shows where
+  the chosen entry came from.
+- Delete asks "move ... to the Trash?" first. Dragging onto the Trash does
+  not ask. Delete inside the Trash, and Empty Trash (which says how many),
+  remove for good after asking.
+- Folders go to the Trash whole. Drives other than C: have no Trash: Delete
+  there removes for good, and the question says so.
+- The icon shows paper in an open bin, its lid leaning beside it, when the
+  Trash holds anything (own art).
+- The desktop icon is called "Trash" (it said "Recycle Bin").
+- The Defragmenter does not read the disk (its picture is made up), so the
+  Trash makes no difference to it; free space counts the Trash as used.
+- Dragging: an outline 32 px square follows the pointer; the desktop icon or
+  folder it would go into is highlighted. Folder-to-folder moves work too:
+  onto a folder in a File manager window or on the desktop, or onto the
+  window's empty space (into the folder it shows); same drive only. Desktop
+  file icons can be dragged. Escape does not cancel a drag yet, and dropping
+  on the empty desktop does nothing (it could move into
+  C:\Documents\Desktop).
 
 ## To confirm on the bench
 

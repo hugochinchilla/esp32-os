@@ -257,7 +257,6 @@ struct NotYet {
     const char *text;
 };
 const NotYet kNetwork = {"Network", "The network is not available yet.\nWi-Fi comes in a later version."};
-const NotYet kRecycleBin = {"Recycle Bin", "The Recycle Bin is not available yet.\nIt needs files first."};
 
 void not_yet(void *context)
 {
@@ -274,6 +273,9 @@ void open_documents(void *)
 {
     open_folder("C:\\docs");
 }
+
+void open_trash_icon(void *) { open_trash(); }
+void drop_on_trash(const char *path, void *) { drop_in_trash(path); }
 
 // The system icons, then the files in C:\Documents\Desktop.
 constexpr int kSystemIcons = 4;
@@ -295,6 +297,19 @@ void open_desktop_file(void *context)
         open_folder(f.path);
     } else if (!open_file(f.path)) {
         message_box("Desktop", "There is no program for this kind of file yet.");
+    }
+}
+
+// A file let go on a folder's icon on the desktop goes into that folder.
+void drop_on_folder(const char *path, void *context)
+{
+    const ports::FsError e = move_to_folder(path, static_cast<const DesktopFile *>(context)->path);
+    files_changed();
+    if (e != ports::FsError::Ok) {
+        static char text[fs::kMaxPath + 60];
+        snprintf(text, sizeof(text), "Cannot move '%s':\n%s.", fs::path::name(path),
+                 e == ports::FsError::Exists ? "there is one with that name there already" : fs::error_text(e));
+        message_box("Move", text);
     }
 }
 
@@ -347,6 +362,10 @@ void refresh_desktop_files(bool force)
         n++;
     }
     signature ^= static_cast<uint32_t>(n);
+    // The Trash's picture: with paper in it when it holds anything.
+    const bool full = trash_count() > 0;
+    signature = (signature ^ (full ? 3u : 4u)) * 16777619u;
+    g_icons[3].picture = full ? &gfx::bin_full_icon_32() : &gfx::bin_icon_32();
     if (!force && signature == g_files_signature) {
         return;
     }
@@ -369,12 +388,23 @@ void refresh_desktop_files(bool force)
         } else {
             snprintf(f.label, sizeof(f.label), "%.11s", found[i].name);
         }
-        g_icons[kSystemIcons + i] = {f.label, file_picture(found[i].name, found[i].folder), &open_desktop_file, &f};
+        g_icons[kSystemIcons + i] = {f.label, file_picture(found[i].name, found[i].folder), &open_desktop_file, &f,
+                                     f.path, found[i].folder ? &drop_on_folder : nullptr};
     }
     manager().set_desktop_icons(g_icons, kSystemIcons + n);
 }
 
 void desktop_files_tick(void *) { refresh_desktop_files(false); }
+
+} // namespace
+
+void files_changed()
+{
+    refresh_folder_windows();
+    refresh_desktop_files(false);
+}
+
+namespace {
 
 // The welcome text, put on the desktop once: if it is deleted it does not
 // come back (C:\.config\desktop.ini remembers).
@@ -492,7 +522,7 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
     g_icons[0] = {"My Board", &gfx::board_icon_32(), &open_my_board, nullptr};
     g_icons[1] = {"Documents", &gfx::folder_icon_32(), &open_documents, nullptr};
     g_icons[2] = {"Network", &gfx::network_icon_32(), &not_yet, const_cast<NotYet *>(&kNetwork)};
-    g_icons[3] = {"Recycle Bin", &gfx::bin_icon_32(), &not_yet, const_cast<NotYet *>(&kRecycleBin)};
+    g_icons[3] = {"Trash", &gfx::bin_icon_32(), &open_trash_icon, nullptr, nullptr, &drop_on_trash};
     if (network() != nullptr) {
         g_icons[2] = {"Network", &gfx::network_icon_32(), &network_panel, nullptr};
         g_settings_items[2].icon = &gfx::network_icon_16();
