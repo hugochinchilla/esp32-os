@@ -111,3 +111,37 @@ still answer; `tools/dbg.py` still talks.
   26. The names from the review (`dbgd`, `netd`, `vncd`, `httpd`) are kept
   for that day. Backlog item 5b (signals for services) now waits for it.
 - The owner's word on `init` (see 3).
+
+## 8. The same evening: the desktop is PID 1
+
+Section 3 left `init` in the table and asked the owner. His answer:
+
+> Ok, make desktop pid 1 for now
+
+So the rule has no exception. What changed:
+
+- The table no longer makes an `init` row by itself. **The first process
+  made is the root of the tree**: PID 1, no parent, and it never ends. Today
+  the shell makes the desktop first, so the desktop is PID 1. Orphans are
+  handed to the root, and a respawned process is started as the root's child,
+  as before; only the name on the row is different. In the code `kInit`
+  became `kRoot`, and `Table::init()` is gone.
+- Before any program starts the table has one row, `desktop` 1. The first
+  program is PID 2.
+- When init becomes a real program (item 18) it is started first and takes
+  PID 1, and the desktop becomes one of its children. The numbers move on
+  that day. That was the reason given in section 3 for keeping the row; the
+  owner chose an honest list today over stable numbers later.
+
+The other option was to leave PID 1 unused and start the desktop at 2. Not
+taken: a tree needs a root, and orphans and restarts need a parent that never
+ends.
+
+Tested on the PC: `test_proc` checks that the first process made is the root
+whatever its name, that a child cannot be made before it, and that after
+start-up the table is exactly `desktop` 1. All 22 tests pass. Four reference
+pictures changed, all of the Task Manager, in the PID column and the rows
+listed (`34`, `34b`, `34c`, `34e`). Not compiled for the board, not run on it.
+
+On the board, Ctrl+Alt+Del with Alt+A should show `desktop` 1 and the Task
+Manager 2, with End Task grey on `desktop`.

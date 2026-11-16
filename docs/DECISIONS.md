@@ -1188,7 +1188,7 @@ Task does.
 - KILL closes the process's menus and windows (dialogs first), stops its
   timers and removes its row, without `close_requested()`. `closed()` still
   runs, because window objects are used again by the next launch.
-- Protected processes (`init`, `desktop`) refuse both signals. Task Manager
+- Protected processes (`desktop` today) refuse both signals. Task Manager
   greys End Task out on them.
 - A process without windows cannot be signalled yet (NotSupported), and Task
   Manager has a message for it. Since the service rows were removed (see
@@ -1242,10 +1242,15 @@ confusing". The story is in `docs/journal/2026-11-16-only-real-tasks.md`.
   gets no row.
 - The rows `dbgd`, `netd`, `vncd` and `httpd` are removed. The Wi-Fi
   manager's timer is the desktop's. Before any program starts the table is
-  `init` 1 and `desktop` 2.
+  `desktop` 1.
 - A service gets its row, with the name planned for it, in the change that
   makes it a task (items 14, 18 and 26).
-- `init` stays as PID 1 although it is not a task yet: it is the root of the
-  tree and keeps the numbers stable until item 18. **To confirm with the
-  owner.**
+- There is no `init` row either, until init is a real program (item 18).
+  **The owner's decision, 2026-11-16**: "make desktop pid 1 for now". The
+  first process made is the root of the tree, PID 1, and today that is the
+  desktop. Orphans go to the root and respawned processes are its children.
+  When init exists it takes PID 1 and the desktop becomes its child. This
+  replaces "PID 1 is a row called `init` from the first moment" in "Chosen
+  for the process table", and "init is PID 1" under "OS architecture" holds
+  again from item 18.
 - The other option was to keep the rows marked "(part of the desktop)".
