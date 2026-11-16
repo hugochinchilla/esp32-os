@@ -7,6 +7,7 @@
 
 #include "core/fs/fs.hpp"
 #include "core/fs/ini.hpp"
+#include "core/games/cactus.hpp"
 #include "core/games/snake.hpp"
 #include "core/gfx/canvas.hpp"
 #include "core/ports.hpp"
@@ -94,6 +95,12 @@ void set_network(net::Manager *wifi);
 net::Manager *network();
 // The Network panel: networks in range, connect, forget.
 void open_network();
+
+// Tests and reference pictures: the game in the Cactus Patch window, and a
+// repaint after changing it directly.
+games::CactusField &cactus_patch_field();
+void cactus_patch_refresh();
+int cactus_patch_seconds();
 
 // Sets up the desktop icons and the Start menu, and opens the first windows.
 // `storage` holds the drives; `memory` gives the large buffers (editor,

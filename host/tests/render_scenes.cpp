@@ -208,7 +208,12 @@ int main(int argc, char **argv)
     save("08-start-menu-programs");
 
     // Launch the Widget gallery from Programs, type into its text field.
-    centre_of(desktop.popup_item(1, 8), x, y); // Widget gallery
+    // Found by name, so a new program in the table does not move it.
+    int gallery = 0;
+    while (std::string(shell::app(gallery).name) != "Widget gallery") {
+        gallery++;
+    }
+    centre_of(desktop.popup_item(1, gallery), x, y);
     click(x, y);
     key(wm::key::End);
     desktop.text(" año");

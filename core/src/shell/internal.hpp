@@ -21,6 +21,10 @@ void show(wm::Window &w);
 // Centres a window of the given size in the work area.
 gfx::Rect centred(const wm::Wm &wm, int w, int h);
 
+// Cactus Patch (cactus_patch.cpp): its Start menu entry.
+const gfx::Bitmap &cactus_patch_icon();
+void open_cactus_patch();
+
 // Puts the screensaver in place with its settings (screensaver.cpp).
 void install_screen_saver();
 

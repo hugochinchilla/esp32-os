@@ -277,6 +277,7 @@ struct Entry {
 };
 const Entry kApps[] = {
     {{"About Chinchilla", nullptr, &open_about}, &gfx::mascot_16},
+    {{"Cactus Patch", nullptr, &open_cactus_patch}, &cactus_patch_icon},
     {{"Culebra", nullptr, &open_culebra}, &gfx::snake_icon_16},
     {{"Defragmenter", nullptr, &open_defragmenter}, &gfx::drive_icon_16},
     {{"Editor", nullptr, &open_editor}, &gfx::text_icon_16},

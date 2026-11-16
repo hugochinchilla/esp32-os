@@ -8,6 +8,7 @@ set(CORE_SRCS
     src/fs/ini.cpp
     src/fs/memory_volume.cpp
     src/fs/sample_pictures.cpp
+    src/games/cactus.cpp
     src/games/snake.cpp
     src/image/blue_noise.cpp
     src/image/bmp.cpp
@@ -33,6 +34,7 @@ set(CORE_SRCS
     src/net/wifi.cpp
     src/shell/apps.cpp
     src/shell/boot.cpp
+    src/shell/cactus_patch.cpp
     src/shell/culebra.cpp
     src/shell/defrag.cpp
     src/shell/desktop.cpp

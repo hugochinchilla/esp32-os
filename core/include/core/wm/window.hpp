@@ -17,7 +17,7 @@ class Window;
 enum class MouseKind : uint8_t { Down, Move, Up };
 
 // A mouse message for a window or widget, in its own coordinates. Only the
-// left button is routed for now.
+// left button is routed this way; the right one calls Window::right_click().
 struct MouseMsg {
     MouseKind kind;
     int x;
@@ -219,6 +219,9 @@ public:
     // Mouse messages for the client area. The default routes them to the
     // widget under the pointer, which keeps them until the button is let go.
     virtual void mouse(const MouseMsg &m);
+    // The right button went down in the client area (client coordinates).
+    // Not captured: there is no matching release.
+    virtual void right_click(int /*x*/, int /*y*/) {}
     // Keys for the window. The default gives them to the focused widget,
     // moves the focus with Tab and presses the default widget with Enter.
     // Returns true if the key was used.
