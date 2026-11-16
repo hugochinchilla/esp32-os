@@ -88,6 +88,19 @@ Not scheduled. To be revisited once a basic OS boots.
 | Wired Ethernet | SPI module with an RJ45 socket, 5 pins | Rejected for now: a module would have to be bought |
 | Battery-backed clock | I2C clock chip with a coin cell on GPIO1 and GPIO2 | Only if parts are already at home |
 
+### System programs the owner would like (2026-11-16)
+
+Not scheduled. Each needs its design choices put to the owner before it is built.
+
+| Program | Notes |
+| --- | --- |
+| Disk defragmenter | Purely nostalgic: flash storage does not need it. A block map that slowly tidies itself. It must not really rewrite the flash, which would only wear it out |
+| Task manager | Opened with Ctrl+Alt+Del. Lists running programs with memory and processor use, and can close one |
+| Power-down screen | Shut Down ends on a full screen saying "It is now safe to turn off your computer", as machines without soft power did. Wording and artwork must be our own |
+| Audio player | Compact player in the spirit of late-90s players, with no visualiser and no equaliser. Opens WAV and MP3. The look must be original, not a copy of an existing player or its skins. Needs the sound output (GPIO13) working first, and a freely licensed MP3 decoder |
+| Mine-sweeping game | A grid puzzle of the mine-clearing kind: numbers show how many neighbours are mined. Our own name, artwork and icons; not a copy of any existing game's look |
+| Snake game | The classic grow-as-you-eat arcade game, with our own name and artwork. A good first program driven by the timer and the keyboard |
+
 ## Found on the bench
 
 First picture: 2026-11-16, through a VGA-to-HDMI adapter.
