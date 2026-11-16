@@ -53,6 +53,13 @@ constants run from PSRAM (CONFIG_SPIRAM_XIP_FROM_PSRAM), because writing the
 flash otherwise turns the cache off and the picture shakes (see Found on the
 bench).
 
+### Flash layout (2026-11-16)
+
+Decided by the owner. The app area is 0x10000-0x400000 (3.94 MB, one app now;
+it can later be split into two over-the-air update slots of about 1.9 MB
+without moving C:). C: is LittleFS on the 12 MB above it. A larger C: with no
+room kept for updates was the alternative.
+
 ### Program settings (2026-11-16)
 
 Decided by the owner. Each program keeps its settings in its own plain text
@@ -96,7 +103,6 @@ other threads do not merge their own work.
 | Remote keyboard, mouse and screen for a person | VNC server, web page, debug tool only | VNC server |
 | How apps are delivered | Built into the firmware, or loadable from disk | Built in first, behind an app interface. Still the owner's question; the shell works on that assumption: programs are entries in a table (`core/include/core/shell/shell.hpp`: name, icon, open function) that the Start menu and desktop icons launch the same way |
 | Shell details chosen while building menus, the Start menu and widgets; to confirm or overrule | See "Chosen in the shell milestone" below | As built |
-| Flash layout (provisional) | As built: app area 0x10000-0x400000 (3.94 MB, one app now; it can later be split into two OTA slots of about 1.9 MB without moving C:), C: LittleFS the 12 MB above it; or a larger C: with no room kept for OTA | As built. The app is 607 KB now (the Wi-Fi branch's 1.10 MB fits); with code run from PSRAM (see Found on the bench) the app's size also comes out of external RAM |
 | A RAM disk as well as C: | Drop it, or keep a small one as a separate temporary drive | Dropped with LittleFS, since nothing needs it; the RAM disk code stays for the PC tests and the simulator |
 | Details chosen in the files milestone; to confirm or overrule | See "Chosen in the files milestone" below | As built |
 | Details chosen in the image viewer milestone; to confirm or overrule | See "Chosen in the image viewer milestone" below | As built |
@@ -223,6 +229,16 @@ First picture: 2026-11-16, through a VGA-to-HDMI adapter.
   partly the camera's compression of fine detail; it is the one pattern
   where shimmer can be seen. The longest timer slice while decoding was
   21 to 31 ms with every dither.
+- Wi-Fi on the board (2026-11-16, PR 7's Wi-Fi part). The radio starts in
+  70 ms after the start-up screens; a scan takes 2.9 s; after a restart the
+  board joins the remembered network on its own about 5 s after the radio
+  starts, and the clock is set from the network (local time). A wrong
+  password says "the password is not right" and keeps the remembered one.
+  59.5 frames a second and a steady picture (no shaken frames on the webcam)
+  while scanning and while connected. Free internal RAM falls from about
+  300 KB to 151 KB with Wi-Fi on; 6.8 MB external. Firmware 1.12 MB. Note:
+  ESP-IDF's own Wi-Fi log line names the network it joins (on the debug
+  link, not stored); the password is never logged.
 - C: on LittleFS (2026-11-16). Mounting takes 6 to 11 ms; 12 MB, 11 MB
   free with the samples. Through the debug link a 60 KB file goes onto the
   flash in 3.0 s (the link is the limit); the Editor saves a 293 KB file in
@@ -451,11 +467,53 @@ practical. Each is easy to change.
 - The 16x16 picture icon is the 32x32 one with every other pixel, made at
   compile time.
 
+### Chosen in the Wi-Fi milestone (asked 2026-11-16, to confirm)
+
+Put to the owner as options; built on the recommended one until he answers.
+
+- Where Wi-Fi passwords are kept: the board's settings area in the flash
+  (NVS), not a file on C:, so the File manager, `tools/dbg.py get` and a
+  remote viewer cannot read them. This is an exception to "settings are INI
+  files in `C:\.config`" and needs the owner's yes; the alternative is
+  `C:\.config\network.ini` with the passwords in it. The names of the
+  remembered networks and the time zone are meant to move to
+  `C:\.config\network.ini` once the INI helper is on `main`; today they
+  sit with the passwords behind one small port (`net::KeyStore`).
+- Remembered networks: up to 8, most recently used first. At start-up and
+  after a lost link the board joins the strongest remembered network in
+  range, tries the next one if that fails, and looks again after 10, 20, 40
+  and then every 80 seconds. Disconnect in the panel stays disconnected.
+  A network is remembered only after it has connected.
+- The Network panel opens from the desktop's Network icon, from Start >
+  Settings > Network and from the signal icon in the tray (one click). The
+  tray icon shows 0 to 4 bars, or a red cross when not connected.
+- Time zone: Spanish mainland time with EU summer time (a guess from the
+  Spanish sample text), set in the code until there is a Date/Time panel.
+  The clock is set when the network time first arrives and every hour.
+  Time server: `pool.ntp.org`.
+- Security accepted: open networks, and WPA, WPA2 and WPA3 with a password.
+  WEP is refused; networks that ask for a user name (enterprise) are listed
+  but cannot be joined. Hidden networks: through "Other...".
+- Wi-Fi power saving is off (a remote screen would lag by 100 to 300 ms).
+- The debug link can scan, connect, disconnect and forget
+  (`tools/dbg.py wifi`); it never returns a password.
+- Firmware size with Wi-Fi: 1.10 MB (556 KB before), over ESP-IDF's
+  default 1 MB app partition; it fits the 3.94 MB app area of the LittleFS
+  partition table, which also keeps `nvs` (24 KB) and `phy_init`.
+- ESP-IDF v5.5 does install in the cloud container (the firmware of this
+  milestone was compiled and linked there, not run): `tools/setup-cloud-idf.sh`.
+
 ## To confirm on the bench
 
 - The picture is stable at 640x480 with the framebuffer in PSRAM.
 - The colours and the four greys look right in both modes.
 - The picture stays stable with Wi-Fi active and during flash writes.
+- Wi-Fi (never run on the board yet): the radio starts and how long it
+  takes; a scan lists the networks around; a wrong password is reported as
+  such and a right one connects; the board joins by itself after a restart;
+  the clock is set from the network; free internal RAM with Wi-Fi up; the
+  picture stays stable and the frame rate holds during a scan and while
+  connected.
 
 ## Planned order of work
 

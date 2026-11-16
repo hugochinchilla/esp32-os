@@ -64,6 +64,15 @@ add_test(NAME pictures
 add_test(NAME dbg_tool
          COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/test_dbg_sim.py $<TARGET_FILE:sim>)
 
+add_executable(test_net tests/test_net.cpp)
+target_link_libraries(test_net PRIVATE core)
+add_test(NAME net COMMAND test_net)
+add_executable(render_net_scenes tests/render_net_scenes.cpp)
+target_link_libraries(render_net_scenes PRIVATE core)
+add_test(NAME net_pictures
+         COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/check_pictures.py $<TARGET_FILE:render_net_scenes>)
+set_tests_properties(net net_pictures PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
+
 add_executable(dither_eval dither_eval.cpp)
 target_link_libraries(dither_eval PRIVATE core)
 

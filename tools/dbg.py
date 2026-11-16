@@ -18,6 +18,7 @@ Needs pyserial, which the ESP-IDF environment (get_idf) already has.
 """
 import argparse
 import binascii
+import getpass
 import json
 import os
 import struct
@@ -31,6 +32,7 @@ PING, INFO, SCREENSHOT, KEY, MOUSE, STATS, REBOOT = 1, 2, 3, 4, 5, 6, 7
 WINDOWS, REPAINT, TEXT, TIME, ANIMATIONS = 8, 9, 10, 11, 12
 FILE_LIST, FILE_READ, FILE_WRITE, FILE_DELETE, FILE_MKDIR = 13, 14, 15, 16, 17
 BOOT_SCREEN = 18
+WIFI = 0x20
 MAX_REQUEST = 1024  # largest request payload the board takes
 LOG, HELLO, SHOT_DATA, SHOT_END = 0x70, 0x71, 0x72, 0x73
 REPLY = 0x80
@@ -312,6 +314,75 @@ class Board:
         "splash"); repaint() brings the desktop back."""
         self.request(BOOT_SCREEN, bytes([{"selftest": 0, "splash": 1}[which]]))
 
+    # ---- Wi-Fi
+
+    LINKS = ("no radio", "not connected", "connecting", "connected")
+    FAILURES = ("", "the password is not right", "the network was not found",
+                "it did not answer", "the network refused")
+    SECURITY = ("open", "password", "user name and password (not supported)")
+
+    @staticmethod
+    def _name(text):
+        data = text if isinstance(text, bytes) else text.encode("utf-8")
+        return bytes([len(data)]) + data
+
+    def wifi_status(self):
+        body = self.request(WIFI, b"\x00")
+        link, failure, scanning, clock, rssi, channel = struct.unpack_from("<BBBBbB", body)
+        return {"link": self.LINKS[link], "failure": self.FAILURES[failure], "scanning": bool(scanning),
+                "clock_from_network": bool(clock), "rssi": rssi, "channel": channel,
+                "address": ".".join(str(b) for b in body[6:10]),
+                "router": ".".join(str(b) for b in body[10:14]),
+                "mac": ":".join("%02X" % b for b in body[14:20]),
+                "remembered": body[20],
+                "ssid": body[22:22 + body[21]].decode("utf-8", "replace")}
+
+    def wifi_list(self):
+        """(scanning, networks seen, remembered names)."""
+        body = self.request(WIFI, b"\x02")
+        seen, i = [], 2
+        for _ in range(body[1]):
+            rssi, channel, security, flags, length = struct.unpack_from("<bBBBB", body, i)
+            seen.append({"ssid": body[i + 5:i + 5 + length].decode("utf-8", "replace"), "rssi": rssi,
+                         "channel": channel, "security": self.SECURITY[security],
+                         "remembered": bool(flags & 1), "connected": bool(flags & 2)})
+            i += 5 + length
+        saved = []
+        for _ in range(body[i]):
+            length = body[i + 1]
+            saved.append(body[i + 2:i + 2 + length].decode("utf-8", "replace"))
+            i += 1 + length
+        return bool(body[0]), seen, saved
+
+    def wifi_scan(self, timeout=15.0):
+        """Looks for networks and returns wifi_list() when the scan is done."""
+        self.request(WIFI, b"\x01")
+        end = time.monotonic() + timeout
+        while True:
+            time.sleep(0.3)
+            scanning, seen, saved = self.wifi_list()
+            if not scanning or time.monotonic() > end:
+                return scanning, seen, saved
+
+    def wifi_connect(self, ssid, password=None, remember=True, timeout=30.0):
+        """Joins a network (password None: the remembered one) and waits for
+        the result: wifi_status()."""
+        payload = b"\x03" + self._name(ssid) + bytes([1 if remember else 0])
+        payload += b"\x00" if password is None else b"\x01" + self._name(password)
+        self.request(WIFI, payload)
+        end = time.monotonic() + timeout
+        while True:
+            time.sleep(0.3)
+            status = self.wifi_status()
+            if status["link"] != "connecting" or time.monotonic() > end:
+                return status
+
+    def wifi_disconnect(self):
+        self.request(WIFI, b"\x04")
+
+    def wifi_forget(self, ssid):
+        self.request(WIFI, b"\x05" + self._name(ssid))
+
     # ---- Files. Paths are written C:\docs\notes.txt ("/" works too).
 
     @staticmethod
@@ -480,6 +551,51 @@ def write_png(path, width, height, pixels):
 
 # ---- Command line -----------------------------------------------------------
 
+def show_wifi_status(status):
+    if status["link"] == "connected":
+        print("connected to %(ssid)s, %(rssi)d dBm, channel %(channel)d" % status)
+        print("address %(address)s, router %(router)s" % status)
+        print("clock: %s" % ("set from the network" if status["clock_from_network"] else "not set yet"))
+    else:
+        print(status["link"] + (": " + status["failure"] if status["failure"] else ""))
+    print("board %(mac)s, %(remembered)d network(s) remembered" % status)
+
+
+def wifi_command(board, args):
+    """The wifi command. A password is typed at a prompt that does not show
+    it, and is never an argument (arguments end up in the shell's history)."""
+    if args.action == "status":
+        show_wifi_status(board.wifi_status())
+    elif args.action in ("scan", "list"):
+        _, seen, saved = board.wifi_scan() if args.action == "scan" else board.wifi_list()
+        for n in seen:
+            marks = ", ".join(m for m in ("connected", "remembered") if n[m])
+            print("%4d dBm  ch %-2d  %-8s  %s%s" % (n["rssi"], n["channel"], n["security"].split(" ")[0],
+                                                   n["ssid"], "  (%s)" % marks if marks else ""))
+        missing = [s for s in saved if s not in [n["ssid"] for n in seen]]
+        if missing:
+            print("remembered, not in range: " + ", ".join(missing))
+    elif args.action == "connect":
+        ssid = args.ssid or input("Network name: ")
+        _, seen, saved = board.wifi_list()
+        password = None
+        is_open = any(n["ssid"] == ssid and n["security"] == "open" for n in seen)
+        if args.password_stdin:
+            password = sys.stdin.readline().rstrip("\r\n")
+        elif ssid not in saved and not is_open:
+            password = getpass.getpass("Password for %s (not shown): " % ssid)
+        status = board.wifi_connect(ssid, password, remember=not args.no_remember)
+        show_wifi_status(status)
+        if status["link"] != "connected":
+            raise DebugError("not connected")
+    elif args.action == "disconnect":
+        board.wifi_disconnect()
+    elif args.action == "forget":
+        if not args.ssid:
+            raise DebugError("which network? dbg.py wifi forget NAME")
+        board.wifi_forget(args.ssid)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Debug tool for the board.")
     parser.add_argument("--port", default=os.environ.get("DBG_PORT", "/dev/ttyACM0"))
@@ -513,6 +629,13 @@ def main(argv=None):
     sub.add_parser("repaint", help="paint the whole screen again and time it")
     p = sub.add_parser("boot", help="show a start-up screen again (repaint brings the desktop back)")
     p.add_argument("screen", choices=["selftest", "splash"])
+    p = sub.add_parser("wifi", help="Wi-Fi: status, scan, connect (asks for the password), disconnect, forget")
+    p.add_argument("action", nargs="?", default="status",
+                   choices=["status", "scan", "list", "connect", "disconnect", "forget"])
+    p.add_argument("ssid", nargs="?", help="network name, for connect and forget")
+    p.add_argument("--no-remember", action="store_true", help="connect without remembering the network")
+    p.add_argument("--password-stdin", action="store_true",
+                   help="read the password from standard input instead of asking")
     sub.add_parser("monitor", help="show the board's log text until Ctrl+C")
 
     p = sub.add_parser("screenshot", help="save the screen as a PNG")
@@ -606,6 +729,8 @@ def main(argv=None):
         elif args.command == "boot":
             board.boot_screen(args.screen)
             print("showing the %s screen; dbg.py repaint brings the desktop back" % args.screen)
+        elif args.command == "wifi":
+            wifi_command(board, args)
         elif args.command == "monitor":
             while True:
                 board._read()
