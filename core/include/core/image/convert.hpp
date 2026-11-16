@@ -27,6 +27,7 @@ enum class Dither : uint8_t {
 constexpr int kDitherCount = 11;
 
 struct DitherInfo {
+    const char *id;          // for settings files, e.g. "floyd-steinberg"
     const char *name;        // e.g. "Floyd-Steinberg"
     const char *menu;        // with its access letter, e.g. "&Floyd-Steinberg"
     const char *description; // one line

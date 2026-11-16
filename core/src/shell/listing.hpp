@@ -18,6 +18,10 @@ public:
         uint32_t size;
     };
 
+    // Names starting with a dot are hidden unless this is set (View > Show
+    // hidden files in the File manager; it applies to the file dialogs too).
+    static bool show_hidden;
+
     // Takes its memory on first use; false if there is none.
     bool ready();
     ports::FsError read(const fs::Storage &storage, const char *folder);
