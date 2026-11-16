@@ -305,3 +305,30 @@ Now: the Editor goes and the caret and clock carry on.
 - The table still has no lock. `signal()` is the first function another task
   will want to call; it needs the lock, or the bit set atomically, before the
   shell's `kill` runs on its own task.
+
+## On the board (added by the board thread, 2026-11-16)
+
+The first firmware compile was the board thread's, with main merged in
+(84688f2, the file system lock): no errors or warnings. Flashed with a fast
+start and checked:
+
+- Ctrl+Alt+Del, Alt+A: End Task is greyed out with init, dbgd and desktop
+  selected, and active with netd and the Task Manager.
+- End Task on netd: "netd (PID 6) is a service without windows. Services
+  cannot be ended yet."
+- End Task on the Editor (PID 8) with unsaved text: the Editor comes forward
+  with its question. Cancel, then Ctrl+Alt+Del: the "has not closed" box
+  ("Editor (PID 8) has not closed. It may be waiting for an answer from
+  you.") with End Now and Cancel. Timed in a second run: 5.2 s after End Task.
+  When more than 5 s had passed, it appeared as soon as the Task Manager came
+  back.
+- End Now: the Editor and its question went, its row went, the file on disk
+  kept its old text. Afterwards a new Editor opened (PID 12), its caret
+  blinked, the clock changed with the minute, K held for 1 s typed 17 letters,
+  and File > Save left the title clean.
+- Free internal RAM 101,699 bytes against 102,059 on main (360 bytes less);
+  repaint of the empty desktop 14.32 ms against 14.06 ms; video 0 late, 0
+  missed refills.
+
+Respawn has no user on the real desktop yet, so the board could not show it.
+
