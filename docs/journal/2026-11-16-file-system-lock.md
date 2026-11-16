@@ -158,8 +158,10 @@ How it was run:
 - With the `set_lock()` line taken out of the test: a crash inside the RAM
   disk, three runs out of three. Put back.
 
-Not tested: anything on the board. The firmware change is four lines that use
-a class already there; whether it was compiled is in the pull request.
+- The firmware was compiled and linked in the cloud container (ESP-IDF v5.5,
+  `tools/setup-cloud-idf.sh`): it builds, with no warnings.
+
+Not tested: anything on the board. The firmware has been compiled, not run.
 
 ## 5. What was learned
 
