@@ -258,7 +258,8 @@ class Board:
 
     def stats(self):
         names = ("uptime_ms", "free_internal_ram", "free_external_ram", "frames_shown",
-                 "frames_received", "receive_errors", "keys", "mouse_events", "scanout_us")
+                 "frames_received", "receive_errors", "keys", "mouse_events", "scanout_us",
+                 "picture_decode_us", "picture_total_us", "picture_longest_slice_us")
         body = self.request(STATS)
         # Older firmware sends fewer numbers.
         return dict(zip(names, struct.unpack("<%dI" % (len(body) // 4), body[:len(body) // 4 * 4])))

@@ -253,6 +253,26 @@ const Bitmap &settings_icon_16()
     return bitmap;
 }
 
+// A 16x16 picture from a 32x32 one: every other pixel.
+constexpr Pixels<16> half(const Pixels<32> &big)
+{
+    Pixels<16> out;
+    for (int r = 0; r < 16; r++) {
+        for (int q = 0; q < 16; q++) {
+            out.p[r * 16 + q] = big.p[(r * 2 + 1) * 32 + q * 2 + 1];
+        }
+    }
+    return out;
+}
+
+const Bitmap &picture_icon_16()
+{
+    static constexpr Pixels<32> big = paint<32>(kPicture32, kPictureInks);
+    static constexpr Pixels<16> pixels = half(big);
+    static constexpr Bitmap bitmap = {16, 16, pixels.p, kClear};
+    return bitmap;
+}
+
 const Bitmap &drive_icon_16()
 {
     static constexpr Pixels<16> pixels = paint<16>(kDrive16, kDriveInks);

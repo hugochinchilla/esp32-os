@@ -63,6 +63,9 @@ Last updated: 2026-11-16.
 | Shell details chosen while building menus, the Start menu and widgets; to confirm or overrule | See "Chosen in the shell milestone" below | As built |
 | File system on the flash | LittleFS, FAT | Asked; until it is chosen, C: is a RAM disk (lost at restart) behind the storage port, and nothing writes the flash |
 | Details chosen in the files milestone; to confirm or overrule | See "Chosen in the files milestone" below | As built |
+| Details chosen in the image viewer milestone; to confirm or overrule | See "Chosen in the image viewer milestone" below | As built |
+| Desktop wallpaper from a picture (Settings > Display) | Yes (a picture shrunk to 640x480 in external RAM, 300 KB, repainted from it), later, never | Later: there is no Settings program yet and the desktop would need a picture store; skipped in this milestone |
+| Interlaced PNG and progressive JPEG | Support them (a whole-picture buffer for progressive JPEG: 6 bytes a pixel), keep them refused | Keep refused for now: they say "not supported" in an error box |
 | SD card in the first version | Yes, later, never | Later (pins are reserved) |
 | How two USB sockets are provided | External hub, hub module on the board, shared receiver | One socket now, space for a hub module |
 | A PC build of the desktop for testing | Yes, no | Decided: yes. See Decided |
@@ -137,6 +140,24 @@ First picture: 2026-11-16, through a VGA-to-HDMI adapter.
   and the 64 KB clipboard); opening the Editor takes another 0.6 MB external
   (its 512 KB text and 64 KB undo). Icons and pointer shapes moved from RAM
   to flash on the way (15 KB).
+- Image viewer milestone (2026-11-16): all 33 PC render steps, including
+  the 11 new ones (pictures folder, the viewer with each dither, fitted and
+  actual size with scroll bars, the Open dialog, the mascot BMP, the test
+  card PNG, a damaged JPEG with its error box), are pixel-identical on the
+  board, with no stale pixels. Decoding 640x480 pictures on the board
+  (time spent decoding; with the pauses between timer slices in brackets):
+  JPEG 4:2:0 0.80 s (1.32 s), with error diffusion 1.13 s, no dither 0.90 s;
+  JPEG 4:4:4 1.09 s (1.43 s); PNG photo 0.94 s (1.51 s); PNG test card and
+  colour bars 0.73 s (1.21 s); 24-bit BMP 0.43 s (0.80 s). The longest timer
+  slice was 12 to 26 ms, not the 8 ms aimed at, because a JPEG decodes a
+  whole 16-row strip at once; a ping took 19 to 29 ms while decoding
+  (9 to 10 ms idle). Still 59.5 frames a second, no receive errors. The
+  viewer takes about 2.3 MB of external RAM the first time it opens (the
+  1600x1200 display buffer, the 384 KB decoder pool and the converter rows)
+  and keeps it; internal RAM did not change (311 KB free). On the webcam,
+  ordered dither and error diffusion both look smooth at viewing distance
+  and are hard to tell apart; no dither shows clear bands in the sky. Copying
+  a 900 KB BMP over the debug link takes 19 s.
 - Shell milestone (2026-11-16): 14 steps (Start menu, launching each
   program, the gallery's menus, typing "año" into the text field, resizing,
   desktop icon double click, Shut Down dialog) are pixel-identical on the
@@ -248,7 +269,8 @@ practical. Each is easy to change.
   Rename ask for the name in a small dialog (98 edits the name in place).
   Icons per extension: text (.txt .log .ini .md), picture (.png .jpg .bmp
   .gif), other files a blank page. Only text files open (in the Editor);
-  others say there is no program yet.
+  others say there is no program yet. (Since the image viewer milestone:
+  .bmp .png .jpg .jpeg open in the Picture viewer.)
 - The Editor is one window (98 Notepad opens one per file). Files up to
   512 KB; Undo is one step that a second Undo redoes, as in Notepad. The
   title shows a * after the name while there are unsaved changes. No
@@ -256,6 +278,42 @@ practical. Each is easy to change.
   Menus show no shortcut keys yet.
 - The text field and the list box do not use the clipboard yet; the Editor
   does (Ctrl+X, C, V, Shift+Delete).
+
+### Chosen in the image viewer milestone (to confirm)
+
+- Decoders written for the project (in `core/src/image/`), not taken from
+  a library: a streaming inflate for PNG (in the style of zlib's `puff`), PNG
+  (every colour type and bit depth, every filter, transparency over the
+  background colour; not interlaced), BMP (1, 4, 8, 16, 24 and 32 bits,
+  bottom-up and top-down, no RLE), baseline JPEG (Huffman, 4:4:4, 4:2:2,
+  4:2:0 and grey, restart markers; integer IDCT; not progressive or
+  arithmetic). Why: they read the file in order through the storage port and
+  give rows one at a time, take all memory from the Memory port (one 384 KB
+  pool), never use the heap per row, use integers only (so the PC and the
+  board give the same pixels), and can be fuzzed under sanitizers. The
+  libraries looked at need a whole-file buffer or `malloc` (lodepng, stb_image,
+  ESP-IDF's ROM TJpgDec with its own I/O, libpng/libjpeg are far larger).
+- Limits: 4096 pixels wide (JPEG 2048, for its row buffers), 16384 high.
+  Larger pictures say "too large".
+- Fit to window by default; it shrinks with a box filter (the average of the
+  pixels each screen pixel covers) and never enlarges. Actual size works up
+  to 1600x1200 pixels; larger pictures are always fitted. The space around
+  the picture is dark grey (73, 73, 73), and transparent PNG pixels are laid
+  on that grey.
+- Ordered 4x4 dither by default (the pattern the desktop uses), with error
+  diffusion (Floyd-Steinberg) and no dither in the View menu. The choice is
+  remembered while the board runs.
+- Decoding runs from a timer: up to 8 ms of decoding every 15 ms, showing
+  rows as they come and "Loading... N%" in the status bar. The status bar
+  then shows name, size, format and "(fitted)" when shrunk.
+- A damaged file shows the rows decoded so far and an error box; the
+  status bar says the picture is damaged.
+- The Picture viewer is one window (98's Imaging opened one per picture).
+- Three sample pictures made by `tools/gen_pictures.py` are put in
+  C:\pictures at start-up: a test card (PNG), a landscape (JPEG) and the
+  mascot (4-bit BMP), 18 KB together in the firmware.
+- The 16x16 picture icon is the 32x32 one with every other pixel, made at
+  compile time.
 
 ## To confirm on the bench
 
@@ -277,7 +335,8 @@ practical. Each is easy to change.
    menu, desktop icons, program table, message box, Shut Down dialog, Widget
    gallery); storage port, RAM disk and File manager done 2026-11-16. The file
    system on the flash waits for the owner's choice (LittleFS or FAT).
-6. Text editor, then image viewer. Editor done 2026-11-16.
+6. Text editor, then image viewer. Editor done 2026-11-16. Picture viewer
+   done 2026-11-16 (BMP, PNG, baseline JPEG); wallpaper not done.
 7. Wi-Fi, NTP, remote display.
 8. USB host board, SD card.
 9. Network over USB and dial-up over serial.

@@ -53,6 +53,13 @@ bool open_file(const char *path);
 void open_folder(const char *path);
 // The Editor with a file (nullptr: a new, empty one).
 void open_in_editor(const char *path);
+// The Picture viewer with a picture (nullptr: asks for one).
+void open_picture(const char *path);
+// Tests: decode the picture shown to the end now. Timings of the last
+// picture (µs): decoding, opening to last row, longest timer slice.
+void finish_picture();
+const uint32_t *picture_timings();
+constexpr int kPictureTimings = 3;
 
 // Sets up the desktop icons and the Start menu, and opens the first windows.
 // `storage` holds the drives; `memory` gives the large buffers (editor,

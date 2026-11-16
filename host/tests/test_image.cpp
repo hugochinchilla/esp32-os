@@ -13,6 +13,8 @@
 #include <string>
 #include <vector>
 
+#include "core/gfx/canvas.hpp"
+#include "core/image/convert.hpp"
 #include "core/image/image.hpp"
 #include "../folder_volume.hpp"
 #include "../host_adapters.hpp"
@@ -203,6 +205,52 @@ void test_too_wide()
     CHECK(d.open(storage, "D:\\missing.png", memory, info) == image::Error::NotFound);
 }
 
+// Shrinking averages; each dither keeps a flat colour's average; None is
+// the nearest colour.
+void test_converter()
+{
+    static image::Converter conv;
+    CHECK(conv.ready(memory));
+    static uint8_t out[64 * 64];
+    // 4x2 source, black and white columns, shrunk to 2x1: grey 128.
+    const uint8_t stripes[2][12] = {{0, 0, 0, 255, 255, 255, 0, 0, 0, 255, 255, 255},
+                                    {0, 0, 0, 255, 255, 255, 0, 0, 0, 255, 255, 255}};
+    conv.begin(4, 2, 2, 1, out, image::Dither::None);
+    conv.row(0, stripes[0]);
+    conv.row(1, stripes[1]);
+    CHECK(conv.rows_done() == 1);
+    CHECK(out[0] == gfx::nearest({128, 128, 128}) && out[1] == out[0]);
+    // A flat colour between board colours, 64x64, each way.
+    const gfx::Rgb flat = {150, 100, 60};
+    uint8_t row[64 * 3];
+    for (int x = 0; x < 64; x++) {
+        row[x * 3] = flat.r;
+        row[x * 3 + 1] = flat.g;
+        row[x * 3 + 2] = flat.b;
+    }
+    for (image::Dither d : {image::Dither::Ordered, image::Dither::Diffusion, image::Dither::None}) {
+        conv.begin(64, 64, 64, 64, out, d);
+        for (int y = 0; y < 64; y++) {
+            conv.row(y, row);
+        }
+        CHECK(conv.rows_done() == 64);
+        long sum[3] = {};
+        for (uint8_t c : out) {
+            const gfx::Rgb s = gfx::shown(c);
+            sum[0] += s.r;
+            sum[1] += s.g;
+            sum[2] += s.b;
+        }
+        const int avg[3] = {int(sum[0] / 4096), int(sum[1] / 4096), int(sum[2] / 4096)};
+        if (d == image::Dither::None) {
+            CHECK(out[0] == gfx::nearest(flat) && out[4095] == out[0]);
+        } else {
+            CHECK(std::abs(avg[0] - flat.r) <= 12 && std::abs(avg[1] - flat.g) <= 12 &&
+                  std::abs(avg[2] - flat.b) <= 12);
+        }
+    }
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -214,6 +262,7 @@ int main(int argc, char **argv)
     folder = argv[1];
     static host::FolderVolume volume(folder);
     storage.mount('D', volume);
+    test_converter();
     test_manifest();
     test_too_wide();
     test_damaged();

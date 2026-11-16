@@ -31,6 +31,10 @@ struct Rgb {
 
 // The board colour used at screen position (x, y) for `c`.
 Colour dither(Rgb c, int x, int y);
+// The nearest board colour, and (if asked) what it really shows as.
+Colour nearest(Rgb c, Rgb *shown = nullptr);
+// What a board colour really shows as (blue has levels 0, 2, 5, 7 of 7).
+Rgb shown(Colour c);
 
 // A picture with one board colour per pixel. Pixels equal to `transparent`
 // are not drawn (use a value outside the picture's colours).

@@ -263,12 +263,14 @@ GalleryWindow &gallery()
 void open_gallery() { show(gallery()); }
 
 void open_editor() { open_in_editor(nullptr); }
+void open_viewer() { open_picture(nullptr); }
 void open_file_manager() { open_folder(nullptr); }
 
 const App kApps[] = {
     {"About Chinchilla", nullptr, &open_about},
     {"Editor", nullptr, &open_editor},
     {"File manager", nullptr, &open_file_manager},
+    {"Picture viewer", nullptr, &open_viewer},
     {"Welcome", nullptr, &open_welcome},
     {"Widget gallery", nullptr, &open_gallery},
 };
@@ -287,8 +289,9 @@ const App *table()
         apps_with_icons[0].icon = &gfx::mascot_16();
         apps_with_icons[1].icon = &gfx::text_icon_16();
         apps_with_icons[2].icon = &gfx::folder_icon_16();
-        apps_with_icons[3].icon = &gfx::text_icon_16();
-        apps_with_icons[4].icon = &gfx::settings_icon_16();
+        apps_with_icons[3].icon = &gfx::picture_icon_16();
+        apps_with_icons[4].icon = &gfx::text_icon_16();
+        apps_with_icons[5].icon = &gfx::settings_icon_16();
         icons_set = true;
     }
     return apps_with_icons;

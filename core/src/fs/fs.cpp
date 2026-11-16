@@ -1,5 +1,7 @@
 #include "core/fs/fs.hpp"
 
+#include "core/fs/samples.hpp"
+
 #include <cstdio>
 #include <cstring>
 
@@ -334,6 +336,13 @@ void add_samples(Storage &storage, char drive)
     // Text files are Latin-1, as 98 wrote them (names are kept in UTF-8).
     file("docs\\español.txt", "Texto en espa\xf1ol: a\xf1o, ni\xf1o, caf\xe9, \xa1hola!\r\n");
     file("system\\version.txt", "Chinchilla 0.3\r\n");
+    // Pictures made by tools/gen_pictures.py (no outside artwork).
+    for (int i = 0; i < kSamplePictureCount; i++) {
+        char rel[96];
+        snprintf(rel, sizeof(rel), "pictures\\%s", kSamplePictures[i].name);
+        path::join(root, rel, p, sizeof(p));
+        storage.write_file(p, kSamplePictures[i].data, kSamplePictures[i].size);
+    }
 }
 
 } // namespace fs

@@ -6,7 +6,9 @@ set(CORE_SRCS
     src/dbg/protocol.cpp
     src/fs/fs.cpp
     src/fs/memory_volume.cpp
+    src/fs/sample_pictures.cpp
     src/image/bmp.cpp
+    src/image/convert.cpp
     src/image/decoder.cpp
     src/image/inflate.cpp
     src/image/jpeg.cpp
@@ -21,6 +23,7 @@ set(CORE_SRCS
     src/shell/editor.cpp
     src/shell/file_manager.cpp
     src/shell/listing.cpp
+    src/shell/viewer.cpp
     src/wm/text_edit.cpp
     src/wm/widgets.cpp
     src/wm/window.cpp

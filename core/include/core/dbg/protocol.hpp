@@ -80,6 +80,12 @@ public:
     void set_desktop(ports::Desktop *desktop) { desktop_ = desktop; }
     // Optional: the drives for the file commands.
     void set_storage(fs::Storage *storage) { storage_ = storage; }
+    // More numbers for the end of the stats reply (programs' own timings).
+    void set_counters(const uint32_t *values, int count)
+    {
+        counters_ = values;
+        counter_count_ = count;
+    }
 
     uint32_t frames_received() const { return frames_received_; }
     uint32_t receive_errors() const { return receive_errors_; }
@@ -106,6 +112,8 @@ private:
     bool overflow_ = false;
     size_t rx_size_ = 0;
     uint32_t frames_received_ = 0;
+    const uint32_t *counters_ = nullptr;
+    int counter_count_ = 0;
     uint32_t receive_errors_ = 0;
     uint32_t keys_ = 0;
     uint32_t mouse_events_ = 0;

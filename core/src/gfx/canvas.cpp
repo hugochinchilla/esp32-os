@@ -38,6 +38,37 @@ Colour dither_t(Rgb c, unsigned t)
 
 uint8_t *Canvas::write_counts_ = nullptr;
 
+namespace {
+
+unsigned nearest_level(unsigned v, const uint8_t *levels, unsigned count)
+{
+    unsigned best = 0;
+    for (unsigned i = 1; i < count; i++) {
+        const int d = static_cast<int>(v) - levels[i], b = static_cast<int>(v) - levels[best];
+        if ((d < 0 ? -d : d) < (b < 0 ? -b : b)) {
+            best = i;
+        }
+    }
+    return best;
+}
+
+} // namespace
+
+Colour nearest(Rgb c, Rgb *shown_as)
+{
+    const unsigned r = nearest_level(c.r, kLevels3, 8), g = nearest_level(c.g, kLevels3, 8),
+                   b = nearest_level(c.b, kLevelsB, 4);
+    if (shown_as != nullptr) {
+        *shown_as = {kLevels3[r], kLevels3[g], kLevelsB[b]};
+    }
+    return rgb(r, g, b);
+}
+
+Rgb shown(Colour c)
+{
+    return {kLevels3[c >> 5], kLevels3[(c >> 2) & 7], kLevelsB[c & 3]};
+}
+
 Colour dither(Rgb c, int x, int y)
 {
     return dither_t(c, kBayer[y & 3][x & 3]);

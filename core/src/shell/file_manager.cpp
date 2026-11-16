@@ -729,13 +729,20 @@ void open_folder(const char *path)
 
 bool open_file(const char *path)
 {
-    // What opens what, by extension. ponytail: text files only so far.
+    // What opens what, by extension.
     static const char *const kText[] = {"txt", "log", "ini", "md"};
+    static const char *const kPictures[] = {"bmp", "png", "jpg", "jpeg"};
     char ext[8];
     fs::path::extension(path, ext, sizeof(ext));
     for (const char *e : kText) {
         if (strcmp(ext, e) == 0) {
             open_in_editor(path);
+            return true;
+        }
+    }
+    for (const char *e : kPictures) {
+        if (strcmp(ext, e) == 0) {
+            open_picture(path);
             return true;
         }
     }

@@ -203,6 +203,7 @@ void ui_task(void *)
     fs::add_samples(storage, 'C');
     protocol.set_storage(&storage);
     shell::start(desktop, system, storage, memory);
+    protocol.set_counters(shell::picture_timings(), shell::kPictureTimings);
     desktop.start();
     const uint32_t first_paint_us = desktop.last_update_us();
 

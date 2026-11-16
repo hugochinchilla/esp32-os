@@ -2,9 +2,9 @@
 
 The start of the real firmware. It brings up the screen and runs the
 desktop: window manager, taskbar and Start menu, desktop icons, and the
-built-in programs (About Chinchilla, Editor, File manager, Welcome, Widget
+built-in programs (About Chinchilla, Editor, File manager, Picture viewer, Welcome, Widget
 gallery). Drive C: is a 2 MB RAM disk in external RAM, filled with a few
-sample files at start-up and lost at restart, until a file system on the
+sample files and three generated pictures at start-up and lost at restart, until a file system on the
 flash is chosen. It answers the debug protocol on the serial port. Input is injected over the debug link until there is a USB keyboard and
 mouse.
 

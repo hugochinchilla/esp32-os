@@ -167,7 +167,7 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
     case kStats: {
         ports::SystemStats stats = {};
         system_.stats(stats);
-        uint8_t body[36];
+        uint8_t body[36 + 4 * 8];
         put32(body + 0, stats.uptime_ms);
         put32(body + 4, stats.free_internal_ram);
         put32(body + 8, stats.free_external_ram);
@@ -177,7 +177,11 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
         put32(body + 24, keys_);
         put32(body + 28, mouse_events_);
         put32(body + 32, stats.scanout_us);
-        reply(type, seq, kOk, body, sizeof(body));
+        const int extra = counter_count_ < 8 ? counter_count_ : 8;
+        for (int i = 0; i < extra; i++) {
+            put32(body + 36 + i * 4, counters_[i]);
+        }
+        reply(type, seq, kOk, body, static_cast<uint16_t>(36 + extra * 4));
         break;
     }
 

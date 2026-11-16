@@ -23,6 +23,7 @@ int failures = 0;
 
 void save(const char *name)
 {
+    desktop.update(); // paint what direct calls (not events) changed
     std::string path = folder + "/" + name + ".raw";
     FILE *f = fopen(path.c_str(), "wb");
     if (f == nullptr || fwrite(display.pixels(), 1, 640 * 480, f) != 640 * 480) {
@@ -152,7 +153,7 @@ int main(int argc, char **argv)
     save("08-start-menu-programs");
 
     // Launch the Widget gallery from Programs, type into its text field.
-    centre_of(desktop.popup_item(1, 4), x, y);
+    centre_of(desktop.popup_item(1, 5), x, y);
     click(x, y);
     key(wm::key::End);
     desktop.text(" año");
@@ -236,6 +237,82 @@ int main(int argc, char **argv)
     key(wm::key::Delete);
     save("22-delete");
     key(wm::key::Escape);
+
+    // Pictures, all from the keyboard so the board can replay it. First a
+    // damaged copy of landscape.jpg (its first half), as tools put it there.
+    static uint8_t bytes[16384];
+    size_t size = 0;
+    storage.read_file("C:\\pictures\\landscape.jpg", bytes, sizeof(bytes), size);
+    storage.write_file("C:\\pictures\\broken.jpg", bytes, size / 2);
+
+    // Up to C:, into pictures: broken.jpg, landscape.jpg, mascot.bmp, test card.png.
+    key(wm::key::Backspace);
+    key(wm::key::Home);
+    key(wm::key::Right);
+    key(wm::key::Enter);
+    save("23-pictures-folder");
+
+    // Open landscape.jpg in the Picture viewer, decoded to the end.
+    key(wm::key::Home);
+    key(wm::key::Right);
+    key(wm::key::Enter);
+    shell::finish_picture();
+    save("24-viewer-landscape");
+
+    // The View menu (Alt+V), then error diffusion and no dither.
+    key(0x19, true);
+    save("25-viewer-menu");
+    key(0x08); // E: Error diffusion
+    shell::finish_picture();
+    save("26-viewer-diffusion");
+    key(0x19, true);
+    key(0x11); // N: No dither
+    shell::finish_picture();
+    save("27-viewer-no-dither");
+    key(0x19, true);
+    key(0x12); // O: Ordered dither again
+    shell::finish_picture();
+
+    // Smaller window: fitted, then actual size with scroll bars.
+    const gfx::Rect vf = find("landscape.jpg - Picture viewer")->frame();
+    mouse(vf.right() - 2, vf.bottom() - 2, 0);
+    mouse(vf.right() - 2, vf.bottom() - 2, 1);
+    mouse(vf.right() - 162, vf.bottom() - 122, 1);
+    mouse(vf.right() - 162, vf.bottom() - 122, 0);
+    shell::finish_picture();
+    save("28-viewer-fitted-small");
+    key(0x19, true);
+    key(0x04); // A: Actual size
+    shell::finish_picture();
+    save("29-viewer-actual-size");
+
+    // File > Open (Alt+F, O): the dialog, then the mascot (4-bit BMP).
+    key(0x09, true);
+    key(0x12);
+    save("30-viewer-open-dialog");
+    desktop.text("mascot.bmp");
+    key(wm::key::Enter);
+    shell::finish_picture();
+    save("31-viewer-mascot");
+
+    // Back to fitting, and the test card (PNG).
+    key(0x19, true);
+    key(0x09); // F: Fit to window
+    key(0x09, true);
+    key(0x12);
+    desktop.text("test card.png");
+    key(wm::key::Enter);
+    shell::finish_picture();
+    save("32-viewer-test-card");
+
+    // The damaged picture: what was decoded shows, and an error box.
+    key(0x09, true);
+    key(0x12);
+    desktop.text("broken.jpg");
+    key(wm::key::Enter);
+    shell::finish_picture();
+    save("33-viewer-damaged");
+    key(wm::key::Enter);
 
     return failures == 0 ? 0 : 1;
 }

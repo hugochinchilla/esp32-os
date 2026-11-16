@@ -12,6 +12,7 @@ const Bitmap &text_icon_16();
 const Bitmap &network_icon_16();
 const Bitmap &settings_icon_16();
 const Bitmap &drive_icon_16();
+const Bitmap &picture_icon_16();
 
 // Desktop icons, 32x32.
 const Bitmap &board_icon_32(); // the ESP32 board: My Board

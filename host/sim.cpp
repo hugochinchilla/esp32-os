@@ -84,6 +84,7 @@ int main(int argc, char **argv)
     }
     protocol.set_storage(&storage);
     shell::start(screen, system, storage, memory);
+    protocol.set_counters(shell::picture_timings(), shell::kPictureTimings);
     screen.start();
 
     // A real board first prints start-up text that is not part of the
