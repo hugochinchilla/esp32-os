@@ -20,6 +20,7 @@ set(CORE_SRCS
     src/gfx/font_spleen32x64.cpp
     src/gfx/font_spleen6x12.cpp
     src/gfx/rect.cpp
+    src/net/wifi.cpp
     src/shell/apps.cpp
     src/shell/boot.cpp
     src/shell/desktop.cpp
@@ -27,6 +28,7 @@ set(CORE_SRCS
     src/shell/editor.cpp
     src/shell/file_manager.cpp
     src/shell/listing.cpp
+    src/shell/network.cpp
     src/shell/viewer.cpp
     src/wm/text_edit.cpp
     src/wm/widgets.cpp

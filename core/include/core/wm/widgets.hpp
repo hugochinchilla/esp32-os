@@ -137,6 +137,12 @@ public:
         keep_caret_visible();
         invalidate();
     }
+    // A password: every character is shown as '*'.
+    void set_hidden(bool on)
+    {
+        hidden_ = on;
+        invalidate();
+    }
     int caret() const { return caret_; }
     int selection_start() const { return caret_ < anchor_ ? caret_ : anchor_; }
     int selection_end() const { return caret_ < anchor_ ? anchor_ : caret_; }
@@ -155,6 +161,7 @@ private:
     int anchor_ = 0; // other end of the selection
     int scroll_ = 0; // first character shown
     bool dragging_ = false;
+    bool hidden_ = false;
 };
 
 class ScrollBar : public Widget {
