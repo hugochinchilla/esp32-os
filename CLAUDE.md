@@ -9,7 +9,9 @@ in the same change whenever a decision is made or reversed.
   - The thread that drives the owner's laptop and the board commits directly to
     `main`, as before.
   - Every other thread works on its own branch, one feature per branch, tested
-    on the PC only, and opens a pull request. It never pushes to `main`. Keep
+    on the PC only, and opens a pull request. It never pushes to `main` and
+    never merges its own pull request: the laptop-and-board thread merges each
+    branch into `main` once it has passed on the board (the owner's decision). Keep
     changes to shared files (`docs/DECISIONS.md`, the program table in
     `core/shell/`, CMake lists) small and additive so branches merge cleanly.
   - There is one board. A branch that needs a real-board check asks the
