@@ -13,7 +13,7 @@ The protocol is described in docs/debug-protocol.md.
   tools/dbg.py stats
   tools/dbg.py monitor                    # show the board's log text
 
-The port comes from --port, else the DBG_PORT variable, else /dev/ttyUSB0.
+The port comes from --port, else the DBG_PORT variable, else /dev/ttyACM0 (the board's UART bridge on the bench).
 Needs pyserial, which the ESP-IDF environment (get_idf) already has.
 """
 import argparse
@@ -356,7 +356,7 @@ def write_png(path, width, height, pixels):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Debug tool for the board.")
-    parser.add_argument("--port", default=os.environ.get("DBG_PORT", "/dev/ttyUSB0"))
+    parser.add_argument("--port", default=os.environ.get("DBG_PORT", "/dev/ttyACM0"))
     parser.add_argument("--baud", type=int, default=921600)
     parser.add_argument("--logs", action="store_true", help="also show the board's log text")
     parser.add_argument("--reset", action="store_true", help="restart the board first")

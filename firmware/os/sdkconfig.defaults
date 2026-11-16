@@ -12,4 +12,6 @@ CONFIG_COMPILER_OPTIMIZATION_PERF=y
 CONFIG_LCD_RGB_RESTART_IN_VSYNC=y
 # Debug link speed. If the link is unreliable, change this to 115200, delete
 # the sdkconfig file, rebuild, and pass --baud 115200 to tools/dbg.py.
+# The speed is only taken from here when the console is set to "custom".
+CONFIG_ESP_CONSOLE_UART_CUSTOM=y
 CONFIG_ESP_CONSOLE_UART_BAUDRATE=921600

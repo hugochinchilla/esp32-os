@@ -95,21 +95,29 @@ First picture: 2026-11-16, through a VGA-to-HDMI adapter.
 - During the ground rework the UART/COM socket stopped powering the board for
   about 20 minutes and then recovered by itself, which points to a
   self-resetting fuse tripped by a momentary short. One cable is enough again.
+- `firmware/os` compiled with ESP-IDF v5.5 without changes to the code. One
+  setting was missing: ESP-IDF ignores the console speed unless the console
+  is set to "custom", so the board talked at 115,200 baud until
+  `CONFIG_ESP_CONSOLE_UART_CUSTOM=y` was added.
+- The debug link works at 921,600 baud: 20 screenshots in a row, all
+  identical, no receive errors. A screenshot of the demo screen takes 0.3 s.
+- Opening the port with `tools/dbg.py` does not restart the board: uptime
+  and the pointer position carry over between commands.
+- The screen updates at 59.6 frames a second (counted by `frames_shown`).
+- The board's UART socket appears on the PC as `/dev/ttyACM0`, now the
+  default port of `tools/dbg.py`.
 
 ## To confirm on the bench
 
 - The picture is stable at 640x480 with the framebuffer in PSRAM.
 - The colours and the four greys look right in both modes.
 - The picture stays stable with Wi-Fi active and during flash writes.
-- `firmware/os` compiles and runs (written without access to ESP-IDF).
-- The debug link is reliable at 921,600 baud, and how long a screenshot takes.
-- Opening the serial port with `tools/dbg.py` does not restart the board.
 
 ## Planned order of work
 
 1. Bench test of the VGA wiring (`firmware/vga-test`). Done 2026-11-16.
 2. Debug protocol and PC tool, so screenshots and injected input work early.
-   Written and tested against a simulated board; not yet tried on the board.
+   Done 2026-11-16, working on the board.
 3. Video driver with a cursor merged in at scanout.
 4. Window manager and widget toolkit.
 5. Desktop shell, file system and file manager.

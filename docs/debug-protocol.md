@@ -4,7 +4,7 @@ How a computer talks to the board over the serial port: screenshots, injected
 keyboard and mouse events, and status. The board side is in `core/src/dbg/`,
 the computer side is `tools/dbg.py`.
 
-Version 1. Not yet tried on the real board.
+Version 1. Working on the board since 2026-11-16.
 
 ## Link
 
@@ -88,14 +88,16 @@ Encoding 1 is a run-length code. Each token starts with a control byte:
 
 A token never straddles two chunks. A plain desktop shrinks to a few
 kilobytes; the worst case (nothing repeats) is 0.8 % larger than the raw
-307,200 bytes, about 3.5 seconds at 921,600 baud.
+307,200 bytes, about 3.5 seconds at 921,600 baud. On the bench the demo
+screen takes 0.3 seconds, including opening the port.
 
 ## Reset lines
 
 The board's reset and boot pins are wired to the serial port's DTR and RTS
 lines. `tools/dbg.py` opens the port in a way meant to leave the board
-running, so a screenshot shows the current state and not a fresh start. This
-is to be confirmed on the bench. `--reset` restarts the board on purpose.
+running, so a screenshot shows the current state and not a fresh start.
+Confirmed on the bench: uptime and the pointer position survive repeated
+connections. `--reset` restarts the board on purpose.
 
 ## Planned, not yet in the protocol
 

@@ -36,6 +36,6 @@ Done. Two things before the first build:
 
 Then, from the repository:
   cd firmware/vga-test
-  idf.py -p /dev/ttyUSB0 flash monitor     # the port may be /dev/ttyACM0
+  idf.py -p /dev/ttyACM0 flash monitor     # the port may be /dev/ttyUSB0
 Leave the monitor with Ctrl+]
 DONE
