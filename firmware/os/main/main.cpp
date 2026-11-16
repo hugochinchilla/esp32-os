@@ -20,7 +20,7 @@
 #include "sdkconfig.h"
 
 #include "core/dbg/protocol.hpp"
-#include "core/shell/demo_desktop.hpp"
+#include "core/shell/shell.hpp"
 #include "core/wm/wm.hpp"
 #include "core/ports.hpp"
 #include "core/video/pointer.hpp"
@@ -183,7 +183,7 @@ void ui_task(void *)
     static dbg::Protocol protocol(sink, lock, display, pointer, desktop, system, "esp32-os");
     protocol.set_desktop(&desktop);
 
-    shell::open_demo_windows(desktop);
+    shell::start(desktop, system);
     desktop.start();
     const uint32_t first_paint_us = desktop.last_update_us();
 

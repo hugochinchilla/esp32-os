@@ -19,6 +19,8 @@ namespace {
 constexpr Rgb kDesktop = {58, 110, 165};
 constexpr Rgb kActiveFrom = {0, 0, 128}, kActiveTo = {16, 132, 208};
 constexpr Rgb kInactiveFrom = {128, 128, 128}, kInactiveTo = {192, 192, 192};
+constexpr Rgb kHighlight = {0, 0, 128};                         // chosen menu item
+constexpr Rgb kBannerTop = {0, 0, 48}, kBannerBottom = {16, 100, 190}; // Start menu
 
 const char *const kCloseGlyph[] = {"XX    XX", " XX  XX ", "  XXXX  ", "   XX   ",
                                    "  XXXX  ", " XX  XX ", "XX    XX"};
@@ -28,13 +30,24 @@ const char *const kRestoreGlyph[] = {"  XXXXXX", "  XXXXXX", "  X    X", "XXXXXX
                                      "X    XXX", "X    X  ", "X    X  ", "XXXXXX  "};
 const char *const kMinGlyph[] = {"      ", "      ", "      ", "      ",
                                  "      ", "      ", "XXXXXX", "XXXXXX"};
+const char *const kCheckGlyph[] = {"      X", "     XX", "X   XXX", "XX XXX ",
+                                   "XXXXX  ", " XXX   ", "  X    "};
+const char *const kArrowGlyph[] = {"X   ", "XX  ", "XXX ", "XXXX", "XXX ", "XX  ", "X   "};
 
 // Taskbar layout (tools/mockup/desktop.py).
 constexpr int kStartW = 58;
-constexpr int kQuickX = 66;   // separator before the quick-launch icons
+constexpr int kQuickX = 66;    // separator before the quick-launch icons
 constexpr int kButtonsX = 144; // first window button
 constexpr int kButtonW = 150, kButtonGap = 3;
 constexpr int kClockW = 60;
+
+// Desktop icons (tools/mockup/desktop.py).
+constexpr int kIconX = 6, kIconY = 8, kIconStep = 70;
+
+// Menus.
+constexpr int kMenuEdge = 3;
+constexpr int kItemH = 18, kIconItemH = 20, kStartItemH = 24, kSeparatorH = 7;
+constexpr int kBannerW = 21;
 
 const char *state_name(WindowState s)
 {
@@ -48,6 +61,54 @@ const char *state_name(WindowState s)
     }
 }
 
+// Draws a label with its access letter underlined. Returns the x after it.
+int draw_label(Canvas &c, int x, int y, const char *label, gfx::Colour colour, bool bold = false)
+{
+    char plain[96];
+    const int access = strip_access(label, plain, sizeof(plain));
+    const int end = c.text(x, y, plain, colour, bold);
+    if (access >= 0) {
+        char before[96];
+        memcpy(before, plain, access);
+        before[access] = 0;
+        const char one[2] = {plain[access], 0};
+        c.hline(x + Canvas::text_width(before, bold), y + 11, Canvas::text_width(one, bold), colour);
+    }
+    return end;
+}
+
+int label_width(const char *label)
+{
+    char plain[96];
+    strip_access(label, plain, sizeof(plain));
+    return Canvas::text_width(plain);
+}
+
+bool selectable(const MenuItem &item)
+{
+    return !(item.flags & kMenuSeparator) && item.label != nullptr;
+}
+
+bool has_icons(const Menu &menu)
+{
+    for (int i = 0; i < menu.count; i++) {
+        if (menu.items[i].icon != nullptr) {
+            return true;
+        }
+    }
+    return false;
+}
+
+int first_selectable(const Menu &menu)
+{
+    for (int i = 0; i < menu.count; i++) {
+        if (selectable(menu.items[i])) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 } // namespace
 
 Wm::Wm(ports::Display &display, ports::Pointer &pointer, ports::Clock &clock)
@@ -59,7 +120,8 @@ Wm::Wm(ports::Display &display, ports::Pointer &pointer, ports::Clock &clock)
 
 void Wm::start()
 {
-    pointer_.set_shape(video::arrow_pointer());
+    shape_ = &video::arrow_pointer();
+    pointer_.set_shape(*shape_);
     pointer_.set_position(pointer_x_, pointer_y_);
     pointer_.set_visible(true);
     invalidate({0, 0, width_, height_});
@@ -90,11 +152,16 @@ Window *Wm::topmost_visible() const
 
 void Wm::add(Window &w)
 {
+    if (w.wm_ == this) {
+        activate(w);
+        return;
+    }
     if (count_ == kMaxWindows || w.wm_ != nullptr) {
         return;
     }
     w.wm_ = this;
     w.id_ = next_id_++;
+    w.state_ = WindowState::Normal;
     stack_[count_] = &w;
     order_[count_] = &w;
     count_++;
@@ -109,6 +176,9 @@ void Wm::close(Window &w)
     if (at < 0) {
         return;
     }
+    if (menu_window_ == &w) {
+        close_menus();
+    }
     for (int i = at; i + 1 < count_; i++) {
         stack_[i] = stack_[i + 1];
     }
@@ -120,7 +190,7 @@ void Wm::close(Window &w)
     }
     count_--;
     if (captured_ == &w) {
-        if (capture_ == Capture::Drag) {
+        if (outline_shown_) {
             set_outline(outline_, false);
         }
         capture_ = Capture::None;
@@ -152,6 +222,21 @@ void Wm::raise(Window &w)
     invalidate(w.frame_); // parts that were covered
 }
 
+void Wm::set_active(Window *w)
+{
+    if (active_ == w) {
+        return;
+    }
+    if (active_ != nullptr) {
+        invalidate(active_->frame_); // its title bar turns grey
+    }
+    active_ = w;
+    if (w != nullptr) {
+        invalidate(w->frame_);
+    }
+    invalidate(taskbar());
+}
+
 void Wm::activate(Window &w)
 {
     if (w.wm_ != this) {
@@ -162,14 +247,7 @@ void Wm::activate(Window &w)
         return; // restore() activates
     }
     raise(w);
-    if (active_ != &w) {
-        if (active_ != nullptr) {
-            invalidate(active_->frame_); // its title bar turns grey
-        }
-        active_ = &w;
-        invalidate(w.frame_);
-        invalidate(taskbar());
-    }
+    set_active(&w);
 }
 
 void Wm::minimize(Window &w)
@@ -204,7 +282,7 @@ void Wm::restore(Window &w)
 
 void Wm::toggle_maximize(Window &w)
 {
-    if (w.wm_ != this) {
+    if (w.wm_ != this || !w.resizable_) {
         return;
     }
     invalidate(w.frame_);
@@ -216,6 +294,7 @@ void Wm::toggle_maximize(Window &w)
         w.frame_ = work_area();
         w.state_ = WindowState::Maximized;
     }
+    w.resized();
     invalidate(w.frame_);
 }
 
@@ -228,6 +307,37 @@ void Wm::move(Window &w, int x, int y)
     w.frame_.x = x;
     w.frame_.y = y;
     invalidate(w.frame_);
+}
+
+void Wm::resize(Window &w, const Rect &frame)
+{
+    if (w.frame_ == frame) {
+        return;
+    }
+    invalidate(w.frame_);
+    w.frame_ = frame;
+    w.resized();
+    invalidate(w.frame_);
+}
+
+void Wm::cycle_windows()
+{
+    if (count_ >= 2) {
+        activate(*stack_[0]);
+    }
+}
+
+void Wm::set_desktop_icons(const DesktopIcon *icons, int count)
+{
+    icons_ = icons;
+    icon_count_ = count < kMaxIcons ? count : kMaxIcons;
+    invalidate(work_area());
+}
+
+void Wm::set_start_menu(Menu *menu, const char *banner)
+{
+    start_menu_ = menu;
+    start_banner_ = banner;
 }
 
 /* ---- Hit testing --------------------------------------------------------- */
@@ -271,12 +381,81 @@ Part Wm::part_at(const Window &w, int x, int y) const
     if (w.client().contains(x, y)) {
         return Part::Client;
     }
+    if (w.menu_bar_rect().contains(x, y)) {
+        return Part::MenuBar;
+    }
     const Rect title = {w.frame_.x + Window::kBorder, w.frame_.y + Window::kBorder,
                         w.frame_.w - 2 * Window::kBorder, Window::kTitleHeight};
     if (title.contains(x, y)) {
         return Part::Title;
     }
     return Part::Border;
+}
+
+uint8_t Wm::edges_at(const Window &w, int x, int y) const
+{
+    const Rect &f = w.frame_;
+    if (!w.resizable_ || w.state_ != WindowState::Normal || !f.contains(x, y) ||
+        f.inset(Window::kBorder).contains(x, y)) {
+        return 0;
+    }
+    constexpr int kCorner = 16; // along each edge, a corner grabs both ways
+    uint8_t e = 0;
+    if (x < f.x + Window::kBorder) {
+        e |= kLeft;
+    }
+    if (x >= f.right() - Window::kBorder) {
+        e |= kRight;
+    }
+    if (y < f.y + Window::kBorder) {
+        e |= kTop;
+    }
+    if (y >= f.bottom() - Window::kBorder) {
+        e |= kBottom;
+    }
+    if (e & (kTop | kBottom)) {
+        if (x < f.x + kCorner) {
+            e |= kLeft;
+        }
+        if (x >= f.right() - kCorner) {
+            e |= kRight;
+        }
+    }
+    if (e & (kLeft | kRight)) {
+        if (y < f.y + kCorner) {
+            e |= kTop;
+        }
+        if (y >= f.bottom() - kCorner) {
+            e |= kBottom;
+        }
+    }
+    return e;
+}
+
+Rect Wm::menu_bar_entry(const Window &w, int entry) const
+{
+    const Rect bar = w.menu_bar_rect();
+    if (bar.empty() || entry < 0 || entry >= w.menu_bar_->count) {
+        return {};
+    }
+    int x = bar.x;
+    for (int i = 0; i < entry; i++) {
+        x += label_width(w.menu_bar_->entries[i].label) + 12;
+    }
+    return {x, bar.y, label_width(w.menu_bar_->entries[entry].label) + 12, bar.h};
+}
+
+int Wm::menu_bar_entry_at(const Window &w, int x, int y) const
+{
+    if (w.menu_bar_ == nullptr) {
+        return -1;
+    }
+    for (int i = 0; i < w.menu_bar_->count; i++) {
+        if (menu_bar_entry(w, i).contains(x, y)) {
+            return i;
+        }
+    }
+    return -1;
 }
 
 Rect Wm::taskbar_button(int index) const
@@ -306,13 +485,95 @@ int Wm::taskbar_index_at(int x, int y) const
     return -2; // nothing
 }
 
+Rect Wm::desktop_icon_rect(int index) const
+{
+    return {kIconX - 4, kIconY + index * kIconStep, 72, 50};
+}
+
 /* ---- Input --------------------------------------------------------------- */
 
 void Wm::key(uint16_t usage, bool pressed)
 {
     const uint32_t start = clock_.micros();
-    if (active_ != nullptr) {
-        active_->key(usage, pressed);
+    uint8_t bit = 0;
+    switch (usage) {
+    case key::LeftShift:
+    case key::RightShift:
+        bit = kShift;
+        break;
+    case key::LeftCtrl:
+    case key::RightCtrl:
+        bit = kCtrl;
+        break;
+    case key::LeftAlt:
+    case key::RightAlt:
+        bit = kAlt;
+        break;
+    case key::LeftGui:
+    case key::RightGui:
+        bit = kGui;
+        break;
+    default:
+        break;
+    }
+    if (bit != 0) {
+        mods_ = pressed ? (mods_ | bit) : (mods_ & ~bit);
+    }
+    const KeyMsg k = {usage, pressed, mods_};
+    bool used = false;
+    if (pressed) {
+        const bool start_key = bit == kGui || (usage == key::Escape && (mods_ & kCtrl));
+        if (start_key) {
+            if (start_menu_open()) {
+                close_menus();
+            } else {
+                open_start_menu();
+            }
+            used = true;
+        } else if (menu_open()) {
+            used = menu_key(k);
+        } else if ((mods_ & kAlt) && usage == key::F4) {
+            if (active_ != nullptr) {
+                close(*active_);
+            }
+            used = true;
+        } else if ((mods_ & kAlt) && usage == key::Tab) {
+            cycle_windows();
+            used = true;
+        } else if ((mods_ & kAlt) && key::letter(usage) != 0 && active_ != nullptr &&
+                   active_->menu_bar_ != nullptr) {
+            const char letter = key::letter(usage);
+            for (int i = 0; i < active_->menu_bar_->count; i++) {
+                if (access_letter(active_->menu_bar_->entries[i].label) == letter) {
+                    open_menu_bar(*active_, i);
+                    set_hover(0, first_selectable(*popups_[0].menu));
+                    used = true;
+                    break;
+                }
+            }
+        }
+    } else if (menu_open()) {
+        used = true;
+    }
+    if (!used && bit == 0 && active_ != nullptr) {
+        used = active_->key(k);
+        // Keys the window did not use may type a character.
+        if (!used && pressed && !(mods_ & (kCtrl | kAlt | kGui))) {
+            const char typed[2] = {key::us_char(usage, mods_ & kShift), 0};
+            if (typed[0] != 0) {
+                active_->text(typed);
+            }
+        }
+    }
+    update();
+    last_event_us_ = clock_.micros() - start;
+}
+
+void Wm::text(const char *utf8)
+{
+    const uint32_t start = clock_.micros();
+    if (!menu_open() && active_ != nullptr) {
+        active_->text(utf8);
     }
     update();
     last_event_us_ = clock_.micros() - start;
@@ -338,16 +599,51 @@ void Wm::mouse(const ports::MouseEvent &event)
     } else if (was && !now) {
         on_release();
     }
+    update_pointer_shape();
     update();
     last_event_us_ = clock_.micros() - start;
+}
+
+bool Wm::double_click(int target)
+{
+    const uint32_t now = clock_.micros();
+    const int dx = pointer_x_ - last_press_x_, dy = pointer_y_ - last_press_y_;
+    const bool twice = target == last_target_ && now - last_press_us_ < kDoubleClickUs &&
+                       dx >= -4 && dx <= 4 && dy >= -4 && dy <= 4;
+    last_target_ = twice ? -1 : target; // a third click starts again
+    last_press_us_ = now;
+    last_press_x_ = pointer_x_;
+    last_press_y_ = pointer_y_;
+    return twice;
 }
 
 void Wm::on_press()
 {
     const int x = pointer_x_, y = pointer_y_;
+    if (menu_open()) {
+        if (popup_at(x, y) >= 0) {
+            capture_ = Capture::Menu;
+            return;
+        }
+        if (menu_window_ != nullptr) {
+            const int e = menu_bar_entry_at(*menu_window_, x, y);
+            if (e >= 0 && e != menu_entry_) {
+                open_menu_bar(*menu_window_, e);
+                capture_ = Capture::Menu;
+                return;
+            }
+        }
+        // Anywhere else closes the menus, and the click goes no further.
+        close_menus();
+        capture_ = Capture::Swallow;
+        return;
+    }
     if (taskbar().contains(x, y)) {
         const int index = taskbar_index_at(x, y);
-        if (index >= -1) {
+        if (index == -1 && start_menu_ != nullptr) {
+            open_start_menu();
+            capture_ = Capture::Menu;
+        } else if (index >= -1) {
             capture_ = Capture::Taskbar;
             captured_index_ = index;
             captured_inside_ = true;
@@ -357,11 +653,25 @@ void Wm::on_press()
     }
     Window *w = window_under(x, y);
     if (w == nullptr) {
-        // The desktop takes the focus: no window is active.
-        if (active_ != nullptr) {
-            invalidate(active_->frame_);
-            invalidate(taskbar());
-            active_ = nullptr;
+        // The desktop: maybe an icon; no window keeps the focus.
+        set_active(nullptr);
+        int hit = -1;
+        for (int i = 0; i < icon_count_; i++) {
+            if (desktop_icon_rect(i).contains(x, y)) {
+                hit = i;
+            }
+        }
+        if (hit != selected_icon_) {
+            if (selected_icon_ >= 0) {
+                invalidate(desktop_icon_rect(selected_icon_));
+            }
+            selected_icon_ = hit;
+            if (hit >= 0) {
+                invalidate(desktop_icon_rect(hit));
+            }
+        }
+        if (double_click(hit >= 0 ? hit : -2) && hit >= 0 && icons_[hit].open != nullptr) {
+            icons_[hit].open(icons_[hit].context);
         }
         return;
     }
@@ -372,12 +682,21 @@ void Wm::on_press()
     case Part::Close:
     case Part::Maximize:
     case Part::Minimize:
+        if (part == Part::Maximize && !w->resizable_) {
+            capture_ = Capture::None;
+            break;
+        }
         capture_ = Capture::TitleButton;
         captured_part_ = part;
         captured_inside_ = true;
         invalidate(title_button(*w, part));
         break;
     case Part::Title:
+        if (double_click(1000 + w->id_)) {
+            toggle_maximize(*w);
+            capture_ = Capture::None;
+            break;
+        }
         if (w->state_ == WindowState::Maximized) {
             capture_ = Capture::None; // a maximised window stays put
             break;
@@ -387,14 +706,35 @@ void Wm::on_press()
         grab_dy_ = y - w->frame_.y;
         set_outline(w->frame_, true);
         break;
+    case Part::MenuBar: {
+        const int e = menu_bar_entry_at(*w, x, y);
+        capture_ = Capture::None;
+        if (e >= 0) {
+            open_menu_bar(*w, e);
+            capture_ = Capture::Menu;
+        }
+        break;
+    }
     case Part::Client: {
         capture_ = Capture::Client;
         const Rect c = w->client();
         w->mouse({MouseKind::Down, x - c.x, y - c.y});
         break;
     }
+    case Part::Border: {
+        resize_edges_ = edges_at(*w, x, y);
+        capture_ = Capture::None;
+        if (resize_edges_ != 0) {
+            capture_ = Capture::Resize;
+            resize_from_ = w->frame_;
+            grab_dx_ = x;
+            grab_dy_ = y;
+            set_outline(w->frame_, true);
+        }
+        break;
+    }
     default:
-        capture_ = Capture::None; // the border: resizing comes later
+        capture_ = Capture::None;
         break;
     }
 }
@@ -402,6 +742,29 @@ void Wm::on_press()
 void Wm::on_move()
 {
     const int x = pointer_x_, y = pointer_y_;
+    if (menu_open()) {
+        const int level = popup_at(x, y);
+        if (level >= 0) {
+            const int item = item_at(level, x, y);
+            if (item != popups_[level].hover) {
+                set_hover(level, item);
+                close_popups_from(level + 1);
+                if (item >= 0) {
+                    const MenuItem &it = popups_[level].menu->items[item];
+                    if (it.submenu != nullptr && !(it.flags & kMenuDisabled)) {
+                        const Rect r = popup_item(level, item);
+                        open_popup(*it.submenu, r.right() + kMenuEdge, r.y - kMenuEdge, false, false);
+                    }
+                }
+            }
+        } else if (menu_window_ != nullptr) {
+            const int e = menu_bar_entry_at(*menu_window_, x, y);
+            if (e >= 0 && e != menu_entry_) {
+                open_menu_bar(*menu_window_, e);
+            }
+        }
+        return;
+    }
     switch (capture_) {
     case Capture::Drag: {
         // Keep enough of the title bar on the screen to grab it again.
@@ -421,6 +784,27 @@ void Wm::on_move()
             ny = area.bottom() - Window::kClientTop;
         }
         set_outline({nx, ny, f.w, f.h}, true);
+        break;
+    }
+    case Capture::Resize: {
+        const Rect &f = resize_from_;
+        const int dx = x - grab_dx_, dy = y - grab_dy_;
+        const int min_w = Window::kMinWidth, min_h = captured_->min_height();
+        int left = f.x, top = f.y, right = f.right(), bottom = f.bottom();
+        if (resize_edges_ & kLeft) {
+            left = f.x + dx < right - min_w ? f.x + dx : right - min_w;
+        }
+        if (resize_edges_ & kRight) {
+            right = f.right() + dx > left + min_w ? f.right() + dx : left + min_w;
+        }
+        if (resize_edges_ & kTop) {
+            top = f.y + dy < bottom - min_h ? f.y + dy : bottom - min_h;
+            top = top < 0 ? 0 : top;
+        }
+        if (resize_edges_ & kBottom) {
+            bottom = f.bottom() + dy > top + min_h ? f.bottom() + dy : top + min_h;
+        }
+        set_outline({left, top, right - left, bottom - top}, true);
         break;
     }
     case Capture::TitleButton: {
@@ -463,6 +847,12 @@ void Wm::on_release()
         move(*w, to.x, to.y);
         break;
     }
+    case Capture::Resize: {
+        const Rect to = outline_;
+        set_outline(outline_, false);
+        resize(*w, to);
+        break;
+    }
     case Capture::TitleButton:
         invalidate(title_button(*w, captured_part_));
         if (captured_inside_) {
@@ -486,17 +876,50 @@ void Wm::on_release()
         w->mouse({MouseKind::Up, pointer_x_ - c.x, pointer_y_ - c.y});
         break;
     }
+    case Capture::Menu: {
+        const int level = popup_at(pointer_x_, pointer_y_);
+        if (level >= 0) {
+            const int item = item_at(level, pointer_x_, pointer_y_);
+            if (item >= 0 && popups_[level].menu->items[item].submenu == nullptr) {
+                choose(level, item);
+            }
+        }
+        break;
+    }
     default:
         break;
     }
 }
 
+void Wm::update_pointer_shape()
+{
+    uint8_t edges = 0;
+    if (capture_ == Capture::Resize) {
+        edges = resize_edges_;
+    } else if (capture_ == Capture::None && !menu_open()) {
+        if (Window *w = window_under(pointer_x_, pointer_y_)) {
+            edges = edges_at(*w, pointer_x_, pointer_y_);
+        }
+    }
+    const video::PointerShape *shape = &video::arrow_pointer();
+    const bool horizontal = edges & (kLeft | kRight), vertical = edges & (kTop | kBottom);
+    if (horizontal && vertical) {
+        const bool falling = (edges & kLeft) == ((edges & kTop) ? kLeft : 0);
+        shape = falling ? &video::resize_nwse_pointer() : &video::resize_nesw_pointer();
+    } else if (horizontal) {
+        shape = &video::resize_we_pointer();
+    } else if (vertical) {
+        shape = &video::resize_ns_pointer();
+    }
+    if (shape != shape_) {
+        shape_ = shape;
+        pointer_.set_shape(*shape);
+    }
+}
+
 void Wm::taskbar_click(int index)
 {
-    if (index < 0) {
-        return; // ponytail: the Start menu is a later step
-    }
-    if (index >= count_) {
+    if (index < 0 || index >= count_) {
         return;
     }
     Window &w = *order_[index];
@@ -505,6 +928,247 @@ void Wm::taskbar_click(int index)
     } else {
         restore(w);
     }
+}
+
+/* ---- Menus ----------------------------------------------------------------- */
+
+Rect Wm::popup_size(const Menu &menu, bool start) const
+{
+    int widest = 0, h = 2 * kMenuEdge;
+    bool arrows = false;
+    const bool icons = has_icons(menu);
+    for (int i = 0; i < menu.count; i++) {
+        const MenuItem &item = menu.items[i];
+        if (!selectable(item)) {
+            h += kSeparatorH;
+            continue;
+        }
+        h += start ? kStartItemH : (icons ? kIconItemH : kItemH);
+        const int w = label_width(item.label);
+        widest = w > widest ? w : widest;
+        arrows = arrows || item.submenu != nullptr;
+    }
+    int w = start ? kMenuEdge + kBannerW + 26 + widest + 24 + kMenuEdge
+                  : kMenuEdge + (icons ? 26 : 20) + widest + 26 + kMenuEdge;
+    const int min_w = start ? 150 : 100;
+    (void)arrows;
+    return {0, 0, w > min_w ? w : min_w, h};
+}
+
+Rect Wm::popup_item(int level, int item) const
+{
+    const Popup &p = popups_[level];
+    const int item_h = p.start ? kStartItemH : (has_icons(*p.menu) ? kIconItemH : kItemH);
+    int y = p.rect.y + kMenuEdge;
+    for (int i = 0; i < p.menu->count; i++) {
+        const bool sep = !selectable(p.menu->items[i]);
+        const int h = sep ? kSeparatorH : item_h;
+        if (i == item) {
+            const int x = p.rect.x + kMenuEdge + (p.start ? kBannerW : 0);
+            return {x, y, p.rect.right() - kMenuEdge - x, h};
+        }
+        y += h;
+    }
+    return {};
+}
+
+void Wm::open_popup(Menu &menu, int x, int y, bool start, bool below_point)
+{
+    if (popup_count_ == kMaxPopups) {
+        return;
+    }
+    Rect r = popup_size(menu, start);
+    r.x = x;
+    r.y = start ? y - r.h : y;
+    if (r.right() > width_) {
+        // A submenu that does not fit opens to the left of its parent.
+        r.x = (popup_count_ > 0 && !below_point) ? popups_[popup_count_ - 1].rect.x - r.w + kMenuEdge
+                                                 : width_ - r.w;
+    }
+    r.x = r.x < 0 ? 0 : r.x;
+    if (r.bottom() > height_) {
+        r.y = height_ - r.h;
+    }
+    r.y = r.y < 0 ? 0 : r.y;
+    popups_[popup_count_++] = {&menu, r, -1, start};
+    invalidate(r);
+}
+
+void Wm::close_popups_from(int level)
+{
+    while (popup_count_ > level) {
+        popup_count_--;
+        invalidate(popups_[popup_count_].rect);
+    }
+}
+
+void Wm::close_menus()
+{
+    close_popups_from(0);
+    if (menu_window_ != nullptr) {
+        invalidate(menu_bar_entry(*menu_window_, menu_entry_));
+        menu_window_ = nullptr;
+        menu_entry_ = -1;
+    }
+    if (start_open_) {
+        start_open_ = false;
+        invalidate(taskbar_button(-1));
+    }
+}
+
+void Wm::open_menu(Menu &menu, int x, int y)
+{
+    close_menus();
+    open_popup(menu, x, y, false, true);
+}
+
+void Wm::open_start_menu()
+{
+    if (start_menu_ == nullptr) {
+        return;
+    }
+    close_menus();
+    open_popup(*start_menu_, 0, height_ - kTaskbarHeight, true, false);
+    start_open_ = true;
+    invalidate(taskbar_button(-1));
+}
+
+void Wm::open_menu_bar(Window &w, int entry)
+{
+    if (w.menu_bar_ == nullptr || entry < 0 || entry >= w.menu_bar_->count) {
+        return;
+    }
+    close_menus();
+    menu_window_ = &w;
+    menu_entry_ = entry;
+    const Rect r = menu_bar_entry(w, entry);
+    invalidate(r);
+    open_popup(*w.menu_bar_->entries[entry].menu, r.x, r.bottom(), false, true);
+}
+
+void Wm::set_hover(int level, int item)
+{
+    Popup &p = popups_[level];
+    if (p.hover == item) {
+        return;
+    }
+    if (p.hover >= 0) {
+        invalidate(popup_item(level, p.hover));
+    }
+    p.hover = item;
+    if (item >= 0) {
+        invalidate(popup_item(level, item));
+    }
+}
+
+int Wm::popup_at(int x, int y) const
+{
+    for (int i = popup_count_ - 1; i >= 0; i--) {
+        if (popups_[i].rect.contains(x, y)) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+int Wm::item_at(int level, int x, int y) const
+{
+    const Popup &p = popups_[level];
+    for (int i = 0; i < p.menu->count; i++) {
+        if (selectable(p.menu->items[i]) && popup_item(level, i).contains(x, y)) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+void Wm::choose(int level, int item)
+{
+    const MenuItem &it = popups_[level].menu->items[item];
+    if (!selectable(it) || (it.flags & kMenuDisabled)) {
+        return;
+    }
+    if (it.submenu != nullptr) {
+        set_hover(level, item);
+        close_popups_from(level + 1);
+        const Rect r = popup_item(level, item);
+        open_popup(*it.submenu, r.right() + kMenuEdge, r.y - kMenuEdge, false, false);
+        if (popup_count_ > level + 1) {
+            set_hover(level + 1, first_selectable(*it.submenu));
+        }
+        return;
+    }
+    void (*action)(void *) = it.action;
+    void *context = it.context;
+    close_menus();
+    if (action != nullptr) {
+        action(context);
+    }
+}
+
+bool Wm::menu_key(const KeyMsg &k)
+{
+    const int level = popup_count_ - 1;
+    Popup &p = popups_[level];
+    const Menu &m = *p.menu;
+    switch (k.usage) {
+    case key::Up:
+    case key::Down: {
+        const int step = k.usage == key::Down ? 1 : m.count - 1;
+        int i = p.hover < 0 ? (k.usage == key::Down ? m.count - 1 : 0) : p.hover;
+        for (int n = 0; n < m.count; n++) {
+            i = (i + step) % m.count;
+            if (selectable(m.items[i])) {
+                break;
+            }
+        }
+        close_popups_from(level + 1);
+        set_hover(level, i);
+        return true;
+    }
+    case key::Right:
+        if (p.hover >= 0 && m.items[p.hover].submenu != nullptr) {
+            choose(level, p.hover);
+        } else if (menu_window_ != nullptr) {
+            Window &w = *menu_window_;
+            open_menu_bar(w, (menu_entry_ + 1) % w.menu_bar_->count);
+            set_hover(0, first_selectable(*popups_[0].menu));
+        }
+        return true;
+    case key::Left:
+        if (level > 0) {
+            close_popups_from(level);
+        } else if (menu_window_ != nullptr) {
+            Window &w = *menu_window_;
+            open_menu_bar(w, (menu_entry_ + w.menu_bar_->count - 1) % w.menu_bar_->count);
+            set_hover(0, first_selectable(*popups_[0].menu));
+        }
+        return true;
+    case key::Enter:
+        if (p.hover >= 0) {
+            choose(level, p.hover);
+        }
+        return true;
+    case key::Escape:
+        if (level > 0) {
+            close_popups_from(level);
+        } else {
+            close_menus();
+        }
+        return true;
+    default:
+        break;
+    }
+    const char letter = key::letter(k.usage);
+    if (letter != 0) {
+        for (int i = 0; i < m.count; i++) {
+            if (selectable(m.items[i]) && access_letter(m.items[i].label) == letter) {
+                choose(level, i);
+                return true;
+            }
+        }
+    }
+    return true; // menus take every key while open
 }
 
 /* ---- Painting ------------------------------------------------------------ */
@@ -548,18 +1212,24 @@ uint32_t Wm::repaint_all()
     return last_update_us_;
 }
 
+void Wm::subtract_overlays(RectList &region, bool taskbar_too) const
+{
+    if (taskbar_too) {
+        region.subtract(taskbar());
+    }
+    for (int i = 0; i < popup_count_; i++) {
+        region.subtract(popups_[i].rect);
+    }
+}
+
 void Wm::paint(bool painter)
 {
-    // Normally each part of the screen is painted once: every window gets a
+    // Normally each part of the screen is painted once: every layer gets a
     // clip list of its visible part. If a list runs out of room, everything
     // is painted back to front instead (slower, still right).
-    const Rect screen = {0, 0, width_, height_};
-    const Rect bar = taskbar();
-    uint8_t *pixels = display_.pixels();
-
     region_ = dirty_;
-    region_.subtract(bar);
     if (!painter) {
+        subtract_overlays(region_, true);
         for (int i = 0; i < count_; i++) {
             if (visible(*stack_[i])) {
                 region_.subtract(stack_[i]->frame_);
@@ -571,8 +1241,7 @@ void Wm::paint(bool painter)
         }
     }
     if (!region_.empty()) {
-        Canvas c(pixels, width_, height_, region_, screen);
-        c.fill_rgb(screen, kDesktop);
+        paint_desktop(region_);
     }
 
     for (int i = 0; i < count_; i++) {
@@ -582,8 +1251,8 @@ void Wm::paint(bool painter)
         }
         region_ = dirty_;
         region_.intersect(w.frame_);
-        region_.subtract(bar);
         if (!painter) {
+            subtract_overlays(region_, true);
             for (int j = i + 1; j < count_; j++) {
                 if (visible(*stack_[j])) {
                     region_.subtract(stack_[j]->frame_);
@@ -600,9 +1269,58 @@ void Wm::paint(bool painter)
     }
 
     region_ = dirty_;
-    region_.intersect(bar);
+    region_.intersect(taskbar());
+    if (!painter) {
+        subtract_overlays(region_, false);
+    }
     if (!region_.empty()) {
         paint_taskbar(region_);
+    }
+
+    for (int level = 0; level < popup_count_; level++) {
+        region_ = dirty_;
+        region_.intersect(popups_[level].rect);
+        if (!painter) {
+            for (int j = level + 1; j < popup_count_; j++) {
+                region_.subtract(popups_[j].rect);
+            }
+        }
+        if (!region_.empty()) {
+            paint_popup(level, region_);
+        }
+    }
+}
+
+void Wm::paint_desktop(const RectList &clip)
+{
+    const Rect screen = {0, 0, width_, height_};
+    Canvas c(display_.pixels(), width_, height_, clip, screen);
+    c.fill_rgb(screen, kDesktop);
+    const Rect bounds = clip.bounds();
+    for (int i = 0; i < icon_count_; i++) {
+        const Rect r = desktop_icon_rect(i);
+        if (!r.overlaps(bounds)) {
+            continue;
+        }
+        const DesktopIcon &icon = icons_[i];
+        const int x = kIconX, y = kIconY + i * kIconStep;
+        const bool selected = i == selected_icon_;
+        if (icon.picture != nullptr) {
+            if (selected) {
+                c.blit_selected(*icon.picture, x + 16, y, gfx::rgb(0, 0, 2));
+            } else {
+                c.blit(*icon.picture, x + 16, y);
+            }
+        }
+        const int tw = Canvas::text_width(icon.label);
+        const int tx = x + 32 - tw / 2;
+        if (selected) {
+            c.fill_rgb({tx - 1, y + 33, tw + 2, 14}, kHighlight);
+            c.text(tx, y + 34, icon.label, gfx::kWhite);
+        } else {
+            c.text(tx + 1, y + 35, icon.label, gfx::kBlack);
+            c.text(tx, y + 34, icon.label, gfx::kWhite);
+        }
     }
 }
 
@@ -611,6 +1329,9 @@ void Wm::paint_window(Window &w, const RectList &clip)
     uint8_t *pixels = display_.pixels();
     Canvas frame(pixels, width_, height_, clip, w.frame_);
     paint_frame(frame, w);
+    if (w.menu_bar_ != nullptr) {
+        paint_menu_bar(frame, w);
+    }
     const Rect c = w.client();
     Canvas client(pixels, width_, height_, clip, c, c.x, c.y);
     w.paint(client);
@@ -643,16 +1364,84 @@ void Wm::paint_frame(Canvas &c, Window &w)
                           captured_part_ == p && captured_inside_;
         c.button(r, held ? ButtonLook::Pressed : ButtonLook::Raised);
         const int d = held ? 1 : 0;
+        // A window that cannot be resized shows its maximise button greyed.
+        const gfx::Colour ink = (p == Part::Maximize && !w.resizable_) ? gfx::kDarkGrey : gfx::kBlack;
         if (p == Part::Close) {
-            c.pattern(r.x + 4 + d, r.y + 3 + d, kCloseGlyph, 7, gfx::kBlack);
+            c.pattern(r.x + 4 + d, r.y + 3 + d, kCloseGlyph, 7, ink);
         } else if (p == Part::Maximize) {
             if (w.state_ == WindowState::Maximized) {
-                c.pattern(r.x + 4 + d, r.y + 3 + d, kRestoreGlyph, 9, gfx::kBlack);
+                c.pattern(r.x + 4 + d, r.y + 3 + d, kRestoreGlyph, 9, ink);
             } else {
-                c.pattern(r.x + 4 + d, r.y + 3 + d, kMaxGlyph, 9, gfx::kBlack);
+                if (!w.resizable_) {
+                    c.pattern(r.x + 5, r.y + 4, kMaxGlyph, 9, gfx::kWhite);
+                }
+                c.pattern(r.x + 4 + d, r.y + 3 + d, kMaxGlyph, 9, ink);
             }
         } else {
-            c.pattern(r.x + 4 + d, r.y + 3 + d, kMinGlyph, 8, gfx::kBlack);
+            c.pattern(r.x + 4 + d, r.y + 3 + d, kMinGlyph, 8, ink);
+        }
+    }
+}
+
+void Wm::paint_menu_bar(Canvas &c, Window &w)
+{
+    const Rect bar = w.menu_bar_rect();
+    c.fill(bar, gfx::kGrey);
+    for (int i = 0; i < w.menu_bar_->count; i++) {
+        const Rect r = menu_bar_entry(w, i);
+        const bool open = menu_window_ == &w && menu_entry_ == i;
+        if (open) {
+            c.edge({r.x, r.y + 1, r.w, r.h - 1}, gfx::kDarkGrey, gfx::kWhite);
+        }
+        const int d = open ? 1 : 0;
+        draw_label(c, r.x + 6 + d, r.y + 2 + d, w.menu_bar_->entries[i].label, gfx::kBlack);
+    }
+}
+
+void Wm::paint_popup(int level, const RectList &clip)
+{
+    const Popup &p = popups_[level];
+    const Rect &r = p.rect;
+    Canvas c(display_.pixels(), width_, height_, clip, r);
+    c.fill(r, gfx::kGrey);
+    c.raised(r);
+    if (p.start) {
+        const Rect banner = {r.x + kMenuEdge, r.y + kMenuEdge, kBannerW, r.h - 2 * kMenuEdge};
+        c.fill_fade(banner, kBannerTop, kBannerBottom, true);
+        c.text_up(banner.x + (kBannerW - 12) / 2, banner.bottom() - 6, start_banner_, gfx::kWhite, true);
+    }
+    for (int i = 0; i < p.menu->count; i++) {
+        const MenuItem &item = p.menu->items[i];
+        const Rect ir = popup_item(level, i);
+        if (!selectable(item)) {
+            c.hline(ir.x + 1, ir.y + 3, ir.w - 2, gfx::kDarkGrey);
+            c.hline(ir.x + 1, ir.y + 4, ir.w - 2, gfx::kWhite);
+            continue;
+        }
+        const bool hover = i == p.hover;
+        const bool disabled = item.flags & kMenuDisabled;
+        if (hover) {
+            c.fill_rgb(ir, kHighlight);
+        }
+        const gfx::Colour ink = hover ? (disabled ? gfx::kGrey : gfx::kWhite) : gfx::kBlack;
+        const bool icons = p.start || has_icons(*p.menu);
+        const int tx = icons ? ir.x + 26 : ir.x + 17;
+        const int ty = ir.y + (ir.h - 12) / 2;
+        if (icons && item.icon != nullptr) {
+            c.blit(*item.icon, ir.x + 4, ir.y + (ir.h - 16) / 2);
+        }
+        if (item.flags & kMenuChecked) {
+            c.pattern(ir.x + 5, ir.y + (ir.h - 7) / 2, kCheckGlyph, 7, disabled && !hover ? gfx::kDarkGrey : ink);
+        }
+        if (disabled && !hover) {
+            draw_label(c, tx + 1, ty + 1, item.label, gfx::kWhite);
+            draw_label(c, tx, ty, item.label, gfx::kDarkGrey);
+        } else {
+            draw_label(c, tx, ty, item.label, ink);
+        }
+        if (item.submenu != nullptr) {
+            c.pattern(ir.right() - 10, ir.y + (ir.h - 7) / 2, kArrowGlyph, 7,
+                      disabled && !hover ? gfx::kDarkGrey : ink);
         }
     }
 }
@@ -666,11 +1455,12 @@ void Wm::paint_taskbar(const RectList &clip)
     c.fill(bar, gfx::kGrey);
     c.hline(0, ty + 1, width_, gfx::kWhite);
 
-    // Start button: the mascot and "Start".
+    // Start button: the mascot and "Start", pressed in while its menu is open.
     const Rect start = taskbar_button(-1);
-    const bool start_held = capture_ == Capture::Taskbar && captured_index_ == -1 && captured_inside_;
-    c.button(start, start_held ? ButtonLook::Pressed : ButtonLook::Raised);
-    const int sd = start_held ? 1 : 0;
+    const bool start_in = start_open_ ||
+                          (capture_ == Capture::Taskbar && captured_index_ == -1 && captured_inside_);
+    c.button(start, start_in ? ButtonLook::Pressed : ButtonLook::Raised);
+    const int sd = start_in ? 1 : 0;
     c.blit(gfx::mascot_16(), 5 + sd, ty + 7 + sd);
     c.text(25 + sd, ty + 9 + sd, "Start", gfx::kBlack, true);
 
@@ -762,7 +1552,7 @@ size_t Wm::describe_windows(char *out, size_t capacity)
         used += n;
     };
     auto puts = [&](const char *s) { put(s, strlen(s)); };
-    char number[96];
+    char number[128];
 
     puts("{\"windows\":[");
     for (int z = 0; z < count_; z++) {
@@ -788,7 +1578,9 @@ size_t Wm::describe_windows(char *out, size_t capacity)
                  active_ == &w ? "true" : "false");
         puts(number);
     }
-    snprintf(number, sizeof(number), "],\"update_us\":%u,\"event_us\":%u}",
+    snprintf(number, sizeof(number),
+             "],\"menus\":%d,\"start_menu\":%s,\"selected_icon\":%d,\"update_us\":%u,\"event_us\":%u}",
+             popup_count_, start_open_ ? "true" : "false", selected_icon_,
              static_cast<unsigned>(last_update_us_), static_cast<unsigned>(last_event_us_));
     puts(number);
     if (full) {

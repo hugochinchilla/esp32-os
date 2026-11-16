@@ -119,6 +119,15 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
         break;
     }
 
+    case kText: {
+        char text[kMaxRequestPayload + 1];
+        memcpy(text, args, args_size);
+        text[args_size] = 0;
+        input_.text(text);
+        reply(type, seq, kOk, nullptr, 0);
+        break;
+    }
+
     case kStats: {
         ports::SystemStats stats = {};
         system_.stats(stats);

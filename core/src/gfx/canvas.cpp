@@ -114,8 +114,31 @@ void Canvas::fill_rgb(const Rect &r, Rgb c)
     });
 }
 
-void Canvas::fill_fade(const Rect &r, Rgb from, Rgb to)
+void Canvas::fill_fade(const Rect &r, Rgb from, Rgb to, bool vertical)
 {
+    if (vertical) {
+        const int vspan = r.h > 1 ? r.h - 1 : 1;
+        const int sy0 = r.y + oy_;
+        each(r, [&](const Rect &s) {
+            for (int y = s.y; y < s.bottom(); y++) {
+                const int i = y - sy0;
+                const Rgb c = {
+                    static_cast<uint8_t>(from.r + (to.r - from.r) * i / vspan),
+                    static_cast<uint8_t>(from.g + (to.g - from.g) * i / vspan),
+                    static_cast<uint8_t>(from.b + (to.b - from.b) * i / vspan),
+                };
+                Colour row4[4];
+                for (int k = 0; k < 4; k++) {
+                    row4[k] = dither_t(c, kBayer[y & 3][k]);
+                }
+                uint8_t *p = pixels_ + y * width_;
+                for (int x = s.x; x < s.right(); x++) {
+                    p[x] = row4[x & 3];
+                }
+            }
+        });
+        return;
+    }
     const int span = r.w > 1 ? r.w - 1 : 1;
     const int sx0 = r.x + ox_; // screen x of the fade's first column
     each(r, [&](const Rect &s) {
@@ -136,6 +159,18 @@ void Canvas::fill_fade(const Rect &r, Rgb from, Rgb to)
             }
         }
     });
+}
+
+void Canvas::focus_rect(const Rect &r)
+{
+    for (int x = r.x; x < r.right(); x += 2) {
+        put(x, r.y, kBlack);
+        put(x + ((r.h - 1) & 1), r.bottom() - 1, kBlack);
+    }
+    for (int y = r.y + 2; y < r.bottom() - 1; y += 2) {
+        put(r.x, y, kBlack);
+        put(r.right() - 1, y - ((r.w - 1) & 1), kBlack);
+    }
 }
 
 void Canvas::checker(const Rect &r)
@@ -197,6 +232,22 @@ void Canvas::blit(const Bitmap &b, int x, int y)
             for (int col = 0; col < s.w; col++) {
                 if (src[col] != b.transparent) {
                     dst[col] = src[col];
+                }
+            }
+        }
+    });
+}
+
+void Canvas::blit_selected(const Bitmap &b, int x, int y, Colour tint)
+{
+    each({x, y, b.width, b.height}, [&](const Rect &s) {
+        const int bx = s.x - (x + ox_), by = s.y - (y + oy_);
+        for (int row = 0; row < s.h; row++) {
+            const uint8_t *src = b.pixels + (by + row) * b.width + bx;
+            uint8_t *dst = pixels_ + (s.y + row) * width_ + s.x;
+            for (int col = 0; col < s.w; col++) {
+                if (src[col] != b.transparent) {
+                    dst[col] = ((s.x + col + s.y + row) & 1) ? tint : src[col];
                 }
             }
         }
@@ -276,6 +327,28 @@ int Canvas::text(int x, int y, const char *s, Colour c, bool bold)
         }
     });
     return x + len * advance;
+}
+
+void Canvas::text_up(int x, int y, const char *s, Colour c, bool bold)
+{
+    const Font &f = kSpleen6x12;
+    const int advance = f.width + (bold ? 1 : 0);
+    int along = 0;
+    for (uint8_t code; (code = next_latin1(s)) != 0; along += advance) {
+        const uint8_t *g = f.glyph(code);
+        for (int row = 0; row < f.height; row++) {
+            unsigned bits = g[row];
+            if (bold) {
+                bits |= bits >> 1;
+            }
+            for (int col = 0; col < advance; col++) {
+                if (bits & (0x80u >> col)) {
+                    // Glyph row goes right, glyph column goes up.
+                    put(x + row, y - along - col, c);
+                }
+            }
+        }
+    }
 }
 
 int Canvas::text_width(const char *s, bool bold)

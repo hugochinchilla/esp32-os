@@ -10,6 +10,7 @@
 #include "core/gfx/rect.hpp"
 #include "core/wm/widgets.hpp"
 #include "core/wm/wm.hpp"
+#include "core/video/pointer.hpp"
 #include "../host_adapters.hpp"
 
 static int failures = 0;
@@ -174,12 +175,13 @@ public:
         gfx::Canvas b = c.sub(button_.rect);
         button_.paint(b);
     }
-    void key(uint16_t usage, bool pressed) override
+    bool key(const wm::KeyMsg &k) override
     {
-        if (pressed) {
-            last_key = usage;
+        if (k.pressed) {
+            last_key = k.usage;
             keys++;
         }
+        return true;
     }
     void closed() override { was_closed = true; }
 
@@ -199,7 +201,43 @@ struct Rig {
     host::FixedClock clock;
     wm::Wm wm{display, pointer, clock};
 
-    void move(int x, int y, uint8_t buttons) { wm.mouse({true, static_cast<int16_t>(x), static_cast<int16_t>(y), buttons, 0}); }
+    // Each event moves the clock on, so separate clicks never make a
+    // double click by accident; quick() leaves it alone.
+    void move(int x, int y, uint8_t buttons)
+    {
+        clock.now += 200000;
+        quick(x, y, buttons);
+    }
+    void quick(int x, int y, uint8_t buttons)
+    {
+        wm.mouse({true, static_cast<int16_t>(x), static_cast<int16_t>(y), buttons, 0});
+    }
+    void double_click(int x, int y)
+    {
+        move(x, y, 0);
+        quick(x, y, 1);
+        quick(x, y, 0);
+        clock.now += 100000;
+        quick(x, y, 1);
+        quick(x, y, 0);
+    }
+    void key(uint16_t usage, uint8_t mods = 0)
+    {
+        // Modifiers held around one key press.
+        const uint16_t mod_keys[4] = {wm::key::LeftShift, wm::key::LeftCtrl, wm::key::LeftAlt, wm::key::LeftGui};
+        for (int i = 0; i < 4; i++) {
+            if (mods & (1 << i)) {
+                wm.key(mod_keys[i], true);
+            }
+        }
+        wm.key(usage, true);
+        wm.key(usage, false);
+        for (int i = 0; i < 4; i++) {
+            if (mods & (1 << i)) {
+                wm.key(mod_keys[i], false);
+            }
+        }
+    }
     void click(int x, int y)
     {
         move(x, y, 0);
@@ -259,13 +297,13 @@ static void test_stacking_and_focus()
     CHECK(rig.no_stale_pixels());
 
     // Keys go to the focused window only.
-    rig.wm.key(0x04, true);
+    rig.key(0x04);
     CHECK(a.keys == 1 && b.keys == 0 && a.last_key == 0x04);
 
     // Clicking the desktop leaves no window focused.
     rig.click(600, 20);
     CHECK(rig.wm.active() == nullptr);
-    rig.wm.key(0x05, true);
+    rig.key(0x05);
     CHECK(a.keys == 1 && b.keys == 0);
     CHECK(rig.no_stale_pixels());
 }
@@ -419,6 +457,332 @@ static void test_many_windows()
     }
 }
 
+
+/* ---- Resizing, shortcuts --------------------------------------------------------- */
+
+static void test_resize()
+{
+    Rig rig;
+    TestWindow a("A", {100, 100, 200, 150}, 0x1C);
+    rig.wm.add(a);
+    rig.wm.start();
+
+    // The pointer changes shape over the edges and corners.
+    rig.move(100 + 1, 150, 0);
+    CHECK(memcmp(rig.pointer.state().shape, &video::resize_we_pointer(), sizeof(video::PointerShape)) == 0);
+    rig.move(200, 100 + 148, 0);
+    CHECK(memcmp(rig.pointer.state().shape, &video::resize_ns_pointer(), sizeof(video::PointerShape)) == 0);
+    rig.move(100 + 198, 100 + 148, 0);
+    CHECK(memcmp(rig.pointer.state().shape, &video::resize_nwse_pointer(), sizeof(video::PointerShape)) == 0);
+    rig.move(100 + 198, 101, 0);
+    CHECK(memcmp(rig.pointer.state().shape, &video::resize_nesw_pointer(), sizeof(video::PointerShape)) == 0);
+    rig.move(200, 200, 0);
+    CHECK(memcmp(rig.pointer.state().shape, &video::arrow_pointer(), sizeof(video::PointerShape)) == 0);
+
+    // Bottom right corner: an outline while dragging, the new size on release.
+    rig.move(298, 248, 0);
+    rig.move(298, 248, 1);
+    rig.move(358, 288, 1);
+    CHECK(rig.wm.dragging() && a.frame() == Rect(100, 100, 200, 150));
+    rig.move(358, 288, 0);
+    CHECK(a.frame() == Rect(100, 100, 260, 190));
+    CHECK(rig.no_stale_pixels());
+
+    // The left edge stops at the minimum width.
+    rig.drag(100, 200, 600, 200);
+    CHECK(a.frame().w == wm::Window::kMinWidth && a.frame().right() == 360);
+    // The top edge stops at the minimum height.
+    rig.drag(250, a.frame().y + 1, 250, 470);
+    CHECK(a.frame().h == a.min_height() && a.frame().bottom() == 290);
+    CHECK(rig.no_stale_pixels());
+
+    // A window that cannot be resized has no resize edges or maximise.
+    TestWindow b("B", {400, 40, 200, 100}, 0xE0);
+    b.set_resizable(false);
+    rig.wm.add(b);
+    CHECK(rig.wm.edges_at(b, 401, 80) == 0);
+    rig.double_click(500, 50);
+    CHECK(b.state() == wm::WindowState::Normal);
+}
+
+static void test_shortcuts()
+{
+    Rig rig;
+    TestWindow a("A", {50, 50, 200, 150}, 0x1C), b("B", {150, 100, 200, 150}, 0xE0),
+        c("C", {250, 150, 200, 150}, 0x03);
+    rig.wm.add(a);
+    rig.wm.add(b);
+    rig.wm.add(c);
+    rig.wm.start();
+
+    // Double click on the title bar maximises and restores.
+    rig.double_click(300, 160);
+    CHECK(c.state() == wm::WindowState::Maximized);
+    rig.double_click(300, 10);
+    CHECK(c.state() == wm::WindowState::Normal && c.frame() == Rect(250, 150, 200, 150));
+    // Two clicks far apart in time do not.
+    rig.click(300, 160);
+    rig.click(300, 160);
+    CHECK(c.state() == wm::WindowState::Normal);
+
+    // Alt+Tab brings each window to the front in turn.
+    rig.key(wm::key::Tab, wm::kAlt);
+    CHECK(rig.wm.active() == &a);
+    rig.key(wm::key::Tab, wm::kAlt);
+    CHECK(rig.wm.active() == &b);
+    rig.key(wm::key::Tab, wm::kAlt);
+    CHECK(rig.wm.active() == &c);
+    // Alt+F4 closes the focused window; the keys never reach it.
+    const int keys = c.keys;
+    rig.key(wm::key::F4, wm::kAlt);
+    CHECK(!c.open() && c.keys == keys);
+    CHECK(rig.no_stale_pixels());
+}
+
+/* ---- Menus ------------------------------------------------------------------- */
+
+static int g_runs[4];
+static void run0(void *) { g_runs[0]++; }
+static void run1(void *) { g_runs[1]++; }
+static void run2(void *) { g_runs[2]++; }
+
+class MenuWindow final : public wm::Window {
+public:
+    MenuWindow() : Window("Menus", {100, 60, 300, 200}, nullptr) { set_menu_bar(&bar_); }
+
+    wm::MenuItem sub_items[2] = {
+        {"&Inner", &run2, nullptr, nullptr, nullptr, 0},
+        {"&Other", nullptr, nullptr, nullptr, nullptr, 0},
+    };
+    wm::Menu sub = {sub_items, 2};
+    wm::MenuItem file_items[4] = {
+        {"&Open", &run0, nullptr, nullptr, nullptr, 0},
+        {nullptr, nullptr, nullptr, nullptr, nullptr, wm::kMenuSeparator},
+        {"&Grey", &run1, nullptr, nullptr, nullptr, wm::kMenuDisabled},
+        {"&More", nullptr, nullptr, &sub, nullptr, wm::kMenuChecked},
+    };
+    wm::Menu file = {file_items, 4};
+    wm::MenuItem edit_items[1] = {{"&Undo", &run1, nullptr, nullptr, nullptr, 0}};
+    wm::Menu edit = {edit_items, 1};
+    const wm::MenuBarEntry entries[2] = {{"&File", &file}, {"&Edit", &edit}};
+    const wm::MenuBar bar_ = {entries, 2};
+};
+
+static void test_menus()
+{
+    Rig rig;
+    TestWindow behind("Behind", {380, 300, 200, 120}, 0xE0);
+    MenuWindow w;
+    rig.wm.add(behind);
+    rig.wm.add(w);
+    rig.wm.start();
+    memset(g_runs, 0, sizeof(g_runs));
+    CHECK(w.client().y == 60 + wm::Window::kClientTop + wm::Window::kMenuBarHeight);
+
+    // Click on File: its menu opens under it.
+    const Rect file = rig.wm.menu_bar_entry(w, 0);
+    rig.click(file.x + 5, file.y + 5);
+    CHECK(rig.wm.popup_count() == 1 && rig.wm.popup_rect(0).y == file.bottom());
+    CHECK(rig.no_stale_pixels());
+    // Hovering More opens its submenu to the right.
+    Rect more = rig.wm.popup_item(0, 3);
+    rig.move(more.x + 10, more.y + 5, 0);
+    CHECK(rig.wm.popup_count() == 2 && rig.wm.popup_rect(1).x >= more.right());
+    // The disabled item does nothing.
+    Rect grey = rig.wm.popup_item(0, 2);
+    rig.click(grey.x + 10, grey.y + 5);
+    CHECK(g_runs[1] == 0 && rig.wm.popup_count() == 1);
+    // Choosing Open runs it and closes the menu.
+    Rect open = rig.wm.popup_item(0, 0);
+    rig.click(open.x + 10, open.y + 5);
+    CHECK(g_runs[0] == 1 && rig.wm.popup_count() == 0);
+    CHECK(rig.no_stale_pixels());
+
+    // Keyboard: Alt+F opens File, Down Down picks More (the separator is
+    // skipped), Right opens it, Enter runs Inner.
+    rig.key(0x09, wm::kAlt); // F
+    CHECK(rig.wm.popup_count() == 1 && rig.wm.popup_hover(0) == 0);
+    rig.key(wm::key::Down);
+    CHECK(rig.wm.popup_hover(0) == 2);
+    rig.key(wm::key::Down);
+    CHECK(rig.wm.popup_hover(0) == 3);
+    rig.key(wm::key::Right);
+    CHECK(rig.wm.popup_count() == 2 && rig.wm.popup_hover(1) == 0);
+    rig.key(wm::key::Enter);
+    CHECK(g_runs[2] == 1 && rig.wm.popup_count() == 0);
+    // Access letters inside a menu, Left/Right across the bar, Escape.
+    rig.key(0x09, wm::kAlt);
+    rig.key(wm::key::Right);
+    CHECK(rig.wm.popup_count() == 1 && rig.wm.popup_rect(0).x == rig.wm.menu_bar_entry(w, 1).x);
+    rig.key(0x18); // U: Undo
+    CHECK(g_runs[1] == 1 && rig.wm.popup_count() == 0);
+    rig.key(0x09, wm::kAlt);
+    rig.key(wm::key::Escape);
+    CHECK(rig.wm.popup_count() == 0);
+
+    // A click elsewhere closes the menu and goes no further.
+    rig.click(file.x + 5, file.y + 5);
+    rig.click(450, 350);
+    CHECK(rig.wm.popup_count() == 0 && rig.wm.active() == &w);
+    CHECK(rig.no_stale_pixels());
+}
+
+static void test_start_menu_and_icons()
+{
+    Rig rig;
+    TestWindow a("A", {300, 100, 200, 150}, 0x1C);
+    rig.wm.add(a);
+    memset(g_runs, 0, sizeof(g_runs));
+    wm::MenuItem items[3] = {
+        {"&Programs", nullptr, nullptr, nullptr, nullptr, wm::kMenuDisabled},
+        {nullptr, nullptr, nullptr, nullptr, nullptr, wm::kMenuSeparator},
+        {"Sh&ut Down...", &run0, nullptr, nullptr, nullptr, 0},
+    };
+    wm::Menu start = {items, 3};
+    rig.wm.set_start_menu(&start, "Chinchilla");
+    static const char *const labels[2] = {"One", "Two"};
+    wm::DesktopIcon icons[2] = {{labels[0], nullptr, &run1, nullptr}, {labels[1], nullptr, &run2, nullptr}};
+    rig.wm.set_desktop_icons(icons, 2);
+    rig.wm.start();
+
+    // The Start button opens it above the taskbar; GUI and Ctrl+Esc toggle it.
+    Rect sb = rig.wm.taskbar_button(-1);
+    rig.click(sb.x + 10, sb.y + 10);
+    CHECK(rig.wm.start_menu_open() && rig.wm.popup_rect(0).bottom() == 452);
+    CHECK(rig.no_stale_pixels());
+    rig.key(wm::key::LeftGui);
+    CHECK(!rig.wm.start_menu_open());
+    rig.key(wm::key::Escape, wm::kCtrl);
+    CHECK(rig.wm.start_menu_open());
+    Rect shut = rig.wm.popup_item(0, 2);
+    rig.click(shut.x + 30, shut.y + 5);
+    CHECK(g_runs[0] == 1 && !rig.wm.start_menu_open());
+
+    // Icons: a click selects, a double click opens.
+    Rect one = rig.wm.desktop_icon_rect(0), two = rig.wm.desktop_icon_rect(1);
+    rig.click(one.x + 30, one.y + 20);
+    CHECK(rig.wm.selected_icon() == 0 && rig.wm.active() == nullptr && g_runs[1] == 0);
+    rig.double_click(two.x + 30, two.y + 20);
+    CHECK(rig.wm.selected_icon() == 1 && g_runs[2] == 1 && g_runs[1] == 0);
+    rig.click(200, 300); // empty desktop
+    CHECK(rig.wm.selected_icon() == -1);
+    CHECK(rig.no_stale_pixels());
+}
+
+/* ---- Widgets ----------------------------------------------------------------- */
+
+class WidgetWindow final : public wm::Window {
+public:
+    WidgetWindow()
+        : Window("Widgets", {20, 20, 500, 400}, nullptr),
+          check({10, 10, 120, 18}, "Check"),
+          r0({10, 40, 100, 18}, "Zero", &choice, 0),
+          r1({10, 60, 100, 18}, "One", &choice, 1),
+          field({10, 90, 120, 21}, "abc"),
+          bar({200, 10, 16, 200}, true),
+          list({250, 10, 150, 100}, kItems, 20),
+          ok({300, 300, 75, 23}, "OK", &WidgetWindow::clicked, this)
+    {
+        add(field);
+        add(check);
+        add(r0);
+        add(r1);
+        add(bar);
+        add(list);
+        add(ok);
+        ok.set_default(true);
+        set_default(&ok);
+        bar.set_range(90, 10);
+    }
+    static constexpr const char *kItems[20] = {"a", "b", "c", "d", "e", "f", "g", "h", "i", "j",
+                                                "k", "l", "m", "n", "o", "p", "q", "r", "s", "t"};
+    int choice = 0, oks = 0;
+    wm::CheckBox check;
+    wm::RadioButton r0, r1;
+    wm::TextField field;
+    wm::ScrollBar bar;
+    wm::ListBox list;
+    wm::Button ok;
+
+private:
+    static void clicked(wm::Button &, void *context) { static_cast<WidgetWindow *>(context)->oks++; }
+};
+constexpr const char *WidgetWindow::kItems[20];
+
+static void test_widgets()
+{
+    Rig rig;
+    WidgetWindow w;
+    rig.wm.add(w);
+    rig.wm.start();
+    const Rect c = w.client();
+    auto at = [&](const wm::Widget &wd, int dx, int dy) {
+        rig.click(c.x + wd.rect.x + dx, c.y + wd.rect.y + dy);
+    };
+    char text[64];
+
+    // Check box and radio buttons by mouse and by Space.
+    at(w.check, 5, 9);
+    CHECK(w.check.checked() && w.focus() == &w.check);
+    rig.key(wm::key::Space);
+    CHECK(!w.check.checked());
+    at(w.r1, 5, 9);
+    CHECK(w.choice == 1 && w.r1.selected() && !w.r0.selected());
+
+    // Text field: typing, caret keys, selection, deleting, Latin-1.
+    at(w.field, 4, 10);
+    CHECK(w.focus() == &w.field && w.field.caret() == 0);
+    rig.key(wm::key::End);
+    rig.wm.text("ñé");
+    w.field.get(text, sizeof(text));
+    CHECK(strcmp(text, "abcñé") == 0 && w.field.caret() == 5);
+    rig.key(wm::key::Left, wm::kShift);
+    rig.key(wm::key::Left, wm::kShift);
+    CHECK(w.field.selection_start() == 3 && w.field.selection_end() == 5);
+    rig.key(0x1B, wm::kShift); // X with Shift types over the selection
+    w.field.get(text, sizeof(text));
+    CHECK(strcmp(text, "abcX") == 0);
+    rig.key(wm::key::Home);
+    rig.key(wm::key::Delete);
+    rig.key(wm::key::End);
+    rig.key(wm::key::Backspace);
+    w.field.get(text, sizeof(text));
+    CHECK(strcmp(text, "bc") == 0);
+    rig.key(wm::key::A, wm::kCtrl);
+    CHECK(w.field.selection_start() == 0 && w.field.selection_end() == 2);
+    rig.key(0x1E); // 1
+    w.field.get(text, sizeof(text));
+    CHECK(strcmp(text, "1") == 0);
+    // Enter in the field presses the default button.
+    rig.key(wm::key::Enter);
+    CHECK(w.oks == 1);
+    // Tab moves the focus on.
+    rig.key(wm::key::Tab);
+    CHECK(w.focus() == &w.check);
+    rig.key(wm::key::Tab, wm::kShift);
+    CHECK(w.focus() == &w.field);
+
+    // Scroll bar: arrows, track and dragging the thumb.
+    at(w.bar, 8, 200 - 8);
+    CHECK(w.bar.value() == 1);
+    at(w.bar, 8, 4);
+    CHECK(w.bar.value() == 0);
+    at(w.bar, 8, 150);
+    CHECK(w.bar.value() == 10);
+    const Rect thumb = w.bar.thumb();
+    rig.drag(c.x + 200 + 8, c.y + 10 + thumb.y + 2, c.x + 200 + 8, c.y + 10 + 200);
+    CHECK(w.bar.value() == 90);
+
+    // List box: click, keys, and it scrolls to keep the choice in view.
+    at(w.list, 20, 2 + 14 * 2 + 5);
+    CHECK(w.list.selected() == 2 && w.focus() == &w.list);
+    rig.key(wm::key::End);
+    CHECK(w.list.selected() == 19 && w.list.top() == 20 - w.list.visible_rows());
+    rig.key(wm::key::Home);
+    CHECK(w.list.selected() == 0 && w.list.top() == 0);
+    CHECK(rig.no_stale_pixels());
+}
+
 int main()
 {
     test_rect_list();
@@ -430,6 +794,11 @@ int main()
     test_widget_capture();
     test_describe();
     test_many_windows();
+    test_resize();
+    test_shortcuts();
+    test_menus();
+    test_start_menu_and_icons();
+    test_widgets();
     if (failures == 0) {
         printf("all tests passed\n");
     }

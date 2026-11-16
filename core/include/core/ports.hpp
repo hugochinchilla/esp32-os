@@ -93,6 +93,9 @@ public:
     // usage is a USB HID keyboard usage code (0x04 is A, 0x28 is Enter).
     virtual void key(uint16_t usage, bool pressed) = 0;
     virtual void mouse(const MouseEvent &event) = 0;
+    // Typed text (UTF-8), already turned into characters: from the debug
+    // link now, from a keyboard layout later.
+    virtual void text(const char * /*utf8*/) {}
 
 protected:
     ~InputSink() = default;

@@ -64,8 +64,11 @@ public:
     void vline(int x, int y, int h, Colour c);
     // Exact where the board has the colour, dithered otherwise.
     void fill_rgb(const Rect &r, Rgb c);
-    // A left-to-right fade across `r`, dithered (the 98 title bar).
-    void fill_fade(const Rect &r, Rgb from, Rgb to);
+    // A left-to-right fade across `r`, dithered (the 98 title bar); with
+    // `vertical`, top to bottom.
+    void fill_fade(const Rect &r, Rgb from, Rgb to, bool vertical = false);
+    // A dotted rectangle (every other pixel), as round focused widgets.
+    void focus_rect(const Rect &r);
     // The white and grey weave (pressed-in taskbar buttons, scroll tracks).
     void checker(const Rect &r);
 
@@ -76,6 +79,8 @@ public:
     void button(const Rect &r, ButtonLook look);
 
     void blit(const Bitmap &b, int x, int y);
+    // Same, with every other visible pixel in `tint` (a selected icon).
+    void blit_selected(const Bitmap &b, int x, int y, Colour tint);
     // Same, every pixel drawn as a 2x2 block.
     void blit2x(const Bitmap &b, int x, int y);
     // Small shapes given as strings, 'X' for a set pixel (button glyphs).
@@ -84,6 +89,9 @@ public:
     // Text in Spleen 6x12, top left at (x, y). UTF-8, Latin-1 characters.
     // Bold doubles each pixel sideways. Returns the x after the text.
     int text(int x, int y, const char *s, Colour c, bool bold = false);
+    // Text turned a quarter left, reading upwards; (x, y) is the bottom left
+    // corner of the first character.
+    void text_up(int x, int y, const char *s, Colour c, bool bold = false);
     static int text_width(const char *s, bool bold = false);
     static int text_height() { return kSpleen6x12.height; }
 

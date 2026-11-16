@@ -27,15 +27,50 @@ const char *const kArrow[19] = {
     "       XXX  ",
 };
 
-PointerShape make_arrow()
+const char *const kWestEast[9] = {
+    "    X     X    ",
+    "   XX     XX   ",
+    "  X.X     X.X  ",
+    " X..XXXXXXX..X ",
+    "X.............X",
+    " X..XXXXXXX..X ",
+    "  X.X     X.X  ",
+    "   XX     XX   ",
+    "    X     X    ",
+};
+
+const char *const kNorthSouth[15] = {
+    "    X    ", "   X.X   ", "  X...X  ", " X.....X ", "XXXX.XXXX",
+    "   X.X   ", "   X.X   ", "   X.X   ", "   X.X   ", "   X.X   ",
+    "XXXX.XXXX", " X.....X ", "  X...X  ", "   X.X   ", "    X    ",
+};
+
+const char *const kNwSe[11] = {
+    "XXXXXX     ",
+    "X....X     ",
+    "X...X      ",
+    "X..X.X     ",
+    "X.X X.X    ",
+    "XX   X.X   ",
+    "    X.X XX ",
+    "     X.X.X ",
+    "      X..X ",
+    "     X...X ",
+    "    XXXXXX ",
+};
+
+PointerShape make(const char *const *rows, int width, int height, int hot_x, int hot_y,
+                  bool mirror = false)
 {
     PointerShape shape = {};
-    shape.width = 12;
-    shape.height = 19;
-    for (int row = 0; row < shape.height; row++) {
-        for (int col = 0; col < shape.width; col++) {
-            char c = kArrow[row][col];
-            shape.pixels[row * shape.width + col] =
+    shape.width = static_cast<uint8_t>(width);
+    shape.height = static_cast<uint8_t>(height);
+    shape.hot_x = static_cast<uint8_t>(hot_x);
+    shape.hot_y = static_cast<uint8_t>(hot_y);
+    for (int row = 0; row < height; row++) {
+        for (int col = 0; col < width; col++) {
+            char c = rows[row][mirror ? width - 1 - col : col];
+            shape.pixels[row * width + col] =
                 c == 'X' ? kPointerBlack : c == '.' ? kPointerWhite : kPointerClear;
         }
     }
@@ -46,8 +81,32 @@ PointerShape make_arrow()
 
 const PointerShape &arrow_pointer()
 {
-    static const PointerShape arrow = make_arrow();
-    return arrow;
+    static const PointerShape shape = make(kArrow, 12, 19, 0, 0);
+    return shape;
+}
+
+const PointerShape &resize_we_pointer()
+{
+    static const PointerShape shape = make(kWestEast, 15, 9, 7, 4);
+    return shape;
+}
+
+const PointerShape &resize_ns_pointer()
+{
+    static const PointerShape shape = make(kNorthSouth, 9, 15, 4, 7);
+    return shape;
+}
+
+const PointerShape &resize_nwse_pointer()
+{
+    static const PointerShape shape = make(kNwSe, 11, 11, 5, 5);
+    return shape;
+}
+
+const PointerShape &resize_nesw_pointer()
+{
+    static const PointerShape shape = make(kNwSe, 11, 11, 5, 5, true);
+    return shape;
 }
 
 } // namespace video

@@ -8,7 +8,8 @@ set(CORE_SRCS
     src/gfx/canvas.cpp
     src/gfx/font_spleen6x12.cpp
     src/gfx/rect.cpp
-    src/shell/demo_desktop.cpp
+    src/shell/apps.cpp
+    src/shell/desktop.cpp
     src/wm/widgets.cpp
     src/wm/window.cpp
     src/wm/wm.cpp

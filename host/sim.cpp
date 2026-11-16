@@ -12,7 +12,7 @@
 #include <unistd.h>
 
 #include "core/dbg/protocol.hpp"
-#include "core/shell/demo_desktop.hpp"
+#include "core/shell/shell.hpp"
 #include "core/wm/wm.hpp"
 #include "host_adapters.hpp"
 
@@ -65,7 +65,7 @@ int main()
     dbg::Protocol protocol(sink, lock, display, pointer, screen, system, "sim");
     protocol.set_desktop(&screen);
 
-    shell::open_demo_windows(screen);
+    shell::start(screen, system);
     screen.start();
 
     // A real board first prints start-up text that is not part of the

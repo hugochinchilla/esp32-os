@@ -28,7 +28,7 @@ import zlib
 PROTOCOL_VERSION = 1
 
 PING, INFO, SCREENSHOT, KEY, MOUSE, STATS, REBOOT = 1, 2, 3, 4, 5, 6, 7
-WINDOWS, REPAINT = 8, 9
+WINDOWS, REPAINT, TEXT = 8, 9, 10
 LOG, HELLO, SHOT_DATA, SHOT_END = 0x70, 0x71, 0x72, 0x73
 REPLY = 0x80
 
@@ -277,6 +277,17 @@ class Board:
     def mouse(self, x=0, y=0, buttons=0, absolute=False, wheel=0):
         self.request(MOUSE, struct.pack("<BhhBb", 1 if absolute else 0, x, y, buttons, wheel))
 
+    def text(self, s):
+        """Types text as characters (any Latin-1 letter, such as ñ or é)."""
+        data = s.encode("utf-8")
+        for i in range(0, len(data), 200):
+            self.request(TEXT, data[i:i + 200])
+
+    def doubleclick(self, x, y):
+        for _ in range(2):
+            self.mouse(x, y, 1, absolute=True)
+            self.mouse(x, y, 0, absolute=True)
+
     def windows(self):
         """The windows, bottom to top, as a list of dicts."""
         return json.loads(self.request(WINDOWS).decode("utf-8"))["windows"]
@@ -416,7 +427,9 @@ def main(argv=None):
     p.add_argument("action", choices=["down", "up", "tap"])
     p.add_argument("name", help="a key name such as a, enter, f1, or a usage code such as 0x28")
 
-    p = sub.add_parser("type", help="type text (letters, digits and basic punctuation)")
+    p = sub.add_parser("type", help="type text with key presses (US keyboard)")
+    p.add_argument("text")
+    p = sub.add_parser("text", help="send text as characters (accents and ñ work)")
     p.add_argument("text")
 
     p = sub.add_parser("mouse", help="move, press, release, click or scroll")
@@ -424,6 +437,9 @@ def main(argv=None):
     m = msub.add_parser("move")
     m.add_argument("--rel", action="store_true", help="move by an amount instead of to a position")
     m.add_argument("--buttons", default="", help="buttons held meanwhile, e.g. left (for dragging)")
+    m.add_argument("x", type=int)
+    m.add_argument("y", type=int)
+    m = msub.add_parser("doubleclick")
     m.add_argument("x", type=int)
     m.add_argument("y", type=int)
     for name in ("down", "up", "click"):
@@ -474,10 +490,14 @@ def main(argv=None):
                 board.key(args.name, args.action == "down")
         elif args.command == "type":
             board.type_text(args.text)
+        elif args.command == "text":
+            board.text(args.text)
         elif args.command == "mouse":
             if args.action == "move":
                 held = sum(BUTTONS[b] for b in args.buttons.split(",") if b)
                 board.mouse(args.x, args.y, held, absolute=not args.rel)
+            elif args.action == "doubleclick":
+                board.doubleclick(args.x, args.y)
             elif args.action == "wheel":
                 board.mouse(wheel=args.amount)
             elif args.action == "down":
