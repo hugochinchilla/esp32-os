@@ -423,11 +423,54 @@ practical. Each is easy to change.
 - The 16x16 picture icon is the 32x32 one with every other pixel, made at
   compile time.
 
+### Chosen in the Wi-Fi milestone (asked 2026-11-16, to confirm)
+
+Put to the owner as options; built on the recommended one until he answers.
+
+- Where Wi-Fi passwords are kept: the board's settings area in the flash
+  (NVS), not a file on C:, so the File manager, `tools/dbg.py get` and a
+  remote viewer cannot read them. This is an exception to "settings are INI
+  files in `C:\.config`" and needs the owner's yes; the alternative is
+  `C:\.config\network.ini` with the passwords in it. The names of the
+  remembered networks and the time zone are meant to move to
+  `C:\.config\network.ini` once the INI helper is on `main`; today they
+  sit with the passwords behind one small port (`net::KeyStore`).
+- Remembered networks: up to 8, most recently used first. At start-up and
+  after a lost link the board joins the strongest remembered network in
+  range, tries the next one if that fails, and looks again after 10, 20, 40
+  and then every 80 seconds. Disconnect in the panel stays disconnected.
+  A network is remembered only after it has connected.
+- The Network panel opens from the desktop's Network icon, from Start >
+  Settings > Network and from the signal icon in the tray (one click). The
+  tray icon shows 0 to 4 bars, or a red cross when not connected.
+- Time zone: Spanish mainland time with EU summer time (a guess from the
+  Spanish sample text), set in the code until there is a Date/Time panel.
+  The clock is set when the network time first arrives and every hour.
+  Time server: `pool.ntp.org`.
+- Security accepted: open networks, and WPA, WPA2 and WPA3 with a password.
+  WEP is refused; networks that ask for a user name (enterprise) are listed
+  but cannot be joined. Hidden networks: through "Other...".
+- Wi-Fi power saving is off (a remote screen would lag by 100 to 300 ms).
+- The debug link can scan, connect, disconnect and forget
+  (`tools/dbg.py wifi`); it never returns a password.
+- Firmware size with Wi-Fi: 1.10 MB (556 KB before), over the default 1 MB
+  app partition, so the build uses ESP-IDF's built-in "large single app"
+  table (1.5 MB app, `nvs` kept). A custom table for a flash file system
+  must keep `nvs` and `phy_init` and give the app at least 2 MB.
+- ESP-IDF v5.5 does install in the cloud container (the firmware of this
+  milestone was compiled and linked there, not run): `tools/setup-cloud-idf.sh`.
+
 ## To confirm on the bench
 
 - The picture is stable at 640x480 with the framebuffer in PSRAM.
 - The colours and the four greys look right in both modes.
 - The picture stays stable with Wi-Fi active and during flash writes.
+- Wi-Fi (never run on the board yet): the radio starts and how long it
+  takes; a scan lists the networks around; a wrong password is reported as
+  such and a right one connects; the board joins by itself after a restart;
+  the clock is set from the network; free internal RAM with Wi-Fi up; the
+  picture stays stable and the frame rate holds during a scan and while
+  connected.
 
 ## Planned order of work
 

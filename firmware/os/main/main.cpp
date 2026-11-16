@@ -25,12 +25,14 @@
 
 #include "core/dbg/protocol.hpp"
 #include "core/fs/memory_volume.hpp"
+#include "core/net/wifi.hpp"
 #include "core/shell/boot.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/wm.hpp"
 #include "core/ports.hpp"
 #include "core/video/pointer.hpp"
 #include "vga.h"
+#include "wifi.hpp"
 
 namespace {
 
@@ -297,6 +299,16 @@ void ui_task(void *)
     const int64_t splash_end = esp_timer_get_time();
     protocol.set_boot_screens(&show_boot_screen, &boot_io);
     pointer.set_visible(true);
+
+    // Wi-Fi, after the start-up screens so their timings stay as they
+    // were. If the radio does not start, the Network panel says so.
+    const int64_t wifi_start = esp_timer_get_time();
+    const bool radio = wifi_begin();
+    static net::Manager wifi(wifi_port(), settings_store());
+    shell::set_network(&wifi);
+    protocol.set_network(&wifi);
+    ESP_LOGI(TAG, "wifi %s in %lld ms", radio ? "started" : "did not start",
+             (esp_timer_get_time() - wifi_start) / 1000);
 
     shell::start(desktop, system, storage, memory);
     protocol.set_counters(shell::picture_timings(), shell::kPictureTimings);

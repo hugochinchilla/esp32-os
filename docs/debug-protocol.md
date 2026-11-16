@@ -135,6 +135,26 @@ such as "not found" or "the folder is not empty". `tools/dbg.py` has
 request (150 KB takes 3 seconds each way on the board). C: on the board is a
 RAM disk: what is put there is lost at restart.
 
+## Wi-Fi
+
+Request type 0x20. The first payload byte says what; names and passwords
+travel as a length byte followed by the bytes.
+
+| Byte | Command | Rest of the request | Reply |
+| --- | --- | --- | --- |
+| 0 | Status | | link (0 no radio, 1 not connected, 2 connecting, 3 connected), why the last connect asked for failed (0 none, 1 wrong password, 2 not found, 3 no answer, 4 refused), scanning, clock set from the network, signal in dBm (signed), channel, address (4), router (4), the board's MAC (6), number of remembered networks, name of the network |
+| 1 | Scan | | nothing; the list is ready when "scanning" is 0 |
+| 2 | List | | scanning, count, then per network: signal, channel, security (0 open, 1 password, 2 needs a user name), flags (bit 0 remembered, bit 1 connected), name. Then the count of remembered networks and their names |
+| 3 | Connect | name, remember (0 or 1), password given (0 or 1), password | nothing; follow it with Status. Without a password the remembered one is used |
+| 4 | Disconnect | | |
+| 5 | Forget | name | |
+
+Passwords are never sent back by the board. `tools/dbg.py wifi` shows the
+status; `wifi scan`, `wifi connect [NAME]`, `wifi disconnect` and `wifi
+forget NAME` do the rest. `wifi connect` asks for the password at a prompt
+that does not show it (or reads it with `--password-stdin`); it is never a
+command-line argument, so it does not end up in the shell's history.
+
 ## Windows
 
 The Windows reply lists the windows from the bottom of the stack to the top:

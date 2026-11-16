@@ -25,7 +25,7 @@ public:
     void set(const char *text)
     {
         if (strcmp(text, text_) != 0) {
-            snprintf(text_, sizeof(text_), "%s", text);
+            strncpy(text_, text, sizeof(text_) - 1); // longer text is cut
             invalidate();
         }
     }

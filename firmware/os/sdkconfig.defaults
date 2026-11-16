@@ -15,3 +15,10 @@ CONFIG_LCD_RGB_RESTART_IN_VSYNC=y
 # The speed is only taken from here when the console is set to "custom".
 CONFIG_ESP_CONSOLE_UART_CUSTOM=y
 CONFIG_ESP_CONSOLE_UART_BAUDRATE=921600
+# Wi-Fi: its buffers and the network stack's go to external RAM when they
+# can, to keep internal RAM free
+CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
+# With Wi-Fi the firmware is 1.1 MB: over the default 1 MB app partition.
+# This built-in table has a 1.5 MB one (and keeps the settings area, nvs).
+# A custom table (for a flash file system) needs at least 2 MB for the app.
+CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y

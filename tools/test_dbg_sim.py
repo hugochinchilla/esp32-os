@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import dbg  # noqa: E402
@@ -121,11 +122,52 @@ def main():
             with open(path, "rb") as f:
                 assert f.read(8) == b"\x89PNG\r\n\x1a\n"
 
+        # Wi-Fi against the simulator's pretend radio.
+        status = board.wifi_status()
+        assert status["link"] == "not connected" and status["remembered"] == 0, status
+        scanning, seen, saved = board.wifi_scan()
+        assert not scanning and saved == []
+        assert [n["ssid"] for n in seen] == ["Casa Chinchilla", "Cafe & Churros", "Vecinos 2.4G"], seen
+        assert seen[1]["security"] == "open" and seen[0]["rssi"] == -48
+        status = board.wifi_connect("Casa Chinchilla", "not-the-password")
+        assert status["link"] == "not connected" and "password" in status["failure"], status
+        assert board.wifi_list()[2] == []
+        status = board.wifi_connect("Casa Chinchilla", "semillas-y-heno")
+        assert status["link"] == "connected" and status["ssid"] == "Casa Chinchilla", status
+        assert status["address"] == "192.168.1.37" and status["rssi"] == -48
+        _, seen, saved = board.wifi_list()
+        assert saved == ["Casa Chinchilla"] and seen[0]["connected"] and seen[0]["remembered"]
+        board.wifi_disconnect()
+        assert board.wifi_status()["link"] == "not connected"
+        status = board.wifi_connect("Casa Chinchilla")  # the remembered password
+        assert status["link"] == "connected", status
+        # The clock was set from the network time (this computer's, in Madrid time).
+        for _ in range(20):
+            if board.wifi_status()["clock_from_network"]:
+                break
+            time.sleep(0.1)
+        assert board.wifi_status()["clock_from_network"]
+        board.wifi_forget("Casa Chinchilla")
+        assert board.wifi_list()[2] == [] and board.wifi_status()["link"] == "not connected"
+        try:
+            board.request(dbg.WIFI, b"\x03\x40")  # a name longer than the frame
+            raise AssertionError("a bad Wi-Fi command was accepted")
+        except dbg.DebugError:
+            pass
+
         # The command line works too. Only one program can use the port.
         board.close()
         out = subprocess.run([sys.executable, dbg.__file__, "--port", port, "info"],
                              capture_output=True, text=True, timeout=20)
         assert "firmware: sim" in out.stdout, out
+        # The password goes in on standard input, never as an argument.
+        out = subprocess.run([sys.executable, dbg.__file__, "--port", port, "wifi", "connect",
+                              "Casa Chinchilla", "--password-stdin", "--no-remember"],
+                             input="semillas-y-heno\n", capture_output=True, text=True, timeout=30)
+        assert "connected to Casa Chinchilla" in out.stdout and "0 network(s) remembered" in out.stdout, out
+        out = subprocess.run([sys.executable, dbg.__file__, "--port", port, "wifi", "scan"],
+                             capture_output=True, text=True, timeout=30)
+        assert "Casa Chinchilla  (connected)" in out.stdout, out
         with tempfile.TemporaryDirectory() as folder:
             path = os.path.join(folder, "bare.png")
             out = subprocess.run([sys.executable, dbg.__file__, "--port", port, "screenshot",
