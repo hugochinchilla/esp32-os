@@ -822,7 +822,16 @@ void Wm::on_press()
         }
     }
     if (menu_open()) {
-        if (popup_at(x, y) >= 0) {
+        const int level = popup_at(x, y);
+        if (level >= 0) {
+            // A press on another item takes over at once (no rest needed).
+            const int item = item_at(level, x, y);
+            if (item >= 0 && item != popups_[level].hover && level + 1 < popup_count_) {
+                stop_timer(switch_timer_);
+                switch_timer_ = 0;
+                close_popups_from(level + 1);
+                set_hover(level, item);
+            }
             capture_ = Capture::Menu;
             return;
         }
@@ -981,7 +990,22 @@ void Wm::on_move()
     const int x = pointer_x_, y = pointer_y_;
     if (menu_open()) {
         const int level = popup_at(x, y);
-        if (level >= 0) {
+        if (level >= 0 && level + 1 < popup_count_) {
+            // A menu whose submenu is open: the submenu stays while the
+            // pointer crosses borders, separators or other items on its
+            // way; another item takes over only once the pointer rests on
+            // it (each move starts the wait again), as menus did.
+            const int item = item_at(level, x, y);
+            stop_timer(switch_timer_);
+            switch_timer_ = 0;
+            if (item >= 0 && item != popups_[level].hover) {
+                switch_level_ = level;
+                switch_item_ = item;
+                switch_timer_ = start_timer(kSubmenuDelayUs, 0, &Wm::switch_due, this);
+            }
+        } else if (level >= 0) {
+            stop_timer(switch_timer_); // in the deepest menu: no hand-over
+            switch_timer_ = 0;
             const int item = item_at(level, x, y);
             if (item != popups_[level].hover) {
                 set_hover(level, item);
@@ -1355,10 +1379,32 @@ void Wm::submenu_due(void *self)
     }
 }
 
+// The pointer rested on another item of a menu whose submenu is open: that
+// item takes over, opening its own submenu at once.
+void Wm::switch_due(void *self)
+{
+    Wm &wm = *static_cast<Wm *>(self);
+    wm.switch_timer_ = 0;
+    const int level = wm.switch_level_, item = wm.switch_item_;
+    if (level >= wm.popup_count_ || wm.popup_at(wm.pointer_x_, wm.pointer_y_) != level ||
+        wm.item_at(level, wm.pointer_x_, wm.pointer_y_) != item) {
+        return;
+    }
+    wm.close_popups_from(level + 1);
+    wm.set_hover(level, item);
+    const MenuItem &it = wm.popups_[level].menu->items[item];
+    if (it.submenu != nullptr && !(it.flags & kMenuDisabled)) {
+        const Rect r = wm.popup_item(level, item);
+        wm.open_popup(*it.submenu, r.right() + kMenuEdge, r.y - kMenuEdge, false, false);
+    }
+}
+
 void Wm::close_menus()
 {
     stop_timer(submenu_timer_);
     submenu_timer_ = 0;
+    stop_timer(switch_timer_);
+    switch_timer_ = 0;
     close_popups_from(0);
     if (menu_window_ != nullptr) {
         invalidate(menu_bar_entry(*menu_window_, menu_entry_));

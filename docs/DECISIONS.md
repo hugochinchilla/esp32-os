@@ -838,6 +838,19 @@ tested on the PC only (not yet compiled for or run on the board).
 - The folder is read again every 2 s (a few directory reads) instead of
   hooks in every program that writes files.
 
+### Submenus with a slow pointer (2026-11-16)
+
+Found by the owner: moving slowly from Programs into its submenu closed it.
+The submenu opens flush against its parent, and the pointer crossing the
+parent's border (part of no item) counted as a change of item, which closed
+the submenu at once; a slanted path closed it on the next item. Now, while a
+submenu is open, borders, separators and other items of its parent change
+nothing until the pointer rests on another item for 300 ms (each move starts
+the wait again); a click on another item takes over at once. Menus close only
+on a click outside, Escape or choosing an item. The same code serves every
+cascading menu (Start menu folders, menu bar submenus). test_slow_submenu
+moves 2 px every 20 ms, straight and on a slant.
+
 ### Chosen for painting each pixel once (2026-11-16, to confirm)
 
 - Title bars, menu bars, menus, the taskbar, desktop icons, opaque widgets

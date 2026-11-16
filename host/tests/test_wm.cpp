@@ -2,6 +2,8 @@
 // each failed check prints its line, the exit code is the result.
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
+#include <algorithm>
 #include <cstring>
 #include <random>
 #include <vector>
@@ -635,6 +637,67 @@ static void test_menus()
     CHECK(rig.no_stale_pixels());
 }
 
+// A slow pointer, as a person moves it: from a parent item into its open
+// submenu, 2 pixels every 20 ms, straight across and on a slant that
+// crosses the next parent item. The submenu must stay open and end with the
+// item under the pointer highlighted.
+static void slow_path(Rig &rig, int x0, int y0, int x1, int y1)
+{
+    const int steps = std::max(std::abs(x1 - x0), std::abs(y1 - y0)) / 2 + 1;
+    for (int i = 1; i <= steps; i++) {
+        rig.clock.now += 20000;
+        rig.wm.tick();
+        rig.quick(x0 + (x1 - x0) * i / steps, y0 + (y1 - y0) * i / steps, 0);
+    }
+}
+
+static void test_slow_submenu()
+{
+    Rig rig;
+    rig.wm.start();
+    wm::MenuItem sub_items[2] = {
+        {"&Inner", &run2, nullptr, nullptr, nullptr, 0},
+        {"&Other", &run2, nullptr, nullptr, nullptr, 0},
+    };
+    wm::Menu sub = {sub_items, 2};
+    wm::MenuItem items[3] = {
+        {"&Programs", nullptr, nullptr, &sub, nullptr, 0},
+        {"&Two", &run1, nullptr, nullptr, nullptr, 0},
+        {"&Three", &run1, nullptr, nullptr, nullptr, 0},
+    };
+    wm::Menu menu = {items, 3};
+    for (int pass = 0; pass < 2; pass++) {
+        rig.wm.open_menu(menu, 100, 100);
+        const Rect parent = rig.wm.popup_item(0, 0);
+        const int px = parent.x + 20, py = parent.y + parent.h / 2;
+        rig.move(px, py, 0);
+        rig.wait(wm::Wm::kSubmenuDelayUs);
+        CHECK(rig.wm.popup_count() == 2);
+        const int want = pass; // straight to Inner, on a slant to Other
+        const Rect target = rig.wm.popup_item(1, want);
+        slow_path(rig, px, py, target.x + 20, target.y + target.h / 2);
+        rig.wait(wm::Wm::kSubmenuDelayUs); // and resting there
+        CHECK(rig.wm.popup_count() == 2 && rig.wm.popup_hover(0) == 0 && rig.wm.popup_hover(1) == want);
+        rig.wm.close_menus();
+    }
+    // Resting on another parent item hands over to it after the delay.
+    rig.wm.open_menu(menu, 100, 100);
+    Rect r = rig.wm.popup_item(0, 0);
+    rig.move(r.x + 20, r.y + r.h / 2, 0);
+    rig.wait(wm::Wm::kSubmenuDelayUs);
+    r = rig.wm.popup_item(0, 1);
+    rig.quick(r.x + 20, r.y + r.h / 2, 0);
+    rig.wait(wm::Wm::kSubmenuDelayUs + 10000);
+    CHECK(rig.wm.popup_count() == 1 && rig.wm.popup_hover(0) == 1);
+    // The pointer off the menus leaves them as they are; a click there closes them.
+    rig.move(500, 400, 0);
+    rig.wait(wm::Wm::kSubmenuDelayUs);
+    CHECK(rig.wm.popup_count() == 1);
+    rig.click(500, 400);
+    CHECK(rig.wm.popup_count() == 0);
+    CHECK(rig.no_stale_pixels());
+}
+
 static void test_start_menu_and_icons()
 {
     Rig rig;
@@ -949,6 +1012,7 @@ int main()
     test_resize();
     test_shortcuts();
     test_menus();
+    test_slow_submenu();
     test_start_menu_and_icons();
     test_widgets();
     test_timers_and_clock();

@@ -241,6 +241,7 @@ private:
     static void clock_tick(void *self);
     static void key_repeat(void *self);
     static void submenu_due(void *self);
+    static void switch_due(void *self);
     void handle_key(uint16_t usage, bool pressed);
     Window *system_modal() const;
 
@@ -369,6 +370,8 @@ private:
     uint16_t repeat_usage_ = 0;
     int repeat_timer_ = 0;
     int submenu_timer_ = 0;
+    int switch_timer_ = 0; // another item taking over from an open submenu
+    int switch_level_ = 0, switch_item_ = 0;
     int submenu_level_ = -1, submenu_item_ = -1;
 
     ScreenSaver *saver_ = nullptr;
