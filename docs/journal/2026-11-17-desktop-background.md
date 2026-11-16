@@ -114,3 +114,33 @@ patterned desktops have to be looked at enlarged by a whole number.
 - Entries for the desktop's menu (New folder, Refresh).
 - The Screen Saver dialog as a second part of Display, as its comment says.
 - A picture as wallpaper (not asked for).
+
+## On the board (added by the board thread, 2026-11-17)
+
+Branch at 594c013 (main fa52cba already in); PC tests 22 of 22; the first
+firmware compile, clean; flashed with a fast start. This covers the new
+icons as well (journal `2026-11-16-icon-proposals.md`).
+
+- Icons: readable in Start > Programs, in a folder window (C:\) and in Task
+  Manager with all processes (the desktop with the cog, the File manager, the
+  Task Manager), on the board's screenshots and on the webcam. All the new
+  art is character pictures in `core/src/gfx/art.cpp`, drawn by
+  `tools/mockup/icon_proposals.py` from simple shapes in the board's own
+  colours: original.
+- A right click on the desktop (injected through `tools/dbg.py`, not a real
+  mouse) opens a menu with Display...; Start > Settings > Display opens the
+  same dialog.
+- Colours through the resistor DAC on the webcam: teal, green, maroon, olive
+  and black all show as they should.
+- Bricks over Chinchilla blue: a full repaint 14.82 ms against 14.09 ms for
+  the plain fill (+0.7 ms); 0 late, 0 missed refills with the pattern on.
+- The choice is written to C:\.config\desktop.ini (`[background]`, `colour =
+  chinchilla-blue`, `pattern = bricks`) and kept across a restart. Set back to
+  Chinchilla blue and no pattern at the end; the section stays with those
+  values.
+- Firmware 1,345,152 bytes against 1,335,216 on main (9.9 KB more); 67 % of
+  the app area free.
+- Free internal RAM 97,967 bytes against 100,787 on main (2.8 KB less); the
+  heap total is 2.8 KB smaller too, so it is static.
+- Left for the owner: the right click with a real mouse.
+
