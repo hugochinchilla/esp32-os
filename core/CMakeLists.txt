@@ -25,6 +25,7 @@ set(CORE_SRCS
     src/saver/curves.cpp
     src/saver/runner.cpp
     src/saver/starfield.cpp
+    src/net/wifi.cpp
     src/shell/apps.cpp
     src/shell/boot.cpp
     src/shell/desktop.cpp
@@ -33,6 +34,7 @@ set(CORE_SRCS
     src/shell/file_manager.cpp
     src/shell/listing.cpp
     src/shell/screensaver.cpp
+    src/shell/network.cpp
     src/shell/settings.cpp
     src/shell/viewer.cpp
     src/wm/text_edit.cpp

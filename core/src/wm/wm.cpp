@@ -40,6 +40,7 @@ constexpr int kQuickX = 66;    // separator before the quick-launch icons
 constexpr int kButtonsX = 144; // first window button
 constexpr int kButtonW = 150, kButtonGap = 3;
 constexpr int kClockW = 60;
+constexpr int kTrayW = 20; // a tray icon, left of the clock
 
 // Desktop icons (tools/mockup/desktop.py).
 constexpr int kIconX = 6, kIconY = 8, kIconStep = 70;
@@ -497,7 +498,7 @@ Rect Wm::taskbar_button(int index) const
     if (index < 0) {
         return {2, ty + 4, kStartW, 22};
     }
-    const int room = width_ - kClockW - 6 - kButtonsX;
+    const int room = width_ - kClockW - 6 - kButtonsX - (tray_icon_ != nullptr ? kTrayW : 0);
     const int shown = taskbar_count();
     int w = kButtonW;
     if (shown > 0 && shown * (kButtonW + kButtonGap) > room) {
@@ -784,6 +785,13 @@ void Wm::on_press()
         return;
     }
     if (taskbar().contains(x, y)) {
+        if (tray_icon_ != nullptr && tray_icon_rect().contains(x, y)) {
+            capture_ = Capture::Swallow;
+            if (tray_click_ != nullptr) {
+                tray_click_(tray_context_);
+            }
+            return;
+        }
         const int index = taskbar_index_at(x, y);
         if (index == -1 && start_menu_ != nullptr) {
             open_start_menu();
@@ -1682,7 +1690,13 @@ void Wm::paint_taskbar(const RectList &clip)
 
     // The clock, 12-hour as in the target picture.
     const Rect clock = clock_rect();
-    c.edge(clock, gfx::kDarkGrey, gfx::kWhite);
+    if (tray_icon_ != nullptr) {
+        const Rect icon = tray_icon_rect();
+        c.edge({icon.x, clock.y, kTrayW + kClockW, clock.h}, gfx::kDarkGrey, gfx::kWhite);
+        c.blit(*tray_icon_, icon.x + 3, icon.y + 3);
+    } else {
+        c.edge(clock, gfx::kDarkGrey, gfx::kWhite);
+    }
     int h, m, s;
     get_time(h, m, s);
     char time[12];
@@ -1793,6 +1807,25 @@ void Wm::set_animations(bool on)
 Rect Wm::clock_rect() const
 {
     return {width_ - kClockW - 2, height_ - kTaskbarHeight + 4, kClockW, 22};
+}
+
+Rect Wm::tray_icon_rect() const
+{
+    const Rect clock = clock_rect();
+    return tray_icon_ != nullptr ? Rect{clock.x - kTrayW, clock.y, kTrayW, clock.h} : Rect{};
+}
+
+void Wm::set_tray_icon(const gfx::Bitmap *icon, void (*click)(void *context), void *context)
+{
+    tray_click_ = click;
+    tray_context_ = context;
+    if (icon == tray_icon_) {
+        return;
+    }
+    // A first or a last icon moves the window buttons: the whole bar.
+    const bool whole = (icon == nullptr) != (tray_icon_ == nullptr);
+    tray_icon_ = icon;
+    invalidate(whole ? taskbar() : tray_icon_rect());
 }
 
 void Wm::set_time(int hours, int minutes, int seconds)

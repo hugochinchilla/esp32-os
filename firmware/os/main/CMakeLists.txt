@@ -1,1 +1,1 @@
-idf_component_register(SRCS "main.cpp" "vga.c" INCLUDE_DIRS "." REQUIRES core joltwallet__littlefs esp_driver_uart esp_lcd esp_psram spi_flash esp_timer)
+idf_component_register(SRCS "main.cpp" "vga.c" "wifi.cpp" INCLUDE_DIRS "." REQUIRES core joltwallet__littlefs esp_driver_uart esp_lcd esp_psram spi_flash esp_timer esp_wifi esp_netif esp_event nvs_flash)

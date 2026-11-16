@@ -11,6 +11,10 @@
 #include "core/ports.hpp"
 #include "core/wm/wm.hpp"
 
+namespace net {
+class Manager;
+}
+
 namespace shell {
 
 struct App {
@@ -70,6 +74,14 @@ void open_picture(const char *path);
 void finish_picture();
 const uint32_t *picture_timings();
 constexpr int kPictureTimings = 3;
+
+// Wi-Fi, if the machine has it: call before start(). The shell then shows
+// the signal icon in the tray, keeps the manager running and sets the clock
+// from the network. Without it, Network says it is not available.
+void set_network(net::Manager *wifi);
+net::Manager *network();
+// The Network panel: networks in range, connect, forget.
+void open_network();
 
 // Sets up the desktop icons and the Start menu, and opens the first windows.
 // `storage` holds the drives; `memory` gives the large buffers (editor,

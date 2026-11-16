@@ -347,8 +347,7 @@ int main(int argc, char **argv)
     save("33-viewer-damaged");
     key(wm::key::Enter);
 
-    // The screensaver. Its dialog from Start > Settings (the third entry of
-    // each), then a preview of each animation: 150 frames, five seconds.
+    // The screensaver. Its dialog from Start > Settings (its last entry), then a preview of each animation: 150 frames, five seconds.
     while (desktop.active() != nullptr) {
         desktop.close(*desktop.active());
     }
@@ -359,7 +358,7 @@ int main(int argc, char **argv)
     clock_.now += wm::Wm::kSubmenuDelayUs;
     desktop.tick();
     save("34-settings-menu");
-    centre_of(desktop.popup_item(1, 2), x, y);
+    centre_of(desktop.popup_item(1, 3), x, y); // Screen Saver...
     click(x, y);
     save("35-screen-saver-dialog");
     const char *const savers[3] = {"36-saver-starfield", "37-saver-chinchillas", "38-saver-curves"};

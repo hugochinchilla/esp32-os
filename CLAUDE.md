@@ -29,7 +29,8 @@ in the same change whenever a decision is made or reversed.
 - Portable code goes in `core/` and may not include ESP-IDF headers; hardware
   code goes in adapters under `firmware/os/main/`. Run the PC tests before
   committing (`cmake -S host -B build/host && cmake --build build/host &&
-  ctest --test-dir build/host`). The cloud container has no ESP-IDF, so say
-  when firmware code has not been compiled.
+  ctest --test-dir build/host`). The cloud container has no ESP-IDF until
+  `tools/setup-cloud-idf.sh` installs it (compile and link only), so say
+  when firmware code has not been compiled, and always that it has not run.
 - Do not add Microsoft icons, fonts or bitmaps. All art must be original or
   freely licensed.
