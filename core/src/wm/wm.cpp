@@ -2197,6 +2197,35 @@ void Wm::tick()
     busy_us_ += clock_.micros() - start;
 }
 
+uint32_t Wm::idle_us()
+{
+    if (!dirty_.empty() && !saver_on_) {
+        return 0; // something to paint
+    }
+    const uint64_t now = now_us();
+    uint64_t due = UINT64_MAX;
+    for (const Timer &t : timers_) {
+        if (t.id != 0 && t.due < due) {
+            due = t.due;
+        }
+    }
+    if (saver_on_) {
+        const uint64_t frame = saver_->next_frame_us();
+        due = frame < due ? frame : due;
+    } else if (saver_ != nullptr && saver_idle_us_ != 0 && buttons_ == 0 && capture_ == Capture::None) {
+        // With a button held it starts after the release, which is input.
+        const uint64_t start = last_input_us_ + saver_idle_us_;
+        due = start < due ? start : due;
+    }
+    if (due == UINT64_MAX) {
+        return kIdleForever;
+    }
+    if (due <= now) {
+        return 0;
+    }
+    return due - now < kIdleForever ? static_cast<uint32_t>(due - now) : kIdleForever - 1;
+}
+
 void Wm::blink(void *self)
 {
     Wm &wm = *static_cast<Wm *>(self);

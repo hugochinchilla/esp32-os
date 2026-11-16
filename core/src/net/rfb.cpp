@@ -267,6 +267,23 @@ void Server::poll()
     }
 }
 
+uint32_t Server::poll_interval_us() const
+{
+    if (state_ != State::Idle) {
+        return kBusyPollUs;
+    }
+    uint32_t interval = kNever;
+    for (const net::Listener *listener : listeners_) {
+        if (listener != nullptr) {
+            if (listener->busy()) {
+                return kBusyPollUs;
+            }
+            interval = kListenPollUs;
+        }
+    }
+    return interval;
+}
+
 /* ---- What the viewer sends -------------------------------------------------------- */
 
 void Server::read_input()
