@@ -103,6 +103,15 @@ public:
     // start-up, in µs (wraps): the desktop's share of the processor.
     uint32_t busy_us() const { return busy_us_; }
 
+    // A program is about to keep the desktop waiting (a save, a load): the
+    // pointer becomes the hourglass until the matching end_wait(). Calls
+    // nest. The pointer is mixed in as the picture goes to the monitor, so
+    // the hourglass shows even though nothing is painted meanwhile. Use
+    // wm::Wait rather than calling these.
+    void begin_wait();
+    void end_wait();
+    bool waiting() const { return waiting_ > 0; }
+
     // The desktop and the Start menu, supplied by the shell.
     void set_desktop_icons(const DesktopIcon *icons, int count);
     void set_start_menu(Menu *menu, const char *banner);
@@ -318,6 +327,7 @@ private:
     uint8_t buttons_ = 0;
     uint8_t mods_ = 0;
     const video::PointerShape *shape_ = nullptr;
+    int waiting_ = 0;
 
     Capture capture_ = Capture::None;
     Window *captured_ = nullptr;
@@ -380,6 +390,20 @@ private:
     bool saver_on_ = false;
     int saver_x_ = 0, saver_y_ = 0;  // the pointer when the saver started
     bool swallow_button_ = false;    // the press that woke the screen, until let go
+};
+
+// The hourglass for as long as this object lives:
+//     wm::Wait wait(manager());
+//     ... the slow work ...
+class Wait {
+public:
+    explicit Wait(Wm &wm) : wm_(wm) { wm_.begin_wait(); }
+    ~Wait() { wm_.end_wait(); }
+    Wait(const Wait &) = delete;
+    Wait &operator=(const Wait &) = delete;
+
+private:
+    Wm &wm_;
 };
 
 } // namespace wm

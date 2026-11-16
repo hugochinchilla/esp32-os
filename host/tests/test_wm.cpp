@@ -487,6 +487,23 @@ static void test_resize()
     rig.move(200, 200, 0);
     CHECK(memcmp(rig.pointer.state().shape, &video::arrow_pointer(), sizeof(video::PointerShape)) == 0);
 
+    // While a program keeps the desktop waiting the pointer is the
+    // hourglass, over an edge too; waits nest.
+    {
+        const wm::Wait outer(rig.wm);
+        CHECK(rig.wm.waiting());
+        CHECK(memcmp(rig.pointer.state().shape, &video::busy_pointer(), sizeof(video::PointerShape)) == 0);
+        {
+            const wm::Wait inner(rig.wm);
+            rig.move(100 + 1, 150, 0);
+        }
+        CHECK(memcmp(rig.pointer.state().shape, &video::busy_pointer(), sizeof(video::PointerShape)) == 0);
+    }
+    CHECK(!rig.wm.waiting());
+    CHECK(memcmp(rig.pointer.state().shape, &video::resize_we_pointer(), sizeof(video::PointerShape)) == 0);
+    rig.move(200, 200, 0);
+    CHECK(memcmp(rig.pointer.state().shape, &video::arrow_pointer(), sizeof(video::PointerShape)) == 0);
+
     // Bottom right corner: an outline while dragging, the new size on release.
     rig.move(298, 248, 0);
     rig.move(298, 248, 1);

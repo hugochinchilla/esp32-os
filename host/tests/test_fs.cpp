@@ -92,6 +92,37 @@ static void test_memory_volume()
     CHECK(s.rename("C:\\docs\\c.txt", "C:\\old\\B.TXT") == FsError::Exists);
     CHECK(s.rename("C:\\docs\\c.txt", "C:\\docs\\C.txt") == FsError::Ok); // a change of case
     CHECK(s.remove("C:\\old") == FsError::NotEmpty);
+    // replace(): the name changes hands in one step, over a file already
+    // there. The entry keeps its place and its name as written.
+    CHECK(s.write_file("C:\\docs\\new.txt", "new", 3) == FsError::Ok);
+    CHECK(s.replace("C:\\docs\\new.txt", "C:\\old\\B.TXT") == FsError::Ok);
+    CHECK(s.stat("C:\\docs\\new.txt", e) == FsError::NotFound);
+    CHECK(s.read_file("C:\\old\\b.txt", buf, sizeof(buf), n) == FsError::Ok && n == 3 && memcmp(buf, "new", 3) == 0);
+    CHECK(s.entry("C:\\old", 0, e) == FsError::Ok && strcmp(e.name, "b.txt") == 0);
+    CHECK(s.entry("C:\\old", 1, e) == FsError::NotFound);
+    CHECK(s.replace("C:\\docs\\C.txt", "C:\\docs\\fresh.txt") == FsError::Ok); // nothing there: a rename
+    CHECK(s.rename("C:\\docs\\fresh.txt", "C:\\docs\\C.txt") == FsError::Ok);
+    CHECK(s.replace("C:\\docs\\C.txt", "C:\\old") == FsError::IsFolder);
+    CHECK(s.replace("C:\\old", "C:\\docs\\C.txt") == FsError::IsFolder);
+    CHECK(s.replace("C:\\docs\\none.txt", "C:\\docs\\C.txt") == FsError::NotFound);
+    // A safe save: the old file is whole until the last step, and no
+    // temporary file is left, whether the save is kept or given up.
+    fs::Save save;
+    CHECK(s.begin_save("C:\\old\\b.txt", save) == FsError::Ok);
+    CHECK(s.write(save.file, "half", 4) == FsError::Ok);
+    CHECK(s.read_file("C:\\old\\b.txt", buf, sizeof(buf), n) == FsError::Ok && n == 3 && memcmp(buf, "new", 3) == 0);
+    CHECK(s.stat("C:\\old\\.~b.txt.tmp", e) == FsError::Ok);
+    CHECK(s.finish_save(save, false) == FsError::Ok); // given up
+    CHECK(s.read_file("C:\\old\\b.txt", buf, sizeof(buf), n) == FsError::Ok && n == 3 && memcmp(buf, "new", 3) == 0);
+    CHECK(s.entry("C:\\old", 1, e) == FsError::NotFound);
+    CHECK(s.begin_save("C:\\old\\b.txt", save) == FsError::Ok);
+    CHECK(s.write(save.file, "whole", 5) == FsError::Ok);
+    CHECK(s.finish_save(save) == FsError::Ok);
+    CHECK(s.read_file("C:\\old\\b.txt", buf, sizeof(buf), n) == FsError::Ok && n == 5 && memcmp(buf, "whole", 5) == 0);
+    CHECK(s.entry("C:\\old", 1, e) == FsError::NotFound);
+    CHECK(s.finish_save(save) == FsError::NotFound); // not begun
+    CHECK(s.begin_save("C:\\old", save) == FsError::IsFolder);
+    CHECK(s.begin_save("C:\\nowhere\\x.txt", save) == FsError::NotFound);
     CHECK(s.remove("C:\\old\\b.txt") == FsError::Ok && s.remove("C:\\old") == FsError::Ok);
     CHECK(s.remove("C:\\") == FsError::BadName);
 
@@ -329,8 +360,36 @@ static void test_samples()
     CHECK(n > 14 && static_cast<uint8_t>(buf[13]) == 0xF1); // Latin-1 ñ
 }
 
+// A save that runs out of disk leaves the old file as it was.
+static void test_save_on_a_full_disk()
+{
+    std::vector<uint8_t> pool(64 * 1024);
+    fs::MemoryVolume ram(pool.data(), pool.size(), "RAM disk");
+    fs::Storage s;
+    s.mount('C', ram);
+    std::vector<uint8_t> old(25000, 'o'), bigger(40000, 'n'), back(60000);
+    CHECK(s.write_file("C:\\doc.txt", old.data(), old.size()) == FsError::Ok);
+    CHECK(s.write_file("C:\\doc.txt", bigger.data(), bigger.size()) == FsError::NoSpace);
+    size_t n = 0;
+    CHECK(s.read_file("C:\\doc.txt", back.data(), back.size(), n) == FsError::Ok && n == old.size() &&
+          memcmp(back.data(), old.data(), n) == 0);
+    ports::DirEntry e;
+    CHECK(s.entry("C:\\", 1, e) == FsError::NotFound); // the temporary file is gone
+    // The price: a save needs room for both copies until its last step.
+    CHECK(s.remove("C:\\doc.txt") == FsError::Ok);
+    CHECK(s.write_file("C:\\doc.txt", bigger.data(), bigger.size()) == FsError::Ok);
+
+    char t[fs::kMaxPath];
+    CHECK(fs::path::temporary("C:\\docs\\a.txt", t, sizeof(t)) && strcmp(t, "C:\\docs\\.~a.txt.tmp") == 0);
+    CHECK(fs::path::temporary("C:\\a.txt", t, sizeof(t)) && strcmp(t, "C:\\.~a.txt.tmp") == 0);
+    const std::string longest = "C:\\" + std::string(59, 'n') + ".txt"; // 63 characters
+    CHECK(fs::path::temporary(longest.c_str(), t, sizeof(t)) && fs::path::valid_name(fs::path::name(t)));
+    CHECK(!fs::path::temporary("C:\\", t, sizeof(t)));
+}
+
 int main()
 {
+    test_save_on_a_full_disk();
     test_drives_behave_alike();
     test_ini();
     test_paths();

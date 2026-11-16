@@ -25,6 +25,7 @@ public:
     ports::FsError make_folder(const char *path) override;
     ports::FsError remove(const char *path) override;
     ports::FsError rename(const char *from, const char *to) override;
+    ports::FsError replace(const char *from, const char *to) override;
     ports::FsError open(const char *path, ports::OpenMode mode, int &file) override;
     ports::FsError read(int file, void *data, size_t size, size_t &done) override;
     ports::FsError write(int file, const void *data, size_t size) override;

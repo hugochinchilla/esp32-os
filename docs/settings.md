@@ -26,9 +26,10 @@ Format (INI):
 Programs use `fs::Ini` (`core/include/core/fs/ini.hpp`) through
 `shell::load_settings` and `shell::save_settings`. Changing a value rewrites
 only its line: comments, blank lines and keys the program does not know are
-kept. A missing or damaged file gives the program's defaults. Saving writes
-`<program>.ini.tmp` first and then puts it in place of the old file; if power
-is lost in between, the next start reads the `.tmp` file.
+kept. A missing or damaged file gives the program's defaults. Saving writes a
+hidden temporary file (`.~<program>.ini.tmp`) and then gives it the real name
+in one step, so a power cut leaves the old settings or the new ones (see
+`Storage::begin_save`).
 
 Files so far:
 

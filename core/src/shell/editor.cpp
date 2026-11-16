@@ -155,15 +155,18 @@ private:
             report("open", path, e);
             return;
         }
-        edit_.load_begin();
-        uint8_t piece[1024];
         bool fits = true;
-        for (size_t got = 1; got > 0 && fits && e == ports::FsError::Ok;) {
-            e = storage().read(f, piece, sizeof(piece), got);
-            fits = edit_.load_append(piece, got);
+        {
+            const wm::Wait hourglass(shell::manager());
+            edit_.load_begin();
+            uint8_t piece[1024];
+            for (size_t got = 1; got > 0 && fits && e == ports::FsError::Ok;) {
+                e = storage().read(f, piece, sizeof(piece), got);
+                fits = edit_.load_append(piece, got);
+            }
+            storage().close(f);
+            edit_.load_finish();
         }
-        storage().close(f);
-        edit_.load_finish();
         if (!fits) {
             edit_.clear();
             message_box("Editor", "This file is too large for the Editor (512 KB at most).");
@@ -184,21 +187,29 @@ private:
             save_as(continue_after);
             return;
         }
-        fs::File f;
-        ports::FsError e = storage().open(path_, ports::OpenMode::Write, f);
-        uint8_t piece[1024];
-        size_t at = 0;
-        while (e == ports::FsError::Ok) {
-            const size_t n = edit_.save_bytes(at, piece, sizeof(piece));
-            if (n == 0) {
-                break;
+        // The text goes to a temporary file that takes the place of the old
+        // one at the end, so a power cut, a full disk or a failed write
+        // leaves the document as it was last saved. Nothing else runs until
+        // this returns, so the pointer shows the hourglass meanwhile.
+        ports::FsError e;
+        {
+            const wm::Wait hourglass(shell::manager());
+            fs::Save save;
+            e = storage().begin_save(path_, save);
+            uint8_t piece[1024];
+            size_t at = 0;
+            while (e == ports::FsError::Ok) {
+                const size_t n = edit_.save_bytes(at, piece, sizeof(piece));
+                if (n == 0) {
+                    break;
+                }
+                e = storage().write(save.file, piece, n);
+                at += n;
             }
-            e = storage().write(f, piece, n);
-            at += n;
-        }
-        if (f.open()) {
-            const ports::FsError c = storage().close(f);
-            e = e != ports::FsError::Ok ? e : c;
+            if (save.file.open()) {
+                const ports::FsError c = storage().finish_save(save, e == ports::FsError::Ok);
+                e = e != ports::FsError::Ok ? e : c;
+            }
         }
         if (e != ports::FsError::Ok) {
             next_ = Then::Nothing;
@@ -252,6 +263,9 @@ private:
     // "notes.txt - Editor", with a * after the name while there are changes.
     void retitle()
     {
+        // Remembered here too, so the star comes back on the first change
+        // after a save.
+        shown_modified_ = edit_.modified();
         snprintf(title_, sizeof(title_), "%s%s - Editor", name(), edit_.modified() ? "*" : "");
         set_title(title_);
     }

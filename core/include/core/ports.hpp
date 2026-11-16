@@ -152,6 +152,10 @@ public:
     virtual FsError make_folder(const char *path) = 0;
     virtual FsError remove(const char *path) = 0; // a file or an empty folder
     virtual FsError rename(const char *from, const char *to) = 0;
+    // Gives the file `from` the name `to` in one step, taking the place of a
+    // file already there: after a power cut `to` is whole, either the old
+    // file or the new one, never half of one. IsFolder if `to` is a folder.
+    virtual FsError replace(const char *from, const char *to) = 0;
     virtual FsError open(const char *path, OpenMode mode, int &file) = 0;
     virtual FsError read(int file, void *data, size_t size, size_t &done) = 0;
     virtual FsError write(int file, const void *data, size_t size) = 0;
