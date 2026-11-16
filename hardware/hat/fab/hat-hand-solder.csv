@@ -1,0 +1,11 @@
+Designator,Quantity,Value,Footprint,Manufacturer,MPN,LCSC,Description,Mount
+BT1,1,CR2032 holder,BatteryHolder_Keystone_3034_1x20mm,Keystone,3034,,"Coin cell holder for CR2032, SMD with large pads (hand solder). Insert a CR2032",SMD
+C12,1,100 uF,CP_Radial_D6.3mm_P2.50mm,,,,"Electrolytic 100 uF 10 V or more, radial 6.3 mm, 2.5 mm pitch",THT
+J1,1,DevKitC left,PinSocket_1x22_P2.54mm_Vertical,Wurth Elektronik,61302211821,,"Socket strip 1x22, 2.54 mm, vertical",THT
+J2,1,DevKitC right,PinSocket_1x22_P2.54mm_Vertical,Wurth Elektronik,61302211821,,"Socket strip 1x22, 2.54 mm, vertical",THT
+J3,1,VGA,DSUB-15-HD_Female_Horizontal_P2.29x1.98mm_EdgePinOffset3.03mm_Housed_MountingHolesOffset4.94mm,Amphenol ICC,L77HDE15SD1CH4F,,"HD15 (VGA) female, right angle, through hole. Check the footprint against the part actually used",THT
+J4,1,Audio out,PinHeader_1x02_P2.54mm_Vertical,,,,"1x2 pin header 2.54 mm, to a 3.5 mm jack (tip and ring on pin 1, sleeve on pin 2)",THT
+J5,1,microSD,microSD_HC_Molex_104031-0811,Molex,1040310811,,"microSD socket, push-push, with card detect switch (hand solder, 1.1 mm pitch)",SMD
+J6,1,USB-A x2,USB_A_Wuerth_61400826021_Horizontal_Stacked,Wurth Elektronik,61400826021,,"Dual stacked USB-A socket, through hole",THT
+J8,1,Piezo,PinHeader_1x02_P2.54mm_Vertical,,,,"1x2 pin header 2.54 mm, to a passive piezo sounder",THT
+Y1,1,12 MHz,Crystal_HC49-U_Vertical,,,,"Crystal 12 MHz, HC-49 through hole, 12 to 20 pF load (the hub has its own load capacitors)",THT

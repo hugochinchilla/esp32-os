@@ -1,23 +1,46 @@
-# Chinchilla hat v0.1 (prototype PCB)
+# Chinchilla hat v0.2 (prototype PCB)
 
 A two-layer, 100 x 78 mm board that the ESP32-S3-DevKitC-1 plugs into. It
 replaces the hand-built perfboard adapter and adds the extras Hugo chose on
-2026-11-16:
+2026-11-16. Version 0.2 is laid out for **partial assembly** (level B below):
+the board maker places only 8 different SMD parts, and everything that is
+quick to solder by hand is left to you.
 
-- VGA: 3-bit resistor ladders per colour (510 ohm, 1 k, 2 k, 1 %), 100 ohm on
-  each sync line, HD15 socket on the board edge. Same pins and values as
+- VGA: 3-bit resistor ladders built from 1 k resistors only. Top bit: two 1 k
+  in parallel (500 ohm); middle bit: one 1 k; low bit: two 1 k in series
+  (2 k). Exact 1:2:4 steps, 0.69 V into 75 ohm at full white (the perfboard's
+  510 / 1 k / 2 k gives 0.68 V). Sync lines through two 1 k in parallel
+  (500 ohm instead of 100). Same pins as
   [the perfboard adapter](../../docs/hardware/README.md).
-- Audio out (1 k + 100 nF filter, 10 uF DC block, 10 k bleeder) to a 3.5 mm
-  jack, and a piezo sounder between 3V3 and GPIO14.
+- Audio out (1 k + 100 nF filter, 10 uF DC block) to a 2-pin header for a
+  3.5 mm jack, and a 2-pin header for a piezo between 3V3 and GPIO14.
 - Clock chip DS3231MZ on I2C (GPIO1 SDA, GPIO2 SCL), alarm/1 Hz output on
   GPIO11, CR2032 holder.
 - microSD socket wired for 1-bit SDMMC (CLK 39, CMD 40, D0 41), all data
   lines pulled up, card detect switch on GPIO12.
-- USB host through a CH334R hub with two USB-A sockets for keyboard and mouse.
-  Port power goes through a TPS2051C current-limited switch: on by default,
-  GPIO21 low turns it off, GPIO42 reads its overcurrent flag. ESD protection
-  (USBLC6-2SC6) on both ports. Bus powered from the dev board's 5V pin.
+- USB host through a CH334R hub (through-hole 12 MHz crystal) with two USB-A
+  sockets for keyboard and mouse. Port power goes through a TPS2051C
+  current-limited switch: on by default, GPIO21 low turns it off, GPIO42
+  reads its overcurrent flag. ESD protection (USBLC6-2SC6) on both ports,
+  100 uF electrolytic on port power. Bus powered from the dev board's 5V pin.
 - A 6-pin expansion header (3V3, GPIO38, 47, 48, 5V, GND), not fitted.
+
+Only two resistor values (1 k, 10 k) and two capacitor values (100 nF,
+10 uF). Pull-ups stay at 10 k because the SD card specification asks for
+10 k to 100 k.
+
+### Who fits what
+
+| Board maker (SMD, 8 different parts, 47 placements) | You (hand soldering) |
+| --- | --- |
+| 1 k and 10 k resistors, 100 nF and 10 uF capacitors (0603 / 0805) | Two 1x22 sockets for the dev board |
+| CH334R hub (QSOP-16, 0.635 mm pitch) | HD15 VGA socket, stacked USB-A socket |
+| DS3231MZ clock (SOIC-8) | microSD socket (SMD, 1.1 mm pitch) and CR2032 holder (SMD, big pads) |
+| TPS2051C power switch, 2x USBLC6-2SC6 | 12 MHz HC-49 crystal, 100 uF electrolytic, 2-pin headers for audio and piezo |
+
+The lists are `fab/hat-bom-assembly.csv` (send to the maker) and
+`fab/hat-hand-solder.csv` (buy yourself). `fab/hat-pos-top.csv` holds only the
+maker's parts.
 
 **Status: routed, passes KiCad's design rule check (no errors; only
 silkscreen-at-edge warnings from the connector outlines), not built.** Treat
@@ -34,8 +57,10 @@ the first order as a test run of one to three boards.
 | `hat.kicad_pro`, `hat.kicad_sch`, `hat.kicad_pcb` | KiCad project (saved by KiCad 7; KiCad 8 and 9 open it and convert it) |
 | `hat.kicad_sym`, `sym-lib-table` | The board's own symbols (dev board sockets, connectors) |
 | `fab/hat-gerbers.zip` | Gerbers and Excellon drill files, for any board maker |
-| `fab/hat-bom.csv` | Bill of materials with manufacturer part numbers |
-| `fab/hat-pos-top.csv` | Pick-and-place (component positions), top side |
+| `fab/hat-bom.csv` | Full bill of materials, with who fits each part |
+| `fab/hat-bom-assembly.csv` | The board maker's part of the BOM |
+| `fab/hat-hand-solder.csv` | Parts you buy and solder |
+| `fab/hat-pos-top.csv` | Pick-and-place for the board maker's parts, top side |
 | `fab/hat-schematic.pdf`, `fab/hat-assembly-top.pdf` | Schematic and assembly drawing |
 
 Tracks are 0.25 mm (0.5 mm for power), clearance 0.2 mm, vias 0.6/0.3 mm,
@@ -59,30 +84,35 @@ the scripts should be retired.
 - Dev board on top, in two 1x22 sockets 25.4 mm apart (10 holes on the
   perfboard, which fits the board in use). Its USB-C sockets face the right
   edge, its antenna end the left, with no copper pour under the antenna.
-- VGA and audio jack on the bottom edge, USB-A on the top edge, microSD on the
-  left edge.
+- VGA and the audio and piezo headers on the bottom edge, USB-A on the top
+  edge, microSD on the left edge.
 - Ground: a pour on both layers. The VGA socket's five ground pins and both
   shell lugs go to it (on the perfboard, pin 10 alone gave no picture).
-- Parts on the top side only; through-hole parts are the two sockets, the VGA
-  socket, the jack and the USB-A socket.
+- Parts on the top side only.
 
 ## Before ordering
 
 1. Check the header spacing of your dev board (25.4 mm between the two rows)
    and that pin 1 (3V3) is at the antenna end.
 2. Upload the project and look at the assembler's 3D / placement preview,
-   especially the polarity of U1 to U5 and the orientation of the microSD
-   socket, VGA socket and jack.
+   especially the polarity of U1 to U5. If the maker builds its BOM from the
+   KiCad project (AISLER does), mark the hand-solder parts (J1 to J8, BT1,
+   Y1, C12) as "do not place" there; they are already left out of
+   `hat-pos-top.csv`.
 3. The VGA socket footprint is a generic KiCad one (Tonar/Amphenol style,
    pins 3.03 mm from the edge). If the assembler offers a different HD15
    part, compare its drawing with the footprint.
-4. The coin cell is not fitted by the assembler; insert a CR2032.
+4. Sync now goes through 500 ohm instead of the perfboard's 100 ohm. If your
+   VGA-to-HDMI adapter shows no picture, solder a 1 k across each sync pair
+   (R16/R17 and R18/R19) to bring it to about 330 ohm, or bridge them.
+5. Solder the low parts first (microSD socket, coin cell holder), then the
+   crystal, headers and capacitor, then the sockets and connectors.
 
 ## Firmware notes
 
 - Pins newly used: GPIO11 (clock chip alarm, open drain, pulled up) and
   GPIO12 (card detect, low when a card is inserted). Both were spare.
-- Leave GPIO21 high or floating to keep USB power on (R23 pulls it up).
+- Leave GPIO21 high or floating to keep USB power on (R30 pulls it up).
 - The hub is a standard USB hub. ESP-IDF 5.5's USB host library supports
   external hubs behind `CONFIG_USB_HOST_HUBS_SUPPORTED` (marked
   experimental); check this before relying on it.
@@ -100,28 +130,32 @@ pick-and-place, which is what `fab/` holds.
 | [Beta Layout / PCB-POOL](https://eu.beta-layout.com/pcb/) | Germany / Ireland | 1 board (assembly of 1 to 50) | Boards from 8 h; assembly time in the configurator | Gerbers; other formats on their file format page | Configurator or quote |
 | For comparison: [JLCPCB](https://jlcpcb.com/news/eu-customs-reform-2026) | China, ships to the EU | 2 assembled boards | About 1 to 2 weeks with shipping | Gerbers + BOM + CPL (the files in `fab/`) | Usually the cheapest. Since 1 July 2026 every EU parcel pays duty: EUR 3 per item category for private orders under EUR 150, plus VAT and a possible carrier fee |
 
-### Estimated cost of assembled boards
+### Estimated cost by assembly level
 
-Rough estimates made on 2026-11-16 for this board (78 cm², two layers,
-23 different parts, about 45 SMD and 5 through-hole parts), before VAT and
-before any quote. Upload the files for real numbers; treat these as the order
-of magnitude.
+Rough estimates made on 2026-11-16, before VAT and before any quote, from
+AISLER's last published fees (see below). The design in this folder is
+level B. Levels C and D need small changes to the board (a through-hole fuse
+instead of the switch, no ESD chips).
 
-Parts cost about EUR 30 per board at distributor single-unit prices. The
-DS3231MZ (about EUR 7), the five connectors and the two sockets are most of it.
+| Level | Board maker places | Different parts | 1 board | 3 boards | 6 boards | Your parts for 3 boards |
+| --- | --- | --- | --- | --- | --- | --- |
+| A (v0.1) | Everything | 23 | EUR 245 | EUR 310 | EUR 390 | none |
+| **B (v0.2)** | Resistors, capacitors, hub, clock chip, power switch, ESD | 8 | EUR 115 | EUR 140 | EUR 200 | about EUR 50 |
+| C | As B, without switch and ESD (you fit a through-hole fuse) | 6 | EUR 95 | EUR 120 | EUR 170 | about EUR 50 |
+| D | As C, and you also solder the clock chip | 5 | EUR 80 | EUR 90 | EUR 120 | about EUR 70 |
+| E | Nothing: bare boards and stencil | 0 | EUR 40 | EUR 40 | EUR 55 | about EUR 80 |
 
-| | 1 board | 3 boards | 5 boards |
-| --- | --- | --- | --- |
-| AISLER | about EUR 245 | about EUR 310 | about EUR 390 (6 boards, sold in sets of 3) |
-| JLCPCB (economic assembly, minimum 2) | about EUR 90 (for 2) | about EUR 115 | about EUR 145 |
-| Eurocircuits | about EUR 400 to 600 for 1 to 2 boards; my guess, no published fees | | |
+For comparison, JLCPCB at level B (four "extended" parts at $3, the rest
+basic) comes to about EUR 85 for 2 boards and EUR 100 for 5 including the EU
+import costs, so the gap to a German maker mostly closes. At level A it was
+about EUR 115 for 3 against AISLER's EUR 310.
 
 How they were worked out:
 
 - **AISLER.** Their last published assembly fees (May 2022, may have
   changed) are EUR 7.50 per different part, EUR 0.04 per placed SMD part and
-  EUR 0.01 per cm² per board. With 23 different parts the per-part fee
-  (about EUR 172) is most of the bill and does not grow with quantity. Add
+  EUR 0.01 per cm² per board. The per-part fee does not grow with
+  quantity, which is why fewer different parts matter more than fewer parts. Add
   bare boards (EUR 12 + EUR 0.067/cm² per board, in sets of 3, about EUR 28
   for 3), a stencil (EUR 5 + EUR 0.095/cm², about EUR 12), parts and free
   shipping. Through-hole soldering prices are not published and are left out.

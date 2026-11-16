@@ -39,35 +39,30 @@ def pin_x(n):
     return SOCK_X0 + (n - 1) * 2.54
 
 
-JACK_X = 86.0   # the jack footprint draws its own notch in the bottom edge (x +-6.5 mm)
-
-VGA_RES_X = {"R1": 4, "R2": 5, "R3": 6, "R4": 7, "R5": 8, "R6": 9, "R7": 10, "R8": 11,
-             "R9": 12, "R10": 15, "R11": 16}
-
 # ref: (x, y, rotation in degrees), board coordinates (mm, y down)
 PLACE = {
     "J2": (SOCK_X0, J2_Y, 90), "J1": (SOCK_X0, J1_Y, 90),
     "J6": (73.0, 15.16, 180),
     "J3": (62.0, H - 6.99, 0),
-    "J4": (JACK_X, H - 4.5, 0),
-    "BZ1": (88.0, 58.5, 0),
+    "J4": (82.5, 69.5, 0), "J8": (89.5, 69.5, 0),
     "J5": (7.0, 15.5, 90),
     "BT1": (16.5, 62.5, 0),
     "U1": (13.0, 32.0, 0), "C3": (13.0, 27.0, 0), "C4": (13.0, 37.0, 0),
-    "R14": (19.5, 29.5, 90), "R15": (21.5, 29.5, 90), "R16": (19.5, 35.0, 90),
-    "R17": (19.5, 7.5, 0), "R18": (19.5, 9.7, 0), "R19": (19.5, 11.9, 0),
-    "R20": (19.5, 14.1, 0), "R21": (19.5, 16.3, 0), "R22": (19.5, 18.5, 0),
+    "R21": (19.5, 29.5, 90), "R22": (21.5, 29.5, 90), "R23": (19.5, 35.0, 90),
+    "R24": (19.5, 7.5, 0), "R25": (19.5, 9.7, 0), "R26": (19.5, 11.9, 0),
+    "R27": (19.5, 14.1, 0), "R28": (19.5, 16.3, 0), "R29": (19.5, 18.5, 0),
     "C5": (25.0, 11.0, 90), "C6": (27.5, 11.0, 90),
     "J7": (40.0, 18.0, 90),
-    "U2": (86.0, 12.5, 0), "Y1": (86.0, 5.5, 0),
-    "C7": (92.5, 9.0, 90), "C8": (92.5, 13.0, 90), "C9": (95.0, 13.0, 90),
-    "U4": (79.5, 6.0, 0), "U5": (80.5, 19.0, 0),
-    "U3": (55.0, 10.0, 0), "C10": (55.0, 5.0, 0), "C11": (49.0, 8.0, 90), "C12": (45.0, 8.0, 90),
-    "R23": (59.5, 9.0, 90), "R24": (59.5, 12.5, 90),
-    "R12": (78.0, 55.0, 90), "C1": (78.0, 59.0, 90), "C2": (78.0, 63.0, 90), "R13": (75.5, 63.0, 90),
+    "U2": (86.0, 12.5, 0), "Y1": (84.0, 5.0, 0),
+    "C7": (95.0, 9.5, 90), "C8": (92.5, 13.0, 90), "C9": (95.0, 13.0, 90),
+    "U4": (64.0, 19.5, 0), "U5": (80.5, 19.0, 0),
+    "U3": (55.0, 10.0, 0), "C10": (55.0, 5.0, 0), "C11": (49.0, 8.0, 90), "C12": (40.5, 8.0, 0),
+    "R30": (59.5, 9.0, 90), "R31": (59.5, 12.5, 90),
+    "R20": (78.0, 55.0, 90), "C1": (78.0, 59.0, 90), "C2": (78.0, 63.0, 90),
 }
-for ref, n in VGA_RES_X.items():
-    PLACE[ref] = (pin_x(n), 56.0, 90)
+# VGA ladder resistors sit below the dev board pin they hang from, in two rows
+for ref, gpio, row in parts.VGA_LADDER:
+    PLACE[ref] = (pin_x(parts.DEVKIT_LEFT.index(gpio) + 1), 55.5 + 4.0 * row, 90)
 
 HOLES = [(4.0, 3.8), (96.0, 3.8), (4.0, 74.2), (96.0, 74.2)]
 FIDUCIALS = [(30.0, 3.0), (97.0, 45.0), (3.0, 47.0)]
@@ -177,6 +172,8 @@ def build():
         attrs = fp.GetAttributes()
         if p["dnp"]:
             attrs |= pcbnew.FP_EXCLUDE_FROM_BOM | pcbnew.FP_EXCLUDE_FROM_POS_FILES
+        elif p["who"] == "self":
+            attrs |= pcbnew.FP_EXCLUDE_FROM_POS_FILES   # hand soldered: not in the placement file
         fp.SetAttributes(attrs)
         for pad in fp.Pads():
             num = pad.GetNumber()
@@ -219,8 +216,7 @@ def build():
     r = 2.0
     add_line(board, pcbnew.Edge_Cuts, (r, 0), (W - r, 0))
     add_line(board, pcbnew.Edge_Cuts, (W, r), (W, H - r))
-    add_line(board, pcbnew.Edge_Cuts, (W - r, H), (JACK_X + 6.5, H))
-    add_line(board, pcbnew.Edge_Cuts, (JACK_X - 6.5, H), (r, H))
+    add_line(board, pcbnew.Edge_Cuts, (W - r, H), (r, H))
     add_line(board, pcbnew.Edge_Cuts, (0, H - r), (0, r))
     for cx, cy, a0 in [(r, r, 180), (W - r, r, 270), (W - r, H - r, 0), (r, H - r, 90)]:
         arc = pcbnew.PCB_SHAPE(board)
@@ -236,10 +232,15 @@ def build():
     add_rect(board, pcbnew.F_SilkS, 30.0, J2_Y - 2.2, 99.0, J1_Y + 2.2, 0.12)
     add_text(board, "ESP32-S3-DevKitC-1, USB sockets this end", 64.0, 30.0, 1.2)
     add_text(board, "pin 1: 3V3", 36.0, J1_Y - 3.0, 0.9)
-    add_text(board, "CHINCHILLA HAT v0.1", 64.0, 42.0, 1.6, bold=True)
+    add_text(board, "CHINCHILLA HAT v0.2", 64.0, 42.0, 1.6, bold=True)
     add_text(board, "github.com/hugochinchilla/esp32-os", 64.0, 44.6, 0.9)
     add_text(board, "VGA", 62.0, 66.5, 1.2, bold=True)
-    add_text(board, "AUDIO", 88.0, 64.6, 1.0, bold=True)
+    add_text(board, "AUDIO", 82.5, 66.8, 1.0, bold=True)
+    add_text(board, "PIEZO", 89.5, 66.8, 1.0, bold=True)
+    add_text(board, "sig", 85.1, 69.5, 0.8)
+    add_text(board, "GND", 85.3, 72.04, 0.8)
+    add_text(board, "3V3", 92.1, 69.5, 0.8)
+    add_text(board, "14", 91.8, 72.04, 0.8)
     add_text(board, "USB", 69.5, 1.0, 1.0, bold=True)
     add_text(board, "microSD", 11.0, 22.6, 1.0, bold=True)
     add_text(board, "CR2032 +", 15.5, 54.0, 1.0, bold=True)
@@ -257,8 +258,70 @@ def add_pours(board, netinfo, pts):
     save(board)
     board = pcbnew.LoadBoard(PCB)
     gnd = board.GetNetsByName()["GND"]
+    # Join neighbouring ground pins of the sockets with short tracks, so no sliver of
+    # pour is left stranded between their thermal reliefs.
+    for fp in board.GetFootprints():
+        pads = [p for p in fp.Pads() if p.GetNetname() == "GND" and p.HasHole()]
+        if fp.GetReference() in ("J1", "J2"):
+            for a in pads:
+                a.SetZoneConnection(pcbnew.ZONE_CONNECTION_FULL)
+        for a in pads:
+            for b in pads:
+                if a.GetNumber() < b.GetNumber() and (a.GetPosition() - b.GetPosition()).EuclideanNorm() < pcbnew.FromMM(2.6):
+                    for layer in (pcbnew.F_Cu, pcbnew.B_Cu):
+                        t = pcbnew.PCB_TRACK(board)
+                        t.SetStart(a.GetPosition())
+                        t.SetEnd(b.GetPosition())
+                        t.SetWidth(pcbnew.FromMM(0.5))
+                        t.SetLayer(layer)
+                        t.SetNet(gnd)
+                        board.Add(t)
     for layer, name in ((pcbnew.F_Cu, "GND_top"), (pcbnew.B_Cu, "GND_bottom")):
         add_zone(board, gnd, layer, pts, name)
+    board.BuildConnectivity()
+    pcbnew.ZONE_FILLER(board).Fill(board.Zones())
+    # Stitching vias tie the two ground pours together wherever both have copper
+    zones = [z for z in board.Zones() if z.GetZoneName() in ("GND_top", "GND_bottom")]
+    n = 0
+    for gx in range(4, int(W) - 3, 8):
+        for gy in range(4, int(H) - 3, 8):
+            ring = [(gx, gy)] + [(gx + 0.75 * math.cos(a * math.pi / 4), gy + 0.75 * math.sin(a * math.pi / 4))
+                                 for a in range(8)]
+            if all(z.HitTestFilledArea(z.GetLayer(), V(x, y)) for z in zones for x, y in ring):
+                via = pcbnew.PCB_VIA(board)
+                via.SetPosition(V(gx, gy))
+                via.SetWidth(pcbnew.FromMM(0.6))
+                via.SetDrill(pcbnew.FromMM(0.3))
+                via.SetNet(gnd)
+                board.Add(via)
+                n += 1
+    # Any pour fragment without a track or via of its own gets a via to the other layer
+    for z in zones:
+        polys = z.GetFilledPolysList(z.GetLayer())
+        other = [o for o in zones if o is not z][0]
+        for i in range(polys.OutlineCount()):
+            o = polys.Outline(i)
+            if any(o.PointInside(t.GetPosition() if t.GetClass() == "PCB_VIA" else t.GetStart())
+                   for t in board.GetTracks() if t.GetNetname() == "GND"):
+                continue
+            bb = o.BBox()
+            c = bb.Centre()
+            cands = [pcbnew.VECTOR2I(c.x + dx * pcbnew.FromMM(0.25), c.y + dy * pcbnew.FromMM(0.25))
+                     for dx in range(-40, 41) for dy in range(-40, 41)]
+            cands.sort(key=lambda q: (q - c).EuclideanNorm())
+            for pt in cands:
+                ring = [pcbnew.VECTOR2I(pt.x + int(pcbnew.FromMM(0.75) * math.cos(a * math.pi / 4)),
+                                        pt.y + int(pcbnew.FromMM(0.75) * math.sin(a * math.pi / 4))) for a in range(8)]
+                if all(o.PointInside(q) and other.HitTestFilledArea(other.GetLayer(), q) for q in ring + [pt]):
+                    via = pcbnew.PCB_VIA(board)
+                    via.SetPosition(pt)
+                    via.SetWidth(pcbnew.FromMM(0.6))
+                    via.SetDrill(pcbnew.FromMM(0.3))
+                    via.SetNet(gnd)
+                    board.Add(via)
+                    n += 1
+                    break
+    print(f"{n} ground stitching vias")
     board.BuildConnectivity()
     pcbnew.ZONE_FILLER(board).Fill(board.Zones())
     save(board)
@@ -272,7 +335,7 @@ def write_dsn(board):
     # power nets get wider tracks: add a net class to the DSN
     nets = " ".join(POWER_NETS)
     cls = (f'    (class power {nets}\n      (circuit (use_via "Via[0-1]_800:400_um"))\n'
-           f'      (rule (width 500) (clearance 200))\n    )\n')
+           f'      (rule (width 400) (clearance 200))\n    )\n')
     # remove power nets from the default class
     m = re.search(r"\(class kicad_default(.*?)\(circuit", s, re.S)
     body = m.group(1)
@@ -294,8 +357,7 @@ def write_dsn(board):
     s = s.replace("(rule\n      (width 200)", "(rule\n      (width 250)")
     s = re.sub(r"\(class kicad_default(.*?)\(rule \(width 200\)", lambda m: m.group(0).replace("(width 200)", "(width 250)"), s, flags=re.S)
     i = 0.15
-    pts = [(i, i), (W - i, i), (W - i, H - i), (JACK_X + 6.5, H - i), (JACK_X + 2.2, H - 1.5),
-           (JACK_X - 2.2, H - 1.5), (JACK_X - 6.5, H - i), (i, H - i)]
+    pts = [(i, i), (W - i, i), (W - i, H - i), (i, H - i)]
     path = "  ".join(f"{round((OX + x) * 1000)} {round(-(OY + y) * 1000)}" for x, y in pts + pts[:1])
     s = re.sub(r"\(boundary\s*\(path pcb 0 [^)]*\)\s*\)", f"(boundary\n      (path pcb 0  {path})\n    )", s, count=1)
     open(DSN, "w").write(s)
@@ -357,7 +419,7 @@ def save(board, path=PCB):
     d = json.load(open(pro))
     ns = d["net_settings"]
     default = dict(ns["classes"][0], track_width=0.25)
-    power = dict(default, name="Power", track_width=0.5, via_diameter=0.8, via_drill=0.4)
+    power = dict(default, name="Power", track_width=0.4, via_diameter=0.8, via_drill=0.4)
     ns["classes"] = [default, power]
     ns["netclass_patterns"] = [{"netclass": "Power", "pattern": n} for n in POWER_NETS]
     d["meta"]["filename"] = os.path.basename(pro)
