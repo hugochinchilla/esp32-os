@@ -32,8 +32,16 @@ void message_box(const char *title, const char *text);
 using AnswerFn = void (*)(int choice, void *context);
 void ask(const char *title, const char *text, const char *const *buttons, int count, AnswerFn answer,
          void *context);
-// The Shut Down dialog: Restart (through the System port) or Cancel.
+// The Shut Down dialog: Shut Down, Restart (through the System port) or
+// Cancel.
 void shut_down_dialog();
+// Shut Down: asks every program to close, then hands the screen to the
+// power-down screen for good (Ctrl+Alt+Del there restarts). Returns false,
+// with nothing shut down, when a program has a question open instead.
+bool power_down();
+bool powered_down();
+// The Task Manager (also Ctrl+Alt+Del): opens it or brings it to the front.
+void open_task_manager();
 
 // File dialogs, for any program. Modal to `owner`. `chosen` gets the full
 // path ("C:\docs\notes.txt") when the user picks one; nothing on Cancel.

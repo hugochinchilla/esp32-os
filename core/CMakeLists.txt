@@ -23,12 +23,15 @@ set(CORE_SRCS
     src/gfx/rect.cpp
     src/shell/apps.cpp
     src/shell/boot.cpp
+    src/shell/defrag.cpp
     src/shell/desktop.cpp
     src/shell/dialogs.cpp
     src/shell/editor.cpp
     src/shell/file_manager.cpp
     src/shell/listing.cpp
+    src/shell/power.cpp
     src/shell/settings.cpp
+    src/shell/task_manager.cpp
     src/shell/viewer.cpp
     src/wm/text_edit.cpp
     src/wm/widgets.cpp
