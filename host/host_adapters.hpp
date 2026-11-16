@@ -2,6 +2,9 @@
 // do-nothing versions of the rest.
 #pragma once
 
+#include <atomic>
+#include <mutex>
+#include <thread>
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
@@ -123,6 +126,34 @@ public:
     void lock() override {}
     bool try_lock() override { return true; }
     void unlock() override {}
+};
+
+// A real lock for tests with several threads, as the FreeRTOS mutex is on
+// the board.
+class ThreadLock : public ports::Lock {
+public:
+    void lock() override
+    {
+        mutex_.lock();
+        owner_ = std::this_thread::get_id();
+    }
+    bool try_lock() override
+    {
+        if (owner_.load() == std::this_thread::get_id() || !mutex_.try_lock()) {
+            return false;
+        }
+        owner_ = std::this_thread::get_id();
+        return true;
+    }
+    void unlock() override
+    {
+        owner_ = std::thread::id();
+        mutex_.unlock();
+    }
+
+private:
+    std::mutex mutex_;
+    std::atomic<std::thread::id> owner_{};
 };
 
 class HostSystem : public ports::System {

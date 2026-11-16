@@ -569,6 +569,10 @@ void ui_task(void *)
     // gets the sample files.
     static EspMemory memory;
     static fs::Storage storage;
+    // One task uses the file system today; the lock is in place for the
+    // first one that joins it (background saves, the shell).
+    static RtosLock storage_lock;
+    storage.set_lock(&storage_lock);
     static LittleFsVolume flash;
     bool formatted = false;
     const int64_t mount_start = esp_timer_get_time();

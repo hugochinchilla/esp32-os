@@ -278,24 +278,115 @@ Window *Wm::main_window_of(proc::Pid pid) const
     return any;
 }
 
+// The safe point: the end of every event and tick, when no program's code
+// is on the stack. Signals take effect here, processes whose last window
+// has closed leave the table, and those that come back are started again.
 void Wm::reap()
 {
     if (procs_ == nullptr) {
         return;
     }
+    const bool signalled = deliver_signals();
     for (int i = procs_->count() - 1; i >= 0; i--) {
         const proc::Process &p = procs_->at(i);
         if (!p.is(proc::kWindowed) || windows_of(p.pid) != 0) {
             continue;
         }
-        const proc::Pid pid = p.pid;
-        for (Timer &t : timers_) {
-            if (t.id != 0 && t.owner == pid) {
-                t.id = 0;
-            }
-        }
-        procs_->exit(pid);
+        end_process(p.pid);
     }
+    const bool restarted = procs_->restart_due() != 0;
+    if (signalled || restarted) {
+        update(); // the event's own painting is done: show what changed
+    }
+}
+
+bool Wm::deliver_signals()
+{
+    if (!procs_->signals_waiting()) {
+        return false;
+    }
+    // The PIDs first: acting on a signal changes the table.
+    proc::Pid pids[proc::Table::kMaxProcesses];
+    const int n = procs_->count();
+    for (int i = 0; i < n; i++) {
+        pids[i] = procs_->at(i).pid;
+    }
+    for (int i = 0; i < n; i++) {
+        const uint8_t bits = procs_->take_signals(pids[i]);
+        if (bits & static_cast<uint8_t>(proc::Signal::Kill)) {
+            end_process(pids[i]); // a TERM sent with it no longer matters
+        } else if (bits & static_cast<uint8_t>(proc::Signal::Term)) {
+            ask_to_close(pids[i]);
+        }
+    }
+    return true;
+}
+
+// TERM: the close button of every window of the process that has one.
+void Wm::ask_to_close(proc::Pid pid)
+{
+    Window *windows[kMaxWindows];
+    int n = 0;
+    for (int i = 0; i < count_; i++) {
+        Window *w = order_[i];
+        if (w->owner_ == pid && !(w->modal_ && w->modal_owner_ != nullptr)) {
+            windows[n++] = w;
+        }
+    }
+    for (int i = 0; i < n; i++) {
+        Window &w = *windows[i];
+        if (w.wm_ != this) {
+            continue; // closed by one asked before it
+        }
+        // As a click on the close button would, the window comes to the
+        // front first: a question the program asks is then its own (a
+        // message box belongs to the window in use). One busy with a dialog
+        // is not asked; activating it brings the dialog forward.
+        Window *const before = active_;
+        activate(w);
+        if (blocker(w) != nullptr) {
+            continue;
+        }
+        const proc::Scope as(procs_, pid);
+        if (w.close_requested()) {
+            close(w);
+        } else if (active_ == &w && before != nullptr && before != &w && before->wm_ == this) {
+            activate(*before); // it stays and says nothing: back to who was in front
+        }
+    }
+}
+
+// Takes away everything the process owns here and removes its row. This is
+// KILL, and also how a window program leaves once its last window is gone.
+// Windows go from the top of the stack down, so dialogs go before the
+// windows they belong to. A window is closed without close_requested(), but
+// closed() still runs: the window objects are used again by the next launch
+// and must be told. A program that opens a window from there has it closed
+// too; the bound keeps a stubborn one from holding the desktop.
+void Wm::end_process(proc::Pid pid)
+{
+    for (int i = 0; i < popup_count_; i++) {
+        if (popups_[i].owner == pid) {
+            close_menus();
+            break;
+        }
+    }
+    for (int tries = 0; tries < 2 * kMaxWindows; tries++) {
+        Window *top = nullptr;
+        for (int z = count_ - 1; z >= 0 && top == nullptr; z--) {
+            top = stack_[z]->owner_ == pid ? stack_[z] : nullptr;
+        }
+        if (top == nullptr) {
+            break;
+        }
+        close(*top);
+    }
+    for (Timer &t : timers_) {
+        if (t.id != 0 && t.owner == pid) {
+            t.id = 0;
+        }
+    }
+    procs_->exit(pid);
 }
 
 void Wm::raise(Window &w)

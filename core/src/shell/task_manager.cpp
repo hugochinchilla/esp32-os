@@ -1,6 +1,8 @@
 // The Task Manager (Ctrl+Alt+Del): the processes that are running, each
 // with its number (PID), with End Task and Switch To, and what the processor
-// and the memory are doing. The list is the process table (core/proc): the
+// and the memory are doing. End Task sends the TERM signal, which is the
+// program's own close button, and offers KILL if the program is still there
+// a few seconds later. It is greyed out on a protected process. The list is the process table (core/proc): the
 // programs with windows by default, everything with "Show all processes".
 // Every figure is read from the machine: the desktop's share of the
 // processor is the time the UI task spent working (Wm::busy_us), the video
@@ -57,13 +59,15 @@ public:
     static constexpr int kClientW = 336, kClientH = 332;
     static constexpr int kMaxRows = proc::Table::kMaxProcesses, kRowText = 48;
     static constexpr uint32_t kRefreshUs = 1000000;
+    // How long a program gets to close after End Task before force is offered.
+    static constexpr uint32_t kGraceUs = 5000000;
 
     TaskManager()
         : Window("Task Manager", {0, 0, kClientW + 2 * kBorder, kClientH + kClientTop + kBorder},
                  &gfx::settings_icon_16()),
           heading_({8, 6, 200, 14}, "&Processes running:"),
           columns_({30, 22, 290, 14}, "  PID  Name              Window"),
-          list_({8, 36, 320, 94}, titles_, 0, nullptr, this),
+          list_({8, 36, 320, 94}, titles_, 0, &TaskManager::row_picked, this),
           end_({8, 136, 75, 23}, "&End Task", &TaskManager::end_pressed, this),
           switch_({89, 136, 75, 23}, "&Switch To", &TaskManager::switch_pressed, this),
           shut_down_({kClientW - 8 - 96, 136, 96, 23}, "Shut &Down...", &TaskManager::shut_down_pressed, this),
@@ -119,6 +123,7 @@ public:
     {
         shell::manager().stop_timer(timer_);
         timer_ = 0;
+        ending_ = proc::kNone;
     }
 
     bool key(const wm::KeyMsg &k) override
@@ -136,12 +141,14 @@ public:
     {
         refresh_programs();
         set_focus(&list_);
+        check_ending();
     }
 
     void refresh()
     {
         refresh_programs();
         refresh_figures();
+        check_ending();
     }
 
 private:
@@ -175,11 +182,24 @@ private:
         }
     }
 
-    // End Task closes the program at once, without its "save changes?"
-    // question: it is the way out when a program will not close. Every
-    // window the process owns goes, dialogs included, and the window manager
-    // then takes the process out of the table. A process without windows (a
-    // service) cannot be ended yet: that comes with signals.
+    static void row_picked(wm::ListBox &, void *context) { static_cast<TaskManager *>(context)->update_buttons(); }
+
+    // End Task is greyed out on a protected process: nobody may signal it.
+    void update_buttons()
+    {
+        const proc::Process *p = proc::table().find(chosen());
+        const bool allowed = p == nullptr || !p->is(proc::kProtected);
+        if (!allowed && focus() == &end_) {
+            set_focus(&list_);
+        }
+        end_.set_enabled(allowed);
+    }
+
+    // End Task asks first: it sends TERM, which is the program's own close
+    // button, so a program with unsaved work puts its question up. The
+    // signal takes effect when this click has been dealt with. If the
+    // program is still there kGraceUs later, check_ending() offers force.
+    // End Task again on the same program offers it at once.
     static void end_pressed(wm::Button &, void *context)
     {
         auto *self = static_cast<TaskManager *>(context);
@@ -187,25 +207,90 @@ private:
         if (pid == proc::kNone) {
             return;
         }
-        wm::Wm &m = shell::manager();
-        if (m.windows_of(pid) == 0) {
-            static char text[96];
-            snprintf(text, sizeof(text), "%s (PID %d) has no windows to close.\nIt cannot be ended from here yet.",
-                     proc::table().find(pid)->name, pid);
-            message_box("Task Manager", text);
+        self->set_focus(&self->list_); // the arrow keys go on to the next row
+        if (pid == self->ending_) {
+            self->offer_force();
             return;
         }
-        // From the top of the stack down, so dialogs go before their owners.
-        for (int z = m.window_count() - 1; z >= 0; z--) {
-            wm::Window *w = m.window_at(z);
-            if (w != nullptr && w->owner() == pid) {
-                m.close(*w);
-                z = m.window_count(); // the stack changed: look again from the top
-            }
+        static char text[120];
+        const char *name = proc::table().find(pid)->name;
+        switch (proc::table().signal(pid, proc::Signal::Term)) {
+        case proc::Sent::Ok:
+            self->ending_ = pid;
+            self->ending_since_ = shell::manager().now_us();
+            self->look_again_soon();
+            break;
+        case proc::Sent::NotPermitted:
+            snprintf(text, sizeof(text), "%s (PID %d) is protected.\nChinchilla needs it to keep running.", name, pid);
+            message_box("Task Manager", text);
+            break;
+        case proc::Sent::NotSupported:
+            snprintf(text, sizeof(text), "%s (PID %d) is a service without windows.\nServices cannot be ended yet.",
+                     name, pid);
+            message_box("Task Manager", text);
+            break;
+        case proc::Sent::NoSuchProcess:
+            break;
         }
+    }
+
+    // The program End Task asked to close: gone by now, or still there after
+    // its few seconds? The offer waits until this window is the one in
+    // front. A program that answered with a question of its own has that in
+    // front, and there is only one message box: ours would take its place
+    // while the user is still reading it.
+    void check_ending()
+    {
+        if (ending_ == proc::kNone) {
+            return;
+        }
+        if (!proc::table().alive(ending_)) {
+            ending_ = proc::kNone;
+            return;
+        }
+        wm::Wm &m = shell::manager();
+        if (m.now_us() - ending_since_ >= kGraceUs && m.active() == this) {
+            offer_force();
+        }
+    }
+
+    void offer_force()
+    {
+        const proc::Process *p = proc::table().find(ending_);
+        forcing_ = ending_;
+        ending_ = proc::kNone;
+        if (p == nullptr) {
+            return;
+        }
+        static const char *const buttons[] = {"&End Now", "Cancel"};
+        char text[200];
+        snprintf(text, sizeof(text),
+                 "%s (PID %d) has not closed.\nIt may be waiting for an answer from you.\n\n"
+                 "End it now? Changes that were not saved\nwill be lost.",
+                 p->name, p->pid);
+        ask("End Task", text, buttons, 2, &TaskManager::force_answer, this);
+    }
+
+    // End Now sends KILL: the program is not asked again, and the window
+    // manager takes its windows and timers away.
+    static void force_answer(int choice, void *context)
+    {
+        auto *self = static_cast<TaskManager *>(context);
+        if (choice == 0) {
+            proc::table().signal(self->forcing_, proc::Signal::Kill);
+            self->look_again_soon();
+        }
+        self->forcing_ = proc::kNone;
+    }
+
+    // A signal takes effect after the click that sent it: the list is read
+    // again at the next tick, not a second later.
+    void look_again_soon() { shell::manager().start_timer(1, 0, &TaskManager::look_again, this); }
+    static void look_again(void *context)
+    {
+        auto *self = static_cast<TaskManager *>(context);
         if (self->open()) {
             self->refresh_programs();
-            self->set_focus(&self->list_);
         }
     }
 
@@ -257,6 +342,7 @@ private:
         } else if (changed) {
             list_.invalidate();
         }
+        update_buttons();
     }
 
     void set_line(wm::Label &label, char *line, size_t capacity, const char *text)
@@ -328,6 +414,9 @@ private:
     const char *titles_[kMaxRows] = {};
     int count_ = 0;
     int timer_ = 0;
+    proc::Pid ending_ = proc::kNone;  // sent TERM, and watched until it goes
+    uint64_t ending_since_ = 0;
+    proc::Pid forcing_ = proc::kNone; // the one the "End Now?" question is about
     bool have_baseline_ = false, have_totals_ = false;
     uint64_t last_now_ = 0;
     uint32_t last_busy_ = 0, last_scanout_ = 0;

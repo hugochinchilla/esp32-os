@@ -420,6 +420,10 @@ int main(int argc, char **argv)
     // "Show all processes": the whole table, system processes included.
     key(wm::key::A, true);
     save("34b-task-manager-all");
+    // A protected process picked (init): End Task is greyed out.
+    key(wm::key::A + 15, true); // Alt+P: the list
+    key(wm::key::Home);
+    save("34c-task-manager-protected");
     key(wm::key::A, true);
     key(wm::key::Escape);
 
@@ -629,6 +633,46 @@ int main(int argc, char **argv)
     {
         const wm::Wait saving(desktop);
         save("39-editor-saving-hourglass", true, true);
+    }
+    while (desktop.active() != nullptr) {
+        desktop.close(*desktop.active());
+    }
+
+    // End Task on a program with unsaved work sends TERM, its own close
+    // button: the Editor asks. Left unanswered, with the Task Manager back
+    // in front after the few seconds, force is offered; End Now is KILL.
+    {
+        // (Here at the end: these scenes move the clock on by seconds.)
+        const int windows = desktop.window_count();
+        shell::open_in_editor("C:\\Documents\\notes.txt");
+        desktop.text("not saved yet");
+        desktop.key(wm::key::LeftCtrl, true);
+        desktop.key(wm::key::LeftAlt, true);
+        desktop.key(wm::key::Delete, true);
+        desktop.key(wm::key::Delete, false);
+        desktop.key(wm::key::LeftAlt, false);
+        desktop.key(wm::key::LeftCtrl, false);
+        clock_.now += 10000;
+        desktop.tick();
+        key(wm::key::End);
+        key(wm::key::A + 4, true); // Alt+E
+        save("34d-end-task-asks");
+        desktop.key(wm::key::LeftCtrl, true);
+        desktop.key(wm::key::LeftAlt, true);
+        desktop.key(wm::key::Delete, true);
+        desktop.key(wm::key::Delete, false);
+        desktop.key(wm::key::LeftAlt, false);
+        desktop.key(wm::key::LeftCtrl, false);
+        clock_.now += 6000000;
+        desktop.tick();
+        save("34e-end-task-force");
+        key(wm::key::Enter); // End Now
+        clock_.now += 10000;
+        desktop.tick();
+        if (desktop.window_count() != windows + 1) { // the Task Manager stays
+            printf("End Now left the Editor open\n");
+            failures++;
+        }
     }
     while (desktop.active() != nullptr) {
         desktop.close(*desktop.active());

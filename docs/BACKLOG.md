@@ -21,14 +21,15 @@ board or the merge), `done`.
 | 1 | FreeRTOS run-time statistics in the System port, shown by `tools/dbg.py` | S | | Yes | done (checked on the board 2026-11-16) |
 | 2 | Process table with PIDs. Windows and timers carry their owner. Existing services get rows | M | | | done (checked on the board 2026-11-16). [Journal](journal/2026-11-16-process-table.md) |
 | 3 | Per-process processor time and memory. Task Manager shows PID, time and memory columns | M | 1, 2 | Yes | todo |
-| 4 | System, protected and respawn flags | S | 2 | | todo |
-| 5 | TERM and KILL for window programs. End Task asks politely, then offers force | S | 2 | | todo |
+| 4 | System, protected and respawn flags | S | 2 | | done (checked on the board 2026-11-16). [Journal](journal/2026-11-16-signals-and-flags.md) |
+| 5 | TERM and KILL for window programs. End Task asks politely, then offers force | S | 2 | | done (checked on the board 2026-11-16). [Journal](journal/2026-11-16-signals-and-flags.md) |
+| 5b | TERM and KILL for the services (`netd`, `vncd`, `httpd`): each gets a stop function, so ending one really stops it | S | 5, 8 | Yes | todo |
 | 6 | Atomic saves: temporary file, then rename | S | | Yes | done (checked on the board 2026-11-16) |
 | 6b | Hourglass pointer while a program makes the user wait, first of all during a save (own art) | S | | Yes | done (checked on the board 2026-11-16) |
 | 7 | Watchdog, crash record, and an error screen on the next start | M | 2 | Yes | todo |
 | | **Phase 2: work off the UI task** | | | | |
 | 8 | Message queue into the UI task. The loop sleeps until there is work | M | | Yes | on a branch (`claude/project-thread-2jwyaw`): PC tests pass, firmware compiled, waiting for the board. [Journal](journal/2026-11-16-message-queue.md) |
-| 9 | Lock on the file system | S | | | todo |
+| 9 | Lock on the file system | S | | | done (checked on the board 2026-11-16). [Journal](journal/2026-11-16-file-system-lock.md) |
 | 10 | Jobs owned by a process, and "cannot exit until jobs finish". The Editor saves through a job, its window locked meanwhile | M | 2, 8, 9 | Yes | todo |
 | 11 | Three priority classes (Low, Normal, High) for jobs and services | S | 10 | Yes | todo |
 | | **Phase 3: the console** | | | | |

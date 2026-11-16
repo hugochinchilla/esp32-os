@@ -36,11 +36,15 @@ public:
     void paint(gfx::Canvas &c) override;
     bool wants_mouse() const override { return true; }
     void mouse(const MouseMsg &m) override;
-    bool focusable() const override { return true; }
+    bool focusable() const override { return enabled_; }
     bool key(const KeyMsg &k) override;
     void press() override { click(); }
-    char access() const override { return access_letter(text_); }
+    char access() const override { return enabled_ ? access_letter(text_) : 0; }
     bool pressed() const { return pressed_; }
+    // A button that is not enabled is greyed out: its caption is etched, and
+    // the mouse, the keyboard and its Alt+letter do nothing.
+    void set_enabled(bool on);
+    bool enabled() const { return enabled_; }
     void set_label(const char *text)
     {
         text_ = text;
@@ -60,6 +64,7 @@ private:
     void *context_;
     bool pressed_ = false;
     bool default_ = false;
+    bool enabled_ = true;
 };
 
 class CheckBox : public Widget {

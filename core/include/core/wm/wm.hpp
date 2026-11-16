@@ -81,6 +81,14 @@ public:
     // from the table once its last window has closed (at the end of the
     // event or tick, so a dialog can hand over to the next window first).
     // Timers such a process left running are stopped then.
+    //
+    // The same safe point is where signals take effect (proc::Table::signal
+    // leaves them waiting on the row). TERM asks each of the process's
+    // windows to close, as its close button would: the program may put a
+    // question up, or stay. A window held by a dialog is not asked; its
+    // dialog comes forward. KILL asks nothing: every window of the process
+    // is closed, its menus and timers go, and its row is removed. Processes
+    // with the respawn flag are started again once the dead are cleared away.
     void set_processes(proc::Table *table, proc::Pid desktop)
     {
         procs_ = table;
@@ -407,6 +415,9 @@ private:
     proc::Pid current_pid() const { return procs_ != nullptr ? procs_->current() : 0; }
     int start_timer_for(proc::Pid owner, uint32_t delay_us, uint32_t period_us, TimerFn fn, void *context);
     void reap();
+    bool deliver_signals();
+    void ask_to_close(proc::Pid pid);
+    void end_process(proc::Pid pid);
 
     Timer timers_[kMaxTimers] = {};
     int next_timer_id_ = 1;

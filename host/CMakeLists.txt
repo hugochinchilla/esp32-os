@@ -38,7 +38,8 @@ add_executable(test_image tests/test_image.cpp)
 target_link_libraries(test_image PRIVATE core)
 
 add_executable(test_fs tests/test_fs.cpp)
-target_link_libraries(test_fs PRIVATE core)
+find_package(Threads REQUIRED) # the two-task test of the file system's lock
+target_link_libraries(test_fs PRIVATE core Threads::Threads)
 
 add_executable(render_scenes tests/render_scenes.cpp)
 target_link_libraries(render_scenes PRIVATE core)
