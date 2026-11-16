@@ -10,18 +10,18 @@ namespace image {
 namespace {
 
 const DitherInfo kInfo[kDitherCount] = {
-    {"None", "&None", "The nearest colour: flat areas, bands in gradients."},
-    {"Bayer 2x2", "Bayer &2x2", "A coarse regular pattern of four steps."},
-    {"Bayer 4x4", "Bayer &4x4", "The desktop's regular pattern of 16 steps."},
-    {"Bayer 8x8", "Bayer &8x8", "A finer regular pattern of 64 steps."},
-    {"Blue noise", "&Blue noise", "An even, random-looking pattern with no grid."},
-    {"Floyd-Steinberg", "&Floyd-Steinberg", "Error diffusion: fine detail, some worms."},
-    {"Floyd-Steinberg serpentine", "Floyd-Steinberg &serpentine",
+    {"none", "None", "&None", "The nearest colour: flat areas, bands in gradients."},
+    {"bayer2", "Bayer 2x2", "Bayer &2x2", "A coarse regular pattern of four steps."},
+    {"bayer4", "Bayer 4x4", "Bayer &4x4", "The desktop's regular pattern of 16 steps."},
+    {"bayer8", "Bayer 8x8", "Bayer &8x8", "A finer regular pattern of 64 steps."},
+    {"blue-noise", "Blue noise", "&Blue noise", "An even, random-looking pattern with no grid."},
+    {"floyd-steinberg", "Floyd-Steinberg", "&Floyd-Steinberg", "Error diffusion: fine detail, some worms."},
+    {"floyd-serpentine", "Floyd-Steinberg serpentine", "Floyd-Steinberg &serpentine",
      "Floyd-Steinberg, alternate rows reversed: fewer worms."},
-    {"Atkinson", "&Atkinson", "Error diffusion with more contrast, as on the Mac."},
-    {"Jarvis-Judice-Ninke", "&Jarvis-Judice-Ninke", "Error spread over 12 neighbours: smooth, slower."},
-    {"Stucki", "S&tucki", "Like Jarvis-Judice-Ninke, a little sharper."},
-    {"Sierra Lite", "Sierra &Lite", "Error spread over 3 neighbours: quick."},
+    {"atkinson", "Atkinson", "&Atkinson", "Error diffusion with more contrast, as on the Mac."},
+    {"jarvis-judice-ninke", "Jarvis-Judice-Ninke", "&Jarvis-Judice-Ninke", "Error spread over 12 neighbours: smooth, slower."},
+    {"stucki", "Stucki", "S&tucki", "Like Jarvis-Judice-Ninke, a little sharper."},
+    {"sierra-lite", "Sierra Lite", "Sierra &Lite", "Error spread over 3 neighbours: quick."},
 };
 
 // Error diffusion kernels: (dx, dy, weight) taps and the divisor.

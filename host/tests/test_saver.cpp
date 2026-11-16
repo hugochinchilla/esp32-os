@@ -295,9 +295,10 @@ void test_shell()
     char ini[256] = "";
     size_t size = 0;
     CHECK(storage.read_file("C:\\.config\\screensaver.ini", ini, sizeof(ini) - 1, size) == ports::FsError::Ok);
-    CHECK(strstr(ini, "saver = starfield\r\n") != nullptr && strstr(ini, "wait_minutes = 2\r\n") != nullptr);
+    CHECK(strstr(ini, "[saver]") != nullptr && strstr(ini, "saver = starfield") != nullptr &&
+          strstr(ini, "wait_minutes = 2") != nullptr);
     // And a start reads them: Curves after 1 minute.
-    const char other[] = "; mine\nsaver = curves\nwait_minutes = 1\n";
+    const char other[] = "; mine\n[saver]\nsaver = curves\nwait_minutes = 1\n";
     storage.write_file("C:\\.config\\screensaver.ini", other, sizeof(other) - 1);
     while (desktop.active() != nullptr) {
         desktop.close(*desktop.active());

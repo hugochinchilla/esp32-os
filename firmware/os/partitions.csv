@@ -1,0 +1,8 @@
+# Name,   Type, SubType,  Offset,   Size
+# The app area runs to 4 MB, so it can later be split into two OTA slots of
+# about 1.9 MB each without moving the file system. C: (LittleFS) is the
+# 12 MB above it. See docs/DECISIONS.md.
+nvs,      data, nvs,      0x9000,   0x6000
+phy_init, data, phy,      0xf000,   0x1000
+factory,  app,  factory,  0x10000,  0x3f0000
+storage,  data, littlefs, 0x400000, 0xc00000

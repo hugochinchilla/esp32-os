@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "core/fs/ini.hpp"
 #include "core/gfx/art.hpp"
 #include "core/saver/saver.hpp"
 #include "core/shell/shell.hpp"
@@ -18,50 +19,40 @@ namespace {
 int g_choice = 1 + saver::kChinchillas; // 0: none, 1.. the animations
 int g_minutes = kScreenSaverMinutes;
 
-// The settings as a plain text file in the hidden settings folder, as the
-// owner wants for every program. Written when OK is pressed, read at
-// start-up. ponytail: the folder and file layout here are this program's
-// guess until the shared convention is on main; on the RAM disk the file
-// is lost at restart like everything else.
-constexpr char kConfigFolder[] = "C:\\.config";
-constexpr char kConfigFile[] = "C:\\.config\\screensaver.ini";
+// Kept in C:\\.config\\screensaver.ini (docs/settings.md): written when OK is
+// pressed, read at start-up.
 constexpr const char *kKeys[1 + saver::kCount] = {"none", "starfield", "chinchillas", "curves"};
 
-void load_settings()
+fs::Ini &settings()
 {
-    char text[256];
-    size_t size = 0;
-    if (storage().read_file(kConfigFile, text, sizeof(text) - 1, size) != ports::FsError::Ok) {
+    static fs::Ini ini;
+    return ini;
+}
+
+void read_settings()
+{
+    if (!load_settings("screensaver", settings())) {
         return;
     }
-    text[size] = 0;
-    for (const char *line = text; line != nullptr && *line != 0;) {
-        char value[32];
-        int minutes = 0;
-        if (sscanf(line, " saver = %31[a-z]", value) == 1) {
-            for (int i = 0; i <= saver::kCount; i++) {
-                if (strcmp(value, kKeys[i]) == 0) {
-                    g_choice = i;
-                }
+    char value[32];
+    if (settings().get("saver", "saver", value, sizeof(value))) {
+        for (int i = 0; i <= saver::kCount; i++) {
+            if (strcmp(value, kKeys[i]) == 0) {
+                g_choice = i;
             }
-        } else if (sscanf(line, " wait_minutes = %d", &minutes) == 1 && minutes >= 1) {
-            g_minutes = minutes > kScreenSaverMaxMinutes ? kScreenSaverMaxMinutes : minutes;
         }
-        line = strchr(line, '\n');
-        line = line != nullptr ? line + 1 : nullptr;
+    }
+    const int minutes = settings().get_int("saver", "wait_minutes", g_minutes);
+    if (minutes >= 1) {
+        g_minutes = minutes > kScreenSaverMaxMinutes ? kScreenSaverMaxMinutes : minutes;
     }
 }
 
-void save_settings()
+void write_settings()
 {
-    char text[160];
-    const int size = snprintf(text, sizeof(text),
-                              "; Chinchilla screensaver\r\n"
-                              "; saver: none, starfield, chinchillas or curves\r\n"
-                              "saver = %s\r\nwait_minutes = %d\r\n",
-                              kKeys[g_choice], g_minutes);
-    storage().make_folder(kConfigFolder); // already there: fine
-    storage().write_file(kConfigFile, text, static_cast<size_t>(size));
+    settings().set("saver", "saver", kKeys[g_choice]);
+    settings().set_int("saver", "wait_minutes", g_minutes);
+    save_settings("screensaver", settings());
 }
 
 saver::Runner &runner()
@@ -188,7 +179,7 @@ private:
         if (d->list_.selected() >= 0) {
             g_choice = d->list_.selected();
         }
-        save_settings();
+        write_settings();
         d->close(); // applies
     }
     static void cancel(wm::Button &, void *context) { static_cast<SaverDialog *>(context)->close(); }
@@ -217,7 +208,7 @@ void screen_saver_dialog() { dialog().show(); }
 
 void install_screen_saver()
 {
-    load_settings();
+    read_settings();
     apply();
 }
 
