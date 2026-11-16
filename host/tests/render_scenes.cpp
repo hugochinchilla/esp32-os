@@ -8,6 +8,7 @@
 
 #include "core/fs/memory_volume.hpp"
 #include "core/shell/boot.hpp"
+#include "core/shell/defrag.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/wm.hpp"
 #include "../host_adapters.hpp"
@@ -207,7 +208,7 @@ int main(int argc, char **argv)
     save("08-start-menu-programs");
 
     // Launch the Widget gallery from Programs, type into its text field.
-    centre_of(desktop.popup_item(1, 5), x, y);
+    centre_of(desktop.popup_item(1, 8), x, y); // Widget gallery
     click(x, y);
     key(wm::key::End);
     desktop.text(" año");
@@ -387,26 +388,75 @@ int main(int argc, char **argv)
     save("33-viewer-damaged");
     key(wm::key::Enter);
 
+    // Ctrl+Alt+Del: the Task Manager, with the second program picked. The
+    // clock moves on a second so the figures are a real sample.
+    desktop.key(wm::key::LeftCtrl, true);
+    desktop.key(wm::key::LeftAlt, true);
+    desktop.key(wm::key::Delete, true);
+    desktop.key(wm::key::Delete, false);
+    desktop.key(wm::key::LeftAlt, false);
+    desktop.key(wm::key::LeftCtrl, false);
+    clock_.now += 1000000;
+    desktop.tick();
+    key(wm::key::Home);
+    key(wm::key::Down);
+    save("34-task-manager");
+    key(wm::key::Escape);
+
     // Culebra, the snake game: a new game, a few berries in, its menu,
     // paused, and the end against a wall.
     while (desktop.active() != nullptr) {
         desktop.close(*desktop.active());
     }
     shell::launch(*shell::find_app("Culebra"));
-    save("34-culebra-new-game");
+    save("39-culebra-new-game");
     play_culebra(8);
-    save("35-culebra-playing");
+    save("40-culebra-playing");
     key(0x0A, true); // Alt+G
     key(0x16);       // S: Speed
-    save("36-culebra-menu");
+    save("41-culebra-menu");
     key(wm::key::Escape);
     key(wm::key::Escape);
     wait(130000); // the step that was due finds the game was left: paused
-    save("37-culebra-paused");
+    save("42-culebra-paused");
     key(wm::key::Space);
     key(wm::key::Up);
     wait(130000 * 20);
-    save("38-culebra-game-over");
+    save("43-culebra-game-over");
+    key(wm::key::F4, true);
+
+    // The Defragmenter: its made-up disk, part of the way, and tidy.
+    while (desktop.active() != nullptr) {
+        desktop.close(*desktop.active());
+    }
+    shell::open_defragmenter();
+    save("35-defragmenter");
+    key(wm::key::Enter); // Start
+    for (int i = 0; i < 601; i++) {
+        clock_.now += shell::kDefragStepUs;
+        desktop.tick();
+    }
+    save("36-defragmenter-running");
+    for (int i = 0; i < 20000 && !shell::defragmenter_disk().done(); i++) {
+        clock_.now += shell::kDefragStepUs;
+        desktop.tick();
+    }
+    clock_.now += shell::kDefragStepUs;
+    desktop.tick();
+    save("37-defragmenter-done");
+
+    // Shut Down from the Start menu: Enter picks Shut Down, and the screen
+    // says the power can go.
+    centre_of(desktop.taskbar_button(-1), x, y);
+    click(x, y);
+    centre_of(desktop.popup_item(0, 4), x, y);
+    click(x, y);
+    key(wm::key::Enter);
+    if (!shell::powered_down()) {
+        printf("Shut Down did not reach the power-down screen\n");
+        failures++;
+    }
+    save("38-power-down");
 
     return failures == 0 ? 0 : 1;
 }
