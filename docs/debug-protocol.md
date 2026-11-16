@@ -128,7 +128,7 @@ including opening the port.
 
 ## Files
 
-Paths are written `C:\docs\notes.txt` and are UTF-8. File errors come back
+Paths are written `C:\Documents\notes.txt` and are UTF-8. File errors come back
 with status 3, followed by the error code (`ports::FsError`) and its text,
 such as "not found" or "the folder is not empty". `tools/dbg.py` has
 `ls`, `get`, `put`, `rm` and `mkdir`; `put` sends about 1000 bytes per

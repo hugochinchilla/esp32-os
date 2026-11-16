@@ -83,23 +83,23 @@ def main():
 
         # Files: the RAM disk has the samples; put, list, get, delete.
         names = [n for n, _, _ in board.ls("C:\\")]
-        assert "docs" in names and "readme.txt" in names, names
+        assert "Documents" in names and "readme.txt" in names, names
         data = bytes(range(256)) * 1200  # 300 KB, every byte value
-        board.put("C:\\docs\\big.bin", data)
-        entries = {n: (d, s) for n, d, s in board.ls("C:/docs")}
+        board.put("C:\\Documents\\big.bin", data)
+        entries = {n: (d, s) for n, d, s in board.ls("C:/Documents")}
         assert entries["big.bin"] == (False, len(data)), entries
-        assert board.get("C:\\docs\\big.bin") == data
-        board.put("C:\\docs\\big.bin", b"short now")  # replacing truncates
-        assert board.get("C:\\docs\\big.bin") == b"short now"
+        assert board.get("C:\\Documents\\big.bin") == data
+        board.put("C:\\Documents\\big.bin", b"short now")  # replacing truncates
+        assert board.get("C:\\Documents\\big.bin") == b"short now"
         board.mkdir("C:\\new")
         try:
-            board.rm("C:\\docs")
+            board.rm("C:\\Documents")
             raise AssertionError("a folder with files in it was removed")
         except dbg.DebugError as error:
             assert "not empty" in str(error), error
-        board.rm("C:\\docs\\big.bin")
+        board.rm("C:\\Documents\\big.bin")
         board.rm("C:\\new")
-        assert "big.bin" not in [n for n, _, _ in board.ls("C:\\docs")]
+        assert "big.bin" not in [n for n, _, _ in board.ls("C:\\Documents")]
         try:
             board.get("C:\\nothing.txt")
             raise AssertionError("a missing file was read")

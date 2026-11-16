@@ -102,6 +102,16 @@ changes to the folder. A welcome.txt is put there on a new drive and once on
 an existing one; C:\.config\desktop.ini remembers it, so a deleted copy never
 comes back.
 
+### One documents folder (2026-11-16)
+
+Decided by the owner: the Documents icon opens C:\Documents, which holds the
+sample documents (C:\docs before) and the Desktop folder. A drive formatted
+before keeps its files: at start-up its C:\docs moves into C:\Documents
+once, a clashing name numbered ("notes (2).txt"), nothing overwritten, and
+C:\docs removed when empty; `[documents] moved` in C:\.config\desktop.ini
+records it. If something cannot be moved it stays in C:\docs and the move is
+tried again at the next start.
+
 ### Trash (2026-11-16)
 
 Asked for by the owner: deleting a file or folder moves it to the Trash; the
@@ -827,8 +837,6 @@ tested on the PC only (not yet compiled for or run on the board).
   cut to 9 and "..".
 - The folder is read again every 2 s (a few directory reads) instead of
   hooks in every program that writes files.
-- The Documents icon still opens C:\docs, not C:\Documents. Put to the owner:
-  move docs into Documents, or point the icon at C:\Documents.
 
 ### Chosen for the Trash (2026-11-16, to confirm)
 

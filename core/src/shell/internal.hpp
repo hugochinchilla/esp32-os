@@ -45,6 +45,8 @@ bool trash_origin(const char *name, char *out, int capacity);
 ports::FsError restore_from_trash(const char *name);
 // Drag and drop between folders (same drive); into the Trash trashes.
 ports::FsError move_to_folder(const char *path, const char *folder);
+// A name for `name` not taken in `folder`: itself, else "name (2).ext"...
+bool free_name_in(const char *folder, const char *name, bool is_folder, char *out, int capacity);
 // The Delete command: asks, then moves to the Trash (on C:) or deletes for
 // good (in the Trash, on other drives).
 void delete_asking(const char *path);

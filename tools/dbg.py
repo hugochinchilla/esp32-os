@@ -390,7 +390,7 @@ class Board:
     def wifi_forget(self, ssid):
         self.request(WIFI, b"\x05" + self._name(ssid))
 
-    # ---- Files. Paths are written C:\docs\notes.txt ("/" works too).
+    # ---- Files. Paths are written C:\Documents\notes.txt ("/" works too).
 
     @staticmethod
     def _path(p):

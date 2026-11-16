@@ -239,11 +239,11 @@ private:
 
     const char *name() const { return path_[0] ? fs::path::name(path_) : "Untitled"; }
 
-    // The folder of the file, for the file dialogs (C:\docs by default).
+    // The folder of the file, for the file dialogs (C:\Documents by default).
     const char *folder()
     {
         if (path_[0] == 0) {
-            return "C:\\docs";
+            return "C:\\Documents";
         }
         fs::path::parent(path_, folder_, sizeof(folder_));
         return folder_;

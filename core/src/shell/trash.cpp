@@ -100,6 +100,11 @@ void ask_permanent(bool folder)
 
 } // namespace
 
+bool free_name_in(const char *folder, const char *name, bool is_folder, char *out, int capacity)
+{
+    return free_name(folder, name, is_folder, nullptr, out, capacity);
+}
+
 bool in_trash(const char *path)
 {
     const size_t n = strlen(kTrashFolder);

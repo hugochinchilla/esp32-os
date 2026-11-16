@@ -321,11 +321,11 @@ static void test_samples()
     s.mount('C', v);
     fs::add_samples(s, 'C');
     ports::DirEntry e;
-    CHECK(s.stat("C:\\docs\\notes.txt", e) == FsError::Ok && e.size > 100);
+    CHECK(s.stat("C:\\Documents\\notes.txt", e) == FsError::Ok && e.size > 100);
     CHECK(s.stat("C:\\readme.txt", e) == FsError::Ok);
     char buf[128];
     size_t n;
-    CHECK(s.read_file("C:\\docs\\español.txt", buf, sizeof(buf), n) == FsError::Ok);
+    CHECK(s.read_file("C:\\Documents\\español.txt", buf, sizeof(buf), n) == FsError::Ok);
     CHECK(n > 14 && static_cast<uint8_t>(buf[13]) == 0xF1); // Latin-1 ñ
 }
 

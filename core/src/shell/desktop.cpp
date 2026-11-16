@@ -271,7 +271,7 @@ void open_my_board(void *)
 
 void open_documents(void *)
 {
-    open_folder("C:\\docs");
+    open_folder("C:\\Documents");
 }
 
 void open_trash_icon(void *) { open_trash(); }
@@ -406,6 +406,42 @@ void files_changed()
 
 namespace {
 
+// Drives formatted before 2026-11-16 keep documents in C:\docs; they move
+// into C:\Documents once (the owner's choice), numbered on a name clash,
+// never overwritten. C:\.config\desktop.ini remembers it was done.
+void move_old_documents()
+{
+    fs::Ini ini;
+    load_settings("desktop", ini);
+    if (ini.get_bool("documents", "moved", false)) {
+        return;
+    }
+    const char *kOld = "C:\\docs";
+    ports::DirEntry e;
+    bool all = true;
+    if (storage().stat(kOld, e) == ports::FsError::Ok && e.folder) {
+        storage().make_folder("C:\\Documents");
+        // Entry i stays put when a move fails, so step past it.
+        for (int i = 0; storage().entry(kOld, i, e) == ports::FsError::Ok;) {
+            char from[fs::kMaxPath], name[fs::kMaxPath], to[fs::kMaxPath];
+            const bool named = fs::path::join(kOld, e.name, from, sizeof(from)) &&
+                               free_name_in("C:\\Documents", e.name, e.folder, name, sizeof(name)) &&
+                               fs::path::join("C:\\Documents", name, to, sizeof(to));
+            if (!named || storage().rename(from, to) != ports::FsError::Ok) {
+                all = false;
+                i++;
+            }
+        }
+        if (all) {
+            storage().remove(kOld);
+        }
+    }
+    if (all) {
+        ini.set_bool("documents", "moved", true);
+        save_settings("desktop", ini);
+    }
+}
+
 // The welcome text, put on the desktop once: if it is deleted it does not
 // come back (C:\.config\desktop.ini remembers).
 void welcome_file()
@@ -529,6 +565,7 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
         g_settings_items[2].flags = 0;
     }
     wm.set_desktop_icons(g_icons, kSystemIcons);
+    move_old_documents();
     welcome_file();
     refresh_desktop_files(true);
     g_file_timer = wm.start_timer(2000000, 2000000, &desktop_files_tick, nullptr);

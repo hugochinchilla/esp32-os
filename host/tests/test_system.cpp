@@ -205,7 +205,7 @@ void test_task_manager()
 {
     close_all();
     shell::launch(*shell::find_app("Welcome"));
-    shell::open_in_editor("C:\\docs\\notes.txt");
+    shell::open_in_editor("C:\\Documents\\notes.txt");
     shell::launch(*shell::find_app("Widget gallery"));
     CHECK(desktop.window_count() == 3);
 
@@ -238,12 +238,12 @@ void test_task_manager()
     CHECK(strcmp(title(), "Task Manager") == 0);
     char saved[4096];
     size_t n = 0;
-    storage.read_file("C:\\docs\\notes.txt", saved, sizeof(saved), n);
+    storage.read_file("C:\\Documents\\notes.txt", saved, sizeof(saved), n);
     CHECK(std::string(saved, n).find("unsaved") == std::string::npos);
     CHECK(no_stale_pixels());
 
     // A program with a dialog open: End Task takes the dialog with it.
-    shell::open_in_editor("C:\\docs\\notes.txt");
+    shell::open_in_editor("C:\\Documents\\notes.txt");
     letter('f', kAlt);
     letter('a'); // Save As
     CHECK(strcmp(title(), "Save As") == 0);
@@ -318,7 +318,7 @@ void test_power_down()
 {
     close_all();
     shell::launch(*shell::find_app("Welcome"));
-    shell::open_in_editor("C:\\docs\\notes.txt");
+    shell::open_in_editor("C:\\Documents\\notes.txt");
     desktop.text("keep me?");
 
     // Unsaved changes call the shut-down off: the Editor's question shows.

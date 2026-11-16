@@ -261,17 +261,18 @@ int main(int argc, char **argv)
     double_click(x, y);
     save("15-my-board");
 
-    // Into C:, then docs (keyboard: select and Enter).
+    // Into C:, then Documents (keyboard: select and Enter).
     key(wm::key::Home);
     key(wm::key::Enter);
     save("16-drive-c");
     wm::Window *fm = desktop.active();
     key(wm::key::Home);
-    key(wm::key::Enter); // docs is the first folder
+    key(wm::key::Enter); // Documents is the first folder
     save("17-docs");
 
-    // Open notes.txt with the keyboard: español.txt, notes.txt, todo.txt.
+    // Open notes.txt with the keyboard: Desktop, español.txt, notes.txt, todo.txt.
     key(wm::key::Home);
+    key(wm::key::Right);
     key(wm::key::Right);
     key(wm::key::Enter);
     key(wm::key::End, false);
@@ -289,9 +290,10 @@ int main(int argc, char **argv)
     save("20-save-changes");
     key(wm::key::Escape); // Cancel
 
-    // Rename in the folder window: F2.
+    // Rename in the folder window: F2, on español.txt.
     desktop.activate(*fm);
     key(wm::key::Home);
+    key(wm::key::Right);
     key(0x3B); // F2
     save("21-rename");
     key(wm::key::Escape);
@@ -312,8 +314,7 @@ int main(int argc, char **argv)
     // landscape.jpg, mascot.bmp, test card.png.
     key(wm::key::Backspace);
     key(wm::key::Home);
-    key(wm::key::Right); // docs, Documents, pictures
-    key(wm::key::Right);
+    key(wm::key::Right); // Documents, pictures
     key(wm::key::Enter);
     save("23-pictures-folder");
 
@@ -505,12 +506,13 @@ int main(int argc, char **argv)
     }
     // Delete in the File manager asks, then moves the file to the Trash,
     // whose icon fills.
-    shell::open_folder("C:\\docs");
-    key(wm::key::Home); // espa\xc3\xb1ol.txt
+    shell::open_folder("C:\\Documents");
+    key(wm::key::Home); // Desktop, then espa\xc3\xb1ol.txt
+    key(wm::key::Right);
     key(wm::key::Delete);
     save("37h-move-to-trash");
     key(wm::key::Enter); // Yes
-    expect(!there("C:\\docs\\espa\xc3\xb1ol.txt") && there("C:\\.trash\\espa\xc3\xb1ol.txt"), "Delete did not move the file");
+    expect(!there("C:\\Documents\\espa\xc3\xb1ol.txt") && there("C:\\.trash\\espa\xc3\xb1ol.txt"), "Delete did not move the file");
     while (desktop.active() != nullptr) {
         desktop.close(*desktop.active());
     }
@@ -521,7 +523,7 @@ int main(int argc, char **argv)
     // File > Restore puts it back.
     key(0x09, true); // Alt+F
     key(0x15);       // R
-    expect(there("C:\\docs\\espa\xc3\xb1ol.txt") && !there("C:\\.trash\\espa\xc3\xb1ol.txt"), "Restore did not put it back");
+    expect(there("C:\\Documents\\espa\xc3\xb1ol.txt") && !there("C:\\.trash\\espa\xc3\xb1ol.txt"), "Restore did not put it back");
     while (desktop.active() != nullptr) {
         desktop.close(*desktop.active());
     }
@@ -538,20 +540,20 @@ int main(int argc, char **argv)
     mouse(tx, ty, 0);
     save("37k-dropped-in-trash");
     expect(!there("C:\\Documents\\Desktop\\welcome.txt") && there("C:\\.trash\\welcome.txt"), "the drop did not trash welcome.txt");
-    // In the File manager: readme.txt dragged onto the docs folder moves there.
+    // In the File manager: readme.txt dragged onto the Documents folder moves there.
     shell::open_folder("C:\\");
     {
         wm::Window *w = desktop.active();
         const gfx::Rect c = w->client();
-        // docs, Documents, pictures, system, then readme.txt on the second row.
+        // Documents, pictures, system, readme.txt.
         const int fx = c.x + 2 + 10 + 38, fy = c.y + 64 + 2 + 8 + 16;
-        mouse(fx, fy + 66, 0);
-        mouse(fx, fy + 66, 1);
-        mouse(fx + 10, fy + 50, 1);
+        mouse(fx + 3 * 76, fy, 0);
+        mouse(fx + 3 * 76, fy, 1);
+        mouse(fx + 3 * 76 - 10, fy + 10, 1);
         mouse(fx, fy, 1);
         save("37l-dragging-to-folder");
         mouse(fx, fy, 0);
-        expect(!there("C:\\readme.txt") && there("C:\\docs\\readme.txt"), "the drop did not move readme.txt");
+        expect(!there("C:\\readme.txt") && there("C:\\Documents\\readme.txt"), "the drop did not move readme.txt");
     }
     while (desktop.active() != nullptr) {
         desktop.close(*desktop.active());
@@ -569,11 +571,12 @@ int main(int argc, char **argv)
         desktop.close(*desktop.active());
     }
     // The same name deleted twice: the second is numbered in the Trash.
-    shell::open_folder("C:\\docs");
+    shell::open_folder("C:\\Documents");
     for (int i = 0; i < 2; i++) {
-        storage.write_file("C:\\docs\\a.txt", "a", 1);
+        storage.write_file("C:\\Documents\\a.txt", "a", 1);
         key(0x3E); // F5
-        key(wm::key::Home); // a.txt
+        key(wm::key::Home); // Desktop, then a.txt
+        key(wm::key::Right);
         key(wm::key::Delete);
         key(wm::key::Enter); // Yes
     }

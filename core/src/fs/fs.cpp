@@ -308,7 +308,7 @@ void add_samples(Storage &storage, char drive)
         path::join(root, rel, p, sizeof(p));
         storage.make_folder(p);
     };
-    folder("docs");
+    folder("Documents");
     folder("pictures");
     folder("system");
     ports::VolumeInfo info = {};
@@ -328,7 +328,7 @@ void add_samples(Storage &storage, char drive)
              "Everything on it is lost when the board restarts.\r\n"
              "Use the computer (tools/dbg.py get) to keep files.\r\n");
     }
-    file("docs\\notes.txt",
+    file("Documents\\notes.txt",
          "Shopping list for the VGA board\r\n"
          "\r\n"
          "  9 colour resistors: 510, 1k, 2k\r\n"
@@ -337,14 +337,14 @@ void add_samples(Storage &storage, char drive)
          "\r\n"
          "640 x 480, 256 colours, 60 Hz.\r\n"
          "Screenshots travel over the serial port.\r\n");
-    file("docs\\todo.txt",
+    file("Documents\\todo.txt",
          "To do\r\n"
          "\r\n"
                   "- Wi-Fi and the clock from the network\r\n"
          "- USB keyboard and mouse\r\n"
          "- image viewer\r\n");
     // Text files are Latin-1, as 98 wrote them (names are kept in UTF-8).
-    file("docs\\español.txt", "Texto en espa\xf1ol: a\xf1o, ni\xf1o, caf\xe9, \xa1hola!\r\n");
+    file("Documents\\español.txt", "Texto en espa\xf1ol: a\xf1o, ni\xf1o, caf\xe9, \xa1hola!\r\n");
     file("system\\version.txt", "Chinchilla 0.3\r\n");
     // Pictures made by tools/gen_pictures.py, and two NASA photographs
     // (public domain, see third_party/samples/README.md).
