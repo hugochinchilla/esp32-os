@@ -60,5 +60,5 @@ Items 1, 2, 6, 9, 12 and 13 touch different files and can be separate branches
 at the same time.
 | | **The look** | | | | |
 | 28 | Taskbar without the dead quick-launch icons; Back and Up with their own icons in the File manager | S | | | on a branch (`claude/project-thread-ikdply`). [Journal](journal/2026-11-16-icons.md) |
-| 29 | Refined icons for every program, at 32x32 and 16x16. The owner picks from drawn proposals | M | | | doing (`claude/project-thread-ikdply`): proposals being drawn |
+| 29 | Refined icons for every program, at 32x32 and 16x16. The owner picks from drawn proposals | M | | | doing (`claude/project-thread-ikdply`): first round of proposals drawn by `tools/mockup/icon_proposals.py`, in `docs/look/icons/`, waiting for the owner to choose |
 | 30 | Quick-launch icons by the Start button that launch something | S | 29 | | todo |
