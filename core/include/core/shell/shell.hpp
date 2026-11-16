@@ -6,6 +6,7 @@
 #pragma once
 
 #include "core/fs/fs.hpp"
+#include "core/fs/ini.hpp"
 #include "core/games/snake.hpp"
 #include "core/gfx/canvas.hpp"
 #include "core/ports.hpp"
@@ -54,6 +55,10 @@ bool open_file(const char *path);
 void open_folder(const char *path);
 // The Editor with a file (nullptr: a new, empty one).
 void open_in_editor(const char *path);
+// A program's own settings file, C:\.config\<program>.ini. load: false
+// when there is none (the defaults apply). save: makes C:\.config if needed.
+bool load_settings(const char *program, fs::Ini &ini);
+bool save_settings(const char *program, const fs::Ini &ini);
 // The Picture viewer with a picture (nullptr: asks for one).
 void open_picture(const char *path);
 // Tests: decode the picture shown to the end now. Timings of the last

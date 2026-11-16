@@ -1,0 +1,7 @@
+## IDF Component Manager Manifest File
+dependencies:
+  idf:
+    version: '>=5.5.0'
+  # LittleFS for C: on the flash (docs/DECISIONS.md). Pinned to the version
+  # the firmware was tested with.
+  joltwallet/littlefs: "==1.23.1"

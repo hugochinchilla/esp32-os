@@ -31,6 +31,8 @@ bool before(const Listing::Item &a, const Listing::Item &b)
 
 } // namespace
 
+bool Listing::show_hidden = false;
+
 bool Listing::ready()
 {
     if (items_ == nullptr) {
@@ -52,6 +54,9 @@ ports::FsError Listing::read(const fs::Storage &storage, const char *folder)
         e = storage.entry(folder, i, d);
         if (e != ports::FsError::Ok) {
             break;
+        }
+        if (d.name[0] == '.' && !show_hidden) {
+            continue;
         }
         if (count_ == kMax) {
             truncated_ = true;
