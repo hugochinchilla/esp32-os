@@ -305,6 +305,7 @@ EditorWindow &editor()
 
 void open_in_editor(const char *path)
 {
+    const AsProgram as("Editor");
     editor().open_path(path);
 }
 

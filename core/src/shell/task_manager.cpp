@@ -1,5 +1,7 @@
-// The Task Manager (Ctrl+Alt+Del): the programs that are open, with End
-// Task and Switch To, and what the processor and the memory are doing.
+// The Task Manager (Ctrl+Alt+Del): the processes that are running, each
+// with its number (PID), with End Task and Switch To, and what the processor
+// and the memory are doing. The list is the process table (core/proc): the
+// programs with windows by default, everything with "Show all processes".
 // Every figure is read from the machine: the desktop's share of the
 // processor is the time the UI task spent working (Wm::busy_us), the video
 // share is the time spent filling video lines (SystemStats::scanout_us), and
@@ -52,38 +54,43 @@ private:
 
 class TaskManager : public wm::Window {
 public:
-    static constexpr int kClientW = 336, kClientH = 300;
+    static constexpr int kClientW = 336, kClientH = 332;
+    static constexpr int kMaxRows = proc::Table::kMaxProcesses, kRowText = 48;
     static constexpr uint32_t kRefreshUs = 1000000;
 
     TaskManager()
         : Window("Task Manager", {0, 0, kClientW + 2 * kBorder, kClientH + kClientTop + kBorder},
                  &gfx::settings_icon_16()),
-          heading_({8, 6, 200, 14}, "&Programs running:"),
-          list_({8, 22, 320, 94}, titles_, 0, nullptr, this),
-          end_({8, 122, 75, 23}, "&End Task", &TaskManager::end_pressed, this),
-          switch_({89, 122, 75, 23}, "&Switch To", &TaskManager::switch_pressed, this),
-          shut_down_({kClientW - 8 - 96, 122, 96, 23}, "Shut &Down...", &TaskManager::shut_down_pressed, this),
-          processor_({8, 152, 320, 74}, "Processor"),
-          history_(18, 170, 46),
-          desktop_({152, 170, 168, 14}, desktop_text_),
-          video_({152, 186, 168, 14}, video_text_),
-          uptime_({152, 202, 168, 14}, uptime_text_),
-          memory_({8, 230, 320, 62}, "Memory"),
-          internal_label_({18, 248, 54, 14}, "Internal"),
-          internal_({76, 248, 100, 14}),
-          internal_text_({184, 248, 138, 14}, internal_line_),
-          external_label_({18, 268, 54, 14}, "External"),
-          external_({76, 268, 100, 14}),
-          external_text_({184, 268, 138, 14}, external_line_)
+          heading_({8, 6, 200, 14}, "&Processes running:"),
+          columns_({30, 22, 290, 14}, "  PID  Name              Window"),
+          list_({8, 36, 320, 94}, titles_, 0, nullptr, this),
+          end_({8, 136, 75, 23}, "&End Task", &TaskManager::end_pressed, this),
+          switch_({89, 136, 75, 23}, "&Switch To", &TaskManager::switch_pressed, this),
+          shut_down_({kClientW - 8 - 96, 136, 96, 23}, "Shut &Down...", &TaskManager::shut_down_pressed, this),
+          all_({8, 164, 200, 18}, "Show &all processes", false, &TaskManager::all_changed, this),
+          processor_({8, 184, 320, 74}, "Processor"),
+          history_(18, 202, 46),
+          desktop_({152, 202, 168, 14}, desktop_text_),
+          video_({152, 218, 168, 14}, video_text_),
+          uptime_({152, 234, 168, 14}, uptime_text_),
+          memory_({8, 262, 320, 62}, "Memory"),
+          internal_label_({18, 280, 54, 14}, "Internal"),
+          internal_({76, 280, 100, 14}),
+          internal_text_({184, 280, 138, 14}, internal_line_),
+          external_label_({18, 300, 54, 14}, "External"),
+          external_({76, 300, 100, 14}),
+          external_text_({184, 300, 138, 14}, external_line_)
     {
         set_dialog(true); // fixed size, only the close button
         list_.set_icons(&TaskManager::icon_of);
         list_.set_on_activate(&TaskManager::activated);
-        add(heading_);
+        add(columns_);
+        add(heading_); // just before the list: Alt+P goes to the widget after the label
         add(list_);
         add(end_);
         add(switch_);
         add(shut_down_);
+        add(all_);
         add(processor_);
         add(history_);
         add(desktop_);
@@ -142,88 +149,114 @@ private:
 
     static const gfx::Bitmap *icon_of(int index, void *context)
     {
-        return static_cast<TaskManager *>(context)->windows_[index]->icon();
+        auto *self = static_cast<TaskManager *>(context);
+        const wm::Window *w = shell::manager().main_window_of(self->pids_[index]);
+        return w != nullptr ? w->icon() : &gfx::settings_icon_16();
     }
 
-    wm::Window *chosen() const
+    // The PID of the row picked, if that process is still there.
+    proc::Pid chosen() const
     {
         const int at = list_.selected();
-        return at >= 0 && at < count_ && windows_[at]->open() ? windows_[at] : nullptr;
+        return at >= 0 && at < count_ && proc::table().alive(pids_[at]) ? pids_[at] : proc::kNone;
     }
 
     static void activated(wm::ListBox &, void *context) { switch_pressed(static_cast<TaskManager *>(context)->switch_, context); }
 
+    static void all_changed(wm::CheckBox &, void *context) { static_cast<TaskManager *>(context)->refresh_programs(); }
+
     static void switch_pressed(wm::Button &, void *context)
     {
-        if (wm::Window *w = static_cast<TaskManager *>(context)->chosen()) {
-            shell::manager().activate(*w);
+        wm::Wm &m = shell::manager();
+        if (wm::Window *w = m.main_window_of(static_cast<TaskManager *>(context)->chosen())) {
+            // Its dialog, if one holds it, comes forward with it.
+            wm::Window *dialog = m.blocker(*w);
+            m.activate(dialog != nullptr ? *dialog : *w);
         }
     }
 
     // End Task closes the program at once, without its "save changes?"
-    // question: it is the way out when a program will not close.
+    // question: it is the way out when a program will not close. Every
+    // window the process owns goes, dialogs included, and the window manager
+    // then takes the process out of the table. A process without windows (a
+    // service) cannot be ended yet: that comes with signals.
     static void end_pressed(wm::Button &, void *context)
     {
         auto *self = static_cast<TaskManager *>(context);
-        wm::Window *w = self->chosen();
-        if (w == nullptr) {
+        const proc::Pid pid = self->chosen();
+        if (pid == proc::kNone) {
             return;
         }
         wm::Wm &m = shell::manager();
-        // Its open dialogs (a message box, Save As) go first.
-        for (int i = 0; i < wm::Wm::kMaxWindows; i++) {
-            wm::Window *dialog = m.blocker(*w);
-            if (dialog == nullptr || dialog == self) {
-                break;
-            }
-            m.close(*dialog);
+        if (m.windows_of(pid) == 0) {
+            static char text[96];
+            snprintf(text, sizeof(text), "%s (PID %d) has no windows to close.\nIt cannot be ended from here yet.",
+                     proc::table().find(pid)->name, pid);
+            message_box("Task Manager", text);
+            return;
         }
-        m.close(*w);
-        self->refresh_programs();
-        self->set_focus(&self->list_);
+        // From the top of the stack down, so dialogs go before their owners.
+        for (int z = m.window_count() - 1; z >= 0; z--) {
+            wm::Window *w = m.window_at(z);
+            if (w != nullptr && w->owner() == pid) {
+                m.close(*w);
+                z = m.window_count(); // the stack changed: look again from the top
+            }
+        }
+        if (self->open()) {
+            self->refresh_programs();
+            self->set_focus(&self->list_);
+        }
     }
 
     static void shut_down_pressed(wm::Button &, void *) { shut_down_dialog(); }
 
-    // The list: every window with a taskbar button except this one. It is
-    // only rebuilt when the windows changed, so the selection stays put.
+    // The list: one row per process. By default the programs with windows,
+    // except this one; with "Show all processes" every row of the table,
+    // system processes and this one too. It is only rebuilt when the set of
+    // processes changed, so the selection stays put.
     void refresh_programs()
     {
         wm::Wm &m = shell::manager();
-        wm::Window *now[wm::Wm::kMaxWindows];
+        const proc::Table &table = proc::table();
+        const bool all = all_.checked();
+        proc::Pid now[kMaxRows];
+        char text[kMaxRows][kRowText];
         int n = 0;
-        uint32_t sum = 0; // of the titles' text, which can change in place
-        for (int i = 0; i < m.taskbar_count(); i++) {
-            wm::Window *w = m.taskbar_window(i);
-            if (w == this) {
+        for (int i = 0; i < table.count() && n < kMaxRows; i++) {
+            const proc::Process &p = table.at(i);
+            const wm::Window *w = m.main_window_of(p.pid);
+            if (!all && (p.is(proc::kSystem) || w == nullptr || p.pid == owner())) {
                 continue;
             }
-            now[n++] = w;
-            for (const char *p = w->title(); *p != 0; p++) {
-                sum = sum * 31 + static_cast<uint8_t>(*p);
-            }
+            const char *what = w != nullptr ? w->title() : (p.is(proc::kSystem) ? "(system)" : "");
+            now[n] = p.pid;
+            snprintf(text[n], kRowText, "%5d  %-16.16s  %s", p.pid, p.name, what);
+            n++;
         }
         bool same = n == count_;
-        for (int i = 0; i < n && same; i++) {
-            same = now[i] == windows_[i] && now[i]->title() == titles_[i];
+        bool changed = false;
+        for (int i = 0; i < n; i++) {
+            same = same && now[i] == pids_[i];
+            changed = changed || strcmp(text[i], rows_[i]) != 0;
         }
+        const proc::Pid was = list_.selected() >= 0 && list_.selected() < count_ ? pids_[list_.selected()] : proc::kNone;
+        for (int i = 0; i < n; i++) {
+            pids_[i] = now[i];
+            memcpy(rows_[i], text[i], kRowText);
+            titles_[i] = rows_[i];
+        }
+        count_ = n;
         if (!same) {
-            wm::Window *was = list_.selected() >= 0 && list_.selected() < count_ ? windows_[list_.selected()] : nullptr;
-            int again = -1;
-            for (int i = 0; i < n; i++) {
-                windows_[i] = now[i];
-                titles_[i] = now[i]->title();
-                again = now[i] == was ? i : again;
-            }
-            count_ = n;
             list_.set_items(titles_, n);
-            if (again >= 0) {
-                list_.select(again);
+            for (int i = 0; i < n; i++) {
+                if (now[i] == was) {
+                    list_.select(i);
+                }
             }
-        } else if (sum != title_sum_) {
+        } else if (changed) {
             list_.invalidate();
         }
-        title_sum_ = sum;
     }
 
     void set_line(wm::Label &label, char *line, size_t capacity, const char *text)
@@ -290,10 +323,10 @@ private:
         set_line(external_text_, external_line_, sizeof(external_line_), text);
     }
 
-    wm::Window *windows_[wm::Wm::kMaxWindows] = {};
-    const char *titles_[wm::Wm::kMaxWindows] = {};
+    proc::Pid pids_[kMaxRows] = {};
+    char rows_[kMaxRows][kRowText] = {};
+    const char *titles_[kMaxRows] = {};
     int count_ = 0;
-    uint32_t title_sum_ = 0;
     int timer_ = 0;
     bool have_baseline_ = false, have_totals_ = false;
     uint64_t last_now_ = 0;
@@ -302,9 +335,10 @@ private:
     char desktop_text_[40] = "", video_text_[40] = "", uptime_text_[40] = "";
     char internal_line_[40] = "", external_line_[40] = "";
 
-    wm::Label heading_;
+    wm::Label heading_, columns_;
     wm::ListBox list_;
     wm::Button end_, switch_, shut_down_;
+    wm::CheckBox all_;
     wm::GroupFrame processor_;
     History history_;
     wm::Label desktop_, video_, uptime_;
@@ -327,6 +361,7 @@ TaskManager &task_manager()
 
 void open_task_manager()
 {
+    const AsProgram as("Task Manager");
     TaskManager &w = task_manager();
     const bool was_open = w.open();
     if (!was_open) {

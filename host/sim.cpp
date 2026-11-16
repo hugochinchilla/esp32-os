@@ -20,6 +20,7 @@
 #include "core/net/rfb.hpp"
 #include "core/net/web.hpp"
 #include "core/net/wifi.hpp"
+#include "core/proc/table.hpp"
 #include "fake_wifi.hpp"
 #include "folder_volume.hpp"
 #include "core/wm/wm.hpp"
@@ -79,6 +80,8 @@ int main(int argc, char **argv)
     FdSink sink(fd);
     dbg::Protocol protocol(sink, lock, display, pointer, screen, system, "sim");
     protocol.set_desktop(&screen);
+    // Rows in the process table for the services, as on the board.
+    proc::table().spawn_service("dbgd", proc::kProtected);
 
     // C: a RAM disk, as on the board. D: a folder of the PC, if given.
     static host::HostMemory memory;
@@ -143,6 +146,7 @@ int main(int argc, char **argv)
     if (argc > 2) {
         if (vnc_port.listen(atoi(argv[2]), true)) {
             remote.set_listener(&vnc_port);
+            proc::table().spawn_service("vncd");
         } else {
             fprintf(stderr, "cannot listen on port %s\n", argv[2]);
         }
@@ -155,6 +159,7 @@ int main(int argc, char **argv)
             web.set_page(net::viewer_page(), net::viewer_page_size());
             web.set_second_page("/novnc", net::novnc_page(), net::novnc_page_size());
             remote.set_listener(&web, 1);
+            proc::table().spawn_service("httpd");
         } else {
             fprintf(stderr, "cannot listen on port %s\n", argv[3]);
         }

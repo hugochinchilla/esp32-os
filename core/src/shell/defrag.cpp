@@ -480,6 +480,7 @@ DefragWindow &defrag_window()
 
 void open_defragmenter()
 {
+    const AsProgram as("Defragmenter");
     DefragWindow &w = defrag_window();
     if (!w.open()) {
         w.set_frame(centred(manager(), w.frame().w, w.frame().h));

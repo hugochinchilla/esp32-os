@@ -463,6 +463,7 @@ CulebraWindow &culebra()
 
 void open_culebra()
 {
+    const AsProgram as("Culebra");
     CulebraWindow &w = culebra();
     if (!w.open() && w.game().state() != Snake::State::Paused) {
         w.new_game(); // nothing was left half played

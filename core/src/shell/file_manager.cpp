@@ -970,6 +970,7 @@ void refresh_folder_windows()
 
 void open_trash()
 {
+    const AsProgram as("File manager");
     TrashWindow &w = trash_window();
     w.refresh();
     if (w.open()) {
@@ -981,6 +982,7 @@ void open_trash()
 
 void open_folder(const char *path)
 {
+    const AsProgram as("File manager");
     const char *want = path != nullptr ? path : "";
     // Already shown: bring that window forward.
     for (int i = 0; i < kWindows; i++) {

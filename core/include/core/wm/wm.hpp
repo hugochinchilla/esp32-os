@@ -11,6 +11,7 @@
 #include "core/gfx/canvas.hpp"
 #include "core/gfx/rect.hpp"
 #include "core/ports.hpp"
+#include "core/proc/table.hpp"
 #include "core/wm/window.hpp"
 
 namespace wm {
@@ -68,6 +69,28 @@ public:
 
     // Sets the pointer up and paints the whole screen.
     void start();
+
+    // The process table, and the process that owns the desktop itself (the
+    // Start menu, the icons, the taskbar and the manager's own timers). With
+    // one set, every window and timer records the process that asked for it
+    // (the current one), the manager makes a window's owner the current
+    // process whenever it calls into it, and a window program is removed
+    // from the table once its last window has closed (at the end of the
+    // event or tick, so a dialog can hand over to the next window first).
+    // Timers such a process left running are stopped then.
+    void set_processes(proc::Table *table, proc::Pid desktop)
+    {
+        procs_ = table;
+        desktop_pid_ = desktop;
+    }
+    proc::Table *processes() const { return procs_; }
+    // How many windows and timers a process owns, and its window that was
+    // opened first with a taskbar button (nullptr: none).
+    int windows_of(proc::Pid pid) const;
+    int timers_of(proc::Pid pid) const;
+    Window *main_window_of(proc::Pid pid) const;
+    // The owner of a timer, 0 if the id is not running.
+    proc::Pid timer_owner(int id) const;
 
     // Window list. add() puts the window on top and gives it the focus.
     void add(Window &w);
@@ -227,6 +250,7 @@ private:
         Rect rect;
         int hover;   // item under the pointer or chosen by keys, -1 none
         bool start;  // the Start menu (banner, icons, taller items)
+        proc::Pid owner; // the process its actions run for
     };
 
     struct Timer {
@@ -235,6 +259,7 @@ private:
         uint64_t due;
         uint32_t period;
         int id;
+        proc::Pid owner;
     };
 
     static void blink(void *self);
@@ -355,6 +380,13 @@ private:
     ScreenFn screen_fn_ = nullptr;
     void *screen_context_ = nullptr;
     void event_done(uint32_t start);
+
+    // Processes.
+    proc::Table *procs_ = nullptr;
+    proc::Pid desktop_pid_ = 0;
+    proc::Pid current_pid() const { return procs_ != nullptr ? procs_->current() : 0; }
+    int start_timer_for(proc::Pid owner, uint32_t delay_us, uint32_t period_us, TimerFn fn, void *context);
+    void reap();
 
     Timer timers_[kMaxTimers] = {};
     int next_timer_id_ = 1;

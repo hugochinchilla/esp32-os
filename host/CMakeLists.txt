@@ -98,6 +98,9 @@ add_test(NAME snake COMMAND test_snake)
 add_executable(test_saver tests/test_saver.cpp)
 target_link_libraries(test_saver PRIVATE core)
 add_test(NAME saver COMMAND test_saver)
+add_executable(test_proc tests/test_proc.cpp)
+target_link_libraries(test_proc PRIVATE core)
+add_test(NAME proc COMMAND test_proc)
 
 # Memory-port buffers live as long as the program, as on the board, so the
 # leak checker would report them; applied after every add_test above.

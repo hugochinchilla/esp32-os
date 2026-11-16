@@ -204,7 +204,11 @@ SaverDialog &dialog()
 
 } // namespace
 
-void screen_saver_dialog() { dialog().show(); }
+void screen_saver_dialog()
+{
+    const AsProgram as("Screen Saver");
+    dialog().show();
+}
 
 void install_screen_saver()
 {

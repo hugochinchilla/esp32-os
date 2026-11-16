@@ -449,6 +449,13 @@ void start_network()
     if (g_net == nullptr) {
         return;
     }
+    // The Wi-Fi manager is a service: its timer below is its own.
+    proc::Table &t = proc::table();
+    proc::Pid netd = t.find_by_name("netd");
+    if (netd == proc::kNone) {
+        netd = t.spawn_service("netd");
+    }
+    const proc::Scope as(&t, netd);
     g_net->set_on_time(&clock_from_network, nullptr);
     g_net->start(manager().now_us());
     g_shown_changes = g_net->changes();
@@ -462,6 +469,7 @@ void open_network()
         message_box("Network", "The network is not available on this board.");
         return;
     }
+    const AsProgram as("Network");
     NetworkWindow &w = panel();
     if (!w.open()) {
         w.set_frame(centred(manager(), w.frame().w, w.frame().h));

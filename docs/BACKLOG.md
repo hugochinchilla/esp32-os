@@ -19,7 +19,7 @@ board or the merge), `done`.
 | --- | --- | --- | --- | --- | --- |
 | | **Phase 1: know what is running** | | | | |
 | 1 | FreeRTOS run-time statistics in the System port, shown by `tools/dbg.py` | S | | Yes | todo |
-| 2 | Process table with PIDs. Windows and timers carry their owner. Existing services get rows | M | | | todo |
+| 2 | Process table with PIDs. Windows and timers carry their owner. Existing services get rows | M | | | on a branch (`claude/project-thread-9cvne3`): PC tests pass, waits for the board check. [Journal](journal/2026-11-16-process-table.md) |
 | 3 | Per-process processor time and memory. Task Manager shows PID, time and memory columns | M | 1, 2 | Yes | todo |
 | 4 | System, protected and respawn flags | S | 2 | | todo |
 | 5 | TERM and KILL for window programs. End Task asks politely, then offers force | S | 2 | | todo |
