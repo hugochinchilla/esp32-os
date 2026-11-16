@@ -40,7 +40,7 @@ Last updated: 2026-11-16.
 | Colours that the board cannot show exactly | Made from a fixed 4x4 dot pattern of the two nearest colours (ordered dither), per colour channel. Used for the desktop colour, title bars and their fade. Lines one pixel wide always use exact colours | Blue has only four levels, so navy, teal and mid-grey do not exist as plain colours |
 | Start-up | A quick real self-test screen (each line printed when its check has finished, with the value found; a failed check shows in red and the start goes on), then a splash with the mascot, the name and a ribbon of the 256 colours for about 500 ms, then the desktop. Chosen by the owner, 2026-11-16 | Shows what the machine has, in the spirit of a 90s PC, without slowing the start much |
 | Memory test at start-up | Real and on by default, decided by the owner: writes and reads back an address-dependent pattern over external RAM borrowed from the heap (never memory in use) for about 250 ms, counting KB on screen; a wrong word is shown with its address and logged, and the start goes on. On the board it covers 4992 KB in 254 ms (about 20 MB/s written and read back), of roughly 6 MB free at that point; all of it would take about 0.31 s | Real figures, a quick flash |
-| Screensaver | Starts after 5 minutes without a key or mouse movement by default (the owner's choice, 2026-11-16), and ends on a key press, a click or a real mouse movement, which only wakes the screen. Three savers, all our own code and art: Starfield, Flying Chinchillas, Curves and Colours. Set in a small dialog under Start > Settings > Screen Saver now; it becomes a tab of a Display window once there is a Control Panel (the owner's choice, 2026-11-16) | Wanted by the owner; the dialog works with the menus that exist today |
+| Screensaver | Starts after 5 minutes without a key or mouse movement by default, showing Flying Chinchillas, with no password (the owner's choices, 2026-11-16), and ends on a key press, a click or a real mouse movement, which only wakes the screen. Three savers, all our own code and art: Starfield, Flying Chinchillas, Curves and Colours. Set in a small dialog under Start > Settings > Screen Saver now; it becomes a tab of a Display window once there is a Control Panel (the owner's choice, 2026-11-16) | Wanted by the owner; the dialog works with the menus that exist today |
 | Testing | Three layers: unit tests of the core on the PC, test-first where practical; framebuffer snapshots compared with stored images; a small number of on-device tests through the serial debug protocol. Signal timing is checked on the bench, not by tests | Fast feedback for most of the code, and checks that can run without hardware |
 
 ### Parallel work (2026-11-16)
@@ -120,7 +120,7 @@ Not scheduled. Each needs its design choices put to the owner before it is built
 | Audio player | Compact player in the spirit of late-90s players, with no visualiser and no equaliser. Opens WAV and MP3. The look must be original, not a copy of an existing player or its skins. Needs the sound output (GPIO13) working first, and a freely licensed MP3 decoder. Its sample files must be public domain, openly licensed, or made by us, with the source and licence recorded as in `third_party/samples/README.md` |
 | Mine-sweeping game | A grid puzzle of the mine-clearing kind: numbers show how many neighbours are mined. Our own name, artwork and icons; not a copy of any existing game's look |
 | Snake game | The classic grow-as-you-eat arcade game, with our own name and artwork. A good first program driven by the timer and the keyboard |
-| ~~Screensaver~~ | Built, see Decided and "Chosen in the screensaver milestone". Still open: whether it ever asks for a password (suggested: no) |
+| ~~Screensaver~~ | Built, see Decided and "Chosen in the screensaver milestone". No password (the owner, 2026-11-16) |
 
 ## Found on the bench
 
@@ -440,7 +440,8 @@ practical. Each is easy to change.
 - Curves and Colours: two closed curves, each round four points that bounce
   off the edges of the screen, each with a trail of 12 copies running through
   the colour wheel, the two on opposite sides of it.
-- Default saver: Flying Chinchillas. No password.
+- Default saver: Flying Chinchillas. No password. Both confirmed by the
+  owner, 2026-11-16.
 - The dialog: a list ((None) and the three), the wait in minutes (1 to 99),
   Preview (Alt+P), OK and Cancel. After a run it shows real figures from it:
   frames a second and the slowest frame.
