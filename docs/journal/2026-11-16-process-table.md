@@ -261,10 +261,13 @@ default list behaves as it did. All 21 PC tests pass, with the address and
 undefined-behaviour checkers on. One reference picture changed
 (`34-task-manager.png`) and one is new (`34b-task-manager-all.png`).
 
+The firmware compiles and links in the cloud container with ESP-IDF v5.5
+(`esp32-os.bin` is 0x143240 bytes, 68 % of the app partition free). That says
+nothing about how it runs.
+
 Not tested:
 
 - **Nothing has run on the board.** The expected PIDs in 3.6 are a prediction.
-- Whether the firmware compiles is noted in the pull request; see there.
 - The cost of the scopes on the board. Each is two assignments around a call,
   so it should not be measurable, but nobody has measured.
 
