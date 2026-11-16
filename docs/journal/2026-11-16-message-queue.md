@@ -155,7 +155,14 @@ process table. Numbered messages to windows were not taken because every
 window would need a message function that none has today; a bare function
 because a message that outlives its program would crash the machine.
 
-3.2, the network's pace, is still his to confirm.
+**3.2, the network's pace: the owner agreed to no watcher task.** He first
+asked "Who owns the watcher as it is now?". The answer was that nobody does:
+there is no watcher, the UI task looks at the network itself in its loop, and
+`vncd` and `httpd` are rows in the process table with no task behind them. He
+answered "Ok, but don't advertise non real tasks then, it's confusing". So
+the network stays on the clock, and the label-only service rows are being
+removed from the process table by the thread that works on it (kill signals,
+PR 17), not on this branch.
 
 ## 5. What was built
 

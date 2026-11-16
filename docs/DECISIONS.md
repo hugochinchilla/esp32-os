@@ -1163,5 +1163,6 @@ and not yet run on it. The options and the reasons are in
   is being sent, every 50 ms while only waiting for a connection, never
   with no port open. The other option was a watcher task (about 3 KB of
   internal RAM); it goes away by itself when the VNC server becomes a task.
-  **To confirm.**
+  **Confirmed by the owner, 2026-11-16** ("Ok", after asking who would own
+  the watcher: nobody does today, the UI task looks at the network itself).
 - The UI task runs at most 16 messages per round, then timers and painting.
