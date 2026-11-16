@@ -34,6 +34,11 @@ void ask(const char *title, const char *text, const char *const *buttons, int co
 // The Shut Down dialog: Restart (through the System port) or Cancel.
 void shut_down_dialog();
 
+// The screensaver's settings (Start > Settings > Screen Saver). It starts
+// after kScreenSaverMinutes without input unless changed there.
+constexpr int kScreenSaverMinutes = 5, kScreenSaverMaxMinutes = 99;
+void screen_saver_dialog();
+
 // File dialogs, for any program. Modal to `owner`. `chosen` gets the full
 // path ("C:\docs\notes.txt") when the user picks one; nothing on Cancel.
 // Save As asks before replacing an existing file.

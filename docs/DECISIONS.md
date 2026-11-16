@@ -40,6 +40,7 @@ Last updated: 2026-11-16.
 | Colours that the board cannot show exactly | Made from a fixed 4x4 dot pattern of the two nearest colours (ordered dither), per colour channel. Used for the desktop colour, title bars and their fade. Lines one pixel wide always use exact colours | Blue has only four levels, so navy, teal and mid-grey do not exist as plain colours |
 | Start-up | A quick real self-test screen (each line printed when its check has finished, with the value found; a failed check shows in red and the start goes on), then a splash with the mascot, the name and a ribbon of the 256 colours for about 500 ms, then the desktop. Chosen by the owner, 2026-11-16 | Shows what the machine has, in the spirit of a 90s PC, without slowing the start much |
 | Memory test at start-up | Real and on by default, decided by the owner: writes and reads back an address-dependent pattern over external RAM borrowed from the heap (never memory in use) for about 250 ms, counting KB on screen; a wrong word is shown with its address and logged, and the start goes on. On the board it covers 4992 KB in 254 ms (about 20 MB/s written and read back), of roughly 6 MB free at that point; all of it would take about 0.31 s | Real figures, a quick flash |
+| Screensaver | Starts after 5 minutes without a key or mouse movement by default (the owner's choice, 2026-11-16), and ends on a key press, a click or a real mouse movement, which only wakes the screen. Three savers, all our own code and art: Starfield, Flying Chinchillas, Curves and Colours. Set in a small dialog under Start > Settings > Screen Saver now; it becomes a tab of a Display window once there is a Control Panel (the owner's choice, 2026-11-16) | Wanted by the owner; the dialog works with the menus that exist today |
 | Testing | Three layers: unit tests of the core on the PC, test-first where practical; framebuffer snapshots compared with stored images; a small number of on-device tests through the serial debug protocol. Signal timing is checked on the bench, not by tests | Fast feedback for most of the code, and checks that can run without hardware |
 
 ### Parallel work (2026-11-16)
@@ -119,7 +120,7 @@ Not scheduled. Each needs its design choices put to the owner before it is built
 | Audio player | Compact player in the spirit of late-90s players, with no visualiser and no equaliser. Opens WAV and MP3. The look must be original, not a copy of an existing player or its skins. Needs the sound output (GPIO13) working first, and a freely licensed MP3 decoder. Its sample files must be public domain, openly licensed, or made by us, with the source and licence recorded as in `third_party/samples/README.md` |
 | Mine-sweeping game | A grid puzzle of the mine-clearing kind: numbers show how many neighbours are mined. Our own name, artwork and icons; not a copy of any existing game's look |
 | Snake game | The classic grow-as-you-eat arcade game, with our own name and artwork. A good first program driven by the timer and the keyboard |
-| Screensaver | Starts after a period with no input and ends on any key or pointer movement. Three savers in the spirit of 90s ones, all our own code and art: a starfield (flying through space), flying Chinchilla mascots, and animated curves and colours. Open: idle time, where it is configured, whether it needs a password, and how it shares the screen with the window manager |
+| ~~Screensaver~~ | Built, see Decided and "Chosen in the screensaver milestone". Still open: whether it ever asks for a password (suggested: no) |
 
 ## Found on the bench
 
@@ -413,6 +414,44 @@ practical. Each is easy to change.
   disk still has 1849 KB of its 2048 KB free.
 - The 16x16 picture icon is the 32x32 one with every other pixel, made at
   compile time.
+
+### Chosen in the screensaver milestone (to confirm)
+
+- The saver takes the whole screen: the window manager paints nothing while
+  it shows (timers go on; everything is painted once when it ends) and the
+  pointer is hidden. It does not start while a mouse button is held.
+- What wakes it: any key press, any mouse button, or the pointer moving 4
+  pixels or more from where it was (a nudge of the desk does not). The key or
+  click that wakes the screen does nothing else. Letting a key go does not
+  wake it. A full repaint asked for over the debug link ends it too.
+- 30 frames a second, in fixed steps, from the window manager's tick. The
+  savers change only the pixels that move, never the whole 300 KB screen,
+  and use whole numbers only, so the PC and the board draw the same frames
+  from the same seed (the seed is the clock when the saver starts). There is
+  no link to the monitor's refresh yet, so a moving face may tear now and
+  then; to look at on the bench.
+- Starfield: 260 stars coming out of a point that drifts slowly, as if
+  steering; dim, grey, then white as they near, two pixels wide when close;
+  one in eight pale blue, yellow or orange.
+- Flying Chinchillas: 14 mascot faces flying out of the distance, drawn at 1
+  to 5 times the 16x16 picture, in four fur colours (white, grey, beige and
+  pale "sapphire" blue). Each place a face was or is gets its final pixels
+  in one pass, so nothing flashes and overlapping faces stay whole.
+- Curves and Colours: two closed curves, each round four points that bounce
+  off the edges of the screen, each with a trail of 12 copies running through
+  the colour wheel, the two on opposite sides of it.
+- Default saver: Flying Chinchillas. No password.
+- The dialog: a list ((None) and the three), the wait in minutes (1 to 99),
+  Preview (Alt+P), OK and Cancel. After a run it shows real figures from it:
+  frames a second and the slowest frame.
+- Settings are kept as a text file, `C:\.config\screensaver.ini` (`saver =
+  none | starfield | chinchillas | curves`, `wait_minutes = 5`), written by
+  OK and read at start-up, after the owner's wish for plain-text settings in
+  a hidden folder. The folder and layout are this program's guess until the
+  shared convention is on main; on the RAM disk the file is lost at restart.
+- Not measured on the board yet: frame times, tearing, how it looks on the
+  monitor. The firmware was not compiled for this change (no ESP-IDF in the
+  cloud); no firmware file changed, the shell installs the saver itself.
 
 ## To confirm on the bench
 

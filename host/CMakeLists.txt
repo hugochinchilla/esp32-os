@@ -67,3 +67,8 @@ add_test(NAME dbg_tool
 
 add_executable(dither_eval dither_eval.cpp)
 target_link_libraries(dither_eval PRIVATE core)
+
+add_executable(test_saver tests/test_saver.cpp)
+target_link_libraries(test_saver PRIVATE core)
+add_test(NAME saver COMMAND test_saver)
+set_tests_properties(saver PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")

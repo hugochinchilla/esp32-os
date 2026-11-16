@@ -347,5 +347,37 @@ int main(int argc, char **argv)
     save("33-viewer-damaged");
     key(wm::key::Enter);
 
+    // The screensaver. Its dialog from Start > Settings (the third entry of
+    // each), then a preview of each animation: 150 frames, five seconds.
+    while (desktop.active() != nullptr) {
+        desktop.close(*desktop.active());
+    }
+    centre_of(desktop.taskbar_button(-1), x, y);
+    click(x, y);
+    centre_of(desktop.popup_item(0, 1), x, y);
+    mouse(x, y, 0);
+    clock_.now += wm::Wm::kSubmenuDelayUs;
+    desktop.tick();
+    save("34-settings-menu");
+    centre_of(desktop.popup_item(1, 2), x, y);
+    click(x, y);
+    save("35-screen-saver-dialog");
+    const char *const savers[3] = {"36-saver-starfield", "37-saver-chinchillas", "38-saver-curves"};
+    for (int i = 0; i < 3; i++) {
+        key(wm::key::Home); // the list: (None), then the three
+        for (int n = 0; n <= i; n++) {
+            key(wm::key::Down);
+        }
+        clock_.now += 1000000;          // the clock is the seed of the run
+        key(0x13, true);                // Alt+P: Preview
+        for (int frame = 0; frame < 150; frame++) {
+            desktop.tick();
+            clock_.now += 33334;
+        }
+        save(savers[i], false);
+        key(wm::key::Escape); // wakes the screen; the dialog stays
+    }
+    save("39-after-screen-saver");
+
     return failures == 0 ? 0 : 1;
 }

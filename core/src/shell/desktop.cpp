@@ -226,11 +226,13 @@ ShutDownDialog &shut_down_window()
 constexpr int kMaxApps = 8;
 wm::MenuItem g_program_items[kMaxApps];
 wm::Menu g_programs = {g_program_items, 0};
+void open_screen_saver(void *) { screen_saver_dialog(); }
 wm::MenuItem g_settings_items[] = {
     {"&Control Panel", nullptr, nullptr, nullptr, nullptr, wm::kMenuDisabled},
     {"&Taskbar...", nullptr, nullptr, nullptr, nullptr, wm::kMenuDisabled},
+    {"&Screen Saver...", &open_screen_saver, nullptr, nullptr, nullptr, 0},
 };
-wm::Menu g_settings = {g_settings_items, 2};
+wm::Menu g_settings = {g_settings_items, 3};
 wm::MenuItem g_start_items[5];
 wm::Menu g_start = {g_start_items, 5};
 
@@ -332,6 +334,7 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
     g_icons[2] = {"Network", &gfx::network_icon_32(), &not_yet, const_cast<NotYet *>(&kNetwork)};
     g_icons[3] = {"Recycle Bin", &gfx::bin_icon_32(), &not_yet, const_cast<NotYet *>(&kRecycleBin)};
     wm.set_desktop_icons(g_icons, 4);
+    install_screen_saver();
 
     launch(*find_app("Welcome"));
     launch(*find_app("About Chinchilla"));
