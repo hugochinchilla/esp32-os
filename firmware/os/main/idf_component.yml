@@ -5,3 +5,6 @@ dependencies:
   # LittleFS for C: on the flash (docs/DECISIONS.md). Pinned to the version
   # the firmware was tested with.
   joltwallet/littlefs: "==1.23.1"
+  # mDNS: the board answers to chinchilla.local and announces the remote
+  # screen (docs/DECISIONS.md).
+  espressif/mdns: "==1.15.1"

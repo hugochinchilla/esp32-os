@@ -384,6 +384,11 @@ void ui_task(void *)
     } else {
         ESP_LOGW(TAG, "remote screen for a browser not available");
     }
+    // By name instead of by address: chinchilla.local, and viewers that
+    // browse the network list the board.
+    if (radio && wifi_announce("chinchilla", vnc_port.listening() ? rfb::kPort : 0, web_port.listening() ? 80 : 0)) {
+        ESP_LOGI(TAG, "answers to chinchilla.local (mDNS)");
+    }
 
     shell::start(desktop, system, storage, memory);
     protocol.set_counters(shell::picture_timings(), shell::kPictureTimings);

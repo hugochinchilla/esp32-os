@@ -62,7 +62,9 @@ tools/dbg.py wifi                        # link, address, signal
 Once the board has joined a Wi-Fi network, any VNC viewer can show and
 control the screen: connect it to the address the Network panel shows
 (`tools/dbg.py wifi` prints it too), port 5900, no password. Or open
-`http://<that address>/` in a browser on the same network.
+`http://<that address>/` in a browser on the same network. The board also answers
+to the name `chinchilla.local` (mDNS), so `http://chinchilla.local/` works
+where the computer resolves such names.
 
 `shot.png` should match what the monitor shows. The UI runs on one task
 (`ui_task` in `main/main.cpp`), which also serves the debug link.

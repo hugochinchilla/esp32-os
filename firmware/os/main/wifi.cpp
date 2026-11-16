@@ -17,6 +17,7 @@
 #include "esp_netif_sntp.h"
 #include "esp_wifi.h"
 #include "nvs.h"
+#include "mdns.h"
 #include "nvs_flash.h"
 
 namespace {
@@ -404,6 +405,27 @@ bool wifi_begin()
         return false;
     }
     return s_wifi.begin();
+}
+
+bool wifi_announce(const char *name, int vnc_port, int web_port)
+{
+    esp_err_t err = mdns_init();
+    if (err == ESP_OK) {
+        err = mdns_hostname_set(name);
+    }
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "mDNS did not start: %s", esp_err_to_name(err));
+        return false;
+    }
+    mdns_instance_name_set("Chinchilla");
+    if (vnc_port != 0) {
+        // What VNC viewers look for when they list the computers around.
+        mdns_service_add("Chinchilla", "_rfb", "_tcp", static_cast<uint16_t>(vnc_port), nullptr, 0);
+    }
+    if (web_port != 0) {
+        mdns_service_add("Chinchilla", "_http", "_tcp", static_cast<uint16_t>(web_port), nullptr, 0);
+    }
+    return true;
 }
 
 net::WifiPort &wifi_port() { return s_wifi; }
