@@ -100,6 +100,49 @@ pick-and-place, which is what `fab/` holds.
 | [Beta Layout / PCB-POOL](https://eu.beta-layout.com/pcb/) | Germany / Ireland | 1 board (assembly of 1 to 50) | Boards from 8 h; assembly time in the configurator | Gerbers; other formats on their file format page | Configurator or quote |
 | For comparison: [JLCPCB](https://jlcpcb.com/news/eu-customs-reform-2026) | China, ships to the EU | 2 assembled boards | About 1 to 2 weeks with shipping | Gerbers + BOM + CPL (the files in `fab/`) | Usually the cheapest. Since 1 July 2026 every EU parcel pays duty: EUR 3 per item category for private orders under EUR 150, plus VAT and a possible carrier fee |
 
+### Estimated cost of assembled boards
+
+Rough estimates made on 2026-11-16 for this board (78 cm², two layers,
+23 different parts, about 45 SMD and 5 through-hole parts), before VAT and
+before any quote. Upload the files for real numbers; treat these as the order
+of magnitude.
+
+Parts cost about EUR 30 per board at distributor single-unit prices. The
+DS3231MZ (about EUR 7), the five connectors and the two sockets are most of it.
+
+| | 1 board | 3 boards | 5 boards |
+| --- | --- | --- | --- |
+| AISLER | about EUR 245 | about EUR 310 | about EUR 390 (6 boards, sold in sets of 3) |
+| JLCPCB (economic assembly, minimum 2) | about EUR 90 (for 2) | about EUR 115 | about EUR 145 |
+| Eurocircuits | about EUR 400 to 600 for 1 to 2 boards; my guess, no published fees | | |
+
+How they were worked out:
+
+- **AISLER.** Their last published assembly fees (May 2022, may have
+  changed) are EUR 7.50 per different part, EUR 0.04 per placed SMD part and
+  EUR 0.01 per cm² per board. With 23 different parts the per-part fee
+  (about EUR 172) is most of the bill and does not grow with quantity. Add
+  bare boards (EUR 12 + EUR 0.067/cm² per board, in sets of 3, about EUR 28
+  for 3), a stencil (EUR 5 + EUR 0.095/cm², about EUR 12), parts and free
+  shipping. Through-hole soldering prices are not published and are left out.
+  Soldering the five through-hole parts yourself removes 5 different parts
+  (about EUR 37) plus their soldering charge.
+  ([fees](https://community.aisler.net/t/amazing-assembly-gets-radical-price-cuts/905),
+  [boards and stencil](https://community.aisler.net/t/our-simple-pricing/102))
+- **JLCPCB.** Economic assembly: about $8 setup, $1.50 stencil, $3 for each
+  "extended" part type (about 8 here), $0.0164 per hand-soldered joint plus a
+  $3.58 hand-soldering charge (about 76 joints), boards about $5, parts about
+  $20 per board at LCSC prices, DHL to Spain about $20 to 25. Some parts
+  (the Würth USB-A, Keystone holder, Amphenol VGA socket) may need LCSC
+  equivalents. On delivery add VAT and, since 1 July 2026, EUR 3 duty per item
+  category plus the carrier's handling fee, about EUR 25 to 40 in total.
+  ([fees](https://jlcpcb.com/help/article/pcb-assembly-price),
+  [EU duty](https://jlcpcb.com/news/eu-customs-reform-2026))
+- **Eurocircuits.** Their 3-day PCB Proto price for two bare 100 x 80 mm
+  boards was EUR 168 in October 2026
+  ([comparison](https://deltaproto.com/pcb-assembly-netherlands-compared));
+  assembly and parts come on top. Use their calculator before deciding.
+
 Recommendation: **AISLER**. It is in Germany, takes the KiCad project
 directly and shows a price before you pay, builds a single board, and buys
 parts from LCSC, Mouser, Digi-Key, Farnell and others, so the CH334R (an LCSC
