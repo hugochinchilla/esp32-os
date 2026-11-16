@@ -50,10 +50,6 @@ add_test(NAME image_pictures
 set_tests_properties(image_pictures PROPERTIES FIXTURES_SETUP pictures)
 add_test(NAME image COMMAND test_image ${CMAKE_CURRENT_BINARY_DIR}/pictures)
 set_tests_properties(image PROPERTIES FIXTURES_REQUIRED pictures)
-# The Memory port's buffers live as long as the program, as on the board:
-# not leaks.
-get_property(all_tests DIRECTORY PROPERTY TESTS)
-set_tests_properties(${all_tests} PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
 add_test(NAME edit COMMAND test_edit)
 add_test(NAME shell COMMAND test_shell)
 
@@ -75,4 +71,8 @@ target_link_libraries(test_cactus PRIVATE core)
 add_test(NAME cactus COMMAND test_cactus)
 add_test(NAME cactus_pictures
          COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/check_pictures.py $<TARGET_FILE:test_cactus>)
-set_tests_properties(cactus cactus_pictures PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
+
+# Memory-port buffers live as long as the program, as on the board, so the
+# leak checker would report them; applied after every add_test above.
+get_property(all_tests DIRECTORY PROPERTY TESTS)
+set_tests_properties(${all_tests} PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")

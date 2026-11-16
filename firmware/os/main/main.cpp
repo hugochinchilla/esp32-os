@@ -24,7 +24,7 @@
 #include "sdkconfig.h"
 
 #include "core/dbg/protocol.hpp"
-#include "core/fs/memory_volume.hpp"
+#include "littlefs_volume.hpp"
 #include "core/shell/boot.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/wm.hpp"
@@ -277,14 +277,27 @@ void ui_task(void *)
     protocol.send_hello();
     const int64_t boot_start = esp_timer_get_time();
 
-    // C: a RAM disk in external RAM. ponytail: lost at restart until the
-    // owner picks a flash file system (docs/DECISIONS.md).
+    // C: LittleFS on the flash; files stay across restarts. A new drive
+    // gets the sample files.
     static EspMemory memory;
     static fs::Storage storage;
-    constexpr size_t kRamDisk = 2 * 1024 * 1024;
-    static fs::MemoryVolume ram_disk(memory.allocate(kRamDisk), kRamDisk, "RAM disk");
-    storage.mount('C', ram_disk);
-    fs::add_samples(storage, 'C');
+    static LittleFsVolume flash;
+    bool formatted = false;
+    const int64_t mount_start = esp_timer_get_time();
+    if (flash.mount(formatted)) {
+        storage.mount('C', flash);
+        ports::DirEntry first;
+        if (formatted || storage.entry("C:\\", 0, first) == ports::FsError::NotFound) {
+            const int64_t samples_start = esp_timer_get_time();
+            fs::add_samples(storage, 'C');
+            ESP_LOGI(TAG, "C: new, sample files written in %lld ms",
+                     (esp_timer_get_time() - samples_start) / 1000);
+        }
+        ESP_LOGI(TAG, "C: mounted in %lld ms%s", (esp_timer_get_time() - mount_start) / 1000,
+                 formatted ? " (formatted first)" : "");
+    } else {
+        ESP_LOGE(TAG, "C: the flash drive cannot be mounted or formatted");
+    }
     protocol.set_storage(&storage);
 
     // Start-up screens: the real self-test, then the splash.

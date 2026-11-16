@@ -4,9 +4,9 @@ The start of the real firmware. It brings up the screen, shows a quick
 real self-test (processor, RAM, a memory test, flash, drives, video, input,
 sound) and a splash screen, and runs the desktop: window manager, taskbar and Start menu, desktop icons, and the
 built-in programs (About Chinchilla, Editor, File manager, Picture viewer, Welcome, Widget
-gallery). Drive C: is a 2 MB RAM disk in external RAM, filled with a few
-sample files and three generated pictures at start-up and lost at restart, until a file system on the
-flash is chosen. It answers the debug protocol on the serial port. Input is injected over the debug link until there is a USB keyboard and
+gallery). Drive C: is LittleFS on the flash (12 MB, `partitions.csv`); files
+stay across restarts. A new drive is formatted and gets the sample files and
+pictures. Programs keep their settings in C:\.config\<program>.ini. It answers the debug protocol on the serial port. Input is injected over the debug link until there is a USB keyboard and
 mouse.
 
 Built with ESP-IDF v5.5 and run on the board on 2026-11-16.

@@ -370,6 +370,7 @@ public:
         file_items_[6] = {"Re&fresh", &FolderWindow::refresh_action, this, nullptr, nullptr, 0};
         file_items_[7] = {nullptr, nullptr, nullptr, nullptr, nullptr, wm::kMenuSeparator};
         file_items_[8] = {"&Close", &close_window, this, nullptr, nullptr, 0};
+        view_items_[0] = {"Show &hidden files", &FolderWindow::toggle_hidden, this, nullptr, nullptr, 0};
         set_menu_bar(&bar_);
         resized();
     }
@@ -435,6 +436,7 @@ public:
 
     void menu_opening(int) override
     {
+        view_items_[0].flags = Listing::show_hidden ? wm::kMenuChecked : 0;
         const bool at_board = folder_[0] == 0;
         const bool chosen = view_.selected() >= 0 && !at_board;
         file_items_[0].flags = view_.selected() >= 0 ? 0 : wm::kMenuDisabled;
@@ -537,6 +539,16 @@ private:
     static void back(void *context) { static_cast<FolderWindow *>(context)->go_back(); }
     static void up(void *context) { static_cast<FolderWindow *>(context)->go_up(); }
     static void refresh_action(void *context) { static_cast<FolderWindow *>(context)->refresh(); }
+    // Kept in C:\.config\files.ini.
+    static void toggle_hidden(void *context)
+    {
+        Listing::show_hidden = !Listing::show_hidden;
+        fs::Ini ini;
+        load_settings("files", ini);
+        ini.set_bool("view", "show_hidden", Listing::show_hidden);
+        save_settings("files", ini);
+        static_cast<FolderWindow *>(context)->refresh();
+    }
 
     static void open_selected(void *context)
     {
@@ -683,8 +695,10 @@ private:
     Panel objects_, free_;
     wm::MenuItem file_items_[9];
     wm::Menu file_ = {file_items_, 9};
-    const wm::MenuBarEntry entries_[1] = {{"&File", &file_}};
-    const wm::MenuBar bar_ = {entries_, 1};
+    wm::MenuItem view_items_[1];
+    wm::Menu view_menu_ = {view_items_, 1};
+    const wm::MenuBarEntry entries_[2] = {{"&File", &file_}, {"&View", &view_menu_}};
+    const wm::MenuBar bar_ = {entries_, 2};
 };
 
 constexpr int kWindows = 3;

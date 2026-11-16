@@ -15,3 +15,9 @@ CONFIG_LCD_RGB_RESTART_IN_VSYNC=y
 # The speed is only taken from here when the console is set to "custom".
 CONFIG_ESP_CONSOLE_UART_CUSTOM=y
 CONFIG_ESP_CONSOLE_UART_BAUDRATE=921600
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+# Code and constants run from PSRAM, so writing the flash (C:) does not turn
+# the cache off and the video keeps reading its framebuffer (docs/DECISIONS.md).
+CONFIG_SPIRAM_XIP_FROM_PSRAM=y
+CONFIG_LCD_RGB_ISR_IRAM_SAFE=y
