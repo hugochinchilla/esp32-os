@@ -1,11 +1,12 @@
 # OS firmware
 
-The start of the real firmware. For now it brings up the screen, shows a demo
-screen (a mouse pointer, three boxes for the mouse buttons, a grid that lights
-up for each key held down) and answers the debug protocol on the serial port.
+The start of the real firmware. It brings up the screen, runs the window
+manager with two demo windows ("About Chinchilla" over "Welcome to
+Chinchilla") and a taskbar, and answers the debug protocol on the serial
+port. Input is injected over the debug link until there is a USB keyboard and
+mouse.
 
-Built with ESP-IDF v5.5 and run on the board on 2026-11-16: the demo screen,
-screenshots, injected keys and mouse all work over the debug link.
+Built with ESP-IDF v5.5 and run on the board on 2026-11-16.
 
 ## Build and flash
 
@@ -34,14 +35,18 @@ the port):
 tools/dbg.py info
 tools/dbg.py screenshot shot.png
 tools/dbg.py screenshot --no-pointer bare.png
-tools/dbg.py mouse move 100 100
-tools/dbg.py mouse click
-tools/dbg.py key down a
+tools/dbg.py windows
+tools/dbg.py mouse move 490 180          # over About's title bar
+tools/dbg.py mouse down
+tools/dbg.py mouse move --buttons left 400 90
+tools/dbg.py mouse up                    # dropped
+tools/dbg.py key tap enter               # About's OK button
+tools/dbg.py repaint
 tools/dbg.py stats
 ```
 
-The pointer should move on the monitor, and `shot.png` should match what the
-monitor shows.
+`shot.png` should match what the monitor shows. The UI runs on one task
+(`ui_task` in `main/main.cpp`), which also serves the debug link.
 
 ## Layout
 
@@ -49,7 +54,7 @@ monitor shows.
 | --- | --- |
 | `main/main.cpp` | Start-up and the ESP32 adapters: serial port, lock, screen, pointer, system |
 | `main/vga.c` | VGA signal, with the settings proven by `firmware/vga-test`. Owns the one framebuffer and fills the video bounce buffers itself |
-| `../../core/` | Everything portable: the protocol, the demo screen and the pointer (`core/src/video/pointer.cpp`) |
+| `../../core/` | Everything portable: drawing (`gfx/`), the window manager and widgets (`wm/`), the demo windows (`shell/`), the protocol (`dbg/`) and the pointer (`video/`) |
 
 ## How the pointer is drawn
 

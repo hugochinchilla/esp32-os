@@ -5,9 +5,10 @@
 A 90s-style desktop operating environment (think Windows 95/98) for the
 ESP32-S3, with VGA output from GPIO pins, Wi-Fi, and USB keyboard and mouse.
 
-Status: **the VGA adapter works, and the first piece of the OS is written.**
-There is no desktop yet. The firmware shows a demo screen and answers a debug
-protocol for screenshots and injected keyboard and mouse events.
+Status: **the window manager runs on the board.** Overlapping windows in the
+98 look, a taskbar with the Start button, and a debug protocol for
+screenshots and injected keyboard and mouse events. No Start menu, files or
+programs yet.
 
 ## What it will be
 
@@ -46,9 +47,10 @@ resistor values and build notes.
 | `core/` | The portable part of the OS (C++). Depends on no hardware; builds for the board and for a PC |
 | `firmware/os/` | The OS firmware: ESP-IDF project with the ESP32 adapters for `core/` |
 | `firmware/vga-test/` | ESP-IDF test program for the VGA wiring |
-| `host/` | PC build: unit tests for `core/` and a simulated board |
+| `host/` | PC build: unit tests and picture tests for `core/`, and a simulated board |
+| `third_party/` | Freely licensed files from elsewhere: the Spleen font |
 | `ci/` | GitHub Actions workflow to copy into `.github/workflows/` |
-| `tools/` | `dbg.py`, the debug tool; the setup script for Arch-based systems; the script that regenerates the board diagram |
+| `tools/` | `dbg.py`, the debug tool; `check_pictures.py`, the picture tests; `gen_font.py`, the font table generator; `mockup/`, the script that drew the target look; the setup script for Arch-based systems; the script that regenerates the board diagram |
 
 ## Tests on the PC
 
@@ -62,6 +64,17 @@ ctest --test-dir build/host --output-on-failure
 
 `build/host/sim` is a simulated board: it prints a port name that
 `tools/dbg.py --port <name>` can talk to.
+
+The picture tests draw the desktop through a series of steps and compare
+each screen with `host/tests/pictures/`. After an intended change to the
+look, regenerate them, look at every changed picture, and commit them:
+
+```sh
+python3 tools/check_pictures.py build/host/render_scenes --update
+```
+
+The font table `core/src/gfx/font_spleen6x12.cpp` is generated:
+`python3 tools/gen_font.py third_party/fonts/spleen/spleen-6x12.bdf core/src/gfx/font_spleen6x12.cpp`.
 
 ## Building the VGA test
 

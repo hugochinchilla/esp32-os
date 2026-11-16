@@ -57,6 +57,7 @@ Last updated: 2026-11-16.
 
 | Question | Options | Suggested |
 | --- | --- | --- |
+| Window manager details chosen while building step 4, closest to the 98 look; to confirm or overrule | See the list under "Chosen in step 4" below | As built |
 | Remote keyboard, mouse and screen for a person | VNC server, web page, debug tool only | VNC server |
 | How apps are delivered | Built into the firmware, or loadable from disk | Built in first, behind an app interface |
 | SD card in the first version | Yes, later, never | Later (pins are reserved) |
@@ -114,6 +115,14 @@ First picture: 2026-11-16, through a VGA-to-HDMI adapter.
   default port of `tools/dbg.py`.
 - A webcam (Logitech StreamCam, `/dev/video4`) watches the monitor, so what
   the monitor really shows can be checked from the PC with `ffmpeg`.
+- Window manager (2026-11-16): the board's screen is pixel-identical to the
+  PC render of the same steps (desktop, focus change, drag and drop), and a
+  full repaint after any step changes nothing (no stale pixels). Times on the
+  board: full-screen repaint 22 ms; bringing a window to the front 16 ms;
+  each mouse move while dragging 0.4 to 1.1 ms (only the outline changes);
+  dropping a 300x160 window 6.6 ms; closing it 16 ms. Still 59.5 frames a
+  second, no receive errors. A screenshot now takes 2.2 s instead of 0.3 s,
+  because the dithered desktop colour does not compress with run lengths.
 - Pointer mixed in at scanout (2026-11-16): the OS fills the video bounce
   buffers itself (`no_fb` and `on_bounce_empty` in ESP-IDF's RGB panel
   driver), copying 10 lines at a time from the framebuffer in PSRAM and
@@ -122,6 +131,25 @@ First picture: 2026-11-16, through a VGA-to-HDMI adapter.
   600 small mouse moves showed no tearing, no doubled or missing pointer
   and no picture shift on the webcam; the pointer clips cleanly at every
   edge and corner; moving it leaves the framebuffer byte-identical.
+
+### Chosen in step 4 (to confirm)
+
+Picked by the agent that built the window manager, as close to Windows 98 as
+practical. Each is easy to change.
+
+- The taskbar clock shows `--:--` until there is a clock (NTP, later).
+- Clicking the desktop takes the focus away from every window, as in 98.
+- Dragging shows a dotted outline 3 pixels wide (every other pixel
+  inverted); the window moves when the button is let go.
+- A maximised window fills the screen above the taskbar with its border still
+  showing (98 pushes the border off the screen), and cannot be dragged.
+- The taskbar stays on top; windows can go under it. A window cannot be
+  dragged so far that its title bar leaves the screen.
+- Taskbar and title text that does not fit is cut off, without "...".
+- Taskbar buttons act when the mouse button is let go, not when pressed.
+- The quick-launch icons are drawn but do nothing yet.
+- The About window's OK button has no extra dark "default button" frame;
+  Enter or Escape press it.
 
 ## To confirm on the bench
 
@@ -135,7 +163,9 @@ First picture: 2026-11-16, through a VGA-to-HDMI adapter.
 2. Debug protocol and PC tool, so screenshots and injected input work early.
    Done 2026-11-16, working on the board.
 3. Video driver with a cursor merged in at scanout. Done 2026-11-16.
-4. Window manager and widget toolkit.
+4. Window manager and widget toolkit. First part done 2026-11-16: windows,
+   frames, taskbar, label, button, text area. Start menu, desktop icons,
+   resizing and menus come next.
 5. Desktop shell, file system and file manager.
 6. Text editor, then image viewer.
 7. Wi-Fi, NTP, remote display.

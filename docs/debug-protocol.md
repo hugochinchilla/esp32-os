@@ -55,6 +55,8 @@ and the same sequence number. Every reply payload starts with a status byte:
 | 0x05 | Mouse | Mode (1: 0 movement, 1 position), x (2, signed), y (2, signed), buttons (1), wheel (1, signed) | None |
 | 0x06 | Stats | None | 4-byte numbers: uptime in ms, free internal RAM, free external RAM, frames shown, frames received, receive errors, key events, mouse events, time spent filling video lines in µs (wraps; the first firmware sent only the first eight) |
 | 0x07 | Reboot | None | None. The board restarts after replying |
+| 0x08 | Windows | None | The windows as JSON text, see below |
+| 0x09 | Repaint | None | Time taken in µs (4). The board paints the whole screen again |
 
 - Key codes are USB HID keyboard usage codes (0x04 is A, 0x28 is Enter), the
   same codes a USB keyboard will produce later.
@@ -94,8 +96,25 @@ Encoding 1 is a run-length code. Each token starts with a control byte:
 
 A token never straddles two chunks. A plain desktop shrinks to a few
 kilobytes; the worst case (nothing repeats) is 0.8 % larger than the raw
-307,200 bytes, about 3.5 seconds at 921,600 baud. On the bench the demo
-screen takes 0.3 seconds, including opening the port.
+307,200 bytes, about 3.5 seconds at 921,600 baud. On the bench the desktop
+takes 2.2 seconds, including opening the port: its dithered colour leaves
+few runs.
+
+## Windows
+
+The Windows reply lists the windows from the bottom of the stack to the top:
+
+```json
+{"windows":[{"id":1,"z":0,"title":"Welcome to Chinchilla","x":40,"y":30,"w":400,"h":280,"state":"normal","focused":false}, ...],
+ "update_us":6246,"event_us":6639}
+```
+
+`state` is `normal`, `minimized` or `maximized`. `update_us` is how long the
+last repaint took and `event_us` how long the last input event took to
+handle, painting included. If the list does not fit in one reply the board
+sends `{"error":"too many windows"}`. `tools/dbg.py windows` prints the list;
+`tools/dbg.py repaint` repaints and prints the time, and comparing a
+screenshot before and after it shows whether anything was left stale.
 
 ## Reset lines
 
