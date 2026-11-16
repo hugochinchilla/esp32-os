@@ -131,8 +131,9 @@ Sent Table::signal(Pid pid, Signal signal)
         return Sent::NotPermitted;
     }
     if (!p->is(kWindowed)) {
-        // A service is a row and a name for now: there is nothing behind
-        // the row that could be stopped, so saying "ended" would be a lie.
+        // Only window programs can be ended so far. A process without
+        // windows will be a real task with a way to stop it; until that is
+        // built, saying "ended" would be a lie.
         return Sent::NotSupported;
     }
     if (p->pending == 0) {

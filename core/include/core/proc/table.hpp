@@ -89,7 +89,10 @@ public:
     // (init is made if needed). Returns kNone when the table is full or
     // there is no such parent.
     Pid spawn(const char *name, Pid parent, uint8_t flags = 0);
-    // A service started by the machine: a child of init with the system flag.
+    // A system process started by the machine: a child of init with the
+    // system flag. Only for what really is a task of its own (the desktop is
+    // the UI task). A service polled from the UI loop gets no row: a row
+    // without a task behind it says something that is not true.
     Pid spawn_service(const char *name, uint8_t flags = 0) { return spawn(name, kNone, flags | kSystem); }
 
     // Removes the row. Its children are handed to init, as on Unix. Returns

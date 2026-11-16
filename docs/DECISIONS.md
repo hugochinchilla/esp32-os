@@ -1123,11 +1123,11 @@ for the table, the rest for Task Manager's rows).
 - A window program ends when it has no window left at the end of the event
   that closed the last one, not at once (the Picture viewer's Open dialog
   closes before its picture window opens). Timers it left are stopped.
-- Services have Unix-style names, children of init with the system flag:
-  `dbgd` (debug link, protected), `netd` (Wi-Fi manager), `vncd` (remote
-  screen), `httpd` (browser viewer), and `desktop` (protected). They are rows
-  only: all still run on the UI task. The other option was plain names such as
-  "Remote screen".
+- **Reversed 2026-11-16 by the owner** (see "Only real tasks are listed"
+  below): the services had rows with Unix-style names, `dbgd`, `netd`, `vncd`
+  and `httpd`, that were names only, all running on the UI task. Those rows
+  are gone. `desktop` (protected) stays: it is the UI task. The names are
+  kept for the day each service is a task.
 - Task Manager lists processes: PID, name and the main window's title. By
   default the programs with windows, without itself, as before; "Show all
   processes" shows the whole table. This replaces "every window that has a
@@ -1157,11 +1157,12 @@ Task does.
 - KILL closes the process's menus and windows (dialogs first), stops its
   timers and removes its row, without `close_requested()`. `closed()` still
   runs, because window objects are used again by the next launch.
-- Protected processes (`init`, `dbgd`, `desktop`) refuse both signals. Task
-  Manager greys End Task out on them.
-- Services without windows (`netd`, `vncd`, `httpd`) cannot be signalled yet:
-  Task Manager says so. Removing only the row would leave `vncd` and `httpd`
-  running. Each gets a stop function in backlog item 5b.
+- Protected processes (`init`, `desktop`) refuse both signals. Task Manager
+  greys End Task out on them.
+- A process without windows cannot be signalled yet (NotSupported), and Task
+  Manager has a message for it. Since the service rows were removed (see
+  "Only real tasks are listed" below) no row gives that answer today. The
+  first real service gets a stop function with its row (backlog item 5b).
 - End Task sends TERM. If the process is still there 5 seconds later, a box
   offers End Now (KILL) or Cancel, but only once the Task Manager is the
   window in front, so it never lands on a question the program is asking.
@@ -1194,3 +1195,21 @@ Backlog item 9. Journal: `docs/journal/2026-11-16-file-system-lock.md`.
   rule.
 - With no lock set, `Storage` is as before (the simulator and one-thread
   tests). The board sets one at start-up.
+
+### Only real tasks are listed as processes (2026-11-16)
+
+The owner's rule, 2026-11-16: "don't advertise non real tasks, it's
+confusing". The story is in `docs/journal/2026-11-16-only-real-tasks.md`.
+
+- A row in the process table stands for something that runs: a window
+  program, or a task of its own. A service that is polled from the UI loop
+  gets no row.
+- The rows `dbgd`, `netd`, `vncd` and `httpd` are removed. The Wi-Fi
+  manager's timer is the desktop's. Before any program starts the table is
+  `init` 1 and `desktop` 2.
+- A service gets its row, with the name planned for it, in the change that
+  makes it a task (items 14, 18 and 26).
+- `init` stays as PID 1 although it is not a task yet: it is the root of the
+  tree and keeps the numbers stable until item 18. **To confirm with the
+  owner.**
+- The other option was to keep the rows marked "(part of the desktop)".

@@ -664,19 +664,20 @@ void test_shell()
 {
     proc::Table &t = proc::table();
 
-    // After start-up: init is 1; the debug service (made by the adapter
-    // before the shell starts), the desktop and the Wi-Fi manager are its
-    // children, all system processes. No program runs yet.
-    const proc::Process *init = t.find(1), *dbgd = process("dbgd"), *desk = process("desktop"), *netd = process("netd");
+    // After start-up: init is 1 and the desktop, its child, is 2. Nothing
+    // else is listed. The debug link, the Wi-Fi manager, the remote screen
+    // and the web page are not tasks of their own (they run on the UI
+    // task), so they have no rows. No program runs yet.
+    const proc::Process *init = t.find(1), *desk = process("desktop");
     CHECK(init != nullptr && strcmp(init->name, "init") == 0);
-    CHECK(dbgd != nullptr && dbgd->pid == 2 && dbgd->parent == 1 && dbgd->is(proc::kProtected));
-    CHECK(desk != nullptr && desk->pid == 3 && desk->parent == 1 && desk->is(proc::kSystem) && desk->is(proc::kProtected));
-    CHECK(netd != nullptr && netd->pid == 4 && netd->parent == 1 && netd->is(proc::kSystem) && !netd->is(proc::kProtected));
-    CHECK(t.count() == 4 && desktop.processes() == &t);
-    const Pid desk_pid = desk->pid, netd_pid = netd->pid;
-    // Timers: the caret and the clock, the desktop's look at its folder and
-    // the screensaver's are the desktop's; the Wi-Fi manager's is its own.
-    CHECK(desktop.timers_of(netd_pid) == 1 && desktop.timers_of(desk_pid) >= 3 && desktop.timers_of(0) == 0);
+    CHECK(desk != nullptr && desk->pid == 2 && desk->parent == 1 && desk->is(proc::kSystem) && desk->is(proc::kProtected));
+    CHECK(t.count() == 2 && desktop.processes() == &t);
+    CHECK(process("dbgd") == nullptr && process("netd") == nullptr && process("vncd") == nullptr &&
+          process("httpd") == nullptr);
+    const Pid desk_pid = desk->pid;
+    // Timers: the caret and the clock, the desktop's look at its folder, the
+    // screensaver's and the Wi-Fi manager's are all the desktop's.
+    CHECK(desktop.timers_of(desk_pid) >= 4 && desktop.timers_of(0) == 0);
 
     // Starting the shell again (the tests do) makes no second desktop.
     CHECK(t.find_by_name("desktop") == desk_pid);
@@ -685,11 +686,11 @@ void test_shell()
     // its window. Launching it again is the same process.
     shell::launch(*shell::find_app("Welcome"));
     const proc::Process *welcome = process("Welcome");
-    CHECK(welcome != nullptr && welcome->pid == 5 && welcome->is(proc::kWindowed) && !welcome->is(proc::kSystem));
+    CHECK(welcome != nullptr && welcome->pid == 3 && welcome->is(proc::kWindowed) && !welcome->is(proc::kSystem));
     CHECK(welcome != nullptr && welcome->parent == proc::kInit); // launched from outside any process
-    CHECK(find("Welcome to Chinchilla")->owner() == 5 && desktop.windows_of(5) == 1);
+    CHECK(find("Welcome to Chinchilla")->owner() == 3 && desktop.windows_of(3) == 1);
     shell::launch(*shell::find_app("Welcome"));
-    CHECK(t.count() == 5 && desktop.window_count() == 1);
+    CHECK(t.count() == 3 && desktop.window_count() == 1);
 
     // From the Start menu the parent is the desktop: Ctrl+Esc, Programs,
     // the first entry (About Chinchilla).
@@ -699,16 +700,16 @@ void test_shell()
     key(wm::key::Enter);
     CHECK(strcmp(title(), "About Chinchilla") == 0);
     const proc::Process *about = process("About Chinchilla");
-    CHECK(about != nullptr && about->pid == 6 && about->parent == desk_pid && desktop.active()->owner() == 6);
+    CHECK(about != nullptr && about->pid == 4 && about->parent == desk_pid && desktop.active()->owner() == 4);
 
     // Closing its last window ends the process; the others stay.
     key(wm::key::Enter); // OK
-    CHECK(process("About Chinchilla") == nullptr && t.count() == 5 && process("Welcome") != nullptr);
+    CHECK(process("About Chinchilla") == nullptr && t.count() == 3 && process("Welcome") != nullptr);
     // Started again it is a new process with a new number.
     shell::launch(*shell::find_app("About Chinchilla"));
-    CHECK(process("About Chinchilla") != nullptr && process("About Chinchilla")->pid == 7);
+    CHECK(process("About Chinchilla") != nullptr && process("About Chinchilla")->pid == 5);
     close_all();
-    CHECK(t.count() == 4);
+    CHECK(t.count() == 2);
 
     // A program opened by another is its child: a text file opened from a
     // File manager window goes to the Editor.
@@ -759,7 +760,7 @@ void test_shell()
     // they started, without itself: End Task on the first row closes
     // Culebra and the process goes.
     close_all();
-    CHECK(t.count() == 4);
+    CHECK(t.count() == 2);
     shell::open_culebra();
     shell::launch(*shell::find_app("Widget gallery"));
     const Pid culebra = t.find_by_name("Culebra"), gallery = t.find_by_name("Widget gallery");
@@ -779,7 +780,7 @@ void test_shell()
     CHECK(strcmp(title(), "Widget gallery") == 0);
 
     // "Show all processes": every row of the table, init first. On a
-    // protected process (init, the debug link, the desktop) End Task is
+    // protected process (init and the desktop) End Task is
     // greyed out: its letter does nothing, a click does nothing, and the
     // button is drawn differently.
     key(wm::key::Delete, kCtrl | kAlt);
@@ -802,7 +803,7 @@ void test_shell()
         desktop.mouse({true, static_cast<int16_t>(at.x + 40), static_cast<int16_t>(at.y + 147), 0, 0});
     };
     const std::string usable = end_button();
-    const int rows[3] = {0, 1, 2}; // init, dbgd, desktop
+    const int rows[2] = {0, 1}; // init, desktop
     for (const int row : rows) {
         key(wm::key::Home);
         for (int i = 0; i < row; i++) {
@@ -812,23 +813,13 @@ void test_shell()
         letter('e', kAlt);
         click_end();
         wait(10000);
-        CHECK(desktop.active() == its_window && desktop.windows_of(manager) == 1 && t.count() == 6);
+        CHECK(desktop.active() == its_window && desktop.windows_of(manager) == 1 && t.count() == 4);
     }
-    CHECK(t.alive(proc::kInit) && process("dbgd") != nullptr && process("desktop") != nullptr);
-    // The Wi-Fi manager is a service but not protected: the button can be
-    // used, and says that services cannot be ended yet. Nothing ends.
-    key(wm::key::Down); // init, dbgd, desktop, netd
+    CHECK(t.alive(proc::kInit) && process("desktop") != nullptr);
+    // The next row is a program: the button can be used again.
+    key(wm::key::Down); // init, desktop, Widget gallery
     CHECK(end_button() == usable);
-    letter('e', kAlt);
-    CHECK(desktop.active() != its_window && desktop.active()->owner() == manager); // its message
-    CHECK(desktop.windows_of(manager) == 2 && process("netd") != nullptr && t.count() == 6);
-    CHECK(desktop.timers_of(netd_pid) == 1);
-    key(wm::key::Enter);
-    CHECK(desktop.active() == its_window);
-    wait(7000000);
-    CHECK(desktop.active() == its_window && desktop.windows_of(manager) == 1); // nothing to force
     // A click on the button of a program's row works as before.
-    key(wm::key::Down); // Widget gallery
     click_end();
     wait(10000);
     CHECK(!t.alive(gallery) && find("Widget gallery") == nullptr);
@@ -865,7 +856,7 @@ void test_shell()
     CHECK(strcmp(title(), "Shut Down Chinchilla") == 0 && desktop.active()->owner() == desk_pid);
     key(wm::key::Escape);
     wait(10000);
-    CHECK(t.count() == 4 && t.alive(desk_pid) && t.alive(netd_pid) && desktop.window_count() == 0);
+    CHECK(t.count() == 2 && t.alive(desk_pid) && desktop.window_count() == 0);
     CHECK(desktop.timers_of(0) == 0); // nothing running that nobody owns
 }
 
@@ -883,7 +874,6 @@ int main()
     static host::FakeWifi radio;
     static host::MemoryKeyStore settings;
     static net::Manager wifi(radio, settings);
-    proc::table().spawn_service("dbgd", proc::kProtected); // as the board and the simulator do
     shell::set_network(&wifi);
     shell::start(desktop, system_, storage, memory);
     desktop.start();
