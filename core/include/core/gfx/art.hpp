@@ -13,6 +13,10 @@ const Bitmap &network_icon_16();
 const Bitmap &settings_icon_16();
 const Bitmap &drive_icon_16();
 const Bitmap &picture_icon_16();
+// Radio signal: four bars, `bars` of them filled (0 to 4). With `locked`, a
+// small padlock (the network wants a password). bars < 0: no link, shown
+// as empty bars and a red cross.
+const Bitmap &signal_icon_16(int bars, bool locked = false);
 
 // Desktop icons, 32x32.
 const Bitmap &board_icon_32(); // the ESP32 board: My Board

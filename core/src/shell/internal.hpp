@@ -12,6 +12,9 @@ ports::System &system_port();
 fs::Storage &storage();
 ports::Memory &memory();
 
+// Starts following the network, if there is one (network.cpp).
+void start_network();
+
 // Opens a window if it is not open, otherwise brings it to the front.
 void show(wm::Window &w);
 

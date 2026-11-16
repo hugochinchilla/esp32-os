@@ -21,3 +21,6 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 # the cache off and the video keeps reading its framebuffer (docs/DECISIONS.md).
 CONFIG_SPIRAM_XIP_FROM_PSRAM=y
 CONFIG_LCD_RGB_ISR_IRAM_SAFE=y
+# Wi-Fi: its buffers and the network stack's go to external RAM when they
+# can, to keep internal RAM free
+CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y

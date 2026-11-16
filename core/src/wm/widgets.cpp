@@ -369,7 +369,8 @@ void TextField::paint(Canvas &c)
         char run[2 * kCapacity + 1];
         int n = 0, count = 0;
         while (i < length_ && (focus && i >= s0 && i < s1) == chosen && x + count * 6 < area.w) {
-            const uint8_t ch = chars_[i++];
+            const uint8_t ch = hidden_ ? '*' : chars_[i];
+            i++;
             if (ch < 0x80) {
                 run[n++] = static_cast<char>(ch);
             } else {
