@@ -31,7 +31,6 @@ board or the merge), `done`.
 | 8 | Message queue into the UI task. The loop sleeps until there is work | M | | Yes | done (checked on the board 2026-11-16). [Journal](journal/2026-11-16-message-queue.md) |
 | 8b | Services loop: one task for the network services (VNC, the web viewer, later the telnet listener) that sleeps on all their sockets and reaches the desktop only by messages. The network leaves the UI loop | M | 8 | Yes | todo |
 | 9 | Lock on the file system | S | | | done (checked on the board 2026-11-16). [Journal](journal/2026-11-16-file-system-lock.md) |
-| 8b | Services loop: one task for the network services (VNC, the web viewer, later the telnet listener) that sleeps on all their sockets and reaches the desktop only by messages. The network leaves the UI loop | M | 8 | Yes | todo |
 | 10 | Jobs owned by a process, and "cannot exit until jobs finish". The Editor saves through a job, its window locked meanwhile | M | 2, 8, 9 | Yes | todo |
 | 11 | Three priority classes (Low, Normal, High) for jobs and services | S | 10 | Yes | todo |
 | | **Phase 3: the console** | | | | |
