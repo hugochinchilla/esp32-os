@@ -549,7 +549,10 @@ practical. Each is easy to change.
   dragged so far that its title bar leaves the screen.
 - Taskbar and title text that does not fit is cut off, without "...".
 - Taskbar buttons act when the mouse button is let go, not when pressed.
-- The quick-launch icons are drawn but do nothing yet.
+- ~~The quick-launch icons are drawn but do nothing yet.~~ Taken out on
+  2026-11-16 at the owner's request: the taskbar shows only what works
+  (Start, the window buttons, the Wi-Fi signal icon, the clock). They come
+  back when they launch something. The window buttons start at x = 72.
 - ~~The About window's OK button has no extra dark "default button"
   frame~~: replaced in the shell milestone, default buttons now have it.
 
@@ -607,7 +610,9 @@ practical. Each is easy to change.
 - The RAM disk is 2 MB of external RAM, labelled "RAM disk", with at most
   256 files and folders. Its readme.txt says that it is lost at restart.
 - The File manager opens folders in the same window (Back and Up), at most
-  three File manager windows. My Board lists the drives. Deleting a folder
+  three File manager windows. Back has a blue arrow pointing left and Up a
+  folder with a green arrow rising from it (they shared the folder icon
+  until 2026-11-16). My Board lists the drives. Deleting a folder
   deletes everything in it, after a question that says so. New Folder and
   Rename ask for the name in a small dialog (98 edits the name in place).
   Icons per extension: text (.txt .log .ini .md), picture (.png .jpg .bmp

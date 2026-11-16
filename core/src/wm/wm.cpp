@@ -36,8 +36,7 @@ const char *const kArrowGlyph[] = {"X   ", "XX  ", "XXX ", "XXXX", "XXX ", "XX  
 
 // Taskbar layout (tools/mockup/desktop.py).
 constexpr int kStartW = 58;
-constexpr int kQuickX = 66;    // separator before the quick-launch icons
-constexpr int kButtonsX = 144; // first window button
+constexpr int kButtonsX = 72; // first window button, after a groove
 constexpr int kButtonW = 150, kButtonGap = 3;
 constexpr int kClockW = 60;
 constexpr int kTrayW = 20; // a tray icon, left of the clock
@@ -2167,12 +2166,8 @@ void Wm::paint_taskbar(const RectList &clip)
     c.blit(gfx::mascot_16(), 5 + sd, ty + 7 + sd);
     c.text(25 + sd, ty + 9 + sd, "Start", gfx::kBlack, true);
 
-    // Quick-launch icons between two grooves. ponytail: they do nothing yet.
-    c.vline(kQuickX, ty + 5, 20, gfx::kDarkGrey);
-    c.vline(kQuickX + 1, ty + 5, 20, gfx::kWhite);
-    c.blit(gfx::folder_icon_16(), kQuickX + 8, ty + 7);
-    c.blit(gfx::text_icon_16(), kQuickX + 30, ty + 7);
-    c.blit(gfx::network_icon_16(), kQuickX + 52, ty + 7);
+    // A groove, then the window buttons. The quick-launch icons that stood
+    // here did nothing and were taken out; they come back when they work.
     c.vline(kButtonsX - 4, ty + 5, 20, gfx::kDarkGrey);
     c.vline(kButtonsX - 3, ty + 5, 20, gfx::kWhite);
 

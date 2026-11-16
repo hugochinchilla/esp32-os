@@ -55,3 +55,4 @@ Plain words, real numbers, no summaries of summaries.
 | 2026-11-16 | [TERM, KILL and protected processes](2026-11-16-signals-and-flags.md) | Signals that wait on the process's row until a safe point, End Task that asks first and offers force after 5 seconds, a greyed End Task for protected processes, and respawn |
 | 2026-11-16 | [A lock on the file system](2026-11-16-file-system-lock.md) | Backlog item 9: one lock around `fs::Storage` so a second task can use files; where it could have gone instead, how long it is held, and a two-thread test that proves itself |
 | 2026-11-16 | [VNC connect times](2026-11-16-vnc-connect.md) | Five connects on main, the network spread, and a correction to the PR 18 transfer figure |
+| 2026-11-16 | [Icons: the inventory, the taskbar and the folder toolbar](2026-11-16-icons.md) | Which icons exist and at what sizes, the quick-launch icons taken out, Back and Up told apart |

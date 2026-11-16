@@ -380,8 +380,8 @@ public:
 
     FolderWindow()
         : Window("My Board", {96, 28, 400, 300}, &gfx::folder_icon_16()),
-          back_({4, 0, 44, 34}, "Back", &gfx::folder_icon_16(), &FolderWindow::back, this),
-          up_({50, 0, 44, 34}, "Up", &gfx::folder_icon_16(), &FolderWindow::up, this),
+          back_({4, 0, 44, 34}, "Back", &gfx::back_icon_16(), &FolderWindow::back, this),
+          up_({50, 0, 44, 34}, "Up", &gfx::up_icon_16(), &FolderWindow::up, this),
           groove_({0, 36, 100, 2}),
           address_label_({4, 44, 46, 14}, "Address"),
           address_({50, 40, 100, 20}, true, &gfx::folder_icon_16()),

@@ -14,6 +14,8 @@ const Bitmap &network_icon_16();
 const Bitmap &settings_icon_16();
 const Bitmap &drive_icon_16();
 const Bitmap &picture_icon_16();
+const Bitmap &back_icon_16(); // folder toolbar: the folder shown before
+const Bitmap &up_icon_16();   // folder toolbar: the folder that holds this one
 // Radio signal: four bars, `bars` of them filled (0 to 4). With `locked`, a
 // small padlock (the network wants a password). bars < 0: no link, shown
 // as empty bars and a red cross.
