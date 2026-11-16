@@ -145,3 +145,28 @@ listed (`34`, `34b`, `34c`, `34e`). Not compiled for the board, not run on it.
 
 On the board, Ctrl+Alt+Del with Alt+A should show `desktop` 1 and the Task
 Manager 2, with End Task grey on `desktop`.
+
+## On the board (added by the board thread, 2026-11-16)
+
+Branch at 5dd6e15 with main merged in (ab5853b); PC tests 22 of 22; the first
+firmware compile, clean; flashed with a fast start:
+
+- Ctrl+Alt+Del, Alt+A: desktop 1, Task Manager 2. End Task is greyed with the
+  desktop selected, active with the Task Manager.
+- PIDs count up as programs start and end: the File manager 3 (the Trash
+  window belongs to it, PID 3 too), then the Editor 4, the File manager 5, the
+  Editor 6 after each was closed.
+- Wi-Fi joins. The tray icon follows the link: bars while connected, a red
+  cross and empty bars after `dbg.py wifi disconnect`, bars again after a
+  restart rejoined the remembered network (the timer is now the desktop's).
+- VNC answers (handshake 898 ms on tonight's network), the web page and
+  /novnc answer (HTTP 200), the browser viewer connects and shows the screen,
+  `dbg.py` answers (ping 0.7 ms).
+- End Task on an Editor with unsaved text: its question, then the "has not
+  closed" box 5.4 s after End Task; End Now removed it, the file kept its old
+  text.
+- The caret blinks, the clock changed with the minute, K held for 1.5 s typed
+  32 letters, File > Save left the title clean.
+- Free internal RAM 100,787 bytes, the same as main; repaint of the empty
+  desktop 14.13 ms against 14.20 ms; video 0 late, 0 missed refills.
+
