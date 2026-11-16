@@ -3,6 +3,7 @@
 #pragma once
 
 #include <chrono>
+#include <cstdlib>
 #include <cstdint>
 #include <vector>
 
@@ -62,6 +63,13 @@ class FixedClock : public ports::Clock {
 public:
     uint32_t micros() override { return now; }
     uint32_t now = 0;
+};
+
+// Large buffers from the ordinary heap. ponytail: never freed; they live
+// as long as the program, as on the board.
+class HostMemory : public ports::Memory {
+public:
+    void *allocate(size_t bytes) override { return std::calloc(1, bytes); }
 };
 
 class NoLock : public ports::Lock {

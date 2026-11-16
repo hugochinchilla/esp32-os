@@ -5,6 +5,7 @@
 // same way.
 #pragma once
 
+#include "core/fs/fs.hpp"
 #include "core/gfx/canvas.hpp"
 #include "core/ports.hpp"
 #include "core/wm/wm.hpp"
@@ -34,6 +35,8 @@ void ask(const char *title, const char *text, const char *const *buttons, int co
 void shut_down_dialog();
 
 // Sets up the desktop icons and the Start menu, and opens the first windows.
-void start(wm::Wm &wm, ports::System &system);
+// `storage` holds the drives; `memory` gives the large buffers (editor,
+// clipboard, folder lists), once.
+void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memory &memory);
 
 } // namespace shell

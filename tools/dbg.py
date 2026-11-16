@@ -29,6 +29,8 @@ PROTOCOL_VERSION = 1
 
 PING, INFO, SCREENSHOT, KEY, MOUSE, STATS, REBOOT = 1, 2, 3, 4, 5, 6, 7
 WINDOWS, REPAINT, TEXT, TIME, ANIMATIONS = 8, 9, 10, 11, 12
+FILE_LIST, FILE_READ, FILE_WRITE, FILE_DELETE, FILE_MKDIR = 13, 14, 15, 16, 17
+MAX_REQUEST = 1024  # largest request payload the board takes
 LOG, HELLO, SHOT_DATA, SHOT_END = 0x70, 0x71, 0x72, 0x73
 REPLY = 0x80
 
@@ -164,7 +166,12 @@ class Board:
     # if asked for; other frames are queued for _wait.
     def _read(self):
         try:
-            data = self.serial.read(4096)
+            # Wait for the first byte (up to the timeout), then take whatever
+            # else has arrived, so a reply is handled as soon as it is in.
+            data = self.serial.read(1)
+            waiting = self.serial.in_waiting
+            if waiting:
+                data += self.serial.read(waiting)
         except Exception:
             raise PortClosed("the serial port went away")
         for byte in data:
@@ -227,6 +234,8 @@ class Board:
             frame = self._wait(lambda k, s, p: k == (kind | REPLY) and s == seq)
             if frame is not None:
                 body = frame[2]
+                if body and body[0] == 3:  # a file error, with its text
+                    raise DebugError("the board answered: %s" % body[2:].decode("utf-8", "replace"))
                 if not body or body[0] != 0:
                     raise DebugError("the board answered: %s" %
                                      STATUS.get(body[0] if body else -1, "error"))
@@ -295,6 +304,59 @@ class Board:
 
     def animations(self, on):
         self.request(ANIMATIONS, b"\x01" if on else b"\x00")
+
+    # ---- Files. Paths are written C:\docs\notes.txt ("/" works too).
+
+    @staticmethod
+    def _path(p):
+        p = p.replace("/", "\\")
+        if len(p) < 2 or p[1] != ":":
+            p = "C:\\" + p.lstrip("\\")
+        return p.encode("utf-8")
+
+    def ls(self, folder):
+        """[(name, is_folder, size)] of a folder."""
+        out, start = [], 0
+        while True:
+            body = self.request(FILE_LIST, struct.pack("<H", start) + self._path(folder))
+            count, more = body[0], body[1]
+            i = 2
+            for _ in range(count):
+                is_folder, size, n = body[i], struct.unpack_from("<I", body, i + 1)[0], body[i + 5]
+                out.append((body[i + 6:i + 6 + n].decode("utf-8", "replace"), bool(is_folder), size))
+                i += 6 + n
+            start += count
+            if not more:
+                return out
+
+    def get(self, path):
+        """The contents of a file on the board."""
+        data = bytearray()
+        while True:
+            body = self.request(FILE_READ, struct.pack("<I", len(data)) + self._path(path))
+            size = struct.unpack_from("<I", body)[0]
+            data += body[4:]
+            if len(data) >= size or len(body) <= 4:
+                return bytes(data[:size])
+
+    def put(self, path, data):
+        """Writes a file on the board (replacing it)."""
+        p = self._path(path)
+        chunk = MAX_REQUEST - 8 - len(p)
+        offset = 0
+        while True:
+            piece = data[offset:offset + chunk]
+            flags = 1 if offset == 0 else 0
+            self.request(FILE_WRITE, struct.pack("<IBB", offset, flags, len(p)) + p + piece)
+            offset += len(piece)
+            if offset >= len(data):
+                return
+
+    def rm(self, path):
+        self.request(FILE_DELETE, self._path(path))
+
+    def mkdir(self, path):
+        self.request(FILE_MKDIR, self._path(path))
 
     def windows(self):
         """The windows, bottom to top, as a list of dicts."""
@@ -424,6 +486,18 @@ def main(argv=None):
     sub.add_parser("stats", help="uptime, free memory, counters")
     sub.add_parser("reboot", help="restart the board")
     sub.add_parser("windows", help="list the windows, bottom to top")
+    p = sub.add_parser("ls", help="list a folder on the board (default C:\\)")
+    p.add_argument("folder", nargs="?", default="C:\\")
+    p = sub.add_parser("get", help="copy a file from the board")
+    p.add_argument("remote")
+    p.add_argument("local", nargs="?")
+    p = sub.add_parser("put", help="copy a file to the board")
+    p.add_argument("local")
+    p.add_argument("remote")
+    p = sub.add_parser("rm", help="delete a file or an empty folder on the board")
+    p.add_argument("remote")
+    p = sub.add_parser("mkdir", help="make a folder on the board")
+    p.add_argument("remote")
     p = sub.add_parser("time", help="read the board's clock, or set it")
     p.add_argument("action", choices=["now", "set"])
     p.add_argument("value", nargs="?", help="HH:MM[:SS]; default: this computer's time")
@@ -485,6 +559,25 @@ def main(argv=None):
             for w in board.windows():
                 print("%(id)d z%(z)d %(x)d,%(y)d %(w)dx%(h)d %(state)s%(f)s  %(title)s"
                       % dict(w, f=" focused" if w["focused"] else ""))
+        elif args.command == "ls":
+            for name, is_folder, size in board.ls(args.folder):
+                print("%-8s %s" % ("<folder>" if is_folder else size, name))
+        elif args.command == "get":
+            data = board.get(args.remote)
+            local = args.local or args.remote.replace("\\", "/").split("/")[-1]
+            with open(local, "wb") as f:
+                f.write(data)
+            print("%s: %d bytes" % (local, len(data)))
+        elif args.command == "put":
+            with open(args.local, "rb") as f:
+                data = f.read()
+            start = time.monotonic()
+            board.put(args.remote, data)
+            print("%s: %d bytes in %.1f s" % (args.remote, len(data), time.monotonic() - start))
+        elif args.command == "rm":
+            board.rm(args.remote)
+        elif args.command == "mkdir":
+            board.mkdir(args.remote)
         elif args.command == "time":
             if args.action == "set":
                 if args.value:

@@ -12,7 +12,9 @@
 #include <unistd.h>
 
 #include "core/dbg/protocol.hpp"
+#include "core/fs/memory_volume.hpp"
 #include "core/shell/shell.hpp"
+#include "folder_volume.hpp"
 #include "core/wm/wm.hpp"
 #include "host_adapters.hpp"
 
@@ -39,7 +41,8 @@ private:
 
 } // namespace
 
-int main()
+// ./sim [folder]: the folder, if given, is drive D:.
+int main(int argc, char **argv)
 {
     int fd = posix_openpt(O_RDWR | O_NOCTTY);
     if (fd < 0 || grantpt(fd) != 0 || unlockpt(fd) != 0) {
@@ -67,7 +70,20 @@ int main()
     dbg::Protocol protocol(sink, lock, display, pointer, screen, system, "sim");
     protocol.set_desktop(&screen);
 
-    shell::start(screen, system);
+    // C: a RAM disk, as on the board. D: a folder of the PC, if given.
+    static host::HostMemory memory;
+    static fs::Storage storage;
+    constexpr size_t kRamDisk = 2 * 1024 * 1024;
+    static fs::MemoryVolume ram_disk(memory.allocate(kRamDisk), kRamDisk, "RAM disk");
+    storage.mount('C', ram_disk);
+    fs::add_samples(storage, 'C');
+    static host::FolderVolume *pc = nullptr;
+    if (argc > 1) {
+        pc = new host::FolderVolume(argv[1]);
+        storage.mount('D', *pc);
+    }
+    protocol.set_storage(&storage);
+    shell::start(screen, system, storage, memory);
     screen.start();
 
     // A real board first prints start-up text that is not part of the

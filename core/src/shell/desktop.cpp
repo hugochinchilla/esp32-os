@@ -13,6 +13,8 @@ namespace {
 
 wm::Wm *g_wm = nullptr;
 ports::System *g_system = nullptr;
+fs::Storage *g_storage = nullptr;
+ports::Memory *g_memory = nullptr;
 
 /* ---- Message box ---------------------------------------------------------------- */
 
@@ -259,6 +261,8 @@ wm::DesktopIcon g_icons[4];
 
 wm::Wm &manager() { return *g_wm; }
 ports::System &system_port() { return *g_system; }
+fs::Storage &storage() { return *g_storage; }
+ports::Memory &memory() { return *g_memory; }
 
 void show(wm::Window &w)
 {
@@ -296,10 +300,12 @@ void shut_down_dialog()
     show(d);
 }
 
-void start(wm::Wm &wm, ports::System &system)
+void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memory &memory)
 {
     g_wm = &wm;
     g_system = &system;
+    g_storage = &storage;
+    g_memory = &memory;
 
     const int n = app_count() < kMaxApps ? app_count() : kMaxApps;
     for (int i = 0; i < n; i++) {

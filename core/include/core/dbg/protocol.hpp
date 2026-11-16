@@ -5,6 +5,7 @@
 #include <cstdint>
 
 #include "core/dbg/cobs.hpp"
+#include "core/fs/fs.hpp"
 #include "core/ports.hpp"
 
 namespace dbg {
@@ -12,7 +13,7 @@ namespace dbg {
 constexpr uint8_t kProtocolVersion = 1;
 
 // Largest payload in either direction, before framing.
-constexpr size_t kMaxRequestPayload = 256;
+constexpr size_t kMaxRequestPayload = 1024;
 constexpr size_t kMaxReplyPayload = 1024;
 
 enum FrameType : uint8_t {
@@ -29,6 +30,11 @@ enum FrameType : uint8_t {
     kText = 0x0A,    // typed text, UTF-8
     kTime = 0x0B,    // read or set the clock
     kAnimations = 0x0C, // blinking on or off
+    kFileList = 0x0D,   // entries of a folder
+    kFileRead = 0x0E,   // part of a file
+    kFileWrite = 0x0F,  // part of a file
+    kFileDelete = 0x10, // a file or an empty folder
+    kFileMakeFolder = 0x11,
     // Sent by the board without being asked.
     kLog = 0x70,
     kHello = 0x71,
@@ -41,6 +47,7 @@ enum Status : uint8_t {
     kOk = 0,
     kUnknownCommand = 1,
     kBadArguments = 2,
+    kFileError = 3, // followed by the error code (ports::FsError) and its text
 };
 
 enum PixelFormat : uint8_t { kRgb332 = 1 };
@@ -71,6 +78,8 @@ public:
     // Optional: the desktop to answer kWindows and kRepaint. Without it they
     // are unknown commands.
     void set_desktop(ports::Desktop *desktop) { desktop_ = desktop; }
+    // Optional: the drives for the file commands.
+    void set_storage(fs::Storage *storage) { storage_ = storage; }
 
     uint32_t frames_received() const { return frames_received_; }
     uint32_t receive_errors() const { return receive_errors_; }
@@ -81,6 +90,8 @@ private:
     void send(uint8_t type, uint8_t seq, const uint8_t *payload, size_t size);
     size_t write_info(uint8_t *out);
     void send_screenshot(uint8_t seq, bool with_pointer, bool back_references);
+    void file_command(uint8_t type, uint8_t seq, const uint8_t *args, size_t size);
+    void file_error(uint8_t type, uint8_t seq, ports::FsError e);
 
     ports::ByteSink &out_;
     ports::Lock &lock_;
@@ -90,6 +101,7 @@ private:
     ports::System &system_;
     const char *firmware_name_;
     ports::Desktop *desktop_ = nullptr;
+    fs::Storage *storage_ = nullptr;
 
     bool overflow_ = false;
     size_t rx_size_ = 0;

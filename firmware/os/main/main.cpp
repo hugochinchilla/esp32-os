@@ -20,6 +20,7 @@
 #include "sdkconfig.h"
 
 #include "core/dbg/protocol.hpp"
+#include "core/fs/memory_volume.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/wm.hpp"
 #include "core/ports.hpp"
@@ -146,6 +147,15 @@ public:
     }
 };
 
+// Large buffers in external RAM (PSRAM), asked for once.
+class EspMemory : public ports::Memory {
+public:
+    void *allocate(size_t bytes) override
+    {
+        return heap_caps_calloc(1, bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    }
+};
+
 class EspClock : public ports::Clock {
 public:
     uint32_t micros() override { return static_cast<uint32_t>(esp_timer_get_time()); }
@@ -183,7 +193,16 @@ void ui_task(void *)
     static dbg::Protocol protocol(sink, lock, display, pointer, desktop, system, "esp32-os");
     protocol.set_desktop(&desktop);
 
-    shell::start(desktop, system);
+    // C: a RAM disk in external RAM. ponytail: lost at restart until the
+    // owner picks a flash file system (docs/DECISIONS.md).
+    static EspMemory memory;
+    static fs::Storage storage;
+    constexpr size_t kRamDisk = 2 * 1024 * 1024;
+    static fs::MemoryVolume ram_disk(memory.allocate(kRamDisk), kRamDisk, "RAM disk");
+    storage.mount('C', ram_disk);
+    fs::add_samples(storage, 'C');
+    protocol.set_storage(&storage);
+    shell::start(desktop, system, storage, memory);
     desktop.start();
     const uint32_t first_paint_us = desktop.last_update_us();
 

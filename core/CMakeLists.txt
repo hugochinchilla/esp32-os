@@ -4,6 +4,8 @@ set(CORE_SRCS
     src/dbg/cobs.cpp
     src/dbg/crc.cpp
     src/dbg/protocol.cpp
+    src/fs/fs.cpp
+    src/fs/memory_volume.cpp
     src/gfx/art.cpp
     src/gfx/canvas.cpp
     src/gfx/font_spleen6x12.cpp

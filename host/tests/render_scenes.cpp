@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <string>
 
+#include "core/fs/memory_volume.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/wm.hpp"
 #include "../host_adapters.hpp"
@@ -97,7 +98,12 @@ int main(int argc, char **argv)
     folder = argv[1];
     int x, y;
 
-    shell::start(desktop, system_);
+    static host::HostMemory memory;
+    static fs::Storage storage;
+    static fs::MemoryVolume ram_disk(memory.allocate(1 << 20), 1 << 20, "RAM disk");
+    storage.mount('C', ram_disk);
+    fs::add_samples(storage, 'C');
+    shell::start(desktop, system_, storage, memory);
     desktop.start();
     desktop.set_animations(false); // the caret stays on: pictures do not depend on timing
     save("01-desktop");

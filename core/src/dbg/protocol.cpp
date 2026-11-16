@@ -156,6 +156,14 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
         reply(type, seq, kOk, nullptr, 0);
         break;
 
+    case kFileList:
+    case kFileRead:
+    case kFileWrite:
+    case kFileDelete:
+    case kFileMakeFolder:
+        file_command(type, seq, args, args_size);
+        break;
+
     case kStats: {
         ports::SystemStats stats = {};
         system_.stats(stats);
@@ -205,6 +213,164 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
         reply(type, seq, kUnknownCommand, nullptr, 0);
         break;
     }
+}
+
+/* ---- Files ---------------------------------------------------------------- */
+
+void Protocol::file_error(uint8_t type, uint8_t seq, ports::FsError e)
+{
+    uint8_t body[48];
+    body[0] = static_cast<uint8_t>(e);
+    const char *text = fs::error_text(e);
+    size_t n = strlen(text);
+    n = n < sizeof(body) - 1 ? n : sizeof(body) - 1;
+    memcpy(body + 1, text, n);
+    reply(type, seq, kFileError, body, 1 + n);
+}
+
+// Request layouts (little-endian):
+//   List:   start index (2), path
+//   Read:   offset (4), path                -> size (4), data
+//   Write:  offset (4), flags (1), path length (1), path, data
+//           flag 1: create or empty the file first
+//   Delete: path      Make folder: path
+void Protocol::file_command(uint8_t type, uint8_t seq, const uint8_t *args, size_t size)
+{
+    if (storage_ == nullptr) {
+        reply(type, seq, kUnknownCommand, nullptr, 0);
+        return;
+    }
+    char path[fs::kMaxPath];
+    auto take_path = [&](const uint8_t *p, size_t n) {
+        n = n < sizeof(path) - 1 ? n : sizeof(path) - 1;
+        memcpy(path, p, n);
+        path[n] = 0;
+    };
+    uint8_t *body = chunk_; // free between screenshots
+    const size_t room = kMaxReplyPayload - 1;
+
+    if (type == kFileList) {
+        if (size < 2) {
+            reply(type, seq, kBadArguments, nullptr, 0);
+            return;
+        }
+        take_path(args + 2, size - 2);
+        int index = get16(args);
+        // count (1), more (1), then per entry: folder (1), size (4), name length (1), name
+        size_t used = 2;
+        uint8_t count = 0;
+        bool more = false;
+        for (;; index++) {
+            ports::DirEntry e;
+            ports::FsError err = storage_->entry(path, index, e);
+            if (err == ports::FsError::NotFound && (index > 0 || count > 0)) {
+                break;
+            }
+            if (err != ports::FsError::Ok) {
+                if (err == ports::FsError::NotFound) {
+                    // An empty folder, or no folder at all.
+                    ports::DirEntry self;
+                    err = path[0] != 0 && fs::path::relative(path)[0] == 0
+                              ? ports::FsError::Ok
+                              : storage_->stat(path, self);
+                    if (err == ports::FsError::Ok) {
+                        break;
+                    }
+                }
+                file_error(type, seq, err);
+                return;
+            }
+            const size_t name = strlen(e.name);
+            if (used + 6 + name > room) {
+                more = true;
+                break;
+            }
+            body[used++] = e.folder ? 1 : 0;
+            put32(body + used, e.size);
+            used += 4;
+            body[used++] = static_cast<uint8_t>(name);
+            memcpy(body + used, e.name, name);
+            used += name;
+            count++;
+        }
+        body[0] = count;
+        body[1] = more ? 1 : 0;
+        reply(type, seq, kOk, body, used);
+        return;
+    }
+
+    if (type == kFileRead) {
+        if (size < 4) {
+            reply(type, seq, kBadArguments, nullptr, 0);
+            return;
+        }
+        take_path(args + 4, size - 4);
+        const uint32_t offset = static_cast<uint32_t>(get16(args)) | (static_cast<uint32_t>(get16(args + 2)) << 16);
+        ports::DirEntry e;
+        ports::FsError err = storage_->stat(path, e);
+        if (err == ports::FsError::Ok && e.folder) {
+            err = ports::FsError::IsFolder;
+        }
+        fs::File f;
+        if (err == ports::FsError::Ok) {
+            err = storage_->open(path, ports::OpenMode::Read, f);
+        }
+        size_t got = 0;
+        if (err == ports::FsError::Ok && offset < e.size) {
+            err = storage_->seek(f, offset);
+            if (err == ports::FsError::Ok) {
+                err = storage_->read(f, body + 4, room - 4, got);
+            }
+        }
+        if (f.open()) {
+            storage_->close(f);
+        }
+        if (err != ports::FsError::Ok) {
+            file_error(type, seq, err);
+            return;
+        }
+        put32(body, e.size);
+        reply(type, seq, kOk, body, 4 + got);
+        return;
+    }
+
+    if (type == kFileWrite) {
+        if (size < 6 || size < 6u + args[5]) {
+            reply(type, seq, kBadArguments, nullptr, 0);
+            return;
+        }
+        const uint32_t offset = static_cast<uint32_t>(get16(args)) | (static_cast<uint32_t>(get16(args + 2)) << 16);
+        const bool create = args[4] & 1;
+        take_path(args + 6, args[5]);
+        const uint8_t *data = args + 6 + args[5];
+        const size_t n = size - 6 - args[5];
+        fs::File f;
+        ports::FsError err = storage_->open(path, create ? ports::OpenMode::Write : ports::OpenMode::Update, f);
+        if (err == ports::FsError::Ok && !create) {
+            err = storage_->seek(f, offset);
+        }
+        if (err == ports::FsError::Ok && n > 0) {
+            err = storage_->write(f, data, n);
+        }
+        if (f.open()) {
+            ports::FsError c = storage_->close(f);
+            err = err != ports::FsError::Ok ? err : c;
+        }
+        if (err != ports::FsError::Ok) {
+            file_error(type, seq, err);
+            return;
+        }
+        reply(type, seq, kOk, nullptr, 0);
+        return;
+    }
+
+    take_path(args, size);
+    const ports::FsError err = type == kFileDelete ? storage_->remove(path) : storage_->make_folder(path);
+    if (err != ports::FsError::Ok) {
+        file_error(type, seq, err);
+        return;
+    }
+    reply(type, seq, kOk, nullptr, 0);
 }
 
 /* ---- Sending ------------------------------------------------------------- */

@@ -106,6 +106,72 @@ protected:
     ~InputSink() = default;
 };
 
+/* ---- Storage ----------------------------------------------------------------- */
+
+enum class FsError : uint8_t {
+    Ok,
+    NotFound,
+    Exists,
+    NotEmpty,
+    NoSpace,
+    BadName,
+    IsFolder,
+    NotFolder,
+    TooManyOpen,
+    InUse,
+    Io,
+};
+
+struct DirEntry {
+    char name[64];
+    bool folder;
+    uint32_t size;
+};
+
+struct VolumeInfo {
+    char label[24];
+    uint64_t total_bytes;
+    uint64_t free_bytes;
+    bool keeps_files; // false: everything is lost at restart (a RAM disk)
+};
+
+enum class OpenMode : uint8_t {
+    Read,
+    Write,  // create, or empty an existing file
+    Update, // an existing file, read and written anywhere
+};
+
+// One drive. Paths are relative to its root, with '\' between names
+// ("docs\notes.txt"; "" is the root). Names compare without regard to case.
+class Volume {
+public:
+    virtual FsError info(VolumeInfo &out) = 0;
+    // The index-th entry of a folder; NotFound past the last one.
+    virtual FsError entry(const char *folder, int index, DirEntry &out) = 0;
+    virtual FsError stat(const char *path, DirEntry &out) = 0;
+    virtual FsError make_folder(const char *path) = 0;
+    virtual FsError remove(const char *path) = 0; // a file or an empty folder
+    virtual FsError rename(const char *from, const char *to) = 0;
+    virtual FsError open(const char *path, OpenMode mode, int &file) = 0;
+    virtual FsError read(int file, void *data, size_t size, size_t &done) = 0;
+    virtual FsError write(int file, const void *data, size_t size) = 0;
+    virtual FsError seek(int file, uint32_t offset) = 0;
+    virtual FsError close(int file) = 0;
+
+protected:
+    ~Volume() = default;
+};
+
+// Large, long-lived memory (external RAM on the board), asked for once at
+// start-up or on first use, never per event. nullptr when there is none.
+class Memory {
+public:
+    virtual void *allocate(size_t bytes) = 0;
+
+protected:
+    ~Memory() = default;
+};
+
 struct SystemStats {
     uint32_t uptime_ms;
     uint32_t free_internal_ram;

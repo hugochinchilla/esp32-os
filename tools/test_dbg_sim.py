@@ -13,7 +13,8 @@ import dbg  # noqa: E402
 
 
 def main():
-    sim = subprocess.Popen([sys.argv[1]], stdout=subprocess.PIPE, text=True)
+    pc_folder = tempfile.mkdtemp()  # drive D: of the simulator
+    sim = subprocess.Popen([sys.argv[1], pc_folder], stdout=subprocess.PIPE, text=True)
     try:
         port = sim.stdout.readline().strip()
         board = dbg.Board(port, timeout=2.0)
@@ -77,6 +78,36 @@ def main():
         assert stats["keys"] == 2, stats
         assert stats["mouse_events"] == 7, stats
         assert stats["receive_errors"] == 0, stats
+
+        # Files: the RAM disk has the samples; put, list, get, delete.
+        names = [n for n, _, _ in board.ls("C:\\")]
+        assert "docs" in names and "readme.txt" in names, names
+        data = bytes(range(256)) * 1200  # 300 KB, every byte value
+        board.put("C:\\docs\\big.bin", data)
+        entries = {n: (d, s) for n, d, s in board.ls("C:/docs")}
+        assert entries["big.bin"] == (False, len(data)), entries
+        assert board.get("C:\\docs\\big.bin") == data
+        board.put("C:\\docs\\big.bin", b"short now")  # replacing truncates
+        assert board.get("C:\\docs\\big.bin") == b"short now"
+        board.mkdir("C:\\new")
+        try:
+            board.rm("C:\\docs")
+            raise AssertionError("a folder with files in it was removed")
+        except dbg.DebugError as error:
+            assert "not empty" in str(error), error
+        board.rm("C:\\docs\\big.bin")
+        board.rm("C:\\new")
+        assert "big.bin" not in [n for n, _, _ in board.ls("C:\\docs")]
+        try:
+            board.get("C:\\nothing.txt")
+            raise AssertionError("a missing file was read")
+        except dbg.DebugError as error:
+            assert "not found" in str(error), error
+        # Drive D: is a folder of this computer.
+        board.put("D:\\from-board.txt", "año\r\n".encode("latin-1"))
+        with open(os.path.join(pc_folder, "from-board.txt"), "rb") as f:
+            assert f.read() == "año\r\n".encode("latin-1")
+        assert [n for n, _, _ in board.ls("D:\\")] == ["from-board.txt"]
 
         try:
             board.request(0x55)

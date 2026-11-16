@@ -19,12 +19,16 @@ target_link_libraries(test_dbg PRIVATE core)
 add_executable(test_wm tests/test_wm.cpp)
 target_link_libraries(test_wm PRIVATE core)
 
+add_executable(test_fs tests/test_fs.cpp)
+target_link_libraries(test_fs PRIVATE core)
+
 add_executable(render_scenes tests/render_scenes.cpp)
 target_link_libraries(render_scenes PRIVATE core)
 
 enable_testing()
 add_test(NAME dbg COMMAND test_dbg)
 add_test(NAME wm COMMAND test_wm)
+add_test(NAME fs COMMAND test_fs)
 add_test(NAME pictures
          COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/check_pictures.py $<TARGET_FILE:render_scenes>)
 add_test(NAME dbg_tool
