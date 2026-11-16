@@ -52,6 +52,15 @@ constexpr const char *kFolder[16] = {
 };
 constexpr Ink kFolderInks[] = {{'K', kBlack}, {'H', rgb(7, 7, 2)}, {'Y', rgb(7, 6, 1)}};
 
+constexpr const char *kSnake[16] = {
+    "................", "................", "..........KKKK..", ".........KGGWKK.", ".........KGGGGKR",
+    ".........KLLKK..", "..KKKKKKKKGGK...", ".KGGLLGGLLGGK...", ".KLLKKKKKKKK....", ".KGGK...........",
+    ".KLLKKKKKKKKK...", ".KGGLLGGLLGGLK..", "..KKKKKKKKKKLK..", "..........KKK...", "................",
+    "................",
+};
+constexpr Ink kSnakeInks[] = {{'K', rgb(0, 2, 0)}, {'G', rgb(1, 4, 0)}, {'L', rgb(3, 6, 1)},
+                              {'W', kWhite},       {'R', rgb(7, 0, 0)}};
+
 constexpr const char *kText[16] = {
     "................", "................", "....KKKKKKKKK...", "....KWWWWWWWK...",
     "....KBBBBBBBK...", "....KWWWWWWWK...", "....KBBBBBBBK...", "....KWWWWWWWK...",
@@ -339,6 +348,13 @@ const Bitmap &bin_icon_32()
 const Bitmap &mascot_16()
 {
     static constexpr Pixels<16> pixels = paint<16>(kMascot, kMascotInks);
+    static constexpr Bitmap bitmap = {16, 16, pixels.p, kClear};
+    return bitmap;
+}
+
+const Bitmap &snake_icon_16()
+{
+    static constexpr Pixels<16> pixels = paint<16>(kSnake, kSnakeInks);
     static constexpr Bitmap bitmap = {16, 16, pixels.p, kClear};
     return bitmap;
 }

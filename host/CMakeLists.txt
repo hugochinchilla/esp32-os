@@ -89,6 +89,9 @@ add_test(NAME cactus COMMAND test_cactus)
 add_test(NAME cactus_pictures
          COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/check_pictures.py $<TARGET_FILE:test_cactus>)
 
+add_executable(test_snake tests/test_snake.cpp)
+target_link_libraries(test_snake PRIVATE core)
+add_test(NAME snake COMMAND test_snake)
 add_executable(test_saver tests/test_saver.cpp)
 target_link_libraries(test_saver PRIVATE core)
 add_test(NAME saver COMMAND test_saver)

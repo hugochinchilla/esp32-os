@@ -9,6 +9,7 @@ set(CORE_SRCS
     src/fs/memory_volume.cpp
     src/fs/sample_pictures.cpp
     src/games/cactus.cpp
+    src/games/snake.cpp
     src/image/blue_noise.cpp
     src/image/bmp.cpp
     src/image/convert.cpp
@@ -34,6 +35,7 @@ set(CORE_SRCS
     src/shell/apps.cpp
     src/shell/boot.cpp
     src/shell/cactus_patch.cpp
+    src/shell/culebra.cpp
     src/shell/defrag.cpp
     src/shell/desktop.cpp
     src/shell/dialogs.cpp

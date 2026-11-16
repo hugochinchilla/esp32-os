@@ -37,6 +37,7 @@ Last updated: 2026-11-16.
 | Font | Spleen 6x12 (BSD licence), a fixed-width bitmap font, for the whole interface. Bold is made by doubling each pixel sideways. The font file and its licence are in `third_party/fonts/spleen/` | Owner's choice from eight freely licensed candidates |
 | Look | Windows 98 style: fading title bars, toolbar and address bar in folder windows, quick-launch icons by the Start button. Target picture: `docs/look/target-98.png`, drawn by `tools/mockup/desktop.py` | Owner's choice between 95 and 98 previews |
 | Name and mascot | The OS is called Chinchilla. Its logo and mascot is a chinchilla face, shown on the Start button. The 16x16 sketch in `tools/mockup/desktop.py` is the starting point | Owner's choice |
+| Snake game's name | Culebra (Spanish for snake). Chosen by the owner, 2026-11-16, over Sierpe and Hay Trail | Owner's choice |
 | Colours that the board cannot show exactly | Made from a fixed 4x4 dot pattern of the two nearest colours (ordered dither), per colour channel. Used for the desktop colour, title bars and their fade. Lines one pixel wide always use exact colours | Blue has only four levels, so navy, teal and mid-grey do not exist as plain colours |
 | Start-up | A quick real self-test screen (each line printed when its check has finished, with the value found; a failed check shows in red and the start goes on), then a splash with the mascot, the name and a ribbon of the 256 colours for about 500 ms, then the desktop. Chosen by the owner, 2026-11-16 | Shows what the machine has, in the spirit of a 90s PC, without slowing the start much |
 | Memory test at start-up | Real and on by default, decided by the owner: writes and reads back an address-dependent pattern over external RAM borrowed from the heap (never memory in use) for about 250 ms, counting KB on screen; a wrong word is shown with its address and logged, and the start goes on. On the board it covers 4992 KB in 254 ms (about 20 MB/s written and read back), of roughly 6 MB free at that point; all of it would take about 0.31 s | Real figures, a quick flash |
@@ -146,7 +147,7 @@ Not scheduled. Each needs its design choices put to the owner before it is built
 | Power-down screen | Shut Down ends on a full screen saying "It is now safe to turn off your computer", as machines without soft power did. Wording and artwork must be our own |
 | Audio player | Compact player in the spirit of late-90s players, with no visualiser and no equaliser. Opens WAV and MP3. The look must be original, not a copy of an existing player or its skins. Needs the sound output (GPIO13) working first, and a freely licensed MP3 decoder. Its sample files must be public domain, openly licensed, or made by us, with the source and licence recorded as in `third_party/samples/README.md` |
 | Mine-sweeping game | A grid puzzle of the mine-clearing kind: numbers show how many neighbours are mined. Our own name, artwork and icons; not a copy of any existing game's look |
-| Snake game | The classic grow-as-you-eat arcade game, with our own name and artwork. A good first program driven by the timer and the keyboard |
+| Snake game | The classic grow-as-you-eat arcade game, with our own name and artwork. A good first program driven by the timer and the keyboard. Built 2026-11-16 as Culebra; see "Chosen in the snake game" |
 | ~~Screensaver~~ | Built, see Decided and "Chosen in the screensaver milestone". No password (the owner, 2026-11-16) |
 
 ## Found on the bench
@@ -480,6 +481,33 @@ practical. Each is easy to change.
   disk still has 1849 KB of its 2048 KB free.
 - The 16x16 picture icon is the 32x32 one with every other pixel, made at
   compile time.
+
+### Chosen in the snake game (to confirm)
+
+Culebra, the snake game, was built on a branch from the PC tests and the
+simulator only; it has not run on the board. The owner chose the name (see
+"Decided"); the rest is still his to confirm:
+
+- Look: a green striped snake with a face on pale sand, red berries, a
+  24 x 18 board of 12-pixel cells in a sunken frame. All drawn in
+  `core/src/shell/culebra.cpp`; the 16x16 icon is in `core/src/gfx/art.cpp`.
+- Rules: walls end the game (no wrapping round), as does the snake's own
+  body; the head may follow its tail. Two turns can be waiting, so quick
+  corners work. Filling the board wins.
+- Keys: arrows steer and start; Space or P pauses and carries on, and starts
+  again after the end; F2 is a new game.
+- Speed: Slow, Normal, Fast (a step every 200, 130, 80 ms) from the Game
+  menu, worth 5, 10, 20 points a berry. The speed does not rise as the snake
+  grows.
+- The game pauses by itself when another window or a menu is in use, and
+  when it is minimised. Closed in the middle of a game, it is still there,
+  paused, when opened again.
+- The best score lasts until restart; it is not saved to disk.
+- It sits in Programs in alphabetical order with the other programs; there
+  is no Games folder yet.
+- The rules are in `core/games/snake` with no drawing or clock, tested in
+  `host/tests/test_snake.cpp`; the timer runs only while the snake moves and
+  each step repaints only the cells that changed.
 
 ### Chosen in the screensaver milestone (to confirm)
 
