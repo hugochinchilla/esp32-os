@@ -31,20 +31,33 @@ OX, OY = 100.0, 100.0       # board origin on the KiCad page
 POWER_NETS = ["GND", "+5V", "+3V3", "VBUS_DN", "HUB_3V3", "VBAT"]
 
 # Dev board sockets: right header (J2) on top, left header (J1) 25.4 mm below,
-# pin 1 at the left (antenna end); the dev board's USB sockets face the right edge.
-SOCK_X0, J2_Y, J1_Y = 36.0, 24.0, 49.4
+# pin 1 at the left (antenna end); the dev board's USB-C sockets face the right edge.
+# The sockets are placed so the USB-C fronts line up with the hat's right edge, which
+# sits against the enclosure's right wall. DEVKIT_USB_OVERHANG is the distance from
+# the pin-22 centre to the USB-C front: an estimate (board is 70 mm long), to be
+# measured on a real DevKitC-1 before ordering.
+DEVKIT_USB_OVERHANG = 5.0
+SOCK_X0 = W - DEVKIT_USB_OVERHANG - 21 * 2.54
+J2_Y, J1_Y = 24.0, 49.4
 
 
 def pin_x(n):
     return SOCK_X0 + (n - 1) * 2.54
 
 
+# Back panel (bottom edge): VGA, USB-A pair and audio jack, fronts at the board edge,
+# so a 3D-printed case needs cut-outs in one wall (plus microSD on the left wall and
+# the dev board's USB-C sockets on the right wall).
+VGA_X = 50.2     # pin 1 of the HD15; body spans VGA_X - 19.8 .. VGA_X + 11.2
+USB_X = 66.9     # pin 1 of the USB-A pair; body spans USB_X - 3.8 .. USB_X + 10.8
+JACK_X = 85.5    # jack centre; the footprint draws its own notch in the edge (+-6.5 mm)
+
 # ref: (x, y, rotation in degrees), board coordinates (mm, y down)
 PLACE = {
     "J2": (SOCK_X0, J2_Y, 90), "J1": (SOCK_X0, J1_Y, 90),
-    "J6": (73.0, 15.16, 180),
-    "J3": (62.0, H - 6.99, 0),
-    "J4": (82.5, 69.5, 0), "J8": (89.5, 69.5, 0),
+    "J6": (USB_X, H - 15.66, 0),
+    "J3": (VGA_X, H - 6.99, 0),
+    "J4": (JACK_X, H - 4.5, 0), "J8": (96.0, 55.0, 0),
     "J5": (7.0, 15.5, 90),
     "BT1": (16.5, 62.5, 0),
     "U1": (13.0, 32.0, 0), "C3": (13.0, 27.0, 0), "C4": (13.0, 37.0, 0),
@@ -55,18 +68,18 @@ PLACE = {
     "J7": (40.0, 18.0, 90),
     "U2": (86.0, 12.5, 0), "Y1": (84.0, 5.0, 0),
     "C7": (95.0, 9.5, 90), "C8": (92.5, 13.0, 90), "C9": (95.0, 13.0, 90),
-    "U4": (64.0, 19.5, 0), "U5": (80.5, 19.0, 0),
+    "U4": (83.5, 55.5, 0), "U5": (83.5, 59.5, 0),
     "U3": (55.0, 10.0, 0), "C10": (55.0, 5.0, 0), "C11": (49.0, 8.0, 90), "C12": (40.5, 8.0, 0),
     "R30": (59.5, 9.0, 90), "R31": (59.5, 12.5, 90),
-    "R20": (78.0, 55.0, 90), "C1": (78.0, 59.0, 90), "C2": (78.0, 63.0, 90),
+    "R20": (87.5, 56.0, 90), "C1": (89.5, 56.0, 90), "C2": (91.6, 56.0, 90),
 }
 # VGA ladder resistors sit below the dev board pin they hang from, in two rows
 for ref, gpio, row in parts.VGA_LADDER:
-    PLACE[ref] = (pin_x(parts.DEVKIT_LEFT.index(gpio) + 1), 55.5 + 4.0 * row, 90)
+    PLACE[ref] = (pin_x(parts.DEVKIT_LEFT.index(gpio) + 1), 54.4 + 3.2 * row, 90)
 
 HOLES = [(4.0, 3.8), (96.0, 3.8), (4.0, 74.2), (96.0, 74.2)]
-FIDUCIALS = [(30.0, 3.0), (97.0, 45.0), (3.0, 47.0)]
-ANTENNA_KEEPOUT = (24.0, 20.0, 36.0, 54.0)   # no copper pour under the module antenna
+FIDUCIALS = [(32.0, 3.0), (97.0, 45.0), (3.0, 47.0)]
+ANTENNA_KEEPOUT = (SOCK_X0 - 12.0, 20.0, SOCK_X0, 52.0)   # no copper pour under the module antenna
 
 
 def V(x, y):
@@ -216,7 +229,8 @@ def build():
     r = 2.0
     add_line(board, pcbnew.Edge_Cuts, (r, 0), (W - r, 0))
     add_line(board, pcbnew.Edge_Cuts, (W, r), (W, H - r))
-    add_line(board, pcbnew.Edge_Cuts, (W - r, H), (r, H))
+    add_line(board, pcbnew.Edge_Cuts, (W - r, H), (JACK_X + 6.5, H))
+    add_line(board, pcbnew.Edge_Cuts, (JACK_X - 6.5, H), (r, H))
     add_line(board, pcbnew.Edge_Cuts, (0, H - r), (0, r))
     for cx, cy, a0 in [(r, r, 180), (W - r, r, 270), (W - r, H - r, 0), (r, H - r, 90)]:
         arc = pcbnew.PCB_SHAPE(board)
@@ -229,23 +243,20 @@ def build():
         board.Add(arc)
 
     # silkscreen
-    add_rect(board, pcbnew.F_SilkS, 30.0, J2_Y - 2.2, 99.0, J1_Y + 2.2, 0.12)
-    add_text(board, "ESP32-S3-DevKitC-1, USB sockets this end", 64.0, 30.0, 1.2)
-    add_text(board, "pin 1: 3V3", 36.0, J1_Y - 3.0, 0.9)
-    add_text(board, "CHINCHILLA HAT v0.2", 64.0, 42.0, 1.6, bold=True)
-    add_text(board, "github.com/hugochinchilla/esp32-os", 64.0, 44.6, 0.9)
-    add_text(board, "VGA", 62.0, 66.5, 1.2, bold=True)
-    add_text(board, "AUDIO", 82.5, 66.8, 1.0, bold=True)
-    add_text(board, "PIEZO", 89.5, 66.8, 1.0, bold=True)
-    add_text(board, "sig", 85.1, 69.5, 0.8)
-    add_text(board, "GND", 85.3, 72.04, 0.8)
-    add_text(board, "3V3", 92.1, 69.5, 0.8)
-    add_text(board, "14", 91.8, 72.04, 0.8)
-    add_text(board, "USB", 69.5, 1.0, 1.0, bold=True)
+    add_rect(board, pcbnew.F_SilkS, SOCK_X0 - 12.0, J2_Y - 2.2, W - 0.6, J1_Y + 2.2, 0.12)
+    add_text(board, "ESP32-S3-DevKitC-1, USB-C flush with this edge", SOCK_X0 + 30.0, 30.0, 1.2)
+    add_text(board, "pin 1: 3V3", SOCK_X0, J1_Y - 3.0, 0.9)
+    add_text(board, "CHINCHILLA HAT v0.3", SOCK_X0 + 30.0, 42.0, 1.6, bold=True)
+    add_text(board, "github.com/hugochinchilla/esp32-os", SOCK_X0 + 30.0, 44.6, 0.9)
+    add_text(board, "VGA", VGA_X - 4.0, 66.3, 1.2, bold=True)
+    add_text(board, "AUDIO", JACK_X, 62.9, 1.0, bold=True)
+    add_text(board, "PIEZO", 96.0, 61.0, 0.8, bold=True)
+    add_text(board, "3V3", 98.5, 55.0, 0.8)
+    add_text(board, "14", 98.2, 57.54, 0.8)
     add_text(board, "microSD", 11.0, 22.6, 1.0, bold=True)
     add_text(board, "CR2032 +", 15.5, 54.0, 1.0, bold=True)
     add_text(board, "EXP: 3V3 38 47 48 5V GND", 46.0, 15.6, 0.8)
-    add_text(board, "antenna: keep clear", 30.0, 52.5, 0.8)
+    add_text(board, "antenna: keep clear", SOCK_X0 - 6.0, 52.5, 0.8)
 
     pts = [(0.4, 0.4), (W - 0.4, 0.4), (W - 0.4, H - 0.4), (0.4, H - 0.4)]
     x0, y0, x1, y1 = ANTENNA_KEEPOUT
@@ -357,7 +368,8 @@ def write_dsn(board):
     s = s.replace("(rule\n      (width 200)", "(rule\n      (width 250)")
     s = re.sub(r"\(class kicad_default(.*?)\(rule \(width 200\)", lambda m: m.group(0).replace("(width 200)", "(width 250)"), s, flags=re.S)
     i = 0.15
-    pts = [(i, i), (W - i, i), (W - i, H - i), (i, H - i)]
+    pts = [(i, i), (W - i, i), (W - i, H - i), (JACK_X + 6.5, H - i), (JACK_X + 2.2, H - 1.5),
+           (JACK_X - 2.2, H - 1.5), (JACK_X - 6.5, H - i), (i, H - i)]
     path = "  ".join(f"{round((OX + x) * 1000)} {round(-(OY + y) * 1000)}" for x, y in pts + pts[:1])
     s = re.sub(r"\(boundary\s*\(path pcb 0 [^)]*\)\s*\)", f"(boundary\n      (path pcb 0  {path})\n    )", s, count=1)
     open(DSN, "w").write(s)

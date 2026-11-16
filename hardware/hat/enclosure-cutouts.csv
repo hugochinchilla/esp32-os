@@ -1,0 +1,6 @@
+Wall,Opening,Centre along wall (mm),Width (mm),Centre height above board (mm),Height (mm)
+back,VGA,45.88,19.0,6.3,10.0
+back,USB-A x2 (stacked),70.4,15.0,7.8,16.0
+back,Audio jack,85.5,7.0,3.0,7.0
+left,microSD slot,15.5,13.0,1.0,2.5
+right,DevKitC-1 USB-C x2,36.7,30.0,14.2,5.0

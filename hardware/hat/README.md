@@ -1,10 +1,12 @@
-# Chinchilla hat v0.2 (prototype PCB)
+# Chinchilla hat v0.3 (prototype PCB)
 
 A two-layer, 100 x 78 mm board that the ESP32-S3-DevKitC-1 plugs into. It
 replaces the hand-built perfboard adapter and adds the extras Hugo chose on
-2026-11-16. Version 0.2 is laid out for **partial assembly** (level B below):
-the board maker places only 8 different SMD parts, and everything that is
-quick to solder by hand is left to you.
+2026-11-16. It is laid out for **partial assembly** (level B below): the
+board maker places only 8 different SMD parts, and everything that is quick
+to solder by hand is left to you. Version 0.3 puts every socket at a board
+edge, facing outwards, so the board fits a 3D-printed case with cut-outs in
+the walls (see [Enclosure](#enclosure)).
 
 - VGA: 3-bit resistor ladders built from 1 k resistors only. Top bit: two 1 k
   in parallel (500 ohm); middle bit: one 1 k; low bit: two 1 k in series
@@ -12,8 +14,9 @@ quick to solder by hand is left to you.
   510 / 1 k / 2 k gives 0.68 V). Sync lines through two 1 k in parallel
   (500 ohm instead of 100). Same pins as
   [the perfboard adapter](../../docs/hardware/README.md).
-- Audio out (1 k + 100 nF filter, 10 uF DC block) to a 2-pin header for a
-  3.5 mm jack, and a 2-pin header for a piezo between 3V3 and GPIO14.
+- Audio out (1 k + 100 nF filter, 10 uF DC block) to a through-hole 3.5 mm
+  jack on the back edge, and a 2-pin header for a piezo between 3V3 and
+  GPIO14.
 - Clock chip DS3231MZ on I2C (GPIO1 SDA, GPIO2 SCL), alarm/1 Hz output on
   GPIO11, CR2032 holder.
 - microSD socket wired for 1-bit SDMMC (CLK 39, CMD 40, D0 41), all data
@@ -36,14 +39,15 @@ Only two resistor values (1 k, 10 k) and two capacitor values (100 nF,
 | 1 k and 10 k resistors, 100 nF and 10 uF capacitors (0603 / 0805) | Two 1x22 sockets for the dev board |
 | CH334R hub (QSOP-16, 0.635 mm pitch) | HD15 VGA socket, stacked USB-A socket |
 | DS3231MZ clock (SOIC-8) | microSD socket (SMD, 1.1 mm pitch) and CR2032 holder (SMD, big pads) |
-| TPS2051C power switch, 2x USBLC6-2SC6 | 12 MHz HC-49 crystal, 100 uF electrolytic, 2-pin headers for audio and piezo |
+| TPS2051C power switch, 2x USBLC6-2SC6 | 12 MHz HC-49 crystal, 100 uF electrolytic, 3.5 mm jack, 2-pin piezo header |
 
 The lists are `fab/hat-bom-assembly.csv` (send to the maker) and
 `fab/hat-hand-solder.csv` (buy yourself). `fab/hat-pos-top.csv` holds only the
 maker's parts.
 
-**Status: routed, passes KiCad's design rule check (no errors; only
-silkscreen-at-edge warnings from the connector outlines), not built.** Treat
+**Status: routed, passes KiCad's design rule check (no errors and no
+unconnected pads; only silkscreen warnings, mostly connector outlines at the
+board edge), not built.** Treat
 the first order as a test run of one to three boards.
 
 | Top (copper and silkscreen) | Bottom (copper, seen from below) |
@@ -62,8 +66,9 @@ the first order as a test run of one to three boards.
 | `fab/hat-hand-solder.csv` | Parts you buy and solder |
 | `fab/hat-pos-top.csv` | Pick-and-place for the board maker's parts, top side |
 | `fab/hat-schematic.pdf`, `fab/hat-assembly-top.pdf` | Schematic and assembly drawing |
+| `enclosure.png`, `enclosure.svg`, `enclosure-cutouts.csv` | Case reference: outline, M3 holes, wall cut-outs |
 
-Tracks are 0.25 mm (0.5 mm for power), clearance 0.2 mm, vias 0.6/0.3 mm,
+Tracks are 0.25 mm (0.4 mm for power), clearance 0.2 mm, vias 0.6/0.3 mm,
 so any standard two-layer process can make it. The tracks were laid by
 Freerouting 1.9 (`build/hat.dsn` in, `build/hat.ses` out) and imported by
 `gen_pcb.py`; `REROUTE=1 FREEROUTING_JAR=... python3 tools/hat_pcb/gen_pcb.py
@@ -73,7 +78,7 @@ corner.
 
 Everything is generated from one parts table by the scripts in
 `tools/hat_pcb/` (`parts.py` is the netlist and BOM; `gen_sch.py`,
-`gen_pcb.py` and `gen_outputs.py` write the files). Change `parts.py` and run
+`gen_pcb.py`, `gen_outputs.py` and `gen_enclosure.py` write the files). Change `parts.py` and run
 them again rather than editing the netlist by hand in two places. The
 schematic netlist is checked against `parts.py` when it is generated. Once
 the board is edited by hand in KiCad, the KiCad files become the source and
@@ -82,10 +87,12 @@ the scripts should be retired.
 ## Layout
 
 - Dev board on top, in two 1x22 sockets 25.4 mm apart (10 holes on the
-  perfboard, which fits the board in use). Its USB-C sockets face the right
-  edge, its antenna end the left, with no copper pour under the antenna.
-- VGA and the audio and piezo headers on the bottom edge, USB-A on the top
-  edge, microSD on the left edge.
+  perfboard, which fits the board in use). Its USB-C sockets line up with the
+  right edge, its antenna end points left, with no copper pour under the
+  antenna.
+- Back (bottom) edge: VGA, the stacked USB-A pair and the audio jack, all
+  right-angle parts with their fronts at the edge. Left edge: microSD. Right
+  edge: the dev board's two USB-C sockets. The piezo header sits inside.
 - Ground: a pour on both layers. The VGA socket's five ground pins and both
   shell lugs go to it (on the perfboard, pin 10 alone gave no picture).
 - Parts on the top side only.
@@ -93,7 +100,12 @@ the scripts should be retired.
 ## Before ordering
 
 1. Check the header spacing of your dev board (25.4 mm between the two rows)
-   and that pin 1 (3V3) is at the antenna end.
+   and that pin 1 (3V3) is at the antenna end. Measure the distance from the
+   centre of pin 22 (GND, the last pin at the USB end) to the front of the
+   USB-C sockets. The layout assumes 5.0 mm (`DEVKIT_USB_OVERHANG` in
+   `gen_pcb.py`, estimated from the board's 70 mm length), so that the
+   sockets end flush with the board's right edge. If yours differs, change
+   the value and re-run the scripts.
 2. Upload the project and look at the assembler's 3D / placement preview,
    especially the polarity of U1 to U5. If the maker builds its BOM from the
    KiCad project (AISLER does), mark the hand-solder parts (J1 to J8, BT1,
@@ -107,6 +119,37 @@ the scripts should be retired.
    (R16/R17 and R18/R19) to bring it to about 330 ohm, or bridge them.
 5. Solder the low parts first (microSD socket, coin cell holder), then the
    crystal, headers and capacitor, then the sockets and connectors.
+
+## Enclosure
+
+![enclosure drawing](enclosure.png)
+
+The board is meant to sit on four M3 standoffs inside a printed case, with
+openings in three walls. Coordinates are in mm from the board's top-left
+corner (as in the drawing); heights are above the board's top surface.
+
+| Wall | Opening | Centre | Size (w x h) | Centre height |
+| --- | --- | --- | --- | --- |
+| Back | VGA D shell, plus two 3.5 mm holes 25 mm apart for the screw posts | x = 45.9 | 19 x 10 | 6.3 |
+| Back | Stacked USB-A pair | x = 70.4 | 15 x 16 | 7.8 |
+| Back | Audio jack | x = 85.5 | 7 x 7 | 3.0 |
+| Left | microSD slot (the card sticks out about 2.5 mm) | y = 15.5 | 13 x 2.5 | 1.0 |
+| Right | Dev board USB-C pair, one slot for both | y = 36.7 | 30 x 5 | 14.2 |
+
+- Board 100 x 78 mm, 1.6 mm thick, 2 mm corner radius. M3 holes at
+  (4, 3.8), (96, 3.8), (4, 74.2) and (96, 74.2).
+- The tallest parts are the dev board on its sockets (about 16 mm) and the
+  USB-A pair (about 16 mm), so allow at least 18 mm of inside height above
+  the board, and 4 mm standoffs below it for the through-hole leads.
+- The VGA, USB-A and jack fronts are at the board edge. A wall up to about
+  2 mm thick works for all three; the VGA shell sticks out about 7 mm, so a
+  thicker wall is fine there.
+- The heights come from typical datasheet values and the usual socket stack
+  (8.5 mm socket plus 2.5 mm header plastic under the dev board). Check them
+  with real parts before printing, and print a test strip of the back wall
+  first.
+- `tools/hat_pcb/gen_enclosure.py` redraws this from the board file if the
+  layout changes.
 
 ## Firmware notes
 

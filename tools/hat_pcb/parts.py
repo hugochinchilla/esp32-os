@@ -70,7 +70,6 @@ CUSTOM_SYMBOLS = {
     "USBLC6-2SC6": [("1", "IO1", "L", "passive"), ("6", "IO1", "R", "passive"),
                     ("3", "IO2", "L", "passive"), ("4", "IO2", "R", "passive"),
                     ("5", "VBUS", "R", "passive"), ("2", "GND", "L", "passive")],
-    "Header_Audio": [("1", "AUDIO", "L", "passive"), ("2", "GND", "L", "passive")],
     "Header_Piezo": [("1", "3V3", "L", "passive"), ("2", "BEEP", "L", "passive")],
     "Header_1x06": [(str(i + 1), n, "L", "passive") for i, n in
                     enumerate(["3V3", "GPIO38", "GPIO47", "GPIO48", "5V", "GND"])],
@@ -163,9 +162,10 @@ part("J3", "hat:VGA_HD15",
 R("R20", "1k", "AUDIO_PWM", "AUDIO_FILT", "audio")
 C("C1", "100n", "AUDIO_FILT", "GND", "audio")
 C("C2", "10u", "AUDIO_FILT", "AUDIO_OUT", "audio")
-part("J4", "hat:Header_Audio", "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
-     "Audio out", {"1": "AUDIO_OUT", "2": "GND"}, "audio", "", "", "",
-     "1x2 pin header 2.54 mm, to a 3.5 mm jack (tip and ring on pin 1, sleeve on pin 2)")
+# The jack sits on the back edge next to VGA and USB, so the enclosure needs one panel
+part("J4", "hat:Jack_3.5mm", "Connector_Audio:Jack_3.5mm_CUI_SJ1-3523N_Horizontal", "Audio out",
+     {"T": "AUDIO_OUT", "R": "AUDIO_OUT", "S": "GND"}, "audio",
+     "Same Sky (CUI)", "SJ1-3523N", "", "3.5 mm stereo jack, through hole; mono signal on tip and ring")
 # Piezo between 3V3 and GPIO14; the firmware keeps GPIO14 high when silent.
 part("J8", "hat:Header_Piezo", "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
      "Piezo", {"1": "+3V3", "2": "BEEP"}, "audio", "", "", "",
