@@ -37,6 +37,7 @@ Plain words, real numbers, no summaries of summaries.
 | Date | Entry | About |
 | --- | --- | --- |
 | 2026-11-16 | [Architecture review](2026-11-16-architecture-review.md) | How the OS works today, the owner's ideas for processes, signals, a shell, telnet, a TTY and init, twelve design choices and what was decided |
+| 2026-11-16 | [Safe saves and the hourglass](2026-11-16-safe-saves-and-hourglass.md) | Saves write a temporary file and swap it in; the hourglass pointer, chosen from four drawings; why a frozen desktop can still show it |
 | 2026-11-16 | [Task statistics](2026-11-16-task-statistics.md) | Backlog item 1: the kernel counts processor time per task, the System port lists the tasks, `tools/dbg.py tasks` shows them. Seven small choices and what interrupts do to the figures |
 | 2026-11-16 | [The flash-write shake](2026-11-16-flash-write-shake.md) | The picture shook while LittleFS wrote; the cache, PSRAM and the fix |
 | 2026-11-16 | [The flash drive and settings](2026-11-16-littlefs-and-settings.md) | C: on LittleFS, and one plain INI file per program in C:\.config |

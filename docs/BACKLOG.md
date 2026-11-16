@@ -23,8 +23,8 @@ board or the merge), `done`.
 | 3 | Per-process processor time and memory. Task Manager shows PID, time and memory columns | M | 1, 2 | Yes | todo |
 | 4 | System, protected and respawn flags | S | 2 | | todo |
 | 5 | TERM and KILL for window programs. End Task asks politely, then offers force | S | 2 | | todo |
-| 6 | Atomic saves: temporary file, then rename | S | | Yes | todo |
-| 6b | Hourglass pointer while a program makes the user wait, first of all during a save (own art) | S | | Yes | todo |
+| 6 | Atomic saves: temporary file, then rename | S | | Yes | done (checked on the board 2026-11-16) |
+| 6b | Hourglass pointer while a program makes the user wait, first of all during a save (own art) | S | | Yes | done (checked on the board 2026-11-16) |
 | 7 | Watchdog, crash record, and an error screen on the next start | M | 2 | Yes | todo |
 | | **Phase 2: work off the UI task** | | | | |
 | 8 | Message queue into the UI task. The loop sleeps until there is work | M | | Yes | todo |

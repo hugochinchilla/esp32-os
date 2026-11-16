@@ -980,10 +980,32 @@ moves 2 px every 20 ms, straight and on a slant.
   on the empty desktop does nothing (it could move into
   C:\Documents\Desktop).
 
+### Chosen for safe saves and the hourglass (2026-11-16)
+
+Journal: `docs/journal/2026-11-16-safe-saves-and-hourglass.md`.
+
+- Decided by the owner: the busy pointer is drawing A, the sand timer (15x22,
+  own art), out of four (`docs/look/hourglass-options.png`). Not chosen: a
+  round glass, the arrow with a small glass beside it, a timer with
+  chinchilla ears.
+- To confirm: the temporary file sits beside the document under a hidden
+  name, `.~<name>.tmp` (not a visible `name.tmp`, not one `C:\.tmp` folder).
+- To confirm: every whole-file write saves this way, the settings files
+  included, not only the Editor.
+- To confirm: the hourglass shows for every save and load in the Editor,
+  however short, and does not move or animate. A temporary file left by a
+  power cut stays hidden until that document is saved again.
+- A save needs room for both copies until its last step; a disk too full
+  refuses the save and keeps the old document.
+- `Volume::rename()` still refuses an existing name (the Rename command);
+  `Volume::replace()` is the one that takes a file's place.
+
 ## To confirm on the bench
 
 - The picture is stable at 640x480 with the framebuffer in PSRAM.
 - The colours and the four greys look right in both modes.
+- Safe saves and the hourglass (PC only so far): the six checks in section 7
+  of `docs/journal/2026-11-16-safe-saves-and-hourglass.md`.
 - The picture stays stable with Wi-Fi active and during flash writes.
 - Wi-Fi (never run on the board yet): the radio starts and how long it
   takes; a scan lists the networks around; a wrong password is reported as

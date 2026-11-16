@@ -90,6 +90,21 @@ public:
         return ::rename(f.c_str(), target.c_str()) == 0 ? ports::FsError::Ok : error();
     }
 
+    ports::FsError replace(const char *from, const char *to) override
+    {
+        // POSIX rename() swaps the name over in one step. LittleFS does the
+        // same on the board (lfs_rename), as one change to its log.
+        const std::string f = full(from), t = full(to);
+        struct stat s;
+        if (::stat(f.c_str(), &s) != 0) {
+            return error();
+        }
+        if (S_ISDIR(s.st_mode) || (::stat(t.c_str(), &s) == 0 && S_ISDIR(s.st_mode))) {
+            return ports::FsError::IsFolder;
+        }
+        return ::rename(f.c_str(), t.c_str()) == 0 ? ports::FsError::Ok : error();
+    }
+
     ports::FsError open(const char *path, ports::OpenMode mode, int &file) override
     {
         const int flags = mode == ports::OpenMode::Read    ? O_RDONLY

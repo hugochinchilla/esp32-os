@@ -36,6 +36,8 @@ void Ini::set_text(const char *text)
 
 bool Ini::load(const Storage &storage, const char *path)
 {
+    // Until 2026-11-16 a save removed the file and then renamed "<path>.tmp"
+    // to it; a cut in between left only that file, so it is still read.
     char tmp[kMaxPath];
     snprintf(tmp, sizeof(tmp), "%s.tmp", path);
     size_t got = 0;
@@ -52,19 +54,9 @@ bool Ini::load(const Storage &storage, const char *path)
 
 ports::FsError Ini::save(const Storage &storage, const char *path) const
 {
-    char tmp[kMaxPath];
-    snprintf(tmp, sizeof(tmp), "%s.tmp", path);
-    ports::FsError e = storage.write_file(tmp, text_, size_);
-    if (e != ports::FsError::Ok) {
-        return e;
-    }
-    // ponytail: no rename-over on every drive, so remove then rename; a cut
-    // in between leaves the .tmp file, which load() reads.
-    e = storage.remove(path);
-    if (e != ports::FsError::Ok && e != ports::FsError::NotFound) {
-        return e;
-    }
-    return storage.rename(tmp, path);
+    // write_file() writes a temporary file and swaps it in, so a power cut
+    // leaves the old settings or the new ones.
+    return storage.write_file(path, text_, size_);
 }
 
 bool Ini::find(const char *section, const char *key, size_t &value_start, size_t &value_end, size_t &section_end,

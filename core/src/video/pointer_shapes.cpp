@@ -59,6 +59,33 @@ constexpr const char *kNwSe[11] = {
     "    XXXXXX ",
 };
 
+// The sand timer: a straight glass between two flat caps, sand running.
+// Chosen from four drawings (docs/look/hourglass-options.png).
+constexpr const char *kHourglass[22] = {
+    "XXXXXXXXXXXXXXX",
+    "X.............X",
+    "XXXXXXXXXXXXXXX",
+    " X...........X ",
+    " X...........X ",
+    " X.XXXXXXXXX.X ",
+    "  X.XXXXXXX.X  ",
+    "   X.XXXXX.X   ",
+    "    X.XXX.X    ",
+    "     X.X.X     ",
+    "      XXX      ",
+    "     X.X.X     ",
+    "    X.....X    ",
+    "   X...X...X   ",
+    "  X.........X  ",
+    " X.....X.....X ",
+    " X....XXX....X ",
+    " X..XXXXXXX..X ",
+    " X.XXXXXXXXX.X ",
+    "XXXXXXXXXXXXXXX",
+    "X.............X",
+    "XXXXXXXXXXXXXXX",
+};
+
 constexpr PointerShape make(const char *const *rows, int width, int height, int hot_x, int hot_y,
                             bool mirror = false)
 {
@@ -106,6 +133,13 @@ const PointerShape &resize_nwse_pointer()
 const PointerShape &resize_nesw_pointer()
 {
     static constexpr PointerShape shape = make(kNwSe, 11, 11, 5, 5, true);
+    return shape;
+}
+
+const PointerShape &busy_pointer()
+{
+    // The hotspot is the neck of the glass.
+    static constexpr PointerShape shape = make(kHourglass, 15, 22, 7, 10);
     return shape;
 }
 
