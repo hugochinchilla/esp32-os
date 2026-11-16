@@ -546,7 +546,13 @@ void Wm::key(uint16_t usage, bool pressed)
     }
     handle_key(usage, pressed);
     update();
+    event_done(start);
+}
+
+void Wm::event_done(uint32_t start)
+{
     last_event_us_ = clock_.micros() - start;
+    busy_us_ += last_event_us_;
 }
 
 void Wm::key_repeat(void *self)
@@ -583,6 +589,21 @@ void Wm::handle_key(uint16_t usage, bool pressed)
     }
     if (bit != 0) {
         mods_ = pressed ? (mods_ | bit) : (mods_ & ~bit);
+    }
+    if (pressed && usage == key::Delete && (mods_ & kCtrl) && (mods_ & kAlt)) {
+        // Ctrl+Alt+Del belongs to the shell, whatever has the focus. It
+        // does not repeat while held.
+        stop_timer(repeat_timer_);
+        repeat_timer_ = 0;
+        repeat_usage_ = 0;
+        if (attention_ != nullptr && (screen_fn_ != nullptr || system_modal() == nullptr)) {
+            close_menus();
+            attention_(attention_context_);
+        }
+        return;
+    }
+    if (screen_fn_ != nullptr) {
+        return;
     }
     const KeyMsg k = {usage, pressed, mods_};
     bool used = false;
@@ -635,16 +656,19 @@ void Wm::handle_key(uint16_t usage, bool pressed)
 void Wm::text(const char *utf8)
 {
     const uint32_t start = clock_.micros();
-    if (!menu_open() && active_ != nullptr) {
+    if (!menu_open() && active_ != nullptr && screen_fn_ == nullptr) {
         caret_moved();
         active_->text(utf8);
     }
     update();
-    last_event_us_ = clock_.micros() - start;
+    event_done(start);
 }
 
 void Wm::mouse(const ports::MouseEvent &event)
 {
+    if (screen_fn_ != nullptr) {
+        return;
+    }
     const uint32_t start = clock_.micros();
     int x = event.absolute ? event.x : pointer_x_ + event.x;
     int y = event.absolute ? event.y : pointer_y_ + event.y;
@@ -665,7 +689,7 @@ void Wm::mouse(const ports::MouseEvent &event)
     }
     update_pointer_shape();
     update();
-    last_event_us_ = clock_.micros() - start;
+    event_done(start);
 }
 
 bool Wm::double_click(int target)
@@ -1302,6 +1326,14 @@ void Wm::update()
         return;
     }
     const uint32_t start = clock_.micros();
+    if (screen_fn_ != nullptr) {
+        const Rect screen = {0, 0, width_, height_};
+        Canvas c(display_.pixels(), width_, height_, dirty_, screen);
+        screen_fn_(c, screen_context_);
+        dirty_.clear();
+        last_update_us_ = clock_.micros() - start;
+        return;
+    }
     const bool outline = outline_shown_;
     if (outline) {
         xor_outline(); // take it off; it goes back on top afterwards
@@ -1317,6 +1349,24 @@ void Wm::update()
         xor_outline();
     }
     last_update_us_ = clock_.micros() - start;
+}
+
+void Wm::take_over(ScreenFn paint, void *context)
+{
+    close_menus();
+    if (outline_shown_) {
+        set_outline(outline_, false);
+    }
+    capture_ = Capture::None;
+    captured_ = nullptr;
+    stop_timer(repeat_timer_);
+    repeat_timer_ = 0;
+    repeat_usage_ = 0;
+    pointer_.set_visible(false);
+    screen_fn_ = paint;
+    screen_context_ = context;
+    invalidate({0, 0, width_, height_});
+    update();
 }
 
 uint32_t Wm::repaint_all()
@@ -1677,6 +1727,7 @@ void Wm::stop_timer(int id)
 
 void Wm::tick()
 {
+    const uint32_t start = clock_.micros();
     const uint64_t now = now_us();
     for (Timer &t : timers_) {
         if (t.id == 0 || now < t.due) {
@@ -1695,6 +1746,7 @@ void Wm::tick()
         fn(context);
     }
     update();
+    busy_us_ += clock_.micros() - start;
 }
 
 void Wm::blink(void *self)
