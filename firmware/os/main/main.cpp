@@ -27,6 +27,7 @@
 #include "littlefs_volume.hpp"
 #include "core/net/posix_tcp.hpp"
 #include "core/net/rfb.hpp"
+#include "core/net/web.hpp"
 #include "core/net/wifi.hpp"
 #include "core/shell/boot.hpp"
 #include "core/shell/shell.hpp"
@@ -335,6 +336,18 @@ void ui_task(void *)
         ESP_LOGI(TAG, "remote screen (VNC) on port %d", rfb::kPort);
     } else {
         ESP_LOGW(TAG, "remote screen (VNC) not available");
+    }
+    // The same screen in a browser: http://<the board's address>/ gives a
+    // viewer page, which talks VNC to the board through a WebSocket.
+    static net::PosixTcpPool web_port;
+    static net::WebGate web;
+    if (radio && web_port.listen(80)) {
+        web.set_port(&web_port);
+        web.set_page(net::viewer_page(), net::viewer_page_size());
+        remote.set_listener(&web, 1);
+        ESP_LOGI(TAG, "remote screen for a browser on port 80");
+    } else {
+        ESP_LOGW(TAG, "remote screen for a browser not available");
     }
 
     shell::start(desktop, system, storage, memory);

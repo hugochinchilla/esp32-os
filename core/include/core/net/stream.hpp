@@ -23,8 +23,9 @@ protected:
 class Listener {
 public:
     // A new connection, or nullptr when nobody is waiting. The stream
-    // belongs to the listener and is valid until its close(), or until
-    // accept() gives the next one, which ends it: one connection at a time.
+    // belongs to the listener and is valid until its close(). A listener
+    // with one connection at a time gives the same object again for the
+    // next one, which ends the earlier connection.
     virtual Stream *accept() = 0;
 
 protected:

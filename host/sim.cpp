@@ -18,6 +18,7 @@
 #include "core/shell/shell.hpp"
 #include "core/net/posix_tcp.hpp"
 #include "core/net/rfb.hpp"
+#include "core/net/web.hpp"
 #include "core/net/wifi.hpp"
 #include "fake_wifi.hpp"
 #include "folder_volume.hpp"
@@ -47,8 +48,10 @@ private:
 
 } // namespace
 
-// ./sim [folder [vnc-port]]: the folder, if given, is drive D:; with a port,
-// the remote screen (VNC) is offered on it, to this computer only.
+// ./sim [folder [vnc-port [web-port]]]: the folder, if given, is drive D:;
+// with a port, the remote screen (VNC) is offered on it, and with a second
+// one the viewer page for a browser (http://localhost:web-port/). Both to
+// this computer only.
 int main(int argc, char **argv)
 {
     int fd = posix_openpt(O_RDWR | O_NOCTTY);
@@ -129,6 +132,17 @@ int main(int argc, char **argv)
             remote.set_listener(&vnc_port);
         } else {
             fprintf(stderr, "cannot listen on port %s\n", argv[2]);
+        }
+    }
+    static net::PosixTcpPool web_port;
+    static net::WebGate web;
+    if (argc > 3) {
+        if (web_port.listen(atoi(argv[3]), true)) {
+            web.set_port(&web_port);
+            web.set_page(net::viewer_page(), net::viewer_page_size());
+            remote.set_listener(&web, 1);
+        } else {
+            fprintf(stderr, "cannot listen on port %s\n", argv[3]);
         }
     }
 

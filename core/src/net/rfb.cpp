@@ -214,14 +214,18 @@ void Server::damage(const gfx::Rect &r)
 
 void Server::poll()
 {
-    if (listener_ != nullptr) {
-        if (net::Stream *s = listener_->accept()) {
-            if (state_ != State::Idle) {
-                stream_ = nullptr; // the listener has already ended it
-                drop();
-            }
-            start(s);
+    for (net::Listener *listener : listeners_) {
+        net::Stream *s = listener != nullptr ? listener->accept() : nullptr;
+        if (s == nullptr) {
+            continue;
         }
+        if (state_ != State::Idle) {
+            if (s == stream_) {
+                stream_ = nullptr; // its listener has already ended the old one
+            }
+            drop(); // one viewer at a time: the new one takes over
+        }
+        start(s);
     }
     if (state_ == State::Idle) {
         return;

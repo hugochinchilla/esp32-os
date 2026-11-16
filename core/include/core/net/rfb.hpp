@@ -47,8 +47,10 @@ public:
     Server(ports::Display &display, ports::Pointer &pointer, ports::InputSink &input, ports::Clock &clock,
            ports::Memory &memory);
 
-    // Where viewers connect; nullptr while there is no network.
-    void set_listener(net::Listener *listener) { listener_ = listener; }
+    // Where viewers connect (two places: the VNC port and the web server's
+    // WebSocket); nullptr while there is none.
+    static constexpr int kListeners = 2;
+    void set_listener(net::Listener *listener, int which = 0) { listeners_[which] = listener; }
     // A part of the screen was painted.
     void damage(const gfx::Rect &r);
     // Takes new viewers, reads what the viewer sent, sends what fits.
@@ -94,7 +96,7 @@ private:
     ports::InputSink &input_;
     ports::Clock &clock_;
     ports::Memory &memory_;
-    net::Listener *listener_ = nullptr;
+    net::Listener *listeners_[kListeners] = {};
     net::Stream *stream_ = nullptr;
     State state_ = State::Idle;
     int minor_ = 8; // protocol version 3.x agreed

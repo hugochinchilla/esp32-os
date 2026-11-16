@@ -12,6 +12,7 @@
 
 #include "core/net/deflate.hpp"
 #include "core/net/rfb.hpp"
+#include "core/net/web.hpp"
 #include "core/wm/window.hpp"
 #include "../host_adapters.hpp"
 
@@ -317,6 +318,143 @@ int dump(const char *base)
     return 0;
 }
 
+// A browser's frame: masked, as the rules ask.
+std::string masked(int opcode, const std::string &payload)
+{
+    const uint8_t mask[4] = {0x12, 0x34, 0x56, 0x78};
+    std::string f;
+    f += static_cast<char>(0x80 | opcode);
+    if (payload.size() < 126) {
+        f += static_cast<char>(0x80 | payload.size());
+    } else {
+        f += static_cast<char>(0x80 | 126);
+        f += static_cast<char>(payload.size() >> 8);
+        f += static_cast<char>(payload.size());
+    }
+    f.append(reinterpret_cast<const char *>(mask), 4);
+    for (size_t i = 0; i < payload.size(); i++) {
+        f += static_cast<char>(payload[i] ^ mask[i & 3]);
+    }
+    return f;
+}
+
+// The web server over a network that takes one byte at a time.
+void test_web()
+{
+    char reply[29];
+    net::websocket_accept_key("dGhlIHNhbXBsZSBub25jZQ==", reply); // the example in RFC 6455
+    CHECK(strcmp(reply, "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=") == 0);
+
+    Pipe wire;
+    net::WebGate gate;
+    gate.set_port(&wire);
+    const char page[] = "<html>the page</html>";
+    gate.set_page(page, sizeof(page) - 1);
+    wire.room = 1;
+
+    // The page.
+    wire.waiting = true;
+    wire.to_server = "GET / HTTP/1.1\r\nHost: board\r\n\r\n";
+    for (int i = 0; i < 1000; i++) {
+        CHECK(gate.accept() == nullptr);
+    }
+    CHECK(!wire.open); // closed once all was sent
+    CHECK(wire.from_server.rfind("HTTP/1.1 200 OK\r\n", 0) == 0);
+    CHECK(wire.from_server.find("Content-Length: 21\r\n") != std::string::npos);
+    CHECK(wire.from_server.size() > 21 && wire.from_server.substr(wire.from_server.size() - 21) == page);
+    CHECK(gate.pages_served() == 1);
+
+    // Not a page, and not a GET.
+    wire.from_server.clear();
+    wire.waiting = true;
+    wire.to_server = "GET /other HTTP/1.1\r\n\r\n";
+    for (int i = 0; i < 1000; i++) {
+        gate.accept();
+    }
+    CHECK(wire.from_server.rfind("HTTP/1.1 404 ", 0) == 0 && !wire.open);
+    wire.from_server.clear();
+    wire.waiting = true;
+    wire.to_server = "POST / HTTP/1.1\r\n" + std::string(5000, 'x') + ": y\r\n\r\n";
+    for (int i = 0; i < 1000; i++) {
+        gate.accept();
+    }
+    CHECK(wire.from_server.rfind("HTTP/1.1 405 ", 0) == 0 && !wire.open);
+
+    // A WebSocket; the first frame is already behind the request.
+    wire.from_server.clear();
+    wire.waiting = true;
+    wire.to_server = "GET /rfb HTTP/1.1\r\nupgrade: websocket\r\nSEC-WEBSOCKET-KEY:  dGhlIHNhbXBsZSBub25jZQ== \r\n\r\n" +
+                     masked(2, "he");
+    net::Stream *ws = gate.accept();
+    CHECK(ws != nullptr);
+    if (ws == nullptr) {
+        return;
+    }
+    CHECK(gate.accept() == nullptr);
+    // What the server writes comes framed, after the greeting, however
+    // slowly the network takes it.
+    const std::string big(300, 'B');
+    const std::string all = "abc" + big;
+    size_t sent = 0;
+    for (int i = 0; i < 5000 && sent < all.size(); i++) {
+        const int done = ws->write(reinterpret_cast<const uint8_t *>(all.data()) + sent, all.size() - sent);
+        CHECK(done >= 0);
+        sent += static_cast<size_t>(done > 0 ? done : 0);
+        if (sent == 2) {
+            wire.to_server += masked(9, "ping!"); // a ping in the middle of a frame of ours
+            uint8_t in[8];
+            CHECK(ws->read(in, sizeof(in)) == 2 && memcmp(in, "he", 2) == 0);
+        }
+    }
+    CHECK(sent == all.size());
+    for (int i = 0; i < 20; i++) { // the pong goes out between frames, at a later read
+        uint8_t none[1];
+        CHECK(ws->read(none, 1) == 0);
+    }
+    const size_t body = wire.from_server.find("\r\n\r\n");
+    CHECK(wire.from_server.rfind("HTTP/1.1 101 ", 0) == 0 && body != std::string::npos);
+    CHECK(wire.from_server.find("Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=\r\n") != std::string::npos);
+    // Take the frames apart again.
+    std::string data, pong;
+    size_t at = body + 4;
+    while (at + 2 <= wire.from_server.size()) {
+        const uint8_t first = static_cast<uint8_t>(wire.from_server[at]);
+        size_t size = static_cast<uint8_t>(wire.from_server[at + 1]);
+        at += 2;
+        if (size == 126) {
+            size = static_cast<size_t>(static_cast<uint8_t>(wire.from_server[at])) << 8 |
+                   static_cast<uint8_t>(wire.from_server[at + 1]);
+            at += 2;
+        }
+        CHECK(first == 0x82 || first == 0x8A);
+        (first == 0x82 ? data : pong) += wire.from_server.substr(at, size);
+        at += size;
+    }
+    CHECK(at == wire.from_server.size());
+    CHECK(data == all);
+    CHECK(pong == "ping!");
+
+    // What the browser sends: frames of any size, cut anywhere.
+    wire.room = 1 << 20;
+    const std::string message = masked(2, "one") + masked(0, std::string(200, 'z')) + masked(10, "") + masked(2, "") +
+                                masked(2, "two");
+    std::string got;
+    for (char c : message) {
+        wire.to_server += c;
+        uint8_t in[64];
+        const int n = ws->read(in, sizeof(in));
+        CHECK(n >= 0);
+        got.append(reinterpret_cast<const char *>(in), static_cast<size_t>(n > 0 ? n : 0));
+    }
+    CHECK(got == "one" + std::string(200, 'z') + "two");
+    // A close frame ends it.
+    wire.to_server = masked(8, "");
+    uint8_t in[8];
+    CHECK(ws->read(in, sizeof(in)) == -1);
+    CHECK(!wire.open);
+    CHECK(ws->write(in, 1) == -1);
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -328,6 +466,7 @@ int main(int argc, char **argv)
     test_keys();
     test_pointer();
     test_bad_input();
+    test_web();
     if (failures == 0) {
         printf("rfb: all tests passed\n");
     }

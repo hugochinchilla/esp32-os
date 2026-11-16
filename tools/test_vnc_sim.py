@@ -5,6 +5,8 @@ decodes must equal the screenshot from the debug link, pixel for pixel.
 
   python3 tools/test_vnc_sim.py build/host/sim
 """
+import base64
+import hashlib
 import os
 import select
 import socket
@@ -24,8 +26,8 @@ RAW, ZRLE, CURSOR = 0, 16, -239
 class Viewer:
     """Just enough of a VNC viewer: 8, 16 or 32 bits a pixel, Raw and ZRLE."""
 
-    def __init__(self, port, version=b"RFB 003.008\n"):
-        self.sock = socket.create_connection(("127.0.0.1", port), timeout=5)
+    def __init__(self, port, version=b"RFB 003.008\n", sock=None):
+        self.sock = sock or socket.create_connection(("127.0.0.1", port), timeout=5)
         assert self.read(12) == b"RFB 003.008\n"
         self.sock.sendall(version)
         if version == b"RFB 003.003\n":
@@ -153,6 +155,170 @@ class Viewer:
         self.sock.close()
 
 
+class WebSocket:
+    """A browser's side of a WebSocket, used in place of a plain socket."""
+
+    def __init__(self, port, key=b"dGhlIHNhbXBsZSBub25jZQ==", protocol=True, piece=None):
+        self.sock = socket.create_connection(("127.0.0.1", port), timeout=5)
+        self.piece = piece  # cut what is sent into frames of this size
+        self.data = b""
+        self.pongs = []
+        self.sock.sendall(b"GET /rfb HTTP/1.1\r\nHost: board\r\nUpgrade: WebSocket\r\nConnection: Upgrade\r\n"
+                          b"Sec-WebSocket-Key: " + key + b"\r\nSec-WebSocket-Version: 13\r\n" +
+                          (b"Sec-WebSocket-Protocol: binary, base64\r\n" if protocol else b"") + b"\r\n")
+        head = b""
+        while not head.endswith(b"\r\n\r\n"):
+            got = self.sock.recv(1)
+            assert got, "closed during the greeting"
+            head += got
+        lines = head.decode().split("\r\n")
+        assert lines[0] == "HTTP/1.1 101 Switching Protocols", lines[0]
+        want = base64.b64encode(hashlib.sha1(key + b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11").digest()).decode()
+        assert "Sec-WebSocket-Accept: " + want in lines, lines
+        assert ("Sec-WebSocket-Protocol: binary" in lines) == protocol
+
+    def frame(self, opcode, payload):
+        mask = os.urandom(4)
+        size = len(payload)
+        head = bytes([0x80 | opcode])
+        if size < 126:
+            head += bytes([0x80 | size])
+        elif size < 65536:
+            head += bytes([0x80 | 126]) + struct.pack(">H", size)
+        else:
+            head += bytes([0x80 | 127]) + struct.pack(">Q", size)
+        self.sock.sendall(head + mask + bytes(b ^ mask[i & 3] for i, b in enumerate(payload)))
+
+    def sendall(self, data):
+        step = self.piece or len(data)
+        for at in range(0, len(data), step):
+            self.frame(2, data[at:at + step])
+
+    def exactly(self, n):
+        out = b""
+        while len(out) < n:
+            got = self.sock.recv(n - len(out))
+            if not got:
+                return None
+            out += got
+        return out
+
+    def recv(self, n):
+        while not self.data:
+            head = self.exactly(2)
+            if head is None:
+                return b""
+            assert head[1] & 0x80 == 0, "a server must not mask"
+            size = head[1]
+            if size == 126:
+                size = struct.unpack(">H", self.exactly(2))[0]
+            payload = self.exactly(size) if size else b""
+            if payload is None:
+                return b""
+            if head[0] & 0x0F == 0x0A:
+                self.pongs.append(payload)
+            elif head[0] & 0x0F == 8:
+                return b""
+            else:
+                assert head[0] == 0x82, head
+                self.data += payload
+        out, self.data = self.data[:n], self.data[n:]
+        return out
+
+    def settimeout(self, seconds):
+        self.sock.settimeout(seconds)
+
+    def fileno(self):
+        return self.sock.fileno()
+
+    def close(self):
+        self.sock.close()
+
+
+def http_get(port, path):
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as c:
+        c.sendall(b"GET " + path + b" HTTP/1.1\r\nHost: board\r\n\r\n")
+        answer = b""
+        while True:
+            got = c.recv(65536)
+            if not got:
+                break
+            answer += got
+    head, _, body = answer.partition(b"\r\n\r\n")
+    return head.decode().split("\r\n"), body
+
+
+def check_web(board, port, web, shot):
+    """The web server: the viewer page, and VNC inside a WebSocket."""
+    head, body = http_get(web, b"/")
+    assert head[0] == "HTTP/1.1 200 OK" and "Content-Length: %d" % len(body) in head, head
+    assert body.startswith(b"<!doctype html>") and b"WebSocket" in body and body.endswith(b"</html>\n")
+    head, body = http_get(web, b"/secret.txt")
+    assert head[0] == "HTTP/1.1 404 Not Found", head
+    # Connections that never ask for anything (browsers open spares) do not
+    # shut the door: the page still comes.
+    idle = [socket.create_connection(("127.0.0.1", web), timeout=5) for _ in range(9)]
+    assert http_get(web, b"/index.html")[0][0] == "HTTP/1.1 200 OK"
+    for c in idle:
+        c.close()
+
+    # The picture through a WebSocket, as the page asks for it: a colour
+    # map and compressed. The requests arrive cut into small frames.
+    v = Viewer(None, sock=WebSocket(web, piece=3))
+    assert (v.width, v.height, v.name) == (640, 480, "Chinchilla")
+    v.set_format(8, 8, 0, (0, 0, 0), (0, 0, 0), true=0)
+    v.set_encodings([ZRLE, RAW, CURSOR])
+    v.request(0)
+    v.update()
+    assert bytes(v.pixels) == shot, "the picture through the WebSocket differs"
+    assert v.colour_map[0xFF] == (65535, 65535, 65535) and v.cursor is not None
+    # A ping is answered with its own text.
+    v.sock.frame(9, b"are you there")
+    v.pointer(300, 200)
+    v.key(0xFFE1, 1)  # Shift down and up: harmless
+    v.key(0xFFE1, 0)
+    v.request(0)
+    v.update()
+    assert v.sock.pongs == [b"are you there"], v.sock.pongs
+    assert bytes(v.pixels) == shot
+
+    # One viewer at a time, whichever door it came through.
+    plain = Viewer(port)
+    settle(board)
+    v.sock.settimeout(1)
+    try:
+        assert v.sock.recv(1) == b"", "the WebSocket viewer was not ended"
+    except ConnectionError:
+        pass
+    by_web = Viewer(None, sock=WebSocket(web, key=b"x3JJHMbDL1EzLkh9GBhXDw==", protocol=False))
+    settle(board)
+    plain.sock.settimeout(1)
+    try:
+        assert plain.sock.recv(1) == b"", "the VNC viewer was not ended"
+    except ConnectionError:
+        pass
+    again = Viewer(None, sock=WebSocket(web))
+    settle(board)
+    by_web.sock.settimeout(1)
+    try:
+        assert by_web.sock.recv(1) == b"", "the first WebSocket viewer was not ended"
+    except ConnectionError:
+        pass
+    again.set_encodings([RAW])
+    again.request(0)
+    again.update()
+    assert bytes(again.pixels) == shot
+    # An unmasked frame is against the rules: the connection ends.
+    again.sock.sock.sendall(b"\x82\x01\x00")
+    settle(board)
+    try:
+        assert again.sock.recv(1) == b""
+    except ConnectionError:
+        pass
+    assert http_get(web, b"/")[0][0] == "HTTP/1.1 200 OK"
+    print("web: the page and the WebSocket viewer work")
+
+
 def settle(board):
     """Lets the simulator's loop run (it serves the viewer between debug commands)."""
     for _ in range(3):
@@ -179,11 +345,12 @@ def check_compressor(tool):
 def main():
     if len(sys.argv) > 2:
         check_compressor(sys.argv[2])
-    with socket.socket() as probe:  # a free port
+    with socket.socket() as probe, socket.socket() as probe2:  # two free ports
         probe.bind(("127.0.0.1", 0))
-        port = probe.getsockname()[1]
+        probe2.bind(("127.0.0.1", 0))
+        port, web = probe.getsockname()[1], probe2.getsockname()[1]
     folder = tempfile.mkdtemp()
-    sim = subprocess.Popen([sys.argv[1], folder, str(port)], stdout=subprocess.PIPE, text=True)
+    sim = subprocess.Popen([sys.argv[1], folder, str(port), str(web)], stdout=subprocess.PIPE, text=True)
     try:
         board = dbg.Board(sim.stdout.readline().strip(), timeout=2.0)
         board.animations(False)
@@ -345,6 +512,7 @@ def main():
         third.update()
         assert bytes(third.pixels) == shot
         third.close()
+        check_web(board, port, web, shot)
         assert board.ping() < 1.0
         board.close()
         print("vnc: all checks passed")

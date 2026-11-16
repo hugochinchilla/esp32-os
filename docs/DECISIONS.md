@@ -512,9 +512,17 @@ Put to the owner as options; built on the recommended one until he answers.
 - Keys: a key that exists on the US layout with the same Shift state goes
   in as that key; anything else goes in as text. Keys still held when the
   viewer leaves are released.
-- Not built yet: a viewer in a web browser (noVNC). It needs the same
-  protocol over a WebSocket and a page to serve; it is the next step of this
-  milestone and has no decision attached except where the page lives.
+- In a browser (asked 2026-11-16, to confirm; built on the recommended
+  option): the board serves one small page of its own at
+  `http://<address>/` (port 80, about 9 KB, in the firmware), a viewer
+  written for this server only. The other options put to the owner: the
+  full noVNC kept on C: and served by the board, noVNC kept on the owner's
+  computer, or no browser viewer. The page talks VNC through a WebSocket to
+  the same port (`core/net/web.hpp`), which noVNC could use too. It asks for
+  8-bit pixels with the colour map and ZRLE, unpacked with the browser's
+  own zlib (`DecompressionStream`); a browser without it gets plain pixels.
+  The web server answers nothing else: one page, one WebSocket, up to four
+  requests at a time. Like the VNC port, no password.
 
 ## To confirm on the bench
 
@@ -528,8 +536,8 @@ Put to the owner as options; built on the recommended one until he answers.
   picture stays stable and the frame rate holds during a scan and while
   connected.
 - Remote screen (compiled and linked for the board, never run there): a VNC
-  viewer connects to the board's address; the picture is right; keys and
-  mouse work; how long a full-screen update takes and how the desktop feels
+  viewer connects to the board's address, and a browser opens
+  `http://<address>/`; the picture is right; keys and mouse work; how long a full-screen update takes and how the desktop feels
   meanwhile; the VGA picture stays stable with a viewer connected. If
   updates are slow, the UI loop's 10 ms pace (FreeRTOS at 100 ticks a
   second) is the first thing to look at.
