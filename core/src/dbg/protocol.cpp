@@ -98,8 +98,8 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
             break;
         }
         keys_++;
+        reply(type, seq, kOk, nullptr, 0); // first: the event may restart the board
         input_.key(get16(args), args[2] != 0);
-        reply(type, seq, kOk, nullptr, 0);
         break;
 
     case kMouse: {
@@ -114,8 +114,8 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
         event.buttons = args[5];
         event.wheel = static_cast<int8_t>(args[6]);
         mouse_events_++;
+        reply(type, seq, kOk, nullptr, 0); // first: the event may restart the board
         input_.mouse(event);
-        reply(type, seq, kOk, nullptr, 0);
         break;
     }
 
@@ -123,8 +123,8 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
         char text[kMaxRequestPayload + 1];
         memcpy(text, args, args_size);
         text[args_size] = 0;
+        reply(type, seq, kOk, nullptr, 0); // first: the event may restart the board
         input_.text(text);
-        reply(type, seq, kOk, nullptr, 0);
         break;
     }
 
