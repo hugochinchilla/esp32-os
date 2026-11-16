@@ -25,6 +25,9 @@ gfx::Rect centred(const wm::Wm &wm, int w, int h);
 const gfx::Bitmap &cactus_patch_icon();
 void open_cactus_patch();
 
+// Puts the screensaver in place with its settings (screensaver.cpp).
+void install_screen_saver();
+
 // Ctrl+Alt+Del (power.cpp): the Task Manager, or a restart from the
 // power-down screen.
 void attention_key(void *context);

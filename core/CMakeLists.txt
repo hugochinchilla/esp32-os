@@ -22,6 +22,10 @@ set(CORE_SRCS
     src/gfx/font_spleen32x64.cpp
     src/gfx/font_spleen6x12.cpp
     src/gfx/rect.cpp
+    src/saver/chinchillas.cpp
+    src/saver/curves.cpp
+    src/saver/runner.cpp
+    src/saver/starfield.cpp
     src/net/deflate.cpp
     src/net/rfb.cpp
     src/net/viewer_page.cpp
@@ -36,6 +40,7 @@ set(CORE_SRCS
     src/shell/editor.cpp
     src/shell/file_manager.cpp
     src/shell/listing.cpp
+    src/shell/screensaver.cpp
     src/shell/network.cpp
     src/shell/power.cpp
     src/shell/settings.cpp
