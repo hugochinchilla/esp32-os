@@ -164,6 +164,15 @@ public:
     // Values run from 0 to `maximum`; `page` is how much one view shows.
     void set_range(int maximum, int page);
     void set_value(int value);
+    // The same without calling back (when the owner moved itself).
+    void set_value_quietly(int value)
+    {
+        value = value < 0 ? 0 : (value > maximum_ ? maximum_ : value);
+        if (value != value_) {
+            value_ = value;
+            invalidate();
+        }
+    }
     int value() const { return value_; }
     int maximum() const { return maximum_; }
     // Where the thumb is, in the bar's own coordinates (for tests).
