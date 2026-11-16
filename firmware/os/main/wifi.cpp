@@ -160,8 +160,10 @@ public:
             esp_wifi_disconnect(); // its "left" event is ignored while joining
         }
         wifi_config_t config = {};
-        strncpy(reinterpret_cast<char *>(config.sta.ssid), ssid, sizeof(config.sta.ssid));
-        strncpy(reinterpret_cast<char *>(config.sta.password), password, sizeof(config.sta.password));
+        // Fixed-size fields: a 32-character name or 64-digit key fills them with
+        // no terminator, as ESP-IDF expects (config is zeroed above).
+        memcpy(config.sta.ssid, ssid, strnlen(ssid, sizeof(config.sta.ssid)));
+        memcpy(config.sta.password, password, strnlen(password, sizeof(config.sta.password)));
         // Every channel, and of several access points with the name, the
         // strongest. With a password, nothing weaker than WPA is accepted.
         config.sta.scan_method = WIFI_ALL_CHANNEL_SCAN;
