@@ -37,4 +37,12 @@ Plain words, real numbers, no summaries of summaries.
 | Date | Entry | About |
 | --- | --- | --- |
 | 2026-11-16 | [Architecture review](2026-11-16-architecture-review.md) | How the OS works today, the owner's ideas for processes, signals, a shell, telnet, a TTY and init, twelve design choices and what was decided |
+| 2026-11-16 | [The flash-write shake](2026-11-16-flash-write-shake.md) | The picture shook while LittleFS wrote; the cache, PSRAM and the fix |
+| 2026-11-16 | [The flash drive and settings](2026-11-16-littlefs-and-settings.md) | C: on LittleFS, and one plain INI file per program in C:\.config |
+| 2026-11-16 | [Wi-Fi scanlines](2026-11-16-wifi-scanlines.md) | Lines while the radio connects, measured in the video interrupt; 2 dBm by default |
+| 2026-11-16 | [Start-up screens](2026-11-16-boot-screens.md) | Waiting for the monitor, real self-test values, the countdown, the splash hidden |
+| 2026-11-16 | [Files on the desktop](2026-11-16-desktop-files.md) | C:\Documents\Desktop as icons, welcome.txt, C:\docs moved into C:\Documents |
+| 2026-11-16 | [The Trash](2026-11-16-trash.md) | Deletes to C:\.trash, Restore, Empty Trash, drag and drop |
+| 2026-11-16 | [Painting each pixel once](2026-11-16-painting-once.md) | Overdraw counted, a 12-line scratch band, before and after |
+| 2026-11-16 | [Slow-pointer submenus](2026-11-16-start-menu-submenus.md) | Why a slow pointer closed Start > Programs, and the fix |
 | 2026-11-16 | [The process table](2026-11-16-process-table.md) | PIDs for programs and services, windows and timers that know their owner, how the OS knows who is asking, when a process ends, and Task Manager's new list |
