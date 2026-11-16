@@ -1096,9 +1096,11 @@ only; not yet run on the board. Each is easy to change. Pictures:
 
 ### Chosen for the process table (2026-11-16, to confirm)
 
-Backlog item 2, built on a branch and tested on the PC only. The options and
-the reasons are in `docs/journal/2026-11-16-process-table.md`. Each is easy to
-change.
+Backlog item 2. The options and the reasons are in
+`docs/journal/2026-11-16-process-table.md`. Each is easy to change. Checked on
+the board and merged 2026-11-16: the PIDs there are init 1, dbgd 2, vncd 3,
+httpd 4, desktop 5, netd 6, and the change costs 3.2 KB of internal RAM (1.2
+for the table, the rest for Task Manager's rows).
 
 - The table is `core/proc`: 32 rows, PIDs from 1 to 32767 that are not given
   out again until the count has gone round, a parent, a name, a state
