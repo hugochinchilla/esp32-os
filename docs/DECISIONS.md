@@ -69,7 +69,16 @@ room kept for updates was the alternative.
 Decided by the owner. The self-test runs for real as before and then stays
 on screen until `monitor_wait_ms` after the video signal started (4000 by
 default), so a monitor that takes a while to lock still shows it; then the
-splash for `splash_ms` (800). Any key or mouse button skips straight to the
+splash for `splash_ms` (800). Revised the same day: the self-test follows the
+approved drawing (docs/look/boot/boot-b-self-test.png) in layout, fonts and
+colours with the board's real values (the owner: "use accurate data, the
+approved design is for guidance"): the real version, the KB the memory tests
+really covered (a new quick test of free internal RAM joins the external
+one), the 12 MB flash disk. Its header shows at once; the lines start
+appearing `monitor_wait_ms` (now 2500) after the video starts, when the bench
+monitor has a picture, one by one at `selftest_pace` (130 %), the memory
+count climbing with the real test. The processor, RAM and flash sizes are
+still checked and logged though the drawing has no line for them. Any key or mouse button skips straight to the
 desktop from either screen (pointer movement does not); the checks still run
 to the end and failures are logged. `fastboot = true` shows neither screen
 and skips the memory test. All in C:\.config\boot.ini (docs/settings.md). A
@@ -263,6 +272,14 @@ First picture: 2026-11-16, through a VGA-to-HDMI adapter.
   partly the camera's compression of fine detail; it is the one pattern
   where shimmer can be seen. The longest timer slice while decoding was
   21 to 31 ms with every dither.
+- Self-test in the approved layout (2026-11-16): on the webcam the header
+  shows 3.2 s after a restart, the memory count climbs 512K, 1408K, 2304K,
+  3328K, 4096K to about 5760K over 1.7 s, then the internal test (about 144K),
+  the remaining lines, the splash at 6.8 s, the desktop at about 7.6 s. An
+  all-black screen until the lines start made the monitor take 5.4 s instead
+  of 2.4 s to show a picture, so the header is drawn at once. The PC test
+  compares the layout with the approved drawing pixel for pixel, given the
+  drawing's own numbers.
 - Start-up timing on the board (2026-11-16). The bench monitor shows a
   picture about 3.1 s after a restart (2.4 s after the video starts). With
   the defaults the self-test is on screen from then until 4.7 s (about 1.5 s

@@ -231,8 +231,7 @@ public:
             esp_chip_info_t info;
             esp_chip_info(&info);
             const char *model = info.model == CHIP_ESP32S3 ? "ESP32-S3" : "an unexpected chip";
-            snprintf(text, capacity, "%s, %d core%s, rev %d.%d, %d MHz", model, info.cores,
-                     info.cores == 1 ? "" : "s", info.revision / 100, info.revision % 100,
+            snprintf(text, capacity, "%s %s core, %d MHz", model, info.cores == 2 ? "dual" : "single",
                      esp_clk_cpu_freq() / 1000000);
             return info.model == CHIP_ESP32S3;
         }
@@ -252,10 +251,10 @@ public:
             value = vga_pixel_clock_hz();
             return true;
         case ports::Fact::Input:
-            snprintf(text, capacity, "Serial debug link (no USB yet)");
+            snprintf(text, capacity, "serial debug link"); // no USB host yet
             return true;
         case ports::Fact::Sound:
-            snprintf(text, capacity, "None");
+            snprintf(text, capacity, "none");
             return true;
         }
         return false;
@@ -283,6 +282,20 @@ public:
         got = got > max ? max : got;
         got &= ~static_cast<size_t>(3);
         void *p = got != 0 ? heap_caps_malloc(got, MALLOC_CAP_SPIRAM) : nullptr;
+        if (p == nullptr) {
+            got = 0;
+        }
+        return p;
+    }
+    // Internal RAM for its test: the largest free block, less 16 KB kept for
+    // whatever else needs internal RAM meanwhile.
+    void *borrow_internal(size_t max, size_t &got) override
+    {
+        got = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        got = got > 16384 ? got - 16384 : 0;
+        got = got > max ? max : got;
+        got &= ~static_cast<size_t>(3);
+        void *p = got != 0 ? heap_caps_malloc(got, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT) : nullptr;
         if (p == nullptr) {
             got = 0;
         }
@@ -441,6 +454,7 @@ void ui_task(void *)
     boot_io.video_start_us = s_video_start_us;
     boot_io.monitor_wait_ms = boot.monitor_wait_ms;
     boot_io.splash_ms = boot.splash_ms;
+    boot_io.pace_percent = boot.pace_percent;
     boot_io.skip = [](void *) { return input.skip; };
     pointer.set_visible(false);
     const int64_t test_start = esp_timer_get_time();

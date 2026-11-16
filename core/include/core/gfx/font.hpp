@@ -42,6 +42,8 @@ struct WideFont {
 // letters they use.
 extern const WideFont kSpleen32x64;
 extern const WideFont kSpleen12x24;
+// The self-test screen: Spleen 8x16, printable ASCII.
+extern const WideFont kSpleen8x16;
 
 // Reads the next character of a UTF-8 string as a Latin-1 code, and moves
 // `text` past it. Characters outside Latin-1 come back as '?'. Returns 0 at
