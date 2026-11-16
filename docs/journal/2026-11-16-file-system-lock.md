@@ -191,3 +191,20 @@ a class already there; whether it was compiled is in the pull request.
   handler. Nothing does file work there today.
 - **A board turn** is not needed for the lock itself: nothing waits on it
   yet. It will get its real test with item 10, the first second task.
+
+## On the board (added by the board thread, 2026-11-16)
+
+The first firmware compile was the board thread's, with main merged in
+(78d74d1): it built without errors or warnings. Flashed with a fast start and
+checked:
+
+- C: mounts; the folders and files are all there.
+- The Editor opens and saves a small file and a 300 KB one (307,218 bytes, 2.6 s
+  from File > Save until the board answered); both read back whole, and no
+  `.~*.tmp` is left in the folder. 0 late, 0 missed video refills across the
+  saves.
+- View > Show hidden files saves to files.ini (on, then off again), with no
+  temporary file left in C:\.config.
+- Free internal RAM 102,059 bytes against 102,183 on main (124 bytes less);
+  repaint of the empty desktop 14.18 ms against 14.17 ms.
+
