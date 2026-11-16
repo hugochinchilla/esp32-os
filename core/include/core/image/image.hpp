@@ -77,6 +77,7 @@ private:
     uint8_t *pool_ = nullptr;
     size_t used_ = 0;
     FormatDecoder *format_ = nullptr;
+    uint8_t *rgb_ = nullptr; // one decoded row
     Info info_;
     int next_row_ = 0;
     bool done_ = true;

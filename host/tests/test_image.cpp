@@ -1,0 +1,224 @@
+// Tests for the picture decoders, against the pictures and expected pixels
+// written by tools/gen_pictures.py tests <folder>:
+//   test_image <folder>
+// Also feeds every picture truncated and with damaged bytes: decoding must
+// end in an error or finish, never crash (the PC build runs with address
+// and undefined-behaviour checks).
+#include <cmath>
+#include <cstdio>
+#include <cstring>
+#include <fstream>
+#include <random>
+#include <sstream>
+#include <string>
+#include <vector>
+
+#include "core/image/image.hpp"
+#include "../folder_volume.hpp"
+#include "../host_adapters.hpp"
+
+static int failures = 0;
+#define CHECK(condition)                                                   \
+    do {                                                                   \
+        if (!(condition)) {                                                \
+            printf("FAILED %s:%d: %s\n", __FILE__, __LINE__, #condition);  \
+            failures++;                                                    \
+        }                                                                  \
+    } while (0)
+
+namespace {
+
+host::HostMemory memory;
+fs::Storage storage;
+std::string folder;
+
+struct Collect : image::RowSink {
+    std::vector<uint8_t> pixels;
+    int width = 0, rows = 0, last_y = -1;
+    bool in_order = true;
+    void row(int y, const uint8_t *rgb) override
+    {
+        in_order = in_order && y == last_y + 1;
+        last_y = y;
+        pixels.insert(pixels.end(), rgb, rgb + width * 3);
+        rows++;
+    }
+};
+
+image::Error decode(image::Decoder &d, const char *path, image::Info &info, Collect &out)
+{
+    image::Error e = d.open(storage, path, memory, info);
+    if (e != image::Error::None) {
+        return e;
+    }
+    out.width = info.width;
+    while (!d.done()) {
+        e = d.step(out, 7);
+        if (e != image::Error::None) {
+            return e;
+        }
+    }
+    return image::Error::None;
+}
+
+std::vector<uint8_t> read_all(const std::string &path)
+{
+    std::ifstream f(path, std::ios::binary);
+    return std::vector<uint8_t>((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+}
+
+double psnr(const std::vector<uint8_t> &a, const std::vector<uint8_t> &b)
+{
+    double se = 0;
+    for (size_t i = 0; i < a.size(); i++) {
+        const double d = static_cast<double>(a[i]) - b[i];
+        se += d * d;
+    }
+    const double mse = se / static_cast<double>(a.size());
+    return mse == 0 ? 99 : 10 * std::log10(255.0 * 255.0 / mse);
+}
+
+image::Error error_named(const std::string &s)
+{
+    if (s == "Unsupported") {
+        return image::Error::Unsupported;
+    }
+    if (s == "TooLarge") {
+        return image::Error::TooLarge;
+    }
+    return image::Error::Malformed;
+}
+
+void test_manifest()
+{
+    std::ifstream m(folder + "/manifest.txt");
+    std::string line;
+    int checked = 0;
+    image::Decoder d;
+    while (std::getline(m, line)) {
+        std::istringstream in(line);
+        std::string name, kind;
+        in >> name >> kind;
+        const std::string path = "D:\\" + name;
+        image::Info info;
+        Collect got;
+        const image::Error e = decode(d, path.c_str(), info, got);
+        if (kind == "error") {
+            std::string want;
+            in >> want;
+            if (e != error_named(want)) {
+                printf("  %s: got '%s'\n", name.c_str(), image::error_text(e));
+            }
+            CHECK(e == error_named(want));
+            checked++;
+            continue;
+        }
+        int w = 0, h = 0;
+        in >> w >> h;
+        if (e != image::Error::None) {
+            printf("  %s: %s\n", name.c_str(), image::error_text(e));
+        }
+        CHECK(e == image::Error::None);
+        CHECK(info.width == w && info.height == h && got.rows == h && got.in_order);
+        const std::vector<uint8_t> want = read_all(folder + "/" + name + ".rgb");
+        CHECK(want.size() == got.pixels.size());
+        if (want.size() != got.pixels.size()) {
+            continue;
+        }
+        if (kind == "exact") {
+            if (want != got.pixels) {
+                size_t i = 0;
+                while (want[i] == got.pixels[i]) {
+                    i++;
+                }
+                printf("  %s differs at pixel %zu (%d,%d): want %d got %d\n", name.c_str(), i / 3,
+                       static_cast<int>(i / 3 % w), static_cast<int>(i / 3 / w), want[i], got.pixels[i]);
+            }
+            CHECK(want == got.pixels);
+        } else {
+            int floor = 30;
+            in >> floor; // from the manifest: lower for 4:2:0
+            const double p = psnr(want, got.pixels);
+            if (p < floor) {
+                printf("  %s: PSNR %.1f dB, wanted %d\n", name.c_str(), p, floor);
+            }
+            CHECK(p >= floor);
+        }
+        checked++;
+    }
+    CHECK(checked >= 30);
+}
+
+// Every picture cut short at many places and with bytes changed at random:
+// each decode must finish or give an error, and never crash.
+void test_damaged()
+{
+    std::ifstream m(folder + "/manifest.txt");
+    std::string line;
+    std::mt19937 random(11);
+    image::Decoder d;
+    int runs = 0, errors = 0;
+    while (std::getline(m, line)) {
+        std::istringstream in(line);
+        std::string name;
+        in >> name;
+        const std::vector<uint8_t> good = read_all(folder + "/" + name);
+        auto attempt = [&](const std::vector<uint8_t> &bytes) {
+            std::ofstream(folder + "/damaged.bin", std::ios::binary)
+                .write(reinterpret_cast<const char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+            image::Info info;
+            Collect got;
+            const image::Error e = decode(d, "D:\\damaged.bin", info, got);
+            errors += e != image::Error::None;
+            runs++;
+        };
+        for (int cut = 0; cut < 24; cut++) {
+            std::vector<uint8_t> b(good.begin(), good.begin() + static_cast<long>(good.size() * cut / 24));
+            attempt(b);
+        }
+        for (int n = 0; n < 40; n++) {
+            std::vector<uint8_t> b = good;
+            const int changes = 1 + static_cast<int>(random() % 8);
+            for (int k = 0; k < changes && !b.empty(); k++) {
+                b[random() % b.size()] = static_cast<uint8_t>(random());
+            }
+            attempt(b);
+        }
+    }
+    CHECK(runs > 1500);
+    CHECK(errors > runs / 4); // most damage is noticed; the rest decodes to something
+    printf("damaged pictures: %d decodes, %d gave an error\n", runs, errors);
+}
+
+void test_too_wide()
+{
+    // A PNG header claiming 100000 pixels across.
+    std::vector<uint8_t> png = {0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n', 0, 0, 0, 13, 'I', 'H', 'D', 'R',
+                                0, 1, 0x86, 0xA0, 0, 0, 0, 10, 8, 2, 0, 0, 0, 0, 0, 0, 0};
+    std::ofstream(folder + "/wide.png", std::ios::binary)
+        .write(reinterpret_cast<const char *>(png.data()), static_cast<std::streamsize>(png.size()));
+    image::Decoder d;
+    image::Info info;
+    CHECK(d.open(storage, "D:\\wide.png", memory, info) == image::Error::TooLarge);
+    CHECK(d.open(storage, "D:\\missing.png", memory, info) == image::Error::NotFound);
+}
+
+} // namespace
+
+int main(int argc, char **argv)
+{
+    if (argc != 2) {
+        printf("usage: test_image <folder made by tools/gen_pictures.py tests>\n");
+        return 2;
+    }
+    folder = argv[1];
+    static host::FolderVolume volume(folder);
+    storage.mount('D', volume);
+    test_manifest();
+    test_too_wide();
+    test_damaged();
+    if (failures == 0) {
+        printf("all tests passed\n");
+    }
+    return failures == 0 ? 0 : 1;
+}

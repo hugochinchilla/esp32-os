@@ -6,6 +6,11 @@ set(CORE_SRCS
     src/dbg/protocol.cpp
     src/fs/fs.cpp
     src/fs/memory_volume.cpp
+    src/image/bmp.cpp
+    src/image/decoder.cpp
+    src/image/inflate.cpp
+    src/image/jpeg.cpp
+    src/image/png.cpp
     src/gfx/art.cpp
     src/gfx/canvas.cpp
     src/gfx/font_spleen6x12.cpp

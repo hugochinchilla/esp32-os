@@ -7,6 +7,13 @@ project(esp32_os_host CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_compile_options(-Wall -Wextra -Werror -fno-exceptions -fno-rtti)
+# Address and undefined-behaviour checks on everything built for the PC, so a
+# bad read in a decoder fails the tests instead of passing by luck.
+option(HOST_SANITIZE "Build the PC tests with sanitizers" ON)
+if(HOST_SANITIZE)
+    add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=all)
+    add_link_options(-fsanitize=address,undefined)
+endif()
 
 add_subdirectory(../core core)
 
@@ -25,6 +32,9 @@ target_link_libraries(test_edit PRIVATE core)
 add_executable(test_shell tests/test_shell.cpp)
 target_link_libraries(test_shell PRIVATE core)
 
+add_executable(test_image tests/test_image.cpp)
+target_link_libraries(test_image PRIVATE core)
+
 add_executable(test_fs tests/test_fs.cpp)
 target_link_libraries(test_fs PRIVATE core)
 
@@ -35,6 +45,15 @@ enable_testing()
 add_test(NAME dbg COMMAND test_dbg)
 add_test(NAME wm COMMAND test_wm)
 add_test(NAME fs COMMAND test_fs)
+add_test(NAME image_pictures
+         COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/gen_pictures.py tests ${CMAKE_CURRENT_BINARY_DIR}/pictures)
+set_tests_properties(image_pictures PROPERTIES FIXTURES_SETUP pictures)
+add_test(NAME image COMMAND test_image ${CMAKE_CURRENT_BINARY_DIR}/pictures)
+set_tests_properties(image PROPERTIES FIXTURES_REQUIRED pictures)
+# The Memory port's buffers live as long as the program, as on the board:
+# not leaks.
+get_property(all_tests DIRECTORY PROPERTY TESTS)
+set_tests_properties(${all_tests} PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
 add_test(NAME edit COMMAND test_edit)
 add_test(NAME shell COMMAND test_shell)
 add_test(NAME pictures

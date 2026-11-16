@@ -77,6 +77,7 @@ private:
     bool failed_ = false;
     uint32_t stored_left_ = 0;
     uint32_t copy_left_ = 0, copy_dist_ = 0;
+    uint32_t total_ = 0; // bytes given out so far
     Huffman lit_, dist_;
 };
 
