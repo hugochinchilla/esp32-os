@@ -556,6 +556,16 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
     g_system = &system;
     g_storage = &storage;
     g_memory = &memory;
+    // The desktop is a process too: the Start menu, the icons and the
+    // taskbar, and the dialogs they open. (It is the window server and the
+    // desktop shell in one until they are split, backlog item 21.)
+    proc::Table &processes = proc::table();
+    proc::Pid desktop = processes.find_by_name("desktop");
+    if (desktop == proc::kNone) {
+        desktop = processes.spawn_service("desktop", proc::kProtected);
+    }
+    wm.set_processes(&processes, desktop);
+    const proc::Scope as(&processes, desktop);
     constexpr size_t kClipboard = 64 * 1024;
     wm::clipboard::init(static_cast<uint8_t *>(memory.allocate(kClipboard)), kClipboard);
     {

@@ -161,6 +161,8 @@ public:
     }
 
     int id() const { return id_; }
+    // The process that opened the window (0: none, or no process table).
+    int owner() const { return owner_; }
     const char *title() const { return title_; }
     const gfx::Bitmap *icon() const { return icon_; }
     const Rect &frame() const { return frame_; } // screen coordinates
@@ -272,6 +274,7 @@ private:
     const MenuBar *menu_bar_ = nullptr;
     Wm *wm_ = nullptr;
     int id_ = 0;
+    int owner_ = 0;
     Widget *widgets_[kMaxWidgets] = {};
     int widget_count_ = 0;
     Widget *captured_ = nullptr;

@@ -326,6 +326,20 @@ const App *find_app(const char *name)
     return nullptr;
 }
 
-void launch(const App &app) { app.open(); }
+void launch(const App &app)
+{
+    const AsProgram as(app.name);
+    app.open();
+}
+
+proc::Pid process_for(const char *program)
+{
+    proc::Table &t = proc::table();
+    proc::Pid pid = t.find_by_name(program);
+    if (pid == proc::kNone) {
+        pid = t.spawn(program, t.current(), proc::kWindowed);
+    }
+    return pid != proc::kNone ? pid : t.current();
+}
 
 } // namespace shell

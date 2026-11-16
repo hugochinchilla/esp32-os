@@ -198,7 +198,7 @@ command-line argument, so it does not end up in the shell's history.
 The Windows reply lists the windows from the bottom of the stack to the top:
 
 ```json
-{"windows":[{"id":1,"z":0,"title":"Welcome to Chinchilla","x":96,"y":30,"w":400,"h":280,"state":"normal","focused":false}, ...],
+{"windows":[{"id":1,"pid":5,"z":0,"title":"Welcome to Chinchilla","x":96,"y":30,"w":400,"h":280,"state":"normal","focused":false}, ...],
  "menus":0,"start_menu":false,"selected_icon":-1,"update_us":6246,"event_us":6639}
 ```
 

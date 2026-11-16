@@ -612,6 +612,7 @@ const gfx::Bitmap &cactus_patch_icon() { return kIconBitmap; }
 
 void open_cactus_patch()
 {
+    const AsProgram as("Cactus Patch");
     CactusWindow &w = cactus_window();
     if (!w.open()) {
         w.place();

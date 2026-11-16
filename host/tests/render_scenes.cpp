@@ -417,6 +417,10 @@ int main(int argc, char **argv)
     key(wm::key::Home);
     key(wm::key::Down);
     save("34-task-manager");
+    // "Show all processes": the whole table, system processes included.
+    key(wm::key::A, true);
+    save("34b-task-manager-all");
+    key(wm::key::A, true);
     key(wm::key::Escape);
 
     // Culebra, the snake game: a new game, a few berries in, its menu,

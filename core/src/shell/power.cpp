@@ -114,6 +114,8 @@ bool power_down()
         }
     }
     for (int i = 0; i < n; i++) {
+        // Its "save changes?" question is its own window, not the desktop's.
+        const proc::Scope as(&proc::table(), open[i]->owner());
         if (open[i]->open() && open[i]->close_requested()) {
             m.close(*open[i]);
         }

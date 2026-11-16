@@ -3,6 +3,7 @@
 
 #include "core/fs/fs.hpp"
 #include "core/ports.hpp"
+#include "core/proc/table.hpp"
 #include "core/wm/wm.hpp"
 
 namespace shell {
@@ -11,6 +12,20 @@ wm::Wm &manager();
 ports::System &system_port();
 fs::Storage &storage();
 ports::Memory &memory();
+
+// The process of a program, by its name: the one running, or a new one whose
+// parent is the current process (the desktop, or the program that opened
+// it). If the table is full, the current process stands in.
+proc::Pid process_for(const char *program);
+// For a program's way in (launch(), open_in_editor()...): what it opens from
+// here to the end of the block is its own, whoever called.
+class AsProgram {
+public:
+    explicit AsProgram(const char *program) : scope_(&proc::table(), process_for(program)) {}
+
+private:
+    proc::Scope scope_;
+};
 
 // Starts following the network, if there is one (network.cpp).
 void start_network();

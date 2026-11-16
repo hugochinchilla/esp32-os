@@ -532,6 +532,7 @@ void set_dither(image::Dither d)
 
 void open_picture(const char *path)
 {
+    const AsProgram as("Picture viewer");
     viewer().open_path(path);
 }
 

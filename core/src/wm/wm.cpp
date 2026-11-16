@@ -121,8 +121,8 @@ Wm::Wm(ports::Display &display, ports::Pointer &pointer, ports::Clock &clock)
 
 void Wm::start()
 {
-    blink_timer_ = start_timer(kBlinkUs, kBlinkUs, &Wm::blink, this);
-    start_timer(1000000, 1000000, &Wm::clock_tick, this);
+    blink_timer_ = start_timer_for(desktop_pid_, kBlinkUs, kBlinkUs, &Wm::blink, this);
+    start_timer_for(desktop_pid_, 1000000, 1000000, &Wm::clock_tick, this);
     shape_ = &video::arrow_pointer();
     pointer_.set_shape(*shape_);
     pointer_.set_position(pointer_x_, pointer_y_);
@@ -164,6 +164,10 @@ void Wm::add(Window &w)
     }
     w.wm_ = this;
     w.id_ = next_id_++;
+    w.owner_ = current_pid();
+    if (procs_ != nullptr) {
+        procs_->set_state(w.owner_, proc::State::Running); // not on its way out after all
+    }
     w.state_ = WindowState::Normal;
     stack_[count_] = &w;
     order_[count_] = &w;
@@ -214,7 +218,84 @@ void Wm::close(Window &w)
             activate(*next);
         }
     }
-    w.closed();
+    {
+        const proc::Scope as(procs_, w.owner_);
+        w.closed();
+    }
+    // A window program without windows is on its way out: reap() removes
+    // it at the end of the event, unless it has opened another by then.
+    if (procs_ != nullptr && windows_of(w.owner_) == 0) {
+        const proc::Process *p = procs_->find(w.owner_);
+        if (p != nullptr && p->is(proc::kWindowed)) {
+            procs_->set_state(w.owner_, proc::State::Exiting);
+        }
+    }
+}
+
+/* ---- Processes ----------------------------------------------------------- */
+
+int Wm::windows_of(proc::Pid pid) const
+{
+    int n = 0;
+    for (int i = 0; i < count_; i++) {
+        n += stack_[i]->owner_ == pid;
+    }
+    return n;
+}
+
+int Wm::timers_of(proc::Pid pid) const
+{
+    int n = 0;
+    for (const Timer &t : timers_) {
+        n += t.id != 0 && t.owner == pid;
+    }
+    return n;
+}
+
+proc::Pid Wm::timer_owner(int id) const
+{
+    for (const Timer &t : timers_) {
+        if (id != 0 && t.id == id) {
+            return t.owner;
+        }
+    }
+    return 0;
+}
+
+Window *Wm::main_window_of(proc::Pid pid) const
+{
+    Window *any = nullptr;
+    for (int i = 0; i < count_; i++) {
+        Window *w = order_[i];
+        if (w->owner_ != pid) {
+            continue;
+        }
+        if (!(w->modal_ && w->modal_owner_ != nullptr)) {
+            return w;
+        }
+        any = any != nullptr ? any : w;
+    }
+    return any;
+}
+
+void Wm::reap()
+{
+    if (procs_ == nullptr) {
+        return;
+    }
+    for (int i = procs_->count() - 1; i >= 0; i--) {
+        const proc::Process &p = procs_->at(i);
+        if (!p.is(proc::kWindowed) || windows_of(p.pid) != 0) {
+            continue;
+        }
+        const proc::Pid pid = p.pid;
+        for (Timer &t : timers_) {
+            if (t.id != 0 && t.owner == pid) {
+                t.id = 0;
+            }
+        }
+        procs_->exit(pid);
+    }
 }
 
 void Wm::raise(Window &w)
@@ -306,7 +387,10 @@ void Wm::toggle_maximize(Window &w)
         w.frame_ = work_area();
         w.state_ = WindowState::Maximized;
     }
-    w.resized();
+    {
+        const proc::Scope as(procs_, w.owner_);
+        w.resized();
+    }
     invalidate(w.frame_);
 }
 
@@ -328,7 +412,10 @@ void Wm::resize(Window &w, const Rect &frame)
     }
     invalidate(w.frame_);
     w.frame_ = frame;
-    w.resized();
+    {
+        const proc::Scope as(procs_, w.owner_);
+        w.resized();
+    }
     invalidate(w.frame_);
 }
 
@@ -542,6 +629,7 @@ Rect Wm::desktop_icon_rect(int index) const
 
 void Wm::key(uint16_t usage, bool pressed)
 {
+    const proc::Scope desktop(procs_, desktop_pid_);
     const uint32_t start = clock_.micros();
     last_input_us_ = now_us();
     if (saver_on_ && pressed) {
@@ -562,7 +650,7 @@ void Wm::key(uint16_t usage, bool pressed)
         // A held key repeats, after a pause counted from the end of its own
         // handling: a press that took long (a save) does not repeat at once.
         repeat_usage_ = usage;
-        repeat_timer_ = start_timer(kRepeatDelayUs, kRepeatUs, &Wm::key_repeat, this);
+        repeat_timer_ = start_timer_for(desktop_pid_, kRepeatDelayUs, kRepeatUs, &Wm::key_repeat, this);
     }
     update();
     event_done(start);
@@ -570,6 +658,7 @@ void Wm::key(uint16_t usage, bool pressed)
 
 void Wm::event_done(uint32_t start)
 {
+    reap();
     last_event_us_ = clock_.micros() - start;
     busy_us_ += last_event_us_;
 }
@@ -628,7 +717,10 @@ void Wm::handle_key(uint16_t usage, bool pressed)
         set_outline(outline_, false);
         set_drop_icon(-1);
         if (drop_window_ != nullptr) {
-            drop_window_->drag_over(nullptr, -1, -1);
+            {
+                const proc::Scope as(procs_, drop_window_->owner_);
+                drop_window_->drag_over(nullptr, -1, -1);
+            }
             drop_window_ = nullptr;
         }
         desktop_target_ = false;
@@ -649,8 +741,11 @@ void Wm::handle_key(uint16_t usage, bool pressed)
         } else if (menu_open()) {
             used = menu_key(k);
         } else if ((mods_ & kAlt) && usage == key::F4) {
-            if (active_ != nullptr && active_->close_requested()) {
-                close(*active_);
+            if (active_ != nullptr) {
+                const proc::Scope as(procs_, active_->owner_);
+                if (active_->close_requested()) {
+                    close(*active_);
+                }
             }
             used = true;
         } else if ((mods_ & kAlt) && usage == key::Tab) {
@@ -672,6 +767,7 @@ void Wm::handle_key(uint16_t usage, bool pressed)
         used = true;
     }
     if (!used && bit == 0 && active_ != nullptr) {
+        const proc::Scope as(procs_, active_->owner_);
         used = active_->key(k);
         // Keys the window did not use may type a character.
         if (!used && pressed && !(mods_ & (kCtrl | kAlt | kGui))) {
@@ -685,6 +781,7 @@ void Wm::handle_key(uint16_t usage, bool pressed)
 
 void Wm::text(const char *utf8)
 {
+    const proc::Scope desktop(procs_, desktop_pid_);
     const uint32_t start = clock_.micros();
     last_input_us_ = now_us();
     if (saver_on_) {
@@ -693,6 +790,7 @@ void Wm::text(const char *utf8)
     }
     if (!menu_open() && active_ != nullptr && screen_fn_ == nullptr) {
         caret_moved();
+        const proc::Scope as(procs_, active_->owner_);
         active_->text(utf8);
     }
     update();
@@ -701,6 +799,7 @@ void Wm::text(const char *utf8)
 
 void Wm::mouse(const ports::MouseEvent &event)
 {
+    const proc::Scope desktop(procs_, desktop_pid_);
     if (screen_fn_ != nullptr) {
         return;
     }
@@ -947,7 +1046,10 @@ void Wm::on_press()
         capture_ = Capture::Client;
         const Rect c = w->client();
         const bool twice = double_click(2000 + w->id_);
-        w->mouse({MouseKind::Down, x - c.x, y - c.y, twice});
+        {
+            const proc::Scope as(procs_, w->owner_);
+            w->mouse({MouseKind::Down, x - c.x, y - c.y, twice});
+        }
         break;
     }
     case Part::Border: {
@@ -983,7 +1085,10 @@ void Wm::on_right_press()
     }
     activate(*w);
     const Rect c = w->client();
-    w->right_click(pointer_x_ - c.x, pointer_y_ - c.y);
+    {
+        const proc::Scope as(procs_, w->owner_);
+        w->right_click(pointer_x_ - c.x, pointer_y_ - c.y);
+    }
 }
 
 void Wm::on_move()
@@ -1002,7 +1107,7 @@ void Wm::on_move()
             if (item >= 0 && item != popups_[level].hover) {
                 switch_level_ = level;
                 switch_item_ = item;
-                switch_timer_ = start_timer(kSubmenuDelayUs, 0, &Wm::switch_due, this);
+                switch_timer_ = start_timer_for(desktop_pid_, kSubmenuDelayUs, 0, &Wm::switch_due, this);
             }
         } else if (level >= 0) {
             stop_timer(switch_timer_); // in the deepest menu: no hand-over
@@ -1019,7 +1124,7 @@ void Wm::on_move()
                         // A submenu opens after a short rest on its entry.
                         submenu_level_ = level;
                         submenu_item_ = item;
-                        submenu_timer_ = start_timer(kSubmenuDelayUs, 0, &Wm::submenu_due, this);
+                        submenu_timer_ = start_timer_for(desktop_pid_, kSubmenuDelayUs, 0, &Wm::submenu_due, this);
                     }
                 }
             }
@@ -1092,7 +1197,10 @@ void Wm::on_move()
     }
     case Capture::Client: {
         const Rect c = captured_->client();
-        captured_->mouse({MouseKind::Move, x - c.x, y - c.y});
+        {
+            const proc::Scope as(procs_, captured_->owner_);
+            captured_->mouse({MouseKind::Move, x - c.x, y - c.y});
+        }
         break;
     }
     case Capture::Icon:
@@ -1149,6 +1257,7 @@ void Wm::update_drop_target()
         if (w != nullptr) {
             if ((sys == nullptr || sys == w) && blocker(*w) == nullptr && part_at(*w, x, y) == Part::Client) {
                 const Rect c = w->client();
+                const proc::Scope as(procs_, w->owner_);
                 if (w->drag_over(drag_path_, x - c.x, y - c.y)) {
                     target = w;
                 }
@@ -1170,7 +1279,10 @@ void Wm::update_drop_target()
     desktop_target_ = on_desktop;
     set_drop_icon(icon);
     if (drop_window_ != nullptr && drop_window_ != target) {
-        drop_window_->drag_over(nullptr, -1, -1);
+        {
+            const proc::Scope as(procs_, drop_window_->owner_);
+            drop_window_->drag_over(nullptr, -1, -1);
+        }
     }
     drop_window_ = target;
 }
@@ -1198,6 +1310,7 @@ void Wm::on_release()
         invalidate(title_button(*w, captured_part_));
         if (captured_inside_) {
             if (captured_part_ == Part::Close) {
+                const proc::Scope as(procs_, w->owner_);
                 if (w->close_requested()) {
                     close(*w);
                 }
@@ -1216,7 +1329,10 @@ void Wm::on_release()
         break;
     case Capture::Client: {
         const Rect c = w->client();
-        w->mouse({MouseKind::Up, pointer_x_ - c.x, pointer_y_ - c.y});
+        {
+            const proc::Scope as(procs_, w->owner_);
+            w->mouse({MouseKind::Up, pointer_x_ - c.x, pointer_y_ - c.y});
+        }
         break;
     }
     case Capture::Item: {
@@ -1234,6 +1350,7 @@ void Wm::on_release()
         } else if (on_desktop) {
             desktop_drop_(path, desktop_drop_context_);
         } else if (target != nullptr) {
+            const proc::Scope as(procs_, target->owner_);
             target->drag_over(nullptr, -1, -1);
             const Rect c = target->client();
             target->dropped(path, pointer_x_ - c.x, pointer_y_ - c.y);
@@ -1372,7 +1489,9 @@ void Wm::open_popup(Menu &menu, int x, int y, bool start, bool below_point)
         r.y = height_ - r.h;
     }
     r.y = r.y < 0 ? 0 : r.y;
-    popups_[popup_count_++] = {&menu, r, -1, start};
+    // A submenu runs for whoever its parent menu runs for.
+    const proc::Pid owner = popup_count_ > 0 ? popups_[popup_count_ - 1].owner : current_pid();
+    popups_[popup_count_++] = {&menu, r, -1, start, owner};
     invalidate(r);
 }
 
@@ -1446,6 +1565,7 @@ void Wm::open_start_menu()
         return;
     }
     close_menus();
+    const proc::Scope as(procs_, desktop_pid_);
     open_popup(*start_menu_, 0, height_ - kTaskbarHeight, true, false);
     start_open_ = true;
     invalidate(taskbar_button(-1));
@@ -1457,6 +1577,7 @@ void Wm::open_menu_bar(Window &w, int entry)
         return;
     }
     close_menus();
+    const proc::Scope as(procs_, w.owner_); // the menu's actions are the window's
     w.menu_opening(entry);
     menu_window_ = &w;
     menu_entry_ = entry;
@@ -1519,6 +1640,7 @@ void Wm::choose(int level, int item)
     }
     void (*action)(void *) = it.action;
     void *context = it.context;
+    const proc::Scope as(procs_, popups_[level].owner);
     close_menus();
     if (action != nullptr) {
         action(context);
@@ -1802,6 +1924,7 @@ void Wm::paint_window(Window &w, const RectList &clip)
     }
     const Rect c = w.client();
     Canvas client(pixels, width_, height_, clip, c, c.x, c.y);
+    const proc::Scope as(procs_, w.owner_);
     if (w.layered()) {
         client.layered({0, 0, c.w, c.h}, [&](Canvas &l) { w.paint(l); });
     } else {
@@ -2012,9 +2135,14 @@ uint64_t Wm::now_us()
 
 int Wm::start_timer(uint32_t delay_us, uint32_t period_us, TimerFn fn, void *context)
 {
+    return start_timer_for(current_pid(), delay_us, period_us, fn, context);
+}
+
+int Wm::start_timer_for(proc::Pid owner, uint32_t delay_us, uint32_t period_us, TimerFn fn, void *context)
+{
     for (Timer &t : timers_) {
         if (t.id == 0) {
-            t = {fn, context, now_us() + delay_us, period_us, next_timer_id_++};
+            t = {fn, context, now_us() + delay_us, period_us, next_timer_id_++, owner};
             if (next_timer_id_ <= 0) {
                 next_timer_id_ = 1;
             }
@@ -2038,6 +2166,7 @@ void Wm::stop_timer(int id)
 
 void Wm::tick()
 {
+    const proc::Scope desktop(procs_, desktop_pid_);
     const uint32_t start = clock_.micros();
     const uint64_t now = now_us();
     for (Timer &t : timers_) {
@@ -2046,6 +2175,7 @@ void Wm::tick()
         }
         const TimerFn fn = t.fn;
         void *context = t.context;
+        const proc::Scope as(procs_, t.owner);
         if (t.period != 0) {
             t.due += t.period;
             if (t.due <= now) {
@@ -2063,6 +2193,7 @@ void Wm::tick()
         start_screen_saver();
     }
     update();
+    reap();
     busy_us_ += clock_.micros() - start;
 }
 
@@ -2085,7 +2216,7 @@ void Wm::caret_moved()
     caret_on_ = true;
     stop_timer(blink_timer_);
     if (blink_timer_ != 0) {
-        blink_timer_ = start_timer(kBlinkUs, kBlinkUs, &Wm::blink, this);
+        blink_timer_ = start_timer_for(desktop_pid_, kBlinkUs, kBlinkUs, &Wm::blink, this);
     }
 }
 
@@ -2243,7 +2374,7 @@ size_t Wm::describe_windows(char *out, size_t capacity)
         if (z > 0) {
             puts(",");
         }
-        snprintf(number, sizeof(number), "{\"id\":%d,\"z\":%d,\"title\":\"", w.id_, z);
+        snprintf(number, sizeof(number), "{\"id\":%d,\"pid\":%d,\"z\":%d,\"title\":\"", w.id_, w.owner_, z);
         puts(number);
         for (const char *p = w.title_; *p != 0; p++) {
             if (*p == '"' || *p == '\\') {
