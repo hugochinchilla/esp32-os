@@ -342,3 +342,30 @@ Built from a fresh sdkconfig with main merged in (e1993b2), flashed, checked:
    desktop 14.30 ms against 14.07 ms (within the noise). Video: 0 late, 0
    missed refills.
 
+## After the board check (added 2026-11-16)
+
+The branch passed its six checks and was merged into `main` (8ad0047). Two of
+this entry's figures were wrong, and the board corrected both. The text above
+is left as it was written.
+
+- **The PID order.** Section 3.6 predicted `netd` 3. On the board it is
+  init 1, dbgd 2, vncd 3, httpd 4, desktop 5, netd 6. The reason is the order
+  of the start-up code, which the prediction did not follow to the end: the
+  board opens the VNC and web ports before it starts the shell, and the shell
+  starts the network last. The PC test had the right order for its own
+  start-up (no VNC there: dbgd 2, desktop 3, netd 4), which is why it did not
+  catch the difference. The numbers will change again when init starts the
+  services from its file (item 18).
+- **The memory.** Section 3.5 says the table takes about 1.2 KB. That is true
+  of the table. The whole change costs 3.2 KB of internal RAM, measured. The
+  rest is Task Manager: it keeps the text of up to 32 rows, 48 characters
+  each (1.5 KB), plus their PIDs and pointers (0.4 KB), as fixed storage
+  whether its window is open or not. With about 100 KB of internal RAM free
+  that is 3 % of what is left. If it has to come back, the rows are the place
+  to look: they could live in external RAM, or be built for the visible lines
+  only.
+- **One thing the PC could not see.** `tools/dbg.py windows` did not print
+  the new `pid`: the reply carried it and the tool's table had no column for
+  it. The board thread added it at the merge. The PC test checks the reply,
+  not what the tool prints.
+
