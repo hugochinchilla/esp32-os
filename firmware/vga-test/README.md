@@ -71,3 +71,16 @@ uses the colours where each of red, green and blue has two bits.
 - Press `c` to try the other pixel clocks.
 - If the picture drifts sideways or tears, set `VGA_BOUNCE_PX` to `10 * H_RES`
   in `main/vga_test.c` and rebuild.
+
+## No picture: checks with a multimeter
+
+Press `w` for a whole white screen, then measure DC volts against GND:
+
+| Where | Expected | Meaning if different |
+| --- | --- | --- |
+| GPIO9 (HSYNC) at the ESP32 pin | about 2.9 V (31.5 kHz if the meter reads frequency) | 3.3 V or 0 V: the firmware is not producing video |
+| GPIO10 (VSYNC) at the ESP32 pin | about 3.3 V (60 Hz if the meter reads frequency) | 0 V: no video |
+| GPIO4 (red top bit) at the ESP32 pin | about 2.4 V | 3.3 V: colour is not blanked between lines; 0 V: no data |
+| Red, green, blue at the VGA plug, adapter connected | about 0.5 V | 0 V: break between the resistors and the plug |
+| HSYNC (pin 13) at the VGA plug | about 2.9 V | wire mapped to the wrong pin |
+| ESP32 GND to the metal shell of the VGA plug | continuity | no shared ground |

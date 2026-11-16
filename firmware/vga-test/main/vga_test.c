@@ -194,6 +194,16 @@ static void draw_card(color_mode_t mode)
     }
 }
 
+/* Whole screen white, for checking the signals with a multimeter. */
+static void draw_white(void)
+{
+    static uint8_t line[H_RES];
+    memset(line, WHITE, sizeof(line));
+    for (int y = 0; y < V_RES; y++) {
+        esp_lcd_panel_draw_bitmap(s_panel, 0, y, H_RES, y + 1, line);
+    }
+}
+
 static void show_mode(color_mode_t mode)
 {
     s_mode = mode;
@@ -262,6 +272,7 @@ static void print_help(void)
            "  1  show the 64-colour card and stay there\n"
            "  2  show the 256-colour card and stay there\n"
            "  a  auto: switch between the two every 10 seconds\n"
+           "  w  whole screen white and stay there (for multimeter checks)\n"
            "  c  try the next pixel clock\n"
            "  r  restart the video output\n"
            "  i  print status\n"
@@ -286,6 +297,11 @@ static void handle_key(char key)
     case '2':
         s_auto = false;
         show_mode(MODE_256);
+        break;
+    case 'w':
+        s_auto = false;
+        draw_white();
+        printf("white screen\n");
         break;
     case 'a':
         s_auto = true;
