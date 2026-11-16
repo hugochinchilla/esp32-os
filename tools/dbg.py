@@ -11,6 +11,7 @@ The protocol is described in docs/debug-protocol.md.
   tools/dbg.py key tap enter
   tools/dbg.py type "hello"
   tools/dbg.py stats
+  tools/dbg.py tasks                      # the kernel's tasks and their processor time
   tools/dbg.py monitor                    # show the board's log text
 
 The port comes from --port, else the DBG_PORT variable, else /dev/ttyACM0 (the board's UART bridge on the bench).
@@ -33,6 +34,7 @@ WINDOWS, REPAINT, TEXT, TIME, ANIMATIONS = 8, 9, 10, 11, 12
 FILE_LIST, FILE_READ, FILE_WRITE, FILE_DELETE, FILE_MKDIR = 13, 14, 15, 16, 17
 BOOT_SCREEN = 18
 MEMORY_REPORT = 19
+TASKS = 20
 WIFI = 0x20
 MAX_REQUEST = 1024  # largest request payload the board takes
 LOG, HELLO, SHOT_DATA, SHOT_END = 0x70, 0x71, 0x72, 0x73
@@ -315,6 +317,26 @@ class Board:
     def memory_report(self):
         """Where the board's memory goes: heaps and task stacks, as text."""
         return self.request(MEMORY_REPORT).decode("utf-8", "replace")
+
+    TASK_STATES = ("running", "ready", "blocked", "suspended", "deleted", "unknown")
+
+    def tasks(self):
+        """The kernel's tasks. Returns (totals, tasks): totals has clock_us
+        (the clock the run times are counted on), cores and left_out; each
+        task has id, name, state, priority, core (None: either), run_us,
+        stack_free (bytes never used) and stack ("internal" or "psram")."""
+        body = self.request(TASKS)
+        clock_us, cores, count, left_out = struct.unpack_from("<QBBB", body)
+        tasks, at = [], 11
+        for _ in range(count):
+            ident, state, priority, core, flags, run_us, stack_free, size = struct.unpack_from("<HBBbBQIB", body, at)
+            at += 19
+            tasks.append({"id": ident, "name": body[at:at + size].decode("utf-8", "replace"),
+                          "state": self.TASK_STATES[min(state, 5)], "priority": priority,
+                          "core": None if core < 0 else core, "run_us": run_us,
+                          "stack_free": stack_free, "stack": "psram" if flags & 1 else "internal"})
+            at += size
+        return {"clock_us": clock_us, "cores": cores, "left_out": left_out}, tasks
 
     def boot_screen(self, which):
         """Shows a start-up screen again ("selftest" runs the checks again,
@@ -613,6 +635,42 @@ def wifi_command(board, args):
         board.wifi_forget(args.ssid)
 
 
+def task_table(totals, tasks, earlier=None):
+    """The task list as lines of text, busiest first. Shares are of one
+    core, so two cores add up to 200 %. With `earlier` (the result of an
+    earlier Board.tasks()) there is also a column for the time between the
+    two; a task that started in between is counted from zero."""
+    def share(run_us, clock_us):
+        return "%5.1f" % (100.0 * run_us / clock_us) if clock_us > 0 else "    -"
+
+    before = {t["id"]: t["run_us"] for t in earlier[1]} if earlier else {}
+    span = totals["clock_us"] - earlier[0]["clock_us"] if earlier else 0
+    rows = []
+    for t in tasks:
+        recent = t["run_us"] - before.get(t["id"], 0)
+        rows.append((recent if earlier else t["run_us"], t, recent))
+    rows.sort(key=lambda r: (-r[0], r[1]["name"]))
+    lines = ["%4s  %-16s %-9s %4s %4s %7s%s %12s  %6s %s" % (
+        "ID", "NAME", "STATE", "PRI", "CORE", "%START", "    %NOW" if earlier else "", "TIME", "STACK", "IN")]
+    for _, t, recent in rows:
+        seconds = t["run_us"] / 1e6
+        lines.append("%4d  %-16s %-9s %4d %4s %7s%s %12s  %6d %s" % (
+            t["id"], t["name"], t["state"], t["priority"], "-" if t["core"] is None else t["core"],
+            share(t["run_us"], totals["clock_us"]), "   " + share(recent, span) if earlier else "",
+            "%d:%06.3f" % (seconds // 60, seconds % 60), t["stack_free"], t["stack"]))
+    idle = sum(t["run_us"] for t in tasks if t["name"].startswith("IDLE"))
+    summary = "%d tasks on %d cores, up %.1f s, idle %s %% of %d00 %% since start" % (
+        len(tasks), totals["cores"], totals["clock_us"] / 1e6, share(idle, totals["clock_us"]).strip(),
+        totals["cores"])
+    if earlier:
+        idle_now = sum(t["run_us"] - before.get(t["id"], 0) for t in tasks if t["name"].startswith("IDLE"))
+        summary += ", %s %% in the last %.2f s" % (share(idle_now, span).strip(), span / 1e6)
+    lines.append(summary)
+    if totals["left_out"]:
+        lines.append("%d more tasks did not fit in the reply" % totals["left_out"])
+    return lines
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Debug tool for the board.")
     parser.add_argument("--port", default=os.environ.get("DBG_PORT", "/dev/ttyACM0"))
@@ -647,6 +705,10 @@ def main(argv=None):
     p.add_argument("state", choices=["on", "off"])
     sub.add_parser("repaint", help="paint the whole screen again and time it")
     sub.add_parser("memory", help="where the memory goes: heaps and task stacks")
+    p = sub.add_parser("tasks", help="the kernel's tasks: state, priority, core, processor time, unused stack")
+    p.add_argument("--interval", type=float, default=1.0,
+                   help="seconds between the two readings behind the %%NOW column (default 1; 0: one reading)")
+    p.add_argument("--json", action="store_true", help="the last reading as JSON")
     p = sub.add_parser("boot", help="show a start-up screen again (repaint brings the desktop back)")
     p.add_argument("screen", choices=["selftest", "splash", "fast-next"],
                    help="fast-next: show nothing, make the next start a fast one (for before flashing)")
@@ -749,6 +811,16 @@ def main(argv=None):
             print("repainted in %d us" % board.repaint())
         elif args.command == "memory":
             print(board.memory_report(), end="")
+        elif args.command == "tasks":
+            earlier = None
+            if args.interval > 0:
+                earlier = board.tasks()
+                time.sleep(args.interval)
+            totals, tasks = board.tasks()
+            if args.json:
+                print(json.dumps({"totals": totals, "tasks": tasks}, indent=1))
+            else:
+                print("\n".join(task_table(totals, tasks, earlier)))
         elif args.command == "boot":
             board.boot_screen(args.screen)
             if args.screen == "fast-next":

@@ -67,6 +67,8 @@ and the same sequence number. Every reply payload starts with a status byte:
 | 0x10 | File delete | Path | None. A file, or an empty folder |
 | 0x11 | Make folder | Path | None |
 | 0x12 | Boot screen | One byte: 0 the self-test again, 1 the splash, 2 nothing shown but the next start is a fast one, once | None. Repaint brings the desktop back |
+| 0x13 | Memory report | None | Text: heaps, video timing and task stacks |
+| 0x14 | Tasks | None | The kernel's tasks, see below. Unknown command when the firmware keeps no run-time statistics |
 
 - The board replies to Key, Mouse and Text before acting on them, so an event
   that restarts the board (Restart in the Shut Down dialog) still gets its
@@ -135,6 +137,41 @@ such as "not found" or "the folder is not empty". `tools/dbg.py` has
 `ls`, `get`, `put`, `rm` and `mkdir`; `put` sends about 1000 bytes per
 request (150 KB takes 3 seconds each way on the board). C: on the board is a
 RAM disk: what is put there is lost at restart.
+
+## Tasks
+
+The Tasks reply lists every FreeRTOS task. After the status byte:
+
+| Bytes | Field |
+| --- | --- |
+| 8 | The clock the run times are counted on, in µs since start-up |
+| 1 | Processor cores. Each can give one clock's worth of run time, so the run times add up to at most cores × clock |
+| 1 | Tasks that follow |
+| 1 | Tasks left out because the reply was full (29 fit with the longest names) |
+
+Then, per task:
+
+| Bytes | Field |
+| --- | --- |
+| 2 | The kernel's number for the task. It keeps it for life, so two replies can be matched by it |
+| 1 | State: 0 running, 1 ready, 2 blocked, 3 suspended, 4 deleted, 5 unknown |
+| 1 | Priority; higher runs first |
+| 1 | The core it is tied to, or 0xFF for either. Not the core it is on right now |
+| 1 | Flags: bit 0, its stack is in external RAM |
+| 8 | Processor time in µs since start-up. Interrupts that arrive while a task runs count as that task's time |
+| 4 | Bytes of its stack never used so far |
+| 1 + n | Name length, name |
+
+The board sends counters, not percentages: whoever asks takes two replies and
+divides the differences. `tools/dbg.py tasks` does that one second apart
+(`--interval`) and prints the share of one core since start-up (`%START`) and
+between the two replies (`%NOW`), busiest first; `--json` prints the last
+reply. Programs on the desktop share the `ui` task and do not appear on their
+own.
+
+Reading the list stops task switching on the board for a moment while the
+kernel copies it, so it is for a look now and then, not for polling many times
+a second.
 
 ## Wi-Fi
 
