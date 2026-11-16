@@ -312,4 +312,6 @@ has been closed.
   because everything runs on the UI task. The first item that starts a process
   from another task (jobs in item 10, shell sessions in item 13) must give the
   table a lock and make "current" a per-task value.
-- To confirm with the owner: the choices in 3.2, 3.6 (the names) and 3.7.
+- To confirm with the owner: the choices in 3.2 and 3.6 (the names). He
+  confirmed 3.7 the same evening, asked with the three options and the two
+  pictures: programs by default, plus the "Show all processes" box.

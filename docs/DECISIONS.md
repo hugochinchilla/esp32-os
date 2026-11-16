@@ -1087,6 +1087,7 @@ change.
   processes" shows the whole table. This replaces "every window that has a
   taskbar button" in the section above. End Task closes all the windows of
   the process; on a process without windows it says it cannot yet (signals,
-  item 5). The other options were always the whole table, or two tabs.
+  item 5). The other options were always the whole table, or two tabs. **Confirmed by
+  the owner, 2026-11-16**, on a card with those three options.
 - The table has no lock: one task uses it. The first item that starts a
   process from another task has to add one.
