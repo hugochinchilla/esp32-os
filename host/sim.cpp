@@ -16,6 +16,9 @@
 #include "core/fs/memory_volume.hpp"
 #include "core/shell/boot.hpp"
 #include "core/shell/shell.hpp"
+#include "core/net/posix_tcp.hpp"
+#include "core/net/rfb.hpp"
+#include "core/net/web.hpp"
 #include "core/net/wifi.hpp"
 #include "fake_wifi.hpp"
 #include "folder_volume.hpp"
@@ -45,7 +48,10 @@ private:
 
 } // namespace
 
-// ./sim [folder]: the folder, if given, is drive D:.
+// ./sim [folder [vnc-port [web-port]]]: the folder, if given, is drive D:;
+// with a port, the remote screen (VNC) is offered on it, and with a second
+// one the viewer page for a browser (http://localhost:web-port/). Both to
+// this computer only.
 int main(int argc, char **argv)
 {
     int fd = posix_openpt(O_RDWR | O_NOCTTY);
@@ -117,6 +123,29 @@ int main(int argc, char **argv)
     protocol.set_counters(shell::picture_timings(), shell::kPictureTimings);
     screen.start();
 
+    // The remote screen, for a VNC viewer on this computer.
+    static rfb::Server remote(display, pointer, screen, clock, memory);
+    static net::PosixTcpListener vnc_port;
+    screen.set_damage_listener([](const gfx::Rect &r, void *) { remote.damage(r); }, nullptr);
+    if (argc > 2) {
+        if (vnc_port.listen(atoi(argv[2]), true)) {
+            remote.set_listener(&vnc_port);
+        } else {
+            fprintf(stderr, "cannot listen on port %s\n", argv[2]);
+        }
+    }
+    static net::PosixTcpPool web_port;
+    static net::WebGate web;
+    if (argc > 3) {
+        if (web_port.listen(atoi(argv[3]), true)) {
+            web.set_port(&web_port);
+            web.set_page(net::viewer_page(), net::viewer_page_size());
+            remote.set_listener(&web, 1);
+        } else {
+            fprintf(stderr, "cannot listen on port %s\n", argv[3]);
+        }
+    }
+
     // A real board first prints start-up text that is not part of the
     // protocol, then says hello.
     const char boot[] = "boot text outside the protocol\r\n";
@@ -131,9 +160,10 @@ int main(int argc, char **argv)
             protocol.feed(buffer, static_cast<size_t>(got));
         } else {
             // Nobody has the other end open yet (or any more).
-            usleep(10000);
+            usleep(vnc_port.listening() ? 2000 : 10000);
         }
         screen.tick();
+        remote.poll();
     }
     return 0;
 }
