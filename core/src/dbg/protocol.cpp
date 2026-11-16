@@ -157,6 +157,14 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
         reply(type, seq, kOk, nullptr, 0);
         break;
 
+    case kMemoryReport: {
+        static char text[kMaxReplyPayload];
+        const size_t n = system_.memory_report(text, sizeof(text));
+        reply(type, seq, n > 0 ? kOk : kUnknownCommand, reinterpret_cast<const uint8_t *>(text),
+              static_cast<uint16_t>(n));
+        break;
+    }
+
     case kBootScreen:
         if (boot_show_ == nullptr || args_size != 1 || args[0] > 1) {
             reply(type, seq, boot_show_ == nullptr ? kUnknownCommand : kBadArguments, nullptr, 0);

@@ -32,6 +32,7 @@ PING, INFO, SCREENSHOT, KEY, MOUSE, STATS, REBOOT = 1, 2, 3, 4, 5, 6, 7
 WINDOWS, REPAINT, TEXT, TIME, ANIMATIONS = 8, 9, 10, 11, 12
 FILE_LIST, FILE_READ, FILE_WRITE, FILE_DELETE, FILE_MKDIR = 13, 14, 15, 16, 17
 BOOT_SCREEN = 18
+MEMORY_REPORT = 19
 WIFI = 0x20
 MAX_REQUEST = 1024  # largest request payload the board takes
 LOG, HELLO, SHOT_DATA, SHOT_END = 0x70, 0x71, 0x72, 0x73
@@ -308,6 +309,10 @@ class Board:
 
     def animations(self, on):
         self.request(ANIMATIONS, b"\x01" if on else b"\x00")
+
+    def memory_report(self):
+        """Where the board's memory goes: heaps and task stacks, as text."""
+        return self.request(MEMORY_REPORT).decode("utf-8", "replace")
 
     def boot_screen(self, which):
         """Shows a start-up screen again ("selftest" runs the checks again,
@@ -627,6 +632,7 @@ def main(argv=None):
     p = sub.add_parser("animations", help="caret blinking on or off (off for stable screenshots)")
     p.add_argument("state", choices=["on", "off"])
     sub.add_parser("repaint", help="paint the whole screen again and time it")
+    sub.add_parser("memory", help="where the memory goes: heaps and task stacks")
     p = sub.add_parser("boot", help="show a start-up screen again (repaint brings the desktop back)")
     p.add_argument("screen", choices=["selftest", "splash"])
     p = sub.add_parser("wifi", help="Wi-Fi: status, scan, connect (asks for the password), disconnect, forget")
@@ -726,6 +732,8 @@ def main(argv=None):
             board.animations(args.state == "on")
         elif args.command == "repaint":
             print("repainted in %d us" % board.repaint())
+        elif args.command == "memory":
+            print(board.memory_report(), end="")
         elif args.command == "boot":
             board.boot_screen(args.screen)
             print("showing the %s screen; dbg.py repaint brings the desktop back" % args.screen)

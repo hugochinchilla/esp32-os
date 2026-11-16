@@ -205,6 +205,14 @@ enum class Fact : uint8_t {
 class System {
 public:
     virtual void stats(SystemStats &out) = 0;
+    // A plain-text report of where memory goes (heaps, task stacks), for
+    // the debug link; returns its length (0: not available).
+    virtual size_t memory_report(char *out, size_t capacity)
+    {
+        (void)out;
+        (void)capacity;
+        return 0;
+    }
     virtual bool fact(Fact which, uint32_t &value, char *text, size_t capacity)
     {
         (void)which;

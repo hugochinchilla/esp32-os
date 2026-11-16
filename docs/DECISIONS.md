@@ -62,6 +62,15 @@ it can later be split into two over-the-air update slots of about 1.9 MB
 without moving C:). C: is LittleFS on the 12 MB above it. A larger C: with no
 room kept for updates was the alternative.
 
+### Remote screen access (2026-11-16)
+
+Decided by the owner: as built. The VNC server (port 5900) and the browser
+page (port 80) start whenever Wi-Fi is on, ask for no password, and give
+full mouse and keyboard control of the board to anything on the local
+network that can reach it (nothing from the internet unless the router
+forwards those ports). An off-by-default switch in C:\.config\remote.ini
+and a password were offered and can be revisited.
+
 ### Program settings (2026-11-16)
 
 Decided by the owner. Each program keeps its settings in its own plain text
@@ -105,7 +114,6 @@ other threads do not merge their own work.
 | Remote keyboard, mouse and screen for a person | VNC server, web page, debug tool only | VNC server |
 | How apps are delivered | Built into the firmware, or loadable from disk | Built in first, behind an app interface. Still the owner's question; the shell works on that assumption: programs are entries in a table (`core/include/core/shell/shell.hpp`: name, icon, open function) that the Start menu and desktop icons launch the same way |
 | Shell details chosen while building menus, the Start menu and widgets; to confirm or overrule | See "Chosen in the shell milestone" below | As built |
-| Who may use the remote screen | As built (VNC on 5900 and the browser page on 80 for anyone on the local network, no password, always on with Wi-Fi); off by default with a switch in a settings file; a password (VNC authentication, and the same for the page) | Asked. Anything that can reach the board on the network gets full mouse and keyboard control. Nothing is reachable from the internet unless the router forwards the ports |
 | A RAM disk as well as C: | Drop it, or keep a small one as a separate temporary drive | Dropped with LittleFS, since nothing needs it; the RAM disk code stays for the PC tests and the simulator |
 | Details chosen in the files milestone; to confirm or overrule | See "Chosen in the files milestone" below | As built |
 | Details chosen in the image viewer milestone; to confirm or overrule | See "Chosen in the image viewer milestone" below | As built |
@@ -232,6 +240,21 @@ First picture: 2026-11-16, through a VGA-to-HDMI adapter.
   partly the camera's compression of fine detail; it is the one pattern
   where shimmer can be seen. The longest timer slice while decoding was
   21 to 31 ms with every dither.
+- Internal RAM with Wi-Fi (2026-11-16, `tools/dbg.py memory`). Before:
+  internal heap 276 KB, 110 KB free, lowest 78 KB since start, largest block
+  37 KB; a VNC viewer costs about 0.1 KB more. Task stacks: the UI task uses
+  at most 6.3 KB of its 16 KB (after the viewer, dialogs, an Editor save, the
+  Task Manager); every other task is ESP-IDF's own and small. Measured one at
+  a time (Wi-Fi throughput as 300 KB full screens over VNC):
+  8 static Wi-Fi receive buffers instead of 16: +13.4 KB, throughput the
+  same; the Wi-Fi code out of internal RAM (ESP_WIFI_IRAM_OPT and
+  RX_IRAM_OPT off): +18 KB, throughput the same; mallocs over 4 KB in PSRAM
+  instead of over 16 KB: no change. Applied: the first two together give
+  142 KB free (lowest 109 KB, largest block 70 KB), 370 to 408 KB/s, 59.6
+  frames a second and a steady picture. Not applied (choices): the UI
+  task's stack at 12 KB (+4 KB, smaller margin for deep paths not yet
+  exercised); the UI task's stack in PSRAM (+16 KB, needs checking that flash
+  writes from that task stay safe).
 - Remote screen on the board (2026-11-16, PR 7's VNC and browser parts).
   VNC on port 5900: colours exact (0 pixels differ from the board's own
   screenshot), mouse and keys work, a full screen takes 0.37 s with ZRLE

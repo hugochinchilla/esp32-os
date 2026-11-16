@@ -17,6 +17,7 @@
 #include "esp_flash.h"
 #include "esp_heap_caps.h"
 #include "esp_private/esp_clk.h"
+#include "esp_memory_utils.h"
 #include "esp_psram.h"
 #include "esp_log.h"
 #include "esp_system.h"
@@ -148,6 +149,40 @@ public:
         out.free_external_ram = static_cast<uint32_t>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
         out.frames_shown = vga_frame_count();
         out.scanout_us = vga_fill_us();
+    }
+    size_t memory_report(char *out, size_t capacity) override
+    {
+        size_t n = 0;
+        auto add = [&](const char *format, auto... args) {
+            if (n < capacity) {
+                const int k = snprintf(out + n, capacity - n, format, args...);
+                n += k > 0 ? static_cast<size_t>(k) : 0;
+                n = n < capacity ? n : capacity - 1;
+            }
+        };
+        const struct {
+            const char *name;
+            uint32_t caps;
+        } heaps[] = {{"internal", MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT}, {"dma", MALLOC_CAP_DMA},
+                     {"psram", MALLOC_CAP_SPIRAM}};
+        for (const auto &h : heaps) {
+            add("%-8s total %7u free %7u lowest %7u largest %7u\n", h.name,
+                static_cast<unsigned>(heap_caps_get_total_size(h.caps)),
+                static_cast<unsigned>(heap_caps_get_free_size(h.caps)),
+                static_cast<unsigned>(heap_caps_get_minimum_free_size(h.caps)),
+                static_cast<unsigned>(heap_caps_get_largest_free_block(h.caps)));
+        }
+#if CONFIG_FREERTOS_USE_TRACE_FACILITY
+        static TaskStatus_t tasks[24];
+        const UBaseType_t count = uxTaskGetSystemState(tasks, 24, nullptr);
+        add("task stacks (unused bytes, where):\n");
+        for (UBaseType_t i = 0; i < count; i++) {
+            const bool in_psram = esp_ptr_external_ram(tasks[i].pxStackBase);
+            add("  %-14s %5u %s\n", tasks[i].pcTaskName, static_cast<unsigned>(tasks[i].usStackHighWaterMark),
+                in_psram ? "psram" : "internal");
+        }
+#endif
+        return n;
     }
     bool fact(ports::Fact which, uint32_t &value, char *text, size_t capacity) override
     {

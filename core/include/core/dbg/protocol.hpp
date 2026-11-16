@@ -39,7 +39,8 @@ enum FrameType : uint8_t {
     kFileWrite = 0x0F,  // part of a file
     kFileDelete = 0x10, // a file or an empty folder
     kFileMakeFolder = 0x11,
-    kBootScreen = 0x12, // draw a start-up screen now (0 self-test, 1 splash); Repaint brings the desktop back
+    kBootScreen = 0x12,
+    kMemoryReport = 0x13, // text: heaps and task stacks // draw a start-up screen now (0 self-test, 1 splash); Repaint brings the desktop back
     kWifi = 0x20,       // Wi-Fi: status, scan, list, connect, disconnect, forget
     // Sent by the board without being asked.
     kLog = 0x70,
