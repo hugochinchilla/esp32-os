@@ -530,6 +530,11 @@ Rect Wm::desktop_icon_rect(int index) const
 void Wm::key(uint16_t usage, bool pressed)
 {
     const uint32_t start = clock_.micros();
+    last_input_us_ = now_us();
+    if (saver_on_ && pressed) {
+        stop_screen_saver(); // the key only wakes the screen
+        return;
+    }
     const bool modifier = usage >= key::LeftCtrl && usage <= key::RightGui;
     if (!modifier) {
         // A held key repeats, after a pause, until it is let go.
@@ -656,6 +661,11 @@ void Wm::handle_key(uint16_t usage, bool pressed)
 void Wm::text(const char *utf8)
 {
     const uint32_t start = clock_.micros();
+    last_input_us_ = now_us();
+    if (saver_on_) {
+        stop_screen_saver();
+        return;
+    }
     if (!menu_open() && active_ != nullptr && screen_fn_ == nullptr) {
         caret_moved();
         active_->text(utf8);
@@ -674,14 +684,40 @@ void Wm::mouse(const ports::MouseEvent &event)
     int y = event.absolute ? event.y : pointer_y_ + event.y;
     x = x < 0 ? 0 : (x >= width_ ? width_ - 1 : x);
     y = y < 0 ? 0 : (y >= height_ ? height_ - 1 : y);
+    uint8_t buttons = event.buttons;
+    if (saver_on_) {
+        // The hidden pointer follows the mouse. A press or a real movement
+        // (not a nudge of the desk) wakes the screen and does nothing else.
+        const int dx = x - saver_x_, dy = y - saver_y_;
+        pointer_x_ = x;
+        pointer_y_ = y;
+        pointer_.set_position(x, y);
+        if (buttons != 0 || dx <= -kSaverWakeMove || dx >= kSaverWakeMove || dy <= -kSaverWakeMove ||
+            dy >= kSaverWakeMove) {
+            swallow_button_ = buttons & 1;
+            stop_screen_saver();
+            update_pointer_shape();
+        }
+        return;
+    }
+    if (swallow_button_) {
+        if (buttons & 1) {
+            buttons &= static_cast<uint8_t>(~1);
+        } else {
+            swallow_button_ = false;
+        }
+    }
+    if (x != pointer_x_ || y != pointer_y_ || buttons != buttons_) {
+        last_input_us_ = now_us();
+    }
     if (x != pointer_x_ || y != pointer_y_) {
         pointer_x_ = x;
         pointer_y_ = y;
         pointer_.set_position(x, y);
         on_move();
     }
-    const bool was = buttons_ & 1, now = event.buttons & 1;
-    buttons_ = event.buttons;
+    const bool was = buttons_ & 1, now = buttons & 1;
+    buttons_ = buttons;
     if (!was && now) {
         on_press();
     } else if (was && !now) {
@@ -690,6 +726,44 @@ void Wm::mouse(const ports::MouseEvent &event)
     update_pointer_shape();
     update();
     event_done(start);
+}
+
+/* ---- Screensaver ---------------------------------------------------------- */
+
+void Wm::set_screen_saver(ScreenSaver *saver, uint32_t idle_seconds)
+{
+    if (saver_on_ && saver != saver_) {
+        stop_screen_saver();
+    }
+    saver_ = saver;
+    saver_idle_us_ = static_cast<uint64_t>(idle_seconds) * 1000000;
+    last_input_us_ = now_us(); // the wait starts again
+}
+
+void Wm::start_screen_saver()
+{
+    if (saver_ == nullptr || saver_on_) {
+        return;
+    }
+    saver_on_ = true;
+    saver_x_ = pointer_x_;
+    saver_y_ = pointer_y_;
+    pointer_.set_visible(false);
+    saver_->begin(display_.pixels(), width_, height_, clock_.micros());
+    screen_saver_drew({0, 0, width_, height_});
+}
+
+void Wm::stop_screen_saver()
+{
+    if (!saver_on_) {
+        return;
+    }
+    saver_on_ = false;
+    last_input_us_ = now_us();
+    saver_->end(last_input_us_);
+    pointer_.set_visible(true);
+    invalidate({0, 0, width_, height_});
+    update();
 }
 
 bool Wm::double_click(int target)
@@ -1322,8 +1396,8 @@ void Wm::invalidate(const Rect &r)
 
 void Wm::update()
 {
-    if (dirty_.empty()) {
-        return;
+    if (dirty_.empty() || saver_on_) {
+        return; // the screensaver has the screen; all of it is painted when it ends
     }
     const uint32_t start = clock_.micros();
     if (screen_fn_ != nullptr) {
@@ -1371,6 +1445,7 @@ void Wm::take_over(ScreenFn paint, void *context)
 
 uint32_t Wm::repaint_all()
 {
+    stop_screen_saver();
     invalidate({0, 0, width_, height_});
     update();
     return last_update_us_;
@@ -1744,6 +1819,12 @@ void Wm::tick()
             t.id = 0;
         }
         fn(context);
+    }
+    if (saver_on_) {
+        saver_->tick(now);
+    } else if (saver_ != nullptr && saver_idle_us_ != 0 && buttons_ == 0 && capture_ == Capture::None &&
+               now - last_input_us_ >= saver_idle_us_) {
+        start_screen_saver();
     }
     update();
     busy_us_ += clock_.micros() - start;

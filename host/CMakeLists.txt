@@ -84,6 +84,9 @@ target_link_libraries(dither_eval PRIVATE core)
 add_executable(test_snake tests/test_snake.cpp)
 target_link_libraries(test_snake PRIVATE core)
 add_test(NAME snake COMMAND test_snake)
+add_executable(test_saver tests/test_saver.cpp)
+target_link_libraries(test_saver PRIVATE core)
+add_test(NAME saver COMMAND test_saver)
 
 # Memory-port buffers live as long as the program, as on the board, so the
 # leak checker would report them; applied after every add_test above.

@@ -21,6 +21,9 @@ void show(wm::Window &w);
 // Centres a window of the given size in the work area.
 gfx::Rect centred(const wm::Wm &wm, int w, int h);
 
+// Puts the screensaver in place with its settings (screensaver.cpp).
+void install_screen_saver();
+
 // Ctrl+Alt+Del (power.cpp): the Task Manager, or a restart from the
 // power-down screen.
 void attention_key(void *context);
