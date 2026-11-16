@@ -33,6 +33,7 @@ set(CORE_SRCS
     src/net/viewer_page.cpp
     src/net/web.cpp
     src/net/wifi.cpp
+    src/msg/queue.cpp
     src/proc/table.cpp
     src/shell/apps.cpp
     src/shell/boot.cpp

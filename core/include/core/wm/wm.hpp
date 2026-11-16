@@ -45,6 +45,9 @@ public:
     // Called from every Wm::tick() while it shows; draws when a frame is due.
     virtual void tick(uint64_t now_us) = 0;
     virtual void end(uint64_t /*now_us*/) {}
+    // When its next frame is due, on the clock tick() gives it; 0: at every
+    // tick. The UI loop sleeps until then.
+    virtual uint64_t next_frame_us() const { return 0; }
 
 protected:
     ~ScreenSaver() = default;
@@ -166,11 +169,18 @@ public:
     int popup_hover(int level) const { return popups_[level].hover; }
 
     // Timers on the UI task. tick() fires those that are due and paints;
-    // the UI loop calls it often (every 10 ms on the board). A period of 0
-    // fires once. Returns an id for stop_timer(), 0 if there is no room.
+    // the UI loop calls it after every event and whenever idle_us() runs
+    // out. A period of 0 fires once. Returns an id for stop_timer(), 0 if
+    // there is no room.
     int start_timer(uint32_t delay_us, uint32_t period_us, TimerFn fn, void *context);
     void stop_timer(int id);
     void tick();
+    // How long tick() has nothing to do if no input comes, in µs: until the
+    // next timer, the screensaver's next frame or its start. 0: call tick()
+    // now. kIdleForever: nothing is waiting for the clock. The UI loop
+    // sleeps this long between events.
+    static constexpr uint32_t kIdleForever = 0xFFFFFFFF;
+    uint32_t idle_us();
     uint64_t now_us(); // since start-up; does not wrap
 
     // The screensaver (nullptr: none) and the time without input after
