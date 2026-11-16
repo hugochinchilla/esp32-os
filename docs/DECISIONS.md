@@ -78,6 +78,8 @@ First picture: 2026-11-16, through a VGA-to-HDMI adapter.
 
 - Pixel clock: 25.000 MHz gives a clean picture. 25.175 MHz shows shifting
   pixels. 25.000 MHz is the default.
+  24 MHz also gives a clean picture, but runs the screen at 57 Hz instead of
+  59.5 Hz and saves only 4 % of the video work, so it is kept as a fallback.
 - With the framebuffer sent straight from PSRAM, redrawing the screen left the
   picture displaced sideways until the output was restarted. The test program
   now uses bounce buffers and restarts the output in every vertical blank,
