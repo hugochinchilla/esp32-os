@@ -1,9 +1,9 @@
 # OS firmware
 
-The start of the real firmware. It brings up the screen, runs the window
-manager with two demo windows ("About Chinchilla" over "Welcome to
-Chinchilla") and a taskbar, and answers the debug protocol on the serial
-port. Input is injected over the debug link until there is a USB keyboard and
+The start of the real firmware. It brings up the screen and runs the
+desktop: window manager, taskbar and Start menu, desktop icons, and the
+built-in programs (About Chinchilla, Welcome, Widget gallery). It answers the
+debug protocol on the serial port. Input is injected over the debug link until there is a USB keyboard and
 mouse.
 
 Built with ESP-IDF v5.5 and run on the board on 2026-11-16.
@@ -36,11 +36,15 @@ tools/dbg.py info
 tools/dbg.py screenshot shot.png
 tools/dbg.py screenshot --no-pointer bare.png
 tools/dbg.py windows
-tools/dbg.py mouse move 490 180          # over About's title bar
+tools/dbg.py mouse move 400 200          # over About's title bar
 tools/dbg.py mouse down
-tools/dbg.py mouse move --buttons left 400 90
+tools/dbg.py mouse move --buttons left 300 100
 tools/dbg.py mouse up                    # dropped
 tools/dbg.py key tap enter               # About's OK button
+tools/dbg.py key tap gui                 # the Start menu
+tools/dbg.py key tap esc
+tools/dbg.py mouse doubleclick 38 103    # the Documents icon
+tools/dbg.py text "año"                  # typed into the focused window
 tools/dbg.py repaint
 tools/dbg.py stats
 ```

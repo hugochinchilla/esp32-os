@@ -59,7 +59,8 @@ Last updated: 2026-11-16.
 | --- | --- | --- |
 | Window manager details chosen while building step 4, closest to the 98 look; to confirm or overrule | See the list under "Chosen in step 4" below | As built |
 | Remote keyboard, mouse and screen for a person | VNC server, web page, debug tool only | VNC server |
-| How apps are delivered | Built into the firmware, or loadable from disk | Built in first, behind an app interface |
+| How apps are delivered | Built into the firmware, or loadable from disk | Built in first, behind an app interface. Still the owner's question; the shell works on that assumption: programs are entries in a table (`core/include/core/shell/shell.hpp`: name, icon, open function) that the Start menu and desktop icons launch the same way |
+| Shell details chosen while building menus, the Start menu and widgets; to confirm or overrule | See "Chosen in the shell milestone" below | As built |
 | SD card in the first version | Yes, later, never | Later (pins are reserved) |
 | How two USB sockets are provided | External hub, hub module on the board, shared receiver | One socket now, space for a hub module |
 | A PC build of the desktop for testing | Yes, no | Decided: yes. See Decided |
@@ -115,6 +116,20 @@ First picture: 2026-11-16, through a VGA-to-HDMI adapter.
   default port of `tools/dbg.py`.
 - A webcam (Logitech StreamCam, `/dev/video4`) watches the monitor, so what
   the monitor really shows can be checked from the PC with `ffmpeg`.
+- Shell milestone (2026-11-16): 14 steps (Start menu, launching each
+  program, the gallery's menus, typing "año" into the text field, resizing,
+  desktop icon double click, Shut Down dialog) are pixel-identical on the
+  board and in the PC render, with no stale pixels after any step. Restart
+  from Shut Down restarts the board, and it comes back to the same start-up
+  screen. Times on the board: full repaint 24 to 29 ms (more windows,
+  more to draw); opening the Start menu or a menu 1.1 ms; an outline step
+  1 ms; dropping or resizing a window 7 to 18 ms; maximising 28 ms. Still
+  59.5 frames a second, no receive errors. Free RAM: 327 KB internal,
+  8.07 MB external. A screenshot takes 0.33 s.
+- Found while testing Restart: `tools/dbg.py` resends a command when no reply
+  comes, so a key press that restarted the board was sent again to the new
+  start-up. The board now replies to key, mouse and text commands before
+  acting on them.
 - Window manager (2026-11-16): the board's screen is pixel-identical to the
   PC render of the same steps (desktop, focus change, drag and drop), and a
   full repaint after any step changes nothing (no stale pixels). Times on the
@@ -150,8 +165,44 @@ practical. Each is easy to change.
 - Taskbar and title text that does not fit is cut off, without "...".
 - Taskbar buttons act when the mouse button is let go, not when pressed.
 - The quick-launch icons are drawn but do nothing yet.
-- The About window's OK button has no extra dark "default button" frame;
-  Enter or Escape press it.
+- ~~The About window's OK button has no extra dark "default button"
+  frame~~: replaced in the shell milestone, default buttons now have it.
+
+### Chosen in the shell milestone (to confirm)
+
+- Start menu: Programs (the built-in programs), Settings (Control Panel and
+  Taskbar, both greyed for now), Run... (greyed), a line, Shut Down....
+  Rows are 24 pixels with 16x16 icons (98 uses 32x32 icons). The banner
+  fades from near-black at the top to blue at the bottom, with
+  "Chinchilla" in bold white reading upwards. The menu sits on the left edge
+  of the screen, just above the taskbar.
+- The Start menu and menu-bar menus open when the mouse button goes down; an
+  item is chosen when it comes up, so press-drag-release works too.
+- Submenus open as soon as the pointer is over their entry (98 waits a
+  moment).
+- A click outside an open menu closes it and goes no further.
+- Alt+Tab brings the window at the bottom of the stack to the front at each
+  press, with no switcher window (98 shows a row of icons while Alt is held).
+- Double click: two presses within 0.5 s and 4 pixels.
+- Desktop icons sit in a fixed column (as in the target picture) and cannot be
+  dragged yet. A selected icon has a navy label and every other pixel of the
+  picture tinted. My Board opens About Chinchilla; Documents, Network and
+  Recycle Bin open a "not available yet" message box.
+- Message boxes and dialogs are not modal: other windows still work while
+  they are open.
+- Fixed-size dialogs keep all three title buttons, with maximise greyed (98
+  shows only the close button on dialogs).
+- The text field's caret does not blink and scroll bar arrows do not repeat
+  while held: both need a timer, which comes later.
+- Key presses type through a US keyboard layout. Accented letters and ñ are
+  typed with the debug link's Text command (`tools/dbg.py text "año"`) until
+  real keyboards and layouts arrive.
+- Window corners grab both ways within 16 pixels of the corner. Minimum size:
+  128 pixels wide, title bar (and menu bar) plus 24 pixels high.
+- Welcome now opens at x = 96 so it does not cover the desktop icons; About
+  at (300, 190).
+- Icons reused where there is no special one yet: Run uses the text icon,
+  Shut Down the mascot; Settings has a new control-panel icon.
 
 ## To confirm on the bench
 
@@ -165,10 +216,14 @@ practical. Each is easy to change.
 2. Debug protocol and PC tool, so screenshots and injected input work early.
    Done 2026-11-16, working on the board.
 3. Video driver with a cursor merged in at scanout. Done 2026-11-16.
-4. Window manager and widget toolkit. First part done 2026-11-16: windows,
-   frames, taskbar, label, button, text area. Start menu, desktop icons,
-   resizing and menus come next.
-5. Desktop shell, file system and file manager.
+4. Window manager and widget toolkit. Done 2026-11-16: windows, frames,
+   resizing, menus and menu bars, taskbar, and the widgets (label, buttons,
+   check box, radio button, text field, scroll bars, list box, group frame,
+   text area).
+5. Desktop shell, file system and file manager. Shell parts done
+   2026-11-16 (Start menu, desktop icons, program table, message box, Shut
+   Down dialog, Widget gallery). The file system waits for the owner's
+   decision on how files are stored; the file manager comes after it.
 6. Text editor, then image viewer.
 7. Wi-Fi, NTP, remote display.
 8. USB host board, SD card.

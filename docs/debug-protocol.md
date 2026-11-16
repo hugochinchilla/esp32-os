@@ -57,7 +57,11 @@ and the same sequence number. Every reply payload starts with a status byte:
 | 0x07 | Reboot | None | None. The board restarts after replying |
 | 0x08 | Windows | None | The windows as JSON text, see below |
 | 0x09 | Repaint | None | Time taken in µs (4). The board paints the whole screen again |
+| 0x0A | Text | Text, UTF-8 | None. The characters are typed into the focused window (Latin-1 letters such as ñ and é work) |
 
+- The board replies to Key, Mouse and Text before acting on them, so an event
+  that restarts the board (Restart in the Shut Down dialog) still gets its
+  reply and the tool does not send it again.
 - Key codes are USB HID keyboard usage codes (0x04 is A, 0x28 is Enter), the
   same codes a USB keyboard will produce later.
 - Mouse buttons: bit 0 left, bit 1 right, bit 2 middle. Each mouse message
@@ -119,10 +123,12 @@ including opening the port.
 The Windows reply lists the windows from the bottom of the stack to the top:
 
 ```json
-{"windows":[{"id":1,"z":0,"title":"Welcome to Chinchilla","x":40,"y":30,"w":400,"h":280,"state":"normal","focused":false}, ...],
- "update_us":6246,"event_us":6639}
+{"windows":[{"id":1,"z":0,"title":"Welcome to Chinchilla","x":96,"y":30,"w":400,"h":280,"state":"normal","focused":false}, ...],
+ "menus":0,"start_menu":false,"selected_icon":-1,"update_us":6246,"event_us":6639}
 ```
 
+`menus` is how many pop-up menus are open, `start_menu` whether the Start
+menu is, `selected_icon` the selected desktop icon (-1: none).
 `state` is `normal`, `minimized` or `maximized`. `update_us` is how long the
 last repaint took and `event_us` how long the last input event took to
 handle, painting included. If the list does not fit in one reply the board

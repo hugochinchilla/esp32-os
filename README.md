@@ -5,10 +5,10 @@
 A 90s-style desktop operating environment (think Windows 95/98) for the
 ESP32-S3, with VGA output from GPIO pins, Wi-Fi, and USB keyboard and mouse.
 
-Status: **the window manager runs on the board.** Overlapping windows in the
-98 look, a taskbar with the Start button, and a debug protocol for
-screenshots and injected keyboard and mouse events. No Start menu, files or
-programs yet.
+Status: **the desktop runs on the board.** Overlapping, resizable windows in
+the 98 look with menus, a taskbar and Start menu, desktop icons, the first
+widgets and three built-in programs, plus a debug protocol for screenshots
+and injected keyboard and mouse events. No files yet.
 
 ## What it will be
 
