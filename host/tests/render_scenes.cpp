@@ -151,7 +151,7 @@ int main(int argc, char **argv)
     save("08-start-menu-programs");
 
     // Launch the Widget gallery from Programs, type into its text field.
-    centre_of(desktop.popup_item(1, 2), x, y);
+    centre_of(desktop.popup_item(1, 4), x, y);
     click(x, y);
     key(wm::key::End);
     desktop.text(" año");
@@ -174,8 +174,8 @@ int main(int argc, char **argv)
     mouse(wf.right() + 60, wf.bottom() + 40, 0);
     save("12-resized");
 
-    // A desktop icon: select Documents, double-click it for a message box.
-    centre_of(desktop.desktop_icon_rect(1), x, y);
+    // A desktop icon: double-click Network for its message box.
+    centre_of(desktop.desktop_icon_rect(2), x, y);
     double_click(x, y);
     save("13-icon-message-box");
     key(wm::key::Enter);
@@ -186,6 +186,54 @@ int main(int argc, char **argv)
     centre_of(desktop.popup_item(0, 4), x, y);
     click(x, y);
     save("14-shut-down");
+    key(wm::key::Escape);
+
+    // Close everything, then My Board from its icon: the drives.
+    while (desktop.active() != nullptr) {
+        desktop.close(*desktop.active());
+    }
+    centre_of(desktop.desktop_icon_rect(0), x, y);
+    double_click(x, y);
+    save("15-my-board");
+
+    // Into C:, then docs (keyboard: select and Enter).
+    key(wm::key::Home);
+    key(wm::key::Enter);
+    save("16-drive-c");
+    wm::Window *fm = desktop.active();
+    key(wm::key::Home);
+    key(wm::key::Enter); // docs is the first folder
+    save("17-docs");
+
+    // Open notes.txt (folders come first: docs has no folders, so it is
+    // third after español.txt and... found by name instead).
+    shell::open_file("C:\\docs\\notes.txt");
+    key(wm::key::End, false);
+    desktop.text(" (añadido)");
+    save("18-editor");
+
+    // Save As dialog from the File menu (Alt+F, A).
+    key(0x09, true);
+    key(0x04);
+    save("19-save-as");
+    key(wm::key::Escape);
+
+    // Closing with changes asks first.
+    key(wm::key::F4, true);
+    save("20-save-changes");
+    key(wm::key::Escape); // Cancel
+
+    // Rename in the folder window: F2.
+    desktop.activate(*fm);
+    key(wm::key::Home);
+    key(0x3B); // F2
+    save("21-rename");
+    key(wm::key::Escape);
+
+    // Delete asks first.
+    key(wm::key::Delete);
+    save("22-delete");
+    key(wm::key::Escape);
 
     return failures == 0 ? 0 : 1;
 }

@@ -103,24 +103,63 @@ bool TextEdit::load(const uint8_t *bytes, size_t size)
     if (buf_ == nullptr) {
         return false;
     }
-    size_t n = 0;
-    bool saw_cr = false, saw_lf = false;
+    load_begin();
+    const bool fits = load_append(bytes, size);
+    load_finish();
+    return fits;
+}
+
+void TextEdit::load_begin()
+{
+    gap_start_ = 0;
+    gap_end_ = cap_;
+    load_cr_ = load_saw_cr_ = load_saw_lf_ = false;
+}
+
+bool TextEdit::load_append(const uint8_t *bytes, size_t size)
+{
+    // Text goes in before the gap; a CR is held back until the next byte
+    // shows whether it starts a CRLF (which becomes '\n').
     for (size_t i = 0; i < size; i++) {
-        if (bytes[i] == '\r' && i + 1 < size && bytes[i + 1] == '\n') {
-            saw_cr = true;
-            continue; // CRLF becomes '\n'
+        const uint8_t c = bytes[i];
+        if (load_cr_) {
+            load_cr_ = false;
+            if (c == '\n') {
+                load_saw_cr_ = true;
+                load_saw_lf_ = true;
+                if (gap_start_ == gap_end_) {
+                    return false;
+                }
+                buf_[gap_start_++] = '\n';
+                continue;
+            }
+            if (gap_start_ == gap_end_) {
+                return false;
+            }
+            buf_[gap_start_++] = '\r';
         }
-        if (bytes[i] == '\n') {
-            saw_lf = true;
+        if (c == '\r') {
+            load_cr_ = true;
+            continue;
         }
-        if (n == cap_) {
+        load_saw_lf_ = load_saw_lf_ || c == '\n';
+        if (gap_start_ == gap_end_) {
             return false;
         }
-        buf_[n++] = bytes[i];
+        buf_[gap_start_++] = c;
     }
-    crlf_ = saw_cr || !saw_lf; // new and one-line files get CRLF, as in 98
-    gap_start_ = n;
-    gap_end_ = cap_;
+    return true;
+}
+
+void TextEdit::load_finish()
+{
+    if (load_cr_ && gap_start_ < gap_end_) {
+        buf_[gap_start_++] = '\r';
+    }
+    load_cr_ = false;
+    const size_t n = gap_start_;
+    crlf_ = load_saw_cr_ || !load_saw_lf_; // new and one-line files get CRLF, as in 98
+    save_file_ = save_text_ = 0;
     caret_ = anchor_ = 0;
     top_ = 0;
     top_line_ = 0;
@@ -139,7 +178,6 @@ bool TextEdit::load(const uint8_t *bytes, size_t size)
     modified_ = false;
     sync_bars();
     invalidate();
-    return true;
 }
 
 size_t TextEdit::file_size() const
@@ -149,9 +187,13 @@ size_t TextEdit::file_size() const
 
 size_t TextEdit::save_bytes(size_t offset, uint8_t *out, size_t room) const
 {
-    // Walk from the start to the text position of `offset`. ponytail:
-    // O(n) per call; a file is saved in a few large pieces.
+    // Walk to the text position of `offset`, from where the last piece
+    // ended when the pieces come in order (they do when saving).
     size_t file = 0, i = 0;
+    if (offset >= save_file_ && save_text_ <= length()) {
+        file = save_file_;
+        i = save_text_;
+    }
     const size_t len = length();
     bool half = false; // offset falls between the CR and LF of a line end
     while (i < len && file < offset) {
@@ -178,6 +220,8 @@ size_t TextEdit::save_bytes(size_t offset, uint8_t *out, size_t room) const
         }
         out[n++] = c;
     }
+    save_file_ = offset + n;
+    save_text_ = i;
     return n;
 }
 
@@ -247,6 +291,7 @@ void TextEdit::replace(size_t from, size_t to, const uint8_t *data, size_t size,
     if (size > 0) {
         raw_insert(from, data, size);
     }
+    save_file_ = save_text_ = 0; // the text moved
     line_count_ += lines_added - lines_removed;
     // Keep the first line shown where it was.
     if (top_ > from) {
@@ -304,6 +349,7 @@ void TextEdit::undo()
     }
     raw_erase(pos, pos + inserted);
     raw_insert(pos, undo_, removed);
+    save_file_ = save_text_ = 0;
     line_count_ += lines_in - lines_out;
     std::rotate(undo_, undo_ + removed, undo_ + removed + inserted);
     undo_removed_ = inserted;

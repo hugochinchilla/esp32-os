@@ -469,6 +469,28 @@ int Wm::menu_bar_entry_at(const Window &w, int x, int y) const
     return -1;
 }
 
+int Wm::taskbar_count() const
+{
+    int n = 0;
+    for (int i = 0; i < count_; i++) {
+        n += !(order_[i]->modal_ && order_[i]->modal_owner_ != nullptr);
+    }
+    return n;
+}
+
+Window *Wm::taskbar_window(int index) const
+{
+    for (int i = 0; i < count_; i++) {
+        if (order_[i]->modal_ && order_[i]->modal_owner_ != nullptr) {
+            continue;
+        }
+        if (index-- == 0) {
+            return order_[i];
+        }
+    }
+    return nullptr;
+}
+
 Rect Wm::taskbar_button(int index) const
 {
     const int ty = height_ - kTaskbarHeight;
@@ -476,9 +498,10 @@ Rect Wm::taskbar_button(int index) const
         return {2, ty + 4, kStartW, 22};
     }
     const int room = width_ - kClockW - 6 - kButtonsX;
+    const int shown = taskbar_count();
     int w = kButtonW;
-    if (count_ > 0 && count_ * (kButtonW + kButtonGap) > room) {
-        w = room / count_ - kButtonGap;
+    if (shown > 0 && shown * (kButtonW + kButtonGap) > room) {
+        w = room / shown - kButtonGap;
     }
     return {kButtonsX + index * (w + kButtonGap), ty + 4, w, 22};
 }
@@ -488,7 +511,7 @@ int Wm::taskbar_index_at(int x, int y) const
     if (taskbar_button(-1).contains(x, y)) {
         return -1;
     }
-    for (int i = 0; i < count_; i++) {
+    for (int i = 0; i < taskbar_count(); i++) {
         if (taskbar_button(i).contains(x, y)) {
             return i;
         }
@@ -574,7 +597,7 @@ void Wm::handle_key(uint16_t usage, bool pressed)
         } else if (menu_open()) {
             used = menu_key(k);
         } else if ((mods_ & kAlt) && usage == key::F4) {
-            if (active_ != nullptr) {
+            if (active_ != nullptr && active_->close_requested()) {
                 close(*active_);
             }
             used = true;
@@ -916,7 +939,9 @@ void Wm::on_release()
         invalidate(title_button(*w, captured_part_));
         if (captured_inside_) {
             if (captured_part_ == Part::Close) {
-                close(*w);
+                if (w->close_requested()) {
+                    close(*w);
+                }
             } else if (captured_part_ == Part::Maximize) {
                 toggle_maximize(*w);
             } else {
@@ -979,10 +1004,11 @@ void Wm::update_pointer_shape()
 
 void Wm::taskbar_click(int index)
 {
-    if (index < 0 || index >= count_) {
+    Window *tw = index >= 0 ? taskbar_window(index) : nullptr;
+    if (tw == nullptr) {
         return;
     }
-    Window &w = *order_[index];
+    Window &w = *tw;
     if (active_ == &w && w.state_ != WindowState::Minimized) {
         minimize(w);
     } else {
@@ -1113,6 +1139,7 @@ void Wm::open_menu_bar(Window &w, int entry)
         return;
     }
     close_menus();
+    w.menu_opening(entry);
     menu_window_ = &w;
     menu_entry_ = entry;
     const Rect r = menu_bar_entry(w, entry);
@@ -1550,12 +1577,14 @@ void Wm::paint_taskbar(const RectList &clip)
     c.vline(kButtonsX - 4, ty + 5, 20, gfx::kDarkGrey);
     c.vline(kButtonsX - 3, ty + 5, 20, gfx::kWhite);
 
-    // One button per window, in the order they were opened.
-    for (int i = 0; i < count_; i++) {
-        Window &w = *order_[i];
+    // One button per window, in the order they were opened. A window whose
+    // dialog is open shows pressed while the dialog has the focus.
+    for (int i = 0; i < taskbar_count(); i++) {
+        Window &w = *taskbar_window(i);
         const Rect r = taskbar_button(i);
         const bool held = capture_ == Capture::Taskbar && captured_index_ == i && captured_inside_;
-        const bool on = active_ == &w && w.state_ != WindowState::Minimized;
+        const bool owns_active = active_ != nullptr && active_->modal_owner_ == &w;
+        const bool on = (active_ == &w || owns_active) && w.state_ != WindowState::Minimized;
         c.button(r, on ? ButtonLook::Checked : (held ? ButtonLook::Pressed : ButtonLook::Raised));
         const int d = (on || held) ? 1 : 0;
         Canvas inner = c.sub(r.inset(3));

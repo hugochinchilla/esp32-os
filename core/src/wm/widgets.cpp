@@ -616,9 +616,25 @@ ListBox::ListBox(const Rect &r, const char *const *items, int count, Callback on
       bar_(Rect(r.w - 2 - ScrollBar::kThickness, 2, ScrollBar::kThickness, r.h - 4), true,
            &ListBox::scrolled, this)
 {
-    const int rows = (r.h - 4) / kRowHeight;
-    bar_.set_range(count > rows ? count - rows : 0, rows);
     bar_.set_parent(this);
+    layout();
+}
+
+void ListBox::layout()
+{
+    bar_.rect = {rect.w - 2 - ScrollBar::kThickness, 2, ScrollBar::kThickness, rect.h - 4};
+    const int rows = visible_rows();
+    bar_.set_range(count_ > rows ? count_ - rows : 0, rows);
+    invalidate();
+}
+
+void ListBox::set_items(const char *const *items, int count)
+{
+    items_ = items;
+    count_ = count;
+    selected_ = -1;
+    bar_.set_value_quietly(0);
+    layout();
 }
 
 Rect ListBox::bar_rect() const
@@ -640,14 +656,23 @@ void ListBox::paint(Canvas &c)
     c.fill(rows, kWhite);
     Canvas inner = c.sub(rows);
     const int top = bar_.value();
+    const int rh = row_height();
     for (int i = 0; i <= visible_rows() && top + i < count_; i++) {
         const int index = top + i;
-        const Rect row = {0, i * kRowHeight, rows.w, kRowHeight};
+        Rect row = {0, i * rh, rows.w, rh};
         const bool chosen = index == selected_;
+        int tx = 2;
+        if (icon_ != nullptr) {
+            if (const gfx::Bitmap *b = icon_(index, context_)) {
+                inner.blit(*b, 2, row.y + 1);
+            }
+            tx = 22;
+            row = {20, row.y, Canvas::text_width(items_[index]) + 4, rh};
+        }
         if (chosen) {
             inner.fill_rgb(row, kHighlight);
         }
-        inner.text(2, row.y + 1, items_[index], chosen ? kWhite : kBlack);
+        inner.text(tx, row.y + (rh - kTextH) / 2, items_[index], chosen ? kWhite : kBlack);
         if (chosen && has_focus()) {
             inner.focus_rect(row);
         }
@@ -688,9 +713,12 @@ void ListBox::mouse(const MouseMsg &m)
         return;
     }
     if (m.kind != MouseKind::Up && m.y >= 2) {
-        const int row = (m.y - 2) / kRowHeight;
+        const int row = (m.y - 2) / row_height();
         if (row < visible_rows() && bar_.value() + row < count_) {
             select(bar_.value() + row);
+            if (m.double_click && on_activate_ != nullptr) {
+                on_activate_(*this, context_);
+            }
         }
     }
 }
@@ -702,6 +730,12 @@ bool ListBox::key(const KeyMsg &k)
     }
     const int rows = visible_rows();
     switch (k.usage) {
+    case key::Enter:
+        if (selected_ >= 0 && on_activate_ != nullptr) {
+            on_activate_(*this, context_);
+            return true;
+        }
+        return false;
     case key::Up:
         select(selected_ - 1);
         return true;

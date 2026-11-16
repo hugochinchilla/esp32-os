@@ -164,6 +164,9 @@ private:
     void update_pointer_shape();
     bool double_click(int target);
     void taskbar_click(int index);
+    // Windows with a taskbar button (dialogs that belong to a window have none).
+    int taskbar_count() const;
+    Window *taskbar_window(int index) const;
     int taskbar_index_at(int x, int y) const;
     void set_outline(const Rect &r, bool shown);
     void xor_outline();

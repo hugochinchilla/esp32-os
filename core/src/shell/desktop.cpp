@@ -4,6 +4,7 @@
 
 #include "core/gfx/art.hpp"
 #include "core/shell/shell.hpp"
+#include "core/wm/text_edit.hpp"
 #include "core/wm/widgets.hpp"
 #include "internal.hpp"
 
@@ -240,7 +241,6 @@ struct NotYet {
     const char *title;
     const char *text;
 };
-const NotYet kDocuments = {"Documents", "Documents is not available yet.\nFiles come in a later version."};
 const NotYet kNetwork = {"Network", "The network is not available yet.\nWi-Fi comes in a later version."};
 const NotYet kRecycleBin = {"Recycle Bin", "The Recycle Bin is not available yet.\nIt needs files first."};
 
@@ -252,7 +252,12 @@ void not_yet(void *context)
 
 void open_my_board(void *)
 {
-    launch(*find_app("About Chinchilla"));
+    open_folder(nullptr);
+}
+
+void open_documents(void *)
+{
+    open_folder("C:\\docs");
 }
 
 wm::DesktopIcon g_icons[4];
@@ -306,6 +311,8 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
     g_system = &system;
     g_storage = &storage;
     g_memory = &memory;
+    constexpr size_t kClipboard = 64 * 1024;
+    wm::clipboard::init(static_cast<uint8_t *>(memory.allocate(kClipboard)), kClipboard);
 
     const int n = app_count() < kMaxApps ? app_count() : kMaxApps;
     for (int i = 0; i < n; i++) {
@@ -321,7 +328,7 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
     wm.set_start_menu(&g_start, "Chinchilla");
 
     g_icons[0] = {"My Board", &gfx::board_icon_32(), &open_my_board, nullptr};
-    g_icons[1] = {"Documents", &gfx::folder_icon_32(), &not_yet, const_cast<NotYet *>(&kDocuments)};
+    g_icons[1] = {"Documents", &gfx::folder_icon_32(), &open_documents, nullptr};
     g_icons[2] = {"Network", &gfx::network_icon_32(), &not_yet, const_cast<NotYet *>(&kNetwork)};
     g_icons[3] = {"Recycle Bin", &gfx::bin_icon_32(), &not_yet, const_cast<NotYet *>(&kRecycleBin)};
     wm.set_desktop_icons(g_icons, 4);

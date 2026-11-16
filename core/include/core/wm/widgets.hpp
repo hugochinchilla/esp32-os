@@ -129,6 +129,13 @@ public:
     // The text as UTF-8 (at most 2 bytes per character plus the zero).
     void get(char *out, int capacity) const;
     void set(const char *utf8);
+    void select_all()
+    {
+        anchor_ = 0;
+        caret_ = length_;
+        keep_caret_visible();
+        invalidate();
+    }
     int caret() const { return caret_; }
     int selection_start() const { return caret_ < anchor_ ? caret_ : anchor_; }
     int selection_end() const { return caret_ < anchor_ ? anchor_ : caret_; }
@@ -202,10 +209,19 @@ private:
 class ListBox : public Widget {
 public:
     using Callback = void (*)(ListBox &list, void *context);
+    using IconFn = const gfx::Bitmap *(*)(int index, void *context);
     static constexpr int kRowHeight = 14;
+    static constexpr int kIconRowHeight = 18;
 
     ListBox(const Rect &r, const char *const *items, int count, Callback on_select = nullptr,
             void *context = nullptr);
+    // New contents (the strings must stay valid); nothing selected.
+    void set_items(const char *const *items, int count);
+    // A 16x16 icon before each item.
+    void set_icons(IconFn icon) { icon_ = icon; }
+    // Double click or Enter on an item.
+    void set_on_activate(Callback fn) { on_activate_ = fn; }
+    int count() const { return count_; }
     void paint(gfx::Canvas &c) override;
     bool wants_mouse() const override { return true; }
     void mouse(const MouseMsg &m) override;
@@ -214,7 +230,9 @@ public:
     int selected() const { return selected_; }
     void select(int index);
     int top() const { return bar_.value(); }
-    int visible_rows() const { return (rect.h - 4) / kRowHeight; }
+    int row_height() const { return icon_ != nullptr ? kIconRowHeight : kRowHeight; }
+    int visible_rows() const { return (rect.h - 4) / row_height(); }
+    void layout(); // after the rect changed
 
 private:
     static void scrolled(ScrollBar &, void *context);
@@ -224,6 +242,8 @@ private:
     int count_;
     Callback on_select_;
     void *context_;
+    IconFn icon_ = nullptr;
+    Callback on_activate_ = nullptr;
     int selected_ = -1;
     ScrollBar bar_;
     bool in_bar_ = false;

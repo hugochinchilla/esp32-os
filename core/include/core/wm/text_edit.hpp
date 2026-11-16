@@ -40,6 +40,11 @@ public:
     // Returns false if it does not fit.
     bool load(const uint8_t *bytes, size_t size);
     void clear() { load(nullptr, 0); }
+    // The same in pieces, for files read a part at a time: begin, append
+    // each piece (false when it does not fit), finish.
+    void load_begin();
+    bool load_append(const uint8_t *bytes, size_t size);
+    void load_finish();
     // The file's bytes again, in pieces: `offset` counts bytes of the file
     // (with CRLF if the file had it). Returns how many were written to `out`.
     size_t save_bytes(size_t offset, uint8_t *out, size_t room) const;
@@ -142,6 +147,11 @@ private:
     bool undo_valid_ = false;
     bool undo_typing_ = false;
     size_t undo_pos_ = 0, undo_removed_ = 0, undo_inserted_ = 0;
+
+    // Where the last save_bytes() piece ended, so the next one carries on.
+    mutable size_t save_file_ = 0, save_text_ = 0;
+    // While loading in pieces.
+    bool load_cr_ = false, load_saw_cr_ = false, load_saw_lf_ = false;
 
     ChangeFn on_change_ = nullptr;
     void *on_change_context_ = nullptr;

@@ -34,6 +34,26 @@ void ask(const char *title, const char *text, const char *const *buttons, int co
 // The Shut Down dialog: Restart (through the System port) or Cancel.
 void shut_down_dialog();
 
+// File dialogs, for any program. Modal to `owner`. `chosen` gets the full
+// path ("C:\docs\notes.txt") when the user picks one; nothing on Cancel.
+// Save As asks before replacing an existing file.
+using PathFn = void (*)(const char *path, void *context);
+void open_file_dialog(wm::Window *owner, const char *folder, PathFn chosen, void *context);
+void save_file_dialog(wm::Window *owner, const char *folder, const char *name, PathFn chosen,
+                      void *context);
+// A question with a text answer (a new name).
+using TextFn = void (*)(const char *text, void *context);
+void input_dialog(wm::Window *owner, const char *title, const char *prompt, const char *initial,
+                  TextFn done, void *context);
+
+// Opens a file with the program for its kind (by extension). Returns
+// false, after saying so, when there is none.
+bool open_file(const char *path);
+// A File manager window on a folder; nullptr for My Board (the drives).
+void open_folder(const char *path);
+// The Editor with a file (nullptr: a new, empty one).
+void open_in_editor(const char *path);
+
 // Sets up the desktop icons and the Start menu, and opens the first windows.
 // `storage` holds the drives; `memory` gives the large buffers (editor,
 // clipboard, folder lists), once.

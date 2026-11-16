@@ -219,6 +219,10 @@ public:
     virtual void text(const char *utf8);
     // Called after the size changed (resizing, maximising).
     virtual void resized() {}
+    // The close button, Alt+F4: return false to stay open (and ask first).
+    virtual bool close_requested() { return true; }
+    // A menu of the menu bar is about to open: a chance to grey items out.
+    virtual void menu_opening(int /*entry*/) {}
     // Called after the window was closed.
     virtual void closed() {}
 

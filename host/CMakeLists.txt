@@ -22,6 +22,9 @@ target_link_libraries(test_wm PRIVATE core)
 add_executable(test_edit tests/test_edit.cpp)
 target_link_libraries(test_edit PRIVATE core)
 
+add_executable(test_shell tests/test_shell.cpp)
+target_link_libraries(test_shell PRIVATE core)
+
 add_executable(test_fs tests/test_fs.cpp)
 target_link_libraries(test_fs PRIVATE core)
 
@@ -33,6 +36,7 @@ add_test(NAME dbg COMMAND test_dbg)
 add_test(NAME wm COMMAND test_wm)
 add_test(NAME fs COMMAND test_fs)
 add_test(NAME edit COMMAND test_edit)
+add_test(NAME shell COMMAND test_shell)
 add_test(NAME pictures
          COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/check_pictures.py $<TARGET_FILE:render_scenes>)
 add_test(NAME dbg_tool

@@ -152,6 +152,94 @@ const Ink kFolderInks32[] = {{'K', kBlack}, {'T', rgb(6, 5, 0)}, {'Y', rgb(7, 6,
 const Ink kNetInks32[] = {{'K', kBlack}, {'S', rgb(1, 5, 3)}, {'G', kGrey}};
 const Ink kBinInks[] = {{'K', kBlack}, {'G', kGrey}, {'D', kDarkGrey}};
 
+const char *const kText32[32] = {
+    "................................", "................................",
+    "................................", ".......KKKKKKKKKKKKKKKKKKK......",
+    ".......KWWWWWWWWWWWWWWWWWK......", ".......KWWWWWWWWWWWWWWWWWK......",
+    ".......KWWWWWWWWWWWWWWWWWK......", ".......KWWWWWWWWWWWWWWWWWK......",
+    ".......KWWBBBBBBBBBBBBBWWK......", ".......KWWWWWWWWWWWWWWWWWK......",
+    ".......KWWWWWWWWWWWWWWWWWK......", ".......KWWBBBBBBBBBBBBBWWK......",
+    ".......KWWWWWWWWWWWWWWWWWK......", ".......KWWWWWWWWWWWWWWWWWK......",
+    ".......KWWWWWWWWWWWWWWWWWK......", ".......KWWBBBBBBBBBBBBBWWK......",
+    ".......KWWWWWWWWWWWWWWWWWK......", ".......KWWWWWWWWWWWWWWWWWK......",
+    ".......KWWBBBBBBBBBBBBBWWK......", ".......KWWWWWWWWWWWWWWWWWK......",
+    ".......KWWWWWWWWWWWWWWWWWK......", ".......KWWWWWWWWWWWWWWWWWK......",
+    ".......KWWBBBBBBBBBBBBBWWK......", ".......KWWWWWWWWWWWWWWWWWK......",
+    ".......KWWWWWWWWWWWWWWWWWK......", ".......KWWBBBBBBBBBBBBBWWK......",
+    ".......KWWWWWWWWWWWWWWWWWK......", ".......KWWWWWWWWWWWWWWWWWK......",
+    ".......KKKKKKKKKKKKKKKKKKK......", "................................",
+    "................................", "................................",
+};
+const char *const kPicture32[32] = {
+    "................................", "................................",
+    "................................", "................................",
+    "................................", "....KKKKKKKKKKKKKKKKKKKKKKKKK...",
+    "....KWWWWWWWWWWWWWWWWWWWWWWWK...", "....KWSSSSSSSSSSSSSSSSSSSSSWK...",
+    "....KWSSSSSSSSSSSSSSSSSSSSSWK...", "....KWSSSSSSSSSSSSSSYYYSSSSWK...",
+    "....KWSSSSSSSSSSSSSYYYYYSSSWK...", "....KWSSSSSSSSSSSSSYYYYYSSSWK...",
+    "....KWSSSSSSSSSSSSSYYYYYSSSWK...", "....KWSSSSSSSSSSSSSSYYYSSSSWK...",
+    "....KWSSSSSSSGSSSSSSSSSSSSSWK...", "....KWSSSSSSSGSSSSSSSSSSSSSWK...",
+    "....KWSSSSSSGGGSSSSSSSSSSSSWK...", "....KWSSSSSGGGGGSSSSSSSSSSSWK...",
+    "....KWSSSSSGGGGGSSSSSSSSSSSWK...", "....KWSSSSGGGGGGGSSSSSSSSSSWK...",
+    "....KWSSSGGGGGGGGGSSSSSSSSSWK...", "....KWSSSGGGGGGGGGSSSSSSSSSWK...",
+    "....KWSSGGGGGGGGGGGSSSSSSSSWK...", "....KWSGGGGGGGGGGGGGSSSSSSSWK...",
+    "....KWGGGGGGGGGGGGGGGSSSSSSWK...", "....KWWWWWWWWWWWWWWWWWWWWWWWK...",
+    "....KKKKKKKKKKKKKKKKKKKKKKKKK...", "................................",
+    "................................", "................................",
+    "................................", "................................",
+};
+const char *const kDrive32[32] = {
+    "................................", "................................",
+    "................................", "................................",
+    "................................", "................................",
+    "................................", "................................",
+    "................................", "................................",
+    "................................", "..KKKKKKKKKKKKKKKKKKKKKKKKKKKK..",
+    "..KWWWWWWWWWWWWWWWWWWWWWWWWWWK..", "..KLLLLLLLLLLLLLLLLLLLLLLLLLLK..",
+    "..KLLLLLLLLLLLLLLLLLLLLLLLLLLK..", "..KLLLLLLLLLLLLLLLLLLLLLLLLLLK..",
+    "..KLDDDDDDDDDDDDDDLLLLLLLLLLLK..", "..KLLLLLLLLLLLLLLLLLLLLLLLLLLK..",
+    "..KLLLLLLLLLLLLLLLLLLLLLNNNLLK..", "..KLLLLLLLLLLLLLLLLLLLLLNNNLLK..",
+    "..KLLLLLLLLLLLLLLLLLLLLLNNNLLK..", "..KLLLLLLLLLLLLLLLLLLLLLLLLLLK..",
+    "..KKKKKKKKKKKKKKKKKKKKKKKKKKKK..", "................................",
+    "................................", "................................",
+    "................................", "................................",
+    "................................", "................................",
+    "................................", "................................",
+};
+const char *const kFile32[32] = {
+    "................................", "................................",
+    "................................", ".......KKKKKKKKKKKKKK...........",
+    ".......KWWWWWWWWWWWWKK..........", ".......KWWWWWWWWWWWWKWK.........",
+    ".......KWWWWWWWWWWWWKWWK........", ".......KWWWWWWWWWWWWKWWWK.......",
+    ".......KWWWWWWWWWWWWKKKKKK......", ".......KWWWWWWWWWWWWWWWWWK......",
+    ".......KWWWWWWWWWWWWWWWWWK......", ".......KWWWWWWWWWWWWWWWWWK......",
+    ".......KWWWWWWWWWWWWWWWWWK......", ".......KWWWWWWWWWWWWWWWWWK......",
+    ".......KWWWWWWWWWWWWWWWWWK......", ".......KWWWWWWWWWWWWWWWWWK......",
+    ".......KWWWWWWWWWWWWWWWWWK......", ".......KWWWWWWWWWWWWWWWWWK......",
+    ".......KWWWWWWWWWWWWWWWWWK......", ".......KWWWWWWWWWWWWWWWWWK......",
+    ".......KWWWWWWWWWWWWWWWWWK......", ".......KWWWWWWWWWWWWWWWWWK......",
+    ".......KWWWWWWWWWWWWWWWWWK......", ".......KWWWWWWWWWWWWWWWWWK......",
+    ".......KWWWWWWWWWWWWWWWWWK......", ".......KWWWWWWWWWWWWWWWWWK......",
+    ".......KWWWWWWWWWWWWWWWWWK......", ".......KWWWWWWWWWWWWWWWWWK......",
+    ".......KKKKKKKKKKKKKKKKKKK......", "................................",
+    "................................", "................................",
+};
+const char *const kDrive16[16] = {
+    "................", "................",
+    "................", "................",
+    "................", ".KKKKKKKKKKKKKK.",
+    ".KWWWWWWWWWWWWK.", ".KLLLLLLLLLLLLK.",
+    ".KLDDDDDDLLLLLK.", ".KLLLLLLLLLNNLK.",
+    ".KLLLLLLLLLLLLK.", ".KKKKKKKKKKKKKK.",
+    "................", "................",
+    "................", "................",
+};
+
+const Ink kTextInks32[] = {{'K', kBlack}, {'W', kWhite}, {'B', rgb(0, 0, 2)}};
+const Ink kPictureInks[] = {{'K', kBlack}, {'W', kWhite}, {'S', rgb(3, 5, 3)}, {'G', rgb(0, 4, 0)}, {'Y', rgb(7, 6, 0)}};
+const Ink kDriveInks[] = {{'K', kBlack}, {'L', kGrey}, {'W', kWhite}, {'D', kDarkGrey}, {'N', rgb(0, 7, 0)}};
+const Ink kFileInks[] = {{'K', kBlack}, {'W', kWhite}};
+
 template <int N> struct Picture32 {
     uint8_t pixels[1024];
     Bitmap bitmap;
@@ -177,6 +265,36 @@ template <int N> struct Picture32 {
 const Bitmap &settings_icon_16()
 {
     static const Picture16<3> picture(kSettings, kSettingsInks);
+    return picture.bitmap;
+}
+
+const Bitmap &drive_icon_16()
+{
+    static const Picture16<5> picture(kDrive16, kDriveInks);
+    return picture.bitmap;
+}
+
+const Bitmap &text_icon_32()
+{
+    static const Picture32<3> picture(kText32, kTextInks32);
+    return picture.bitmap;
+}
+
+const Bitmap &picture_icon_32()
+{
+    static const Picture32<5> picture(kPicture32, kPictureInks);
+    return picture.bitmap;
+}
+
+const Bitmap &drive_icon_32()
+{
+    static const Picture32<5> picture(kDrive32, kDriveInks);
+    return picture.bitmap;
+}
+
+const Bitmap &file_icon_32()
+{
+    static const Picture32<2> picture(kFile32, kFileInks);
     return picture.bitmap;
 }
 
