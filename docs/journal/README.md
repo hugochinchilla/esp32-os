@@ -59,3 +59,4 @@ Plain words, real numbers, no summaries of summaries.
 | 2026-11-16 | [Icons: the inventory, the taskbar and the folder toolbar](2026-11-16-icons.md) | Which icons exist and at what sizes, the quick-launch icons taken out, Back and Up told apart |
 | 2026-11-16 | [Icon proposals, and the Editor's new icon](2026-11-16-icon-proposals.md) | Three ideas for the Editor, one for each other program; the owner chose the notepad and pencil |
 | 2026-11-17 | [The desktop's colour and pattern](2026-11-17-desktop-background.md) | 16 colours and 10 patterns, the Display dialog, a right click on the desktop |
+| 2026-11-17 | [Chinchilla on a PC](2026-11-17-chinchilla-on-a-pc.md) | Where the screenshots come from, and the owner's idea of a desktop program and a web page (backlog 32, 33) |
