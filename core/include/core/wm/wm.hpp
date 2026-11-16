@@ -64,6 +64,12 @@ public:
     void set_desktop_icons(const DesktopIcon *icons, int count);
     void set_start_menu(Menu *menu, const char *banner);
 
+    // A 16x16 icon in the tray, left of the clock (nullptr: none). A click
+    // on it calls `click`.
+    void set_tray_icon(const gfx::Bitmap *icon, void (*click)(void *context) = nullptr,
+                       void *context = nullptr);
+    Rect tray_icon_rect() const; // empty without an icon
+
     // Pop-up menus. open_menu() opens a free-standing one at (x, y).
     void open_menu(Menu &menu, int x, int y);
     void open_start_menu();
@@ -209,6 +215,10 @@ private:
     const DesktopIcon *icons_ = nullptr;
     int icon_count_ = 0;
     int selected_icon_ = -1;
+
+    const gfx::Bitmap *tray_icon_ = nullptr;
+    void (*tray_click_)(void *context) = nullptr;
+    void *tray_context_ = nullptr;
 
     Menu *start_menu_ = nullptr;
     const char *start_banner_ = "";

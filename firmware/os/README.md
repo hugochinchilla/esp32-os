@@ -54,6 +54,9 @@ tools/dbg.py put notes.txt C:\\docs\\notes.txt
 tools/dbg.py get C:\\docs\\notes.txt copy.txt
 tools/dbg.py repaint
 tools/dbg.py stats
+tools/dbg.py wifi scan                   # networks in range
+tools/dbg.py wifi connect "My network"   # asks for the password, not shown
+tools/dbg.py wifi                        # link, address, signal
 ```
 
 `shot.png` should match what the monitor shows. The UI runs on one task

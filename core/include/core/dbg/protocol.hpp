@@ -8,6 +8,10 @@
 #include "core/fs/fs.hpp"
 #include "core/ports.hpp"
 
+namespace net {
+class Manager;
+}
+
 namespace dbg {
 
 constexpr uint8_t kProtocolVersion = 1;
@@ -36,6 +40,7 @@ enum FrameType : uint8_t {
     kFileDelete = 0x10, // a file or an empty folder
     kFileMakeFolder = 0x11,
     kBootScreen = 0x12, // draw a start-up screen now (0 self-test, 1 splash); Repaint brings the desktop back
+    kWifi = 0x20,       // Wi-Fi: status, scan, list, connect, disconnect, forget
     // Sent by the board without being asked.
     kLog = 0x70,
     kHello = 0x71,
@@ -87,6 +92,8 @@ public:
         boot_show_ = show;
         boot_context_ = context;
     }
+    // Optional: Wi-Fi, for the kWifi commands.
+    void set_network(net::Manager *wifi) { wifi_ = wifi; }
     // More numbers for the end of the stats reply (programs' own timings).
     void set_counters(const uint32_t *values, int count)
     {
@@ -105,6 +112,7 @@ private:
     void send_screenshot(uint8_t seq, bool with_pointer, bool back_references);
     void file_command(uint8_t type, uint8_t seq, const uint8_t *args, size_t size);
     void file_error(uint8_t type, uint8_t seq, ports::FsError e);
+    void wifi_command(uint8_t seq, const uint8_t *args, size_t size);
 
     ports::ByteSink &out_;
     ports::Lock &lock_;
@@ -115,6 +123,7 @@ private:
     const char *firmware_name_;
     ports::Desktop *desktop_ = nullptr;
     fs::Storage *storage_ = nullptr;
+    net::Manager *wifi_ = nullptr;
 
     bool overflow_ = false;
     size_t rx_size_ = 0;

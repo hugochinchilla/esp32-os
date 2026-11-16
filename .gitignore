@@ -6,3 +6,4 @@ dependencies.lock
 __pycache__/
 .DS_Store
 .worktrees/
+firmware/os/components/
