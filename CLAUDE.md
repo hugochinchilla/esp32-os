@@ -40,3 +40,9 @@ in the same change whenever a decision is made or reversed.
   what was asked, the options considered, what was chosen and why, why the
   others were not, what was built and how it was tested. Update the item's
   status in `docs/BACKLOG.md` too.
+- A new dialog or settings tool is a program of its own, not a part of the
+  desktop (the owner's rule, 2026-11-17; `docs/DECISIONS.md`, "Dialogs and
+  settings tools are programs"): its own process row, its own file, no reach
+  into the desktop's private variables, and no memory kept while it is closed
+  once backlog item 19 makes that possible. Do not add new permanent `static`
+  window objects without saying in the journal entry that this is owed.

@@ -42,6 +42,7 @@ board or the merge), `done`.
 | | **Phase 4: structure** | | | | |
 | 18 | init as PID 1 with a start-up file. Services start after the desktop | M | 2, 8 | Yes | todo |
 | 19 | Program lifecycle: created at launch, destroyed at exit, memory returned, more than one instance | L | 2 | Yes | todo |
+| 34 | Display and the other built-in dialogs and settings tools (Screen Saver, Network, Shut Down, file dialogs, message box, Task Manager) become programs with a life of their own: created when opened, memory given back when closed. Display first. The owner's rule of 2026-11-17 | M | 19 | Yes | todo. [Journal](journal/2026-11-17-dialogs-as-programs.md) |
 | 20 | A defined set of OS calls, moved to app by app | L | 2 | | todo |
 | 21 | Split the window manager into window server and desktop shell. The taskbar becomes a process that restarts when killed | L | 18, 20 | Yes | todo |
 | | **Later** | | | | |
