@@ -37,6 +37,7 @@ Last updated: 2026-11-16.
 | Font | Spleen 6x12 (BSD licence), a fixed-width bitmap font, for the whole interface. Bold is made by doubling each pixel sideways. The font file and its licence are in `third_party/fonts/spleen/` | Owner's choice from eight freely licensed candidates |
 | Look | Windows 98 style: fading title bars, toolbar and address bar in folder windows, quick-launch icons by the Start button. Target picture: `docs/look/target-98.png`, drawn by `tools/mockup/desktop.py` | Owner's choice between 95 and 98 previews |
 | Name and mascot | The OS is called Chinchilla. Its logo and mascot is a chinchilla face, shown on the Start button. The 16x16 sketch in `tools/mockup/desktop.py` is the starting point | Owner's choice |
+| Snake game's name | Culebra (Spanish for snake). Chosen by the owner, 2026-11-16, over Sierpe and Hay Trail | Owner's choice |
 | Colours that the board cannot show exactly | Made from a fixed 4x4 dot pattern of the two nearest colours (ordered dither), per colour channel. Used for the desktop colour, title bars and their fade. Lines one pixel wide always use exact colours | Blue has only four levels, so navy, teal and mid-grey do not exist as plain colours |
 | Start-up | A quick real self-test screen (each line printed when its check has finished, with the value found; a failed check shows in red and the start goes on), then a splash with the mascot, the name and a ribbon of the 256 colours for about 500 ms, then the desktop. Chosen by the owner, 2026-11-16 | Shows what the machine has, in the spirit of a 90s PC, without slowing the start much |
 | Memory test at start-up | Real and on by default, decided by the owner: writes and reads back an address-dependent pattern over external RAM borrowed from the heap (never memory in use) for about 250 ms, counting KB on screen; a wrong word is shown with its address and logged, and the start goes on. On the board it covers 4992 KB in 254 ms (about 20 MB/s written and read back), of roughly 6 MB free at that point; all of it would take about 0.31 s | Real figures, a quick flash |
@@ -417,10 +418,9 @@ practical. Each is easy to change.
 ### Chosen in the snake game (to confirm)
 
 Culebra, the snake game, was built on a branch from the PC tests and the
-simulator only; it has not run on the board. The owner has not chosen these
-yet:
+simulator only; it has not run on the board. The owner chose the name (see
+"Decided"); the rest is still his to confirm:
 
-- Name: Culebra (Spanish for snake). Other candidates: Sierpe, Hay Trail.
 - Look: a green striped snake with a face on pale sand, red berries, a
   24 x 18 board of 12-pixel cells in a sunken frame. All drawn in
   `core/src/shell/culebra.cpp`; the 16x16 icon is in `core/src/gfx/art.cpp`.
