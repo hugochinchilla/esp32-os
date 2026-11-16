@@ -6,6 +6,7 @@
 // core (../../core) to the hardware.
 #include <cstdarg>
 #include <cstdio>
+#include <cstdlib>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -13,6 +14,8 @@
 
 #include "driver/uart.h"
 #include "esp_attr.h"
+#include "nvs.h"
+#include "nvs_flash.h"
 #include "esp_chip_info.h"
 #include "esp_flash.h"
 #include "esp_wifi.h"
@@ -39,6 +42,39 @@
 #include "core/video/pointer.hpp"
 #include "vga.h"
 #include "wifi.hpp"
+
+// tools/dbg.py reboot --fast arms a one-shot fast start: a word in NVS
+// (RTC memory was tried first, but the reset after flashing clears it on
+// this board; NVS survives that, and flashing does not erase it).
+constexpr const char *kFastNextKey = "fast_next";
+
+void arm_fast_next()
+{
+    nvs_handle_t h;
+    if (nvs_flash_init() == ESP_OK && nvs_open("chinchilla", NVS_READWRITE, &h) == ESP_OK) {
+        nvs_set_u32(h, kFastNextKey, shell::kFastBootMagic);
+        nvs_commit(h);
+        nvs_close(h);
+    }
+}
+
+// Read once at start-up; the flash is written only when it was armed.
+bool take_fast_next()
+{
+    nvs_handle_t h;
+    if (nvs_flash_init() != ESP_OK || nvs_open("chinchilla", NVS_READWRITE, &h) != ESP_OK) {
+        return false;
+    }
+    uint32_t word = 0;
+    nvs_get_u32(h, kFastNextKey, &word);
+    const bool armed = shell::take_one_shot_fast_boot(word);
+    if (armed) {
+        nvs_erase_key(h, kFastNextKey);
+        nvs_commit(h);
+    }
+    nvs_close(h);
+    return armed;
+}
 
 namespace {
 
@@ -159,6 +195,63 @@ public:
         out.frames_shown = vga_frame_count();
         out.scanout_us = vga_fill_us();
     }
+    // Every FreeRTOS task. The kernel adds up each task's processor time
+    // at every task switch (the run-time statistics settings in
+    // sdkconfig.defaults); without them there is no list.
+    int tasks(ports::TaskInfo *out, int capacity, ports::TaskTotals &totals) override
+    {
+        totals = {};
+#if CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS && CONFIG_FREERTOS_USE_TRACE_FACILITY
+        // The kernel gives all the tasks or none, so there is room for a
+        // few more than exist now. The list is in external RAM for the
+        // length of this call; nothing stays allocated.
+        const UBaseType_t room = uxTaskGetNumberOfTasks() + 4;
+        auto *list = static_cast<TaskStatus_t *>(
+            heap_caps_malloc(room * sizeof(TaskStatus_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+        if (list == nullptr) {
+            list = static_cast<TaskStatus_t *>(malloc(room * sizeof(TaskStatus_t)));
+        }
+        if (list == nullptr) {
+            return 0;
+        }
+        configRUN_TIME_COUNTER_TYPE clock = 0;
+        const UBaseType_t count = uxTaskGetSystemState(list, room, &clock);
+        int written = 0;
+        for (UBaseType_t i = 0; i < count && written < capacity; i++) {
+            const TaskStatus_t &from = list[i];
+            ports::TaskInfo &t = out[written++];
+            t = {};
+            snprintf(t.name, sizeof(t.name), "%s", from.pcTaskName);
+            t.id = static_cast<uint16_t>(from.xTaskNumber);
+            switch (from.eCurrentState) {
+            case eRunning: t.state = ports::TaskState::Running; break;
+            case eReady: t.state = ports::TaskState::Ready; break;
+            case eBlocked: t.state = ports::TaskState::Blocked; break;
+            case eSuspended: t.state = ports::TaskState::Suspended; break;
+            case eDeleted: t.state = ports::TaskState::Deleted; break;
+            default: t.state = ports::TaskState::Unknown; break;
+            }
+            t.priority = static_cast<uint8_t>(from.uxCurrentPriority);
+#if configTASKLIST_INCLUDE_COREID
+            t.core = from.xCoreID == tskNO_AFFINITY ? -1 : static_cast<int8_t>(from.xCoreID);
+#else
+            t.core = -1;
+#endif
+            t.stack_external = esp_ptr_external_ram(from.pxStackBase);
+            t.stack_free = static_cast<uint32_t>(from.usStackHighWaterMark); // bytes on this chip
+            t.run_time_us = from.ulRunTimeCounter;
+        }
+        totals.clock_us = clock;
+        totals.cores = portNUM_PROCESSORS;
+        totals.left_out = static_cast<uint8_t>(count - static_cast<UBaseType_t>(written));
+        heap_caps_free(list);
+        return written;
+#else
+        (void)out;
+        (void)capacity;
+        return 0;
+#endif
+    }
     size_t memory_report(char *out, size_t capacity) override
     {
         size_t n = 0;
@@ -259,6 +352,7 @@ public:
         }
         return false;
     }
+    void arm_fast_boot() override { arm_fast_next(); }
     void reboot() override
     {
         uart_wait_tx_done(kDebugUart, pdMS_TO_TICKS(200));
@@ -450,7 +544,11 @@ void ui_task(void *)
 
     // Start-up screens: the real self-test, then the splash.
     static shell::BootIo boot_io{display, system, memory, clock, &storage, &boot_idle, &protocol, &boot_log};
-    const shell::BootSettings boot = shell::boot_settings(storage);
+    shell::BootSettings boot = shell::boot_settings(storage);
+    if (take_fast_next()) {
+        boot.fastboot = true;
+        ESP_LOGI(TAG, "one-shot fast boot (armed by tools/dbg.py; boot.ini unchanged)");
+    }
     boot_io.video_start_us = s_video_start_us;
     boot_io.monitor_wait_ms = boot.monitor_wait_ms;
     boot_io.splash_ms = boot.splash_ms;

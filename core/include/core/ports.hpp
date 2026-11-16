@@ -213,9 +213,48 @@ enum class Fact : uint8_t {
     Sound,       // text: the sound output
 };
 
+// One task as the kernel sees it (a FreeRTOS task on the board). Programs
+// that share the UI task are not tasks: they all show up as "ui".
+enum class TaskState : uint8_t {
+    Running,   // on a processor at the moment it was asked
+    Ready,     // wants a processor and is waiting its turn
+    Blocked,   // waiting for something: a delay, a queue, a lock
+    Suspended, // stopped until another task resumes it
+    Deleted,   // ended, its memory not yet given back
+    Unknown,
+};
+
+struct TaskInfo {
+    char name[16];
+    uint16_t id;          // the kernel's number for the task; it keeps it for life
+    TaskState state;
+    uint8_t priority;     // higher runs first
+    int8_t core;          // the processor it is tied to; -1: either
+    bool stack_external;  // its stack is in external RAM
+    uint32_t stack_free;  // bytes of its stack never used so far
+    uint64_t run_time_us; // processor time since start-up, interrupts that
+                          // arrived while it ran included
+};
+
+struct TaskTotals {
+    uint64_t clock_us; // the clock the run times are counted on, now
+    uint8_t cores;     // processors; each can give clock_us of run time
+    uint8_t left_out;  // tasks that did not fit in the list
+};
+
 class System {
 public:
     virtual void stats(SystemStats &out) = 0;
+    // Every task of the kernel, in no particular order; returns how many
+    // were written (0: not available, as when the kernel does not keep
+    // run-time statistics).
+    virtual int tasks(TaskInfo *out, int capacity, TaskTotals &totals)
+    {
+        (void)out;
+        (void)capacity;
+        totals = {};
+        return 0;
+    }
     // A plain-text report of where memory goes (heaps, task stacks), for
     // the debug link; returns its length (0: not available).
     virtual size_t memory_report(char *out, size_t capacity)
@@ -233,6 +272,8 @@ public:
         return false;
     }
     virtual void reboot() = 0;
+    // The next start is a fast one (no start-up screens), once.
+    virtual void arm_fast_boot() {}
 
 protected:
     ~System() = default;

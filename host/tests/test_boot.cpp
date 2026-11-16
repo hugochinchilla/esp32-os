@@ -265,8 +265,20 @@ void test_waiting_and_skipping()
 
 } // namespace
 
+// The one-shot fast boot: taken once when armed, then the starts are normal;
+// anything else in the word (memory after a power cut) is not taken.
+static void test_one_shot_fast_boot()
+{
+    uint32_t word = shell::kFastBootMagic;
+    CHECK(shell::take_one_shot_fast_boot(word));
+    CHECK(!shell::take_one_shot_fast_boot(word));
+    word = 0xDEADBEEF;
+    CHECK(!shell::take_one_shot_fast_boot(word) && word == 0);
+}
+
 int main(int argc, char **argv)
 {
+    test_one_shot_fast_boot();
     test_memory_fault();
     test_failed_check();
     test_waiting_and_skipping();
