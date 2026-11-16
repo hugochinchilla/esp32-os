@@ -118,8 +118,9 @@ public:
         using namespace std::chrono;
         out.uptime_ms = static_cast<uint32_t>(
             duration_cast<milliseconds>(steady_clock::now() - start_).count());
-        out.free_internal_ram = 0;
-        out.free_external_ram = 0;
+        out.free_internal_ram = free_internal_ram;
+        out.free_external_ram = free_external_ram;
+        out.scanout_us = scanout_us;
         out.frames_shown = out.uptime_ms * 60 / 1000;
     }
     void reboot() override { reboot_requested = true; }
@@ -142,6 +143,11 @@ public:
     }
 
     bool reboot_requested = false;
+    // Plausible figures for the task manager (the board's after start-up);
+    // tests change them.
+    uint32_t free_internal_ram = 311u << 10;
+    uint32_t free_external_ram = 5900u << 10;
+    uint32_t scanout_us = 0; // the PC sends no video
 
 private:
     std::chrono::steady_clock::time_point start_ = std::chrono::steady_clock::now();

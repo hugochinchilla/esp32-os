@@ -8,6 +8,7 @@
 
 #include "core/fs/memory_volume.hpp"
 #include "core/shell/boot.hpp"
+#include "core/shell/defrag.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/wm.hpp"
 #include "../host_adapters.hpp"
@@ -167,7 +168,7 @@ int main(int argc, char **argv)
     save("08-start-menu-programs");
 
     // Launch the Widget gallery from Programs, type into its text field.
-    centre_of(desktop.popup_item(1, 5), x, y);
+    centre_of(desktop.popup_item(1, 7), x, y);
     click(x, y);
     key(wm::key::End);
     desktop.text(" año");
@@ -347,6 +348,41 @@ int main(int argc, char **argv)
     save("33-viewer-damaged");
     key(wm::key::Enter);
 
+    // Ctrl+Alt+Del: the Task Manager, with the second program picked. The
+    // clock moves on a second so the figures are a real sample.
+    desktop.key(wm::key::LeftCtrl, true);
+    desktop.key(wm::key::LeftAlt, true);
+    desktop.key(wm::key::Delete, true);
+    desktop.key(wm::key::Delete, false);
+    desktop.key(wm::key::LeftAlt, false);
+    desktop.key(wm::key::LeftCtrl, false);
+    clock_.now += 1000000;
+    desktop.tick();
+    key(wm::key::Home);
+    key(wm::key::Down);
+    save("34-task-manager");
+    key(wm::key::Escape);
+
+    // The Defragmenter: its made-up disk, part of the way, and tidy.
+    while (desktop.active() != nullptr) {
+        desktop.close(*desktop.active());
+    }
+    shell::open_defragmenter();
+    save("35-defragmenter");
+    key(wm::key::Enter); // Start
+    for (int i = 0; i < 601; i++) {
+        clock_.now += shell::kDefragStepUs;
+        desktop.tick();
+    }
+    save("36-defragmenter-running");
+    for (int i = 0; i < 20000 && !shell::defragmenter_disk().done(); i++) {
+        clock_.now += shell::kDefragStepUs;
+        desktop.tick();
+    }
+    clock_.now += shell::kDefragStepUs;
+    desktop.tick();
+    save("37-defragmenter-done");
+
     // The screensaver. Its dialog from Start > Settings (its last entry), then a preview of each animation: 150 frames, five seconds.
     while (desktop.active() != nullptr) {
         desktop.close(*desktop.active());
@@ -357,11 +393,11 @@ int main(int argc, char **argv)
     mouse(x, y, 0);
     clock_.now += wm::Wm::kSubmenuDelayUs;
     desktop.tick();
-    save("34-settings-menu");
+    save("37a-settings-menu");
     centre_of(desktop.popup_item(1, 3), x, y); // Screen Saver...
     click(x, y);
-    save("35-screen-saver-dialog");
-    const char *const savers[3] = {"36-saver-starfield", "37-saver-chinchillas", "38-saver-curves"};
+    save("37b-screen-saver-dialog");
+    const char *const savers[3] = {"37c-saver-starfield", "37d-saver-chinchillas", "37e-saver-curves"};
     for (int i = 0; i < 3; i++) {
         key(wm::key::Home); // the list: (None), then the three
         for (int n = 0; n <= i; n++) {
@@ -376,7 +412,21 @@ int main(int argc, char **argv)
         save(savers[i], false);
         key(wm::key::Escape); // wakes the screen; the dialog stays
     }
-    save("39-after-screen-saver");
+    save("37f-after-screen-saver");
+    key(wm::key::Escape); // closes the dialog
+
+    // Shut Down from the Start menu: Enter picks Shut Down, and the screen
+    // says the power can go.
+    centre_of(desktop.taskbar_button(-1), x, y);
+    click(x, y);
+    centre_of(desktop.popup_item(0, 4), x, y);
+    click(x, y);
+    key(wm::key::Enter);
+    if (!shell::powered_down()) {
+        printf("Shut Down did not reach the power-down screen\n");
+        failures++;
+    }
+    save("38-power-down");
 
     return failures == 0 ? 0 : 1;
 }
