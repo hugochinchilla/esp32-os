@@ -22,6 +22,10 @@ set(CORE_SRCS
     src/gfx/font_spleen32x64.cpp
     src/gfx/font_spleen6x12.cpp
     src/gfx/rect.cpp
+    src/net/deflate.cpp
+    src/net/rfb.cpp
+    src/net/viewer_page.cpp
+    src/net/web.cpp
     src/net/wifi.cpp
     src/shell/apps.cpp
     src/shell/boot.cpp
