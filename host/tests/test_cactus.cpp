@@ -470,7 +470,7 @@ int write_pictures(const std::string &folder)
     }
     shell::launch(*shell::find_app("Cactus Patch"));
     CactusField &f = shell::cactus_patch_field();
-    save("40-cactus-new-game");
+    save("50-cactus-new-game");
 
     // A game under way: numbers, markers, and a tile held down.
     const uint16_t patch[] = {3, 9, 13, 21, 26, 38, 44, 58, 66, 79};
@@ -488,11 +488,11 @@ int write_pictures(const std::string &folder)
     tile_xy(6, 8, x, y);
     mouse(x, y, 0);
     mouse(x, y, 1);
-    save("41-cactus-playing");
+    save("51-cactus-playing");
     tile_xy(4, 1, x, y);
     mouse(x, y, 1);
     mouse(x, y, 0); // let go on a cactus
-    save("42-cactus-lost");
+    save("52-cactus-lost");
 
     // Won, on the large field, with every number from 1 to 8 on show.
     key(0x3B);
@@ -523,11 +523,11 @@ int write_pictures(const std::string &folder)
             }
         }
     }
-    save("43-cactus-won-large");
+    save("53-cactus-won-large");
 
     // The Game menu.
     key(0x0A, true);
-    save("44-cactus-game-menu");
+    save("54-cactus-game-menu");
     key(wm::key::Escape);
     return failures == 0 ? 0 : 1;
 }

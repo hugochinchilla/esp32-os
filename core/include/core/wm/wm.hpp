@@ -59,6 +59,28 @@ public:
     void resize(Window &w, const Rect &frame);
     // Brings the window at the bottom of the stack to the front (Alt+Tab).
     void cycle_windows();
+    // Windows with a taskbar button (dialogs that belong to a window have
+    // none), in the order they were opened.
+    int taskbar_count() const;
+    Window *taskbar_window(int index) const;
+
+    // Ctrl+Alt+Del: the shell's handler (the task manager). Not called while
+    // a dialog holds the whole desktop.
+    using AttentionFn = void (*)(void *context);
+    void set_attention_key(AttentionFn fn, void *context)
+    {
+        attention_ = fn;
+        attention_context_ = context;
+    }
+    // Hands the whole screen to `paint` for good (the power-down screen):
+    // windows, menus and the pointer go, and input is ignored except
+    // Ctrl+Alt+Del, which still reaches the attention handler.
+    using ScreenFn = void (*)(gfx::Canvas &c, void *context);
+    void take_over(ScreenFn paint, void *context);
+    bool taken_over() const { return screen_fn_ != nullptr; }
+    // Time the UI task has spent handling input, timers and painting since
+    // start-up, in µs (wraps): the desktop's share of the processor.
+    uint32_t busy_us() const { return busy_us_; }
 
     // The desktop and the Start menu, supplied by the shell.
     void set_desktop_icons(const DesktopIcon *icons, int count);
@@ -180,9 +202,6 @@ private:
     void update_pointer_shape();
     bool double_click(int target);
     void taskbar_click(int index);
-    // Windows with a taskbar button (dialogs that belong to a window have none).
-    int taskbar_count() const;
-    Window *taskbar_window(int index) const;
     int taskbar_index_at(int x, int y) const;
     void set_outline(const Rect &r, bool shown);
     void xor_outline();
@@ -265,6 +284,12 @@ private:
 
     uint32_t last_update_us_ = 0;
     uint32_t last_event_us_ = 0;
+    uint32_t busy_us_ = 0;
+    AttentionFn attention_ = nullptr;
+    void *attention_context_ = nullptr;
+    ScreenFn screen_fn_ = nullptr;
+    void *screen_context_ = nullptr;
+    void event_done(uint32_t start);
 
     Timer timers_[kMaxTimers] = {};
     int next_timer_id_ = 1;

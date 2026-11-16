@@ -319,6 +319,18 @@ def check_web(board, port, web, shot):
     print("web: the page and the WebSocket viewer work")
 
 
+def caught_up(v, board, tries=10):
+    """True once the viewer's picture equals the screenshot, asking for
+    more updates while there are changes it has not had yet."""
+    for _ in range(tries):
+        _, _, shot = board.screenshot(pointer=False)
+        if bytes(v.pixels) == shot:
+            return True
+        v.request(1)
+        v.update()
+    return False
+
+
 def settle(board):
     """Lets the simulator's loop run (it serves the viewer between debug commands)."""
     for _ in range(3):
@@ -398,20 +410,19 @@ def main():
         assert bytes(v.pixels) == shot
 
         # 4. Keys from the viewer: the logo key opens the Start menu, Escape
-        # closes it.
+        # closes it. The first update can come before the key's painting is
+        # finished, so the viewer asks again until it has caught up.
         v.request(1)
         v.tap(0xFFEB)
         settle(board)
         assert board.request(dbg.WINDOWS).find(b'"start_menu":true') >= 0
         v.update()
-        _, _, shot = board.screenshot(pointer=False)
-        assert bytes(v.pixels) == shot
+        assert caught_up(v, board)
         v.request(1)
         v.tap(0xFF1B)
         settle(board)
         v.update()
-        _, _, shot = board.screenshot(pointer=False)
-        assert bytes(v.pixels) == shot
+        assert caught_up(v, board)
 
         # 5. A photograph (every pixel different: tiles sent whole), with
         # many updates through the same compressed stream on the way. The

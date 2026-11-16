@@ -175,7 +175,8 @@ public:
     ShutDownDialog()
         : Window("Shut Down Chinchilla", {0, 0, 320, 150}, &gfx::mascot_16()),
           question_({56, 16, 240, 14}, "What do you want the computer to do?"),
-          detail_({56, 34, 240, 14}, "Restart starts Chinchilla again."),
+          detail_({56, 34, 240, 14}, "Shut Down gets it ready to be unplugged."),
+          shut_down_({312 - 3 * 75 - 2 * 6 - 10, 122 - 23 - 10, 75, 23}, "&Shut Down", &ShutDownDialog::shut_down, this),
           restart_({312 - 2 * 75 - 6 - 10, 122 - 23 - 10, 75, 23}, "&Restart", &ShutDownDialog::restart, this),
           cancel_({312 - 75 - 10, 122 - 23 - 10, 75, 23}, "Cancel", &ShutDownDialog::cancel, this)
     {
@@ -183,10 +184,11 @@ public:
         set_modal(nullptr, true); // the whole desktop waits for an answer
         add(question_);
         add(detail_);
+        add(shut_down_);
         add(restart_);
         add(cancel_);
-        restart_.set_default(true);
-        set_default(&restart_);
+        shut_down_.set_default(true);
+        set_default(&shut_down_);
     }
 
     void paint(gfx::Canvas &c) override
@@ -209,11 +211,16 @@ public:
     }
 
 private:
+    static void shut_down(wm::Button &, void *context)
+    {
+        static_cast<ShutDownDialog *>(context)->close();
+        power_down();
+    }
     static void restart(wm::Button &, void *) { system_port().reboot(); }
     static void cancel(wm::Button &, void *context) { static_cast<ShutDownDialog *>(context)->close(); }
 
     wm::Label question_, detail_;
-    wm::Button restart_, cancel_;
+    wm::Button shut_down_, restart_, cancel_;
 };
 
 ShutDownDialog &shut_down_window()
@@ -224,7 +231,7 @@ ShutDownDialog &shut_down_window()
 
 /* ---- Start menu and desktop ------------------------------------------------------ */
 
-constexpr int kMaxApps = 8;
+constexpr int kMaxApps = 16;
 wm::MenuItem g_program_items[kMaxApps];
 wm::Menu g_programs = {g_program_items, 0};
 void network_panel(void *) { open_network(); }
@@ -334,6 +341,7 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
     g_start_items[3] = {nullptr, nullptr, nullptr, nullptr, nullptr, wm::kMenuSeparator};
     g_start_items[4] = {"Sh&ut Down...", &shut_down, nullptr, nullptr, &gfx::mascot_16(), 0};
     wm.set_start_menu(&g_start, "Chinchilla");
+    wm.set_attention_key(&attention_key, nullptr);
 
     g_icons[0] = {"My Board", &gfx::board_icon_32(), &open_my_board, nullptr};
     g_icons[1] = {"Documents", &gfx::folder_icon_32(), &open_documents, nullptr};

@@ -2,6 +2,7 @@
 #include <cstdio>
 
 #include "core/gfx/art.hpp"
+#include "core/shell/defrag.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/widgets.hpp"
 #include "internal.hpp"
@@ -266,18 +267,25 @@ void open_editor() { open_in_editor(nullptr); }
 void open_viewer() { open_picture(nullptr); }
 void open_file_manager() { open_folder(nullptr); }
 
-const App kApps[] = {
-    {"About Chinchilla", nullptr, &open_about},
-    {"Editor", nullptr, &open_editor},
-    {"File manager", nullptr, &open_file_manager},
-    {"Picture viewer", nullptr, &open_viewer},
-    {"Welcome", nullptr, &open_welcome},
-    {"Widget gallery", nullptr, &open_gallery},
-    {"Cactus Patch", nullptr, &open_cactus_patch},
+// Each program with the function that gives its icon (icons are built on
+// first use, so the table is filled once).
+struct Entry {
+    App app;
+    const gfx::Bitmap &(*icon)();
+};
+const Entry kApps[] = {
+    {{"About Chinchilla", nullptr, &open_about}, &gfx::mascot_16},
+    {{"Cactus Patch", nullptr, &open_cactus_patch}, &cactus_patch_icon},
+    {{"Defragmenter", nullptr, &open_defragmenter}, &gfx::drive_icon_16},
+    {{"Editor", nullptr, &open_editor}, &gfx::text_icon_16},
+    {{"File manager", nullptr, &open_file_manager}, &gfx::folder_icon_16},
+    {{"Picture viewer", nullptr, &open_viewer}, &gfx::picture_icon_16},
+    {{"Task Manager", nullptr, &open_task_manager}, &gfx::settings_icon_16},
+    {{"Welcome", nullptr, &open_welcome}, &gfx::text_icon_16},
+    {{"Widget gallery", nullptr, &open_gallery}, &gfx::settings_icon_16},
 };
 constexpr int kAppCount = sizeof(kApps) / sizeof(kApps[0]);
 
-// Icons are functions (built on first use), so the table is filled once.
 App apps_with_icons[kAppCount];
 bool icons_set = false;
 
@@ -285,15 +293,9 @@ const App *table()
 {
     if (!icons_set) {
         for (int i = 0; i < kAppCount; i++) {
-            apps_with_icons[i] = kApps[i];
+            apps_with_icons[i] = kApps[i].app;
+            apps_with_icons[i].icon = &kApps[i].icon();
         }
-        apps_with_icons[0].icon = &gfx::mascot_16();
-        apps_with_icons[1].icon = &gfx::text_icon_16();
-        apps_with_icons[2].icon = &gfx::folder_icon_16();
-        apps_with_icons[3].icon = &gfx::picture_icon_16();
-        apps_with_icons[4].icon = &gfx::text_icon_16();
-        apps_with_icons[5].icon = &gfx::settings_icon_16();
-        apps_with_icons[6].icon = &cactus_patch_icon();
         icons_set = true;
     }
     return apps_with_icons;
