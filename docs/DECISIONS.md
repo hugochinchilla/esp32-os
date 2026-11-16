@@ -42,6 +42,15 @@ Last updated: 2026-11-16.
 | Memory test at start-up | Real and on by default, decided by the owner: writes and reads back an address-dependent pattern over external RAM borrowed from the heap (never memory in use) for about 250 ms, counting KB on screen; a wrong word is shown with its address and logged, and the start goes on. On the board it covers 4992 KB in 254 ms (about 20 MB/s written and read back), of roughly 6 MB free at that point; all of it would take about 0.31 s | Real figures, a quick flash |
 | Testing | Three layers: unit tests of the core on the PC, test-first where practical; framebuffer snapshots compared with stored images; a small number of on-device tests through the serial debug protocol. Signal timing is checked on the bench, not by tests | Fast feedback for most of the code, and checks that can run without hardware |
 
+### Parallel work (2026-11-16)
+
+The owner asked for work to be split across several threads, each in its own
+worktree, with board time taken in turns. The laptop-and-board thread keeps
+committing to `main`. Other threads use one branch per feature, test on the PC
+and open pull requests; this replaces "no branches, no pull requests" for those
+threads only. To confirm with the owner: whether branches are merged through
+pull requests he reviews, or merged by the laptop thread after the board check.
+
 ## Rejected
 
 | Option | Why not |
