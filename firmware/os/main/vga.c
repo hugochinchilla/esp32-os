@@ -44,6 +44,18 @@ static volatile uint32_t s_frames;
 static vga_line_hook_t s_line_hook;
 static volatile uint64_t s_fill_cycles;
 
+/* Scanout timing, measured in the interrupt (CPU cycles at 240 MHz). In the
+ * visible part of a frame the DMA empties one bounce buffer every 10 lines
+ * (320 us) like clockwork, so each refill has a deadline: it must be done
+ * before the DMA comes back to that buffer, one period after it was handed
+ * over. Lateness is how long after its slot (counted from the frame's first
+ * refill) a refill started. */
+#define CYCLES_PER_US (CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ)
+#define PERIOD_CYCLES (10 * 800 * CYCLES_PER_US / 25)
+static volatile vga_scan_stats_t s_scan;
+static uint32_t s_last_start;
+static int s_last_pos = -1;
+
 /* Runs in the video interrupt, from internal RAM: short, no logging, no
  * locks, no heap. pos_px is where in the frame this buffer starts. */
 static IRAM_ATTR bool on_bounce_empty(esp_lcd_panel_handle_t panel, void *bounce_buf, int pos_px,
@@ -52,6 +64,20 @@ static IRAM_ATTR bool on_bounce_empty(esp_lcd_panel_handle_t panel, void *bounce
     (void)panel;
     (void)context;
     uint32_t start = esp_cpu_get_cycle_count();
+    /* Time since the previous refill, when both are in the same stretch of
+     * picture (not across the vertical blank, where the timing is different). */
+    const bool steady = s_last_pos >= 0 && pos_px == s_last_pos + len_bytes && pos_px > 2 * len_bytes; /* the first refills come around the vertical blank */
+    if (s_last_pos >= 0 && pos_px == s_last_pos + len_bytes && start - s_last_start > 2 * PERIOD_CYCLES) {
+        s_scan.last_gap_pos = (uint32_t)pos_px;
+    }
+    const uint32_t interval = start - s_last_start;
+    s_last_start = start;
+    s_last_pos = pos_px;
+    if (steady) {
+        const uint32_t us = interval / CYCLES_PER_US;
+        s_scan.histogram[us < 200 ? 0 : us < 300 ? 1 : us < 340 ? 2 : us < 400 ? 3 : us < 640 ? 4 : 5]++;
+    }
+    const int32_t late = steady ? (int32_t)(interval - PERIOD_CYCLES) : 0;
     memcpy(bounce_buf, s_framebuffer + pos_px, len_bytes);
     vga_line_hook_t hook = s_line_hook;
     if (hook) {
@@ -64,7 +90,24 @@ static IRAM_ATTR bool on_bounce_empty(esp_lcd_panel_handle_t panel, void *bounce
         next = 0;
     }
     Cache_Start_DCache_Preload((uint32_t)(s_framebuffer + next), len_bytes, 0);
-    s_fill_cycles += esp_cpu_get_cycle_count() - start;
+    const uint32_t end = esp_cpu_get_cycle_count();
+    const uint32_t fill = end - start;
+    s_fill_cycles += fill;
+    s_scan.refills++;
+    if (fill > s_scan.max_fill_cycles) {
+        s_scan.max_fill_cycles = fill;
+    }
+    if (steady) {
+        if (late > (int32_t)s_scan.max_late_cycles) {
+            s_scan.max_late_cycles = (uint32_t)late;
+        }
+        if (late > (int32_t)(PERIOD_CYCLES / 10)) {
+            s_scan.late++; /* more than 32 us after its slot */
+        }
+        if (late + (int32_t)fill > (int32_t)PERIOD_CYCLES) {
+            s_scan.missed++; /* not done when the DMA needed it: stale lines shown */
+        }
+    }
     return false;
 }
 
@@ -144,6 +187,18 @@ void vga_start(void)
 void vga_set_line_hook(vga_line_hook_t hook)
 {
     s_line_hook = hook;
+}
+
+void vga_scan_stats(vga_scan_stats_t *out, bool reset)
+{
+    *out = s_scan;
+    if (reset) {
+        s_scan.refills = s_scan.late = s_scan.missed = 0;
+        s_scan.max_late_cycles = s_scan.max_fill_cycles = 0;
+        for (int i = 0; i < 6; i++) {
+            s_scan.histogram[i] = 0;
+        }
+    }
 }
 
 uint32_t vga_fill_us(void)

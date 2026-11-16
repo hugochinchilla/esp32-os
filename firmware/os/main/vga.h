@@ -2,6 +2,7 @@
  * Wiring and resistor values: docs/hardware/README.md */
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -20,6 +21,18 @@ uint8_t *vga_framebuffer(void);
 
 /* Number of frames sent to the monitor since start. */
 uint32_t vga_frame_count(void);
+
+/* Scanout timing since the last reset (see vga.c). */
+typedef struct {
+    uint32_t refills;         /* bounce buffers filled */
+    uint32_t late;            /* refills started more than 32 us after their slot */
+    uint32_t missed;          /* refills not finished when the DMA needed them */
+    uint32_t max_late_cycles; /* worst start after the slot */
+    uint32_t max_fill_cycles; /* longest refill */
+    uint32_t histogram[6];    /* refill intervals: <200, <300, <340, <400, <640, more us */
+    uint32_t last_gap_pos;    /* where the last long gap between refills was */
+} vga_scan_stats_t;
+void vga_scan_stats(vga_scan_stats_t *out, bool reset);
 
 /* The pixel clock the panel was set up with, in Hz. */
 uint32_t vga_pixel_clock_hz(void);

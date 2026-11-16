@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstring>
 
+#include "core/fs/ini.hpp"
 #include "core/gfx/art.hpp"
 #include "core/gfx/canvas.hpp"
 #include "core/gfx/font.hpp"
@@ -29,14 +30,20 @@ struct Screen {
     gfx::RectList clip;
 };
 
-void wait_ms(BootIo &io, uint32_t ms)
+// Waits until the clock reaches `until` (micros, wrapping), answering the
+// debug link meanwhile; false if a key or button skipped it.
+bool wait_until(BootIo &io, uint32_t until)
 {
-    const uint32_t start = io.clock.micros();
-    while (io.clock.micros() - start < ms * 1000) {
+    while (static_cast<int32_t>(until - io.clock.micros()) > 0) {
         if (io.idle != nullptr) {
             io.idle(io.context);
         }
+        if (io.skip != nullptr && io.skip(io.context)) {
+            io.skipped = true;
+            return false;
+        }
     }
+    return true;
 }
 
 // A bitmap enlarged k times, nearest neighbour.
@@ -132,6 +139,51 @@ void memory_progress(uint32_t kb, void *context)
 inline uint32_t pattern(uintptr_t address) { return static_cast<uint32_t>(address) * 2654435761u ^ 0x5AC3E10Fu; }
 
 } // namespace
+
+BootSettings boot_settings(const fs::Storage &storage)
+{
+    static fs::Ini ini; // 2 KB, read once at start-up
+    ini.load(storage, "C:\\.config\\boot.ini");
+    auto ms = [](int v) { return v < 0 ? 0u : (v > 30000 ? 30000u : static_cast<uint32_t>(v)); };
+    BootSettings s;
+    s.fastboot = ini.get_bool("boot", "fastboot", false);
+    s.monitor_wait_ms = ms(ini.get_int("boot", "monitor_wait_ms", static_cast<int>(kMonitorWaitMs)));
+    s.splash_ms = ms(ini.get_int("boot", "splash_ms", static_cast<int>(kSplashMs)));
+    return s;
+}
+
+int run_quiet_checks(BootIo &io)
+{
+    int failures = 0;
+    char v[96], line[160];
+    uint32_t value = 0;
+    const struct {
+        const char *label;
+        ports::Fact fact;
+        bool bytes;
+    } checks[] = {{"Processor", ports::Fact::Processor, false}, {"Internal RAM", ports::Fact::InternalRam, true},
+                  {"External RAM", ports::Fact::ExternalRam, true}, {"Flash", ports::Fact::Flash, true},
+                  {"Video", ports::Fact::Video, false}, {"Input", ports::Fact::Input, false},
+                  {"Sound", ports::Fact::Sound, false}};
+    for (const auto &c : checks) {
+        v[0] = 0;
+        const bool ok = io.system.fact(c.fact, value, v, sizeof(v)) && (!c.bytes || value > 0);
+        if (c.bytes && ok) {
+            format_bytes(v, sizeof(v), value);
+        } else if (c.fact == ports::Fact::Video && ok) {
+            snprintf(v, sizeof(v), "%u Hz pixel clock", static_cast<unsigned>(value));
+        }
+        failures += ok ? 0 : 1;
+        if (io.log != nullptr) {
+            snprintf(line, sizeof(line), "fast start check: %s: %s: %s", c.label, v, ok ? "OK" : "FAILED");
+            io.log(line, io.context);
+        }
+    }
+    if (io.log != nullptr) {
+        io.log("fast start: memory test skipped", io.context);
+    }
+    return failures;
+}
 
 MemoryTestResult test_memory(ports::Memory &memory, ports::Clock &clock, uint32_t budget_us,
                              void (*progress)(uint32_t kb, void *context), void *context)
@@ -301,8 +353,14 @@ int run_self_test(BootIo &io, bool hold)
             c.text(kLabelX, y, v, kFail);
         }
     }
-    if (hold) {
-        wait_ms(io, kSelfTestHoldMs);
+    if (hold && !io.skipped) {
+        const uint32_t now = io.clock.micros();
+        uint32_t until = now + kSelfTestHoldMs * 1000;
+        const uint32_t monitor = io.video_start_us + io.monitor_wait_ms * 1000;
+        if (io.monitor_wait_ms > 0 && static_cast<int32_t>(monitor - until) > 0) {
+            until = monitor;
+        }
+        wait_until(io, until);
     }
     return failures;
 }
@@ -372,6 +430,9 @@ void nine(gfx::Canvas &c, int x, int y, int size, int gap, int lit)
 
 void show_splash(BootIo &io, bool hold)
 {
+    if (hold && io.skipped) {
+        return; // straight to the desktop
+    }
     Screen s(io.display);
     gfx::Canvas c = s.canvas();
     c.fill({0, 0, io.display.width(), io.display.height()}, gfx::kWhite);
@@ -386,7 +447,7 @@ void show_splash(BootIo &io, bool hold)
     }
     nine(c, 274, 300, 12, 6, 4);
     if (hold) {
-        wait_ms(io, kSplashMs);
+        wait_until(io, io.clock.micros() + io.splash_ms * 1000);
     }
 }
 

@@ -13,7 +13,12 @@ namespace shell {
 
 constexpr uint32_t kMemoryTestBudgetUs = 250000; // the memory test stops after this
 constexpr uint32_t kSelfTestHoldMs = 350;        // the finished self-test stays this long
-constexpr uint32_t kSplashMs = 500;
+constexpr uint32_t kSplashMs = 800;
+// How long after the video starts the self-test stays up, so a monitor that
+// takes a while to show a picture still shows it ([boot] monitor_wait_ms in
+// C:\.config\boot.ini; 0: no waiting). A monitor cannot tell the board it is
+// ready (VGA is one-way), so this is a time.
+constexpr uint32_t kMonitorWaitMs = 4000;
 
 struct MemoryTestResult {
     uint32_t tested_kb = 0;
@@ -34,12 +39,33 @@ struct BootIo {
     void *context;
     // Each finished line as text, e.g. for the log (may be nullptr).
     void (*log)(const char *line, void *context);
+    // When the video signal started (clock.micros()), and how long after
+    // that the self-test stays up.
+    uint32_t video_start_us = 0;
+    uint32_t monitor_wait_ms = 0;
+    uint32_t splash_ms = kSplashMs;
+    // True once a key or mouse button asks to skip the screens (may be nullptr).
+    bool (*skip)(void *context) = nullptr;
+    bool skipped = false; // set when that happened: the splash is skipped too
 };
 
-// The self-test screen; returns the number of failed checks. With hold,
-// waits kSelfTestHoldMs after the last line.
+// C:\.config\boot.ini, [boot] section (docs/settings.md).
+struct BootSettings {
+    bool fastboot = false;                   // no start-up screens, no memory test
+    uint32_t monitor_wait_ms = kMonitorWaitMs;
+    uint32_t splash_ms = kSplashMs;
+};
+BootSettings boot_settings(const fs::Storage &storage);
+
+// Fast start: the cheap checks only (no memory test), nothing drawn; each
+// result goes to io.log. Returns the number of failed checks.
+int run_quiet_checks(BootIo &io);
+
+// The self-test screen; returns the number of failed checks. Every check
+// runs to the end. With hold, it then stays up at least kSelfTestHoldMs and
+// until monitor_wait_ms after the video started, unless skipped.
 int run_self_test(BootIo &io, bool hold = true);
-// The splash screen; with hold, waits kSplashMs.
+// The splash screen; with hold, stays io.splash_ms unless skipped.
 void show_splash(BootIo &io, bool hold = true);
 
 // The memory test alone: writes and verifies borrowed external RAM until

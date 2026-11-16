@@ -161,12 +161,15 @@ void test_auto_join()
         CHECK(setup.saved_count() == 2 && std::string(setup.saved_ssid(0)) == "Strong");
         radio.disconnect();
     }
-    // The strongest remembered network is tried first; its password has
-    // changed, so the next one is joined.
+    // The most recently remembered network is tried first, without a scan;
+    // its password has changed, so after a scan the next one is joined.
     radio.air[1].password = "strong-pass";
     radio.connects = 0;
+    const int scans_before = radio.scans;
     net::Manager m(radio, store);
     m.start(now);
+    // Straight to the most recent network, no scan of every channel first.
+    CHECK(radio.connects == 1 && radio.scans == scans_before);
     run(m, 14);
     CHECK(radio.connects == 2);
     CHECK(m.link().link == net::Link::Connected && std::string(m.link().ssid) == "Weak");

@@ -95,7 +95,19 @@ int main(int argc, char **argv)
     protocol.set_storage(&storage);
     // The start-up screens, as on the board (the same memory test, over
     // ordinary memory of the PC).
-    static shell::BootIo boot_io{display, system, memory, clock, &storage, nullptr, nullptr, nullptr};
+    // While the start-up screens show, the debug link is answered, as on
+    // the board.
+    static int link_fd = fd;
+    static dbg::Protocol *link = &protocol;
+    static shell::BootIo boot_io{display, system, memory, clock, &storage,
+                                 [](void *) {
+                                     uint8_t bytes[256];
+                                     const ssize_t got = read(link_fd, bytes, sizeof(bytes));
+                                     if (got > 0) {
+                                         link->feed(bytes, static_cast<size_t>(got));
+                                     }
+                                 },
+                                 nullptr, nullptr};
     shell::run_self_test(boot_io);
     shell::show_splash(boot_io);
     protocol.set_boot_screens(
