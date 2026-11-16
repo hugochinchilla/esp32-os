@@ -33,6 +33,7 @@ the port):
 ```sh
 tools/dbg.py info
 tools/dbg.py screenshot shot.png
+tools/dbg.py screenshot --no-pointer bare.png
 tools/dbg.py mouse move 100 100
 tools/dbg.py mouse click
 tools/dbg.py key down a
@@ -46,6 +47,16 @@ monitor shows.
 
 | File | Contents |
 | --- | --- |
-| `main/main.cpp` | Start-up and the ESP32 adapters: serial port, lock, screen, system |
-| `main/vga.c` | VGA signal, with the settings proven by `firmware/vga-test` |
-| `../../core/` | Everything portable: the protocol and the demo screen |
+| `main/main.cpp` | Start-up and the ESP32 adapters: serial port, lock, screen, pointer, system |
+| `main/vga.c` | VGA signal, with the settings proven by `firmware/vga-test`. Owns the one framebuffer and fills the video bounce buffers itself |
+| `../../core/` | Everything portable: the protocol, the demo screen and the pointer (`core/src/video/pointer.cpp`) |
+
+## How the pointer is drawn
+
+The pointer is never drawn into the framebuffer. The video interrupt copies
+10 lines at a time from the framebuffer into a bounce buffer in internal RAM
+and calls `video::compose_pointer()` to draw the pointer over them. A new
+position or shape takes effect when the interrupt starts a new frame, so the
+pointer never tears. `core/linker.lf` puts `compose_pointer()` in internal
+RAM, as the interrupt requires. Filling the lines takes about 5 % of one
+core; `tools/dbg.py stats` shows the total as `scanout_us`.

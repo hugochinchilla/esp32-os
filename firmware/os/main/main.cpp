@@ -11,6 +11,7 @@
 #include "freertos/task.h"
 
 #include "driver/uart.h"
+#include "esp_attr.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_system.h"
@@ -20,6 +21,7 @@
 #include "core/dbg/protocol.hpp"
 #include "core/demo/demo_screen.hpp"
 #include "core/ports.hpp"
+#include "core/video/pointer.hpp"
 #include "vga.h"
 
 namespace {
@@ -61,6 +63,69 @@ public:
     uint8_t *pixels() override { return vga_framebuffer(); }
 };
 
+// The pointer as the video interrupt sees it. Changes go to `pending`; the
+// interrupt copies them to `active` when it starts a new frame, so the
+// pointer never moves half way down the screen. All of it is in internal RAM.
+portMUX_TYPE s_pointer_lock = portMUX_INITIALIZER_UNLOCKED;
+DRAM_ATTR video::PointerState s_pending;
+DRAM_ATTR video::PointerState s_active;
+DRAM_ATTR video::PointerShape s_shapes[2];
+
+IRAM_ATTR void compose_line(uint8_t *pixels, int first, int count)
+{
+    if (first == 0) {
+        portENTER_CRITICAL_ISR(&s_pointer_lock);
+        s_active = s_pending;
+        portEXIT_CRITICAL_ISR(&s_pointer_lock);
+    }
+    video::compose_pointer(pixels, first, count, VGA_WIDTH, s_active);
+}
+
+class VgaPointer : public ports::Pointer {
+public:
+    void set_position(int x, int y) override
+    {
+        portENTER_CRITICAL(&s_pointer_lock);
+        s_pending.x = static_cast<int16_t>(x);
+        s_pending.y = static_cast<int16_t>(y);
+        portEXIT_CRITICAL(&s_pointer_lock);
+    }
+    void set_shape(const video::PointerShape &shape) override
+    {
+        // Two shape slots: the new shape goes into the one the screen is not
+        // using. Wait until the screen has picked up the last change, so that
+        // slot is really free.
+        while (true) {
+            portENTER_CRITICAL(&s_pointer_lock);
+            bool settled = s_active.shape == s_pending.shape;
+            portEXIT_CRITICAL(&s_pointer_lock);
+            if (settled) {
+                break;
+            }
+            vTaskDelay(1);
+        }
+        video::PointerShape *spare = s_pending.shape == &s_shapes[0] ? &s_shapes[1] : &s_shapes[0];
+        *spare = shape;
+        portENTER_CRITICAL(&s_pointer_lock);
+        s_pending.shape = spare;
+        portEXIT_CRITICAL(&s_pointer_lock);
+    }
+    void set_visible(bool visible) override
+    {
+        portENTER_CRITICAL(&s_pointer_lock);
+        s_pending.visible = visible;
+        portEXIT_CRITICAL(&s_pointer_lock);
+    }
+    video::PointerState state() override
+    {
+        // The latest state: the monitor shows it from the next frame on.
+        portENTER_CRITICAL(&s_pointer_lock);
+        video::PointerState copy = s_pending;
+        portEXIT_CRITICAL(&s_pointer_lock);
+        return copy;
+    }
+};
+
 class EspSystem : public ports::System {
 public:
     void stats(ports::SystemStats &out) override
@@ -69,6 +134,7 @@ public:
         out.free_internal_ram = static_cast<uint32_t>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
         out.free_external_ram = static_cast<uint32_t>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
         out.frames_shown = vga_frame_count();
+        out.scanout_us = vga_fill_us();
     }
     void reboot() override
     {
@@ -101,9 +167,10 @@ void debug_task(void *)
     static UartSink sink;
     static RtosLock lock;
     static VgaDisplay display;
+    static VgaPointer pointer;
     static EspSystem system;
-    static demo::DemoScreen screen(display);
-    static dbg::Protocol protocol(sink, lock, display, screen, system, "esp32-os");
+    static demo::DemoScreen screen(display, pointer);
+    static dbg::Protocol protocol(sink, lock, display, pointer, screen, system, "esp32-os");
 
     screen.draw();
 
@@ -127,6 +194,7 @@ extern "C" void app_main(void)
 {
     ESP_LOGI(TAG, "starting video");
     vga_start();
+    vga_set_line_hook(compose_line);
 
     // The console already set this port's speed; the driver adds buffered
     // reading and writing.

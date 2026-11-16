@@ -5,6 +5,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "core/video/pointer.hpp"
+
 namespace ports {
 
 // Somewhere to send bytes, such as a serial port.
@@ -40,6 +42,22 @@ protected:
     ~Display() = default;
 };
 
+// The mouse pointer, mixed into the picture as it goes to the monitor. It is
+// never drawn into Display::pixels().
+class Pointer {
+public:
+    virtual void set_position(int x, int y) = 0;
+    // The shape is copied.
+    virtual void set_shape(const video::PointerShape &shape) = 0;
+    virtual void set_visible(bool visible) = 0;
+    // The pointer as the screen shows it, for screenshots. The shape it
+    // points to stays valid until the next set_shape().
+    virtual video::PointerState state() = 0;
+
+protected:
+    ~Pointer() = default;
+};
+
 struct MouseEvent {
     bool absolute;   // true: x, y are a screen position. false: a movement.
     int16_t x;
@@ -64,6 +82,7 @@ struct SystemStats {
     uint32_t free_internal_ram;
     uint32_t free_external_ram;
     uint32_t frames_shown;
+    uint32_t scanout_us; // time spent filling video lines since start (wraps)
 };
 
 class System {

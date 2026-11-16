@@ -41,10 +41,14 @@ enum Status : uint8_t {
 enum PixelFormat : uint8_t { kRgb332 = 1 };
 enum Encoding : uint8_t { kRunLength = 1 };
 
+// Screenshot request flags (optional payload byte).
+enum ScreenshotFlags : uint8_t { kWithoutPointer = 1 };
+
 class Protocol {
 public:
     Protocol(ports::ByteSink &out, ports::Lock &lock, ports::Display &display,
-             ports::InputSink &input, ports::System &system, const char *firmware_name);
+             ports::Pointer &pointer, ports::InputSink &input, ports::System &system,
+             const char *firmware_name);
 
     // Bytes received from the PC, in any size of pieces.
     void feed(const uint8_t *data, size_t size);
@@ -64,11 +68,12 @@ private:
     void reply(uint8_t type, uint8_t seq, Status status, const uint8_t *body, size_t size);
     void send(uint8_t type, uint8_t seq, const uint8_t *payload, size_t size);
     size_t write_info(uint8_t *out);
-    void send_screenshot(uint8_t seq);
+    void send_screenshot(uint8_t seq, bool with_pointer);
 
     ports::ByteSink &out_;
     ports::Lock &lock_;
     ports::Display &display_;
+    ports::Pointer &pointer_;
     ports::InputSink &input_;
     ports::System &system_;
     const char *firmware_name_;

@@ -5,10 +5,12 @@ set(CORE_SRCS
     src/dbg/crc.cpp
     src/dbg/protocol.cpp
     src/demo/demo_screen.cpp
+    src/video/pointer.cpp
+    src/video/pointer_shapes.cpp
 )
 
 if(ESP_PLATFORM)
-    idf_component_register(SRCS ${CORE_SRCS} INCLUDE_DIRS "include")
+    idf_component_register(SRCS ${CORE_SRCS} INCLUDE_DIRS "include" LDFRAGMENTS "linker.lf")
     return()
 endif()
 

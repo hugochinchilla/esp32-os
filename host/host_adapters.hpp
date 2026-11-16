@@ -25,6 +25,27 @@ private:
     std::vector<uint8_t> pixels_;
 };
 
+// Keeps the pointer's state; there is no monitor to send it to.
+class MemoryPointer : public ports::Pointer {
+public:
+    void set_position(int x, int y) override
+    {
+        state_.x = static_cast<int16_t>(x);
+        state_.y = static_cast<int16_t>(y);
+    }
+    void set_shape(const video::PointerShape &shape) override
+    {
+        shape_ = shape;
+        state_.shape = &shape_;
+    }
+    void set_visible(bool visible) override { state_.visible = visible; }
+    video::PointerState state() override { return state_; }
+
+private:
+    video::PointerShape shape_ = {};
+    video::PointerState state_ = {};
+};
+
 class NoLock : public ports::Lock {
 public:
     void lock() override {}

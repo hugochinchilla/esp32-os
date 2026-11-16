@@ -247,8 +247,10 @@ class Board:
 
     def stats(self):
         names = ("uptime_ms", "free_internal_ram", "free_external_ram", "frames_shown",
-                 "frames_received", "receive_errors", "keys", "mouse_events")
-        return dict(zip(names, struct.unpack("<8I", self.request(STATS))))
+                 "frames_received", "receive_errors", "keys", "mouse_events", "scanout_us")
+        body = self.request(STATS)
+        # Older firmware sends fewer numbers.
+        return dict(zip(names, struct.unpack("<%dI" % (len(body) // 4), body[:len(body) // 4 * 4])))
 
     def key(self, name, pressed):
         self.request(KEY, struct.pack("<HB", key_code(name), 1 if pressed else 0))
@@ -279,10 +281,12 @@ class Board:
         except PortClosed:
             pass  # the simulated board closes its port as it exits
 
-    def screenshot(self):
-        """Returns (width, height, pixels) with one RRRGGGBB byte per pixel."""
+    def screenshot(self, pointer=True):
+        """Returns (width, height, pixels) with one RRRGGGBB byte per pixel.
+
+        With pointer=False the mouse pointer is left out: the picture in memory."""
         for _ in range(2):
-            head = self.request(SCREENSHOT)
+            head = self.request(SCREENSHOT, b"" if pointer else b"\x01")
             width, height, fmt, encoding, total = struct.unpack("<HHBBI", head)
             if fmt != 1 or encoding != 1:
                 raise DebugError("this tool does not know picture format %d/%d" % (fmt, encoding))
@@ -369,6 +373,7 @@ def main(argv=None):
     sub.add_parser("monitor", help="show the board's log text until Ctrl+C")
 
     p = sub.add_parser("screenshot", help="save the screen as a PNG")
+    p.add_argument("--no-pointer", action="store_true", help="leave out the mouse pointer")
     p.add_argument("file")
 
     p = sub.add_parser("key", help="press, release or tap a key")
@@ -417,7 +422,7 @@ def main(argv=None):
                 board.pending.clear()
         elif args.command == "screenshot":
             start = time.monotonic()
-            width, height, pixels = board.screenshot()
+            width, height, pixels = board.screenshot(pointer=not args.no_pointer)
             write_png(args.file, width, height, pixels)
             print("%s: %dx%d in %.1f s" % (args.file, width, height, time.monotonic() - start))
         elif args.command == "key":

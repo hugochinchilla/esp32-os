@@ -11,7 +11,7 @@ namespace demo {
 
 class DemoScreen : public ports::InputSink {
 public:
-    explicit DemoScreen(ports::Display &display);
+    DemoScreen(ports::Display &display, ports::Pointer &pointer);
 
     // Draws the whole screen. Call once after the display is running.
     void draw();
@@ -23,23 +23,17 @@ public:
     int pointer_y() const { return pointer_y_; }
 
 private:
-    static constexpr int kPointerW = 12;
-    static constexpr int kPointerH = 19;
-
     void fill(int x, int y, int w, int h, uint8_t colour);
     void frame(int x, int y, int w, int h, uint8_t light, uint8_t dark);
     void draw_key(unsigned usage);
     void draw_buttons();
-    void hide_pointer();
-    void show_pointer();
 
     ports::Display &display_;
+    ports::Pointer &pointer_;
     int pointer_x_;
     int pointer_y_;
     uint8_t buttons_ = 0;
-    bool pointer_shown_ = false;
     uint8_t keys_down_[16] = {}; // one bit per usage code 0..127
-    uint8_t under_[kPointerW * kPointerH];
 };
 
 } // namespace demo

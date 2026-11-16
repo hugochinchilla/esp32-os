@@ -29,6 +29,8 @@ Last updated: 2026-11-16.
 | Code structure | Ports and adapters. The core (drawing, window manager, widgets, shell, apps) depends only on interfaces such as display, input, clock, storage, network and debug link. Adapters implement them for the ESP32, for a PC, and in memory for tests. Interfaces are coarse (framebuffer access, changed rectangles), never one call per pixel; the scanout interrupt sits below them | One seam gives host tests, a desktop that runs on a PC, and a small hardware-bound layer. Applies whichever language is chosen |
 | PC build | Yes. The core builds and runs on a PC | Follows from the code structure; lets the desktop be developed and tested without the board |
 | Debug protocol | Framed packets (COBS, CRC-16) on UART0 at 921,600 baud, with 115,200 as fallback. Log text travels inside the protocol on the same port. Described in `docs/debug-protocol.md` | A screenshot takes seconds, not half a minute; logs cannot corrupt a transfer |
+| Mouse pointer | Mixed into each line as it goes to the monitor, never painted into the picture in memory. Screenshots mix it in with the same code, and can leave it out | Moving the mouse costs nothing and touches no picture memory; no saving and restoring what is under the pointer |
+| Screen buffers | One picture in memory, no double buffering | Saves 300 KB of PSRAM and the copying between buffers; drawing is fast enough that tearing has not been an issue |
 | Debug tool | `tools/dbg.py`, in Python | Already installed with ESP-IDF, quick to change, easy for an agent to drive |
 | Repository layout | `core/` portable C++, `firmware/os/` ESP-IDF project with the ESP32 adapters, `host/` PC tests and a simulated board | Follows from the code structure |
 | Testing | Three layers: unit tests of the core on the PC, test-first where practical; framebuffer snapshots compared with stored images; a small number of on-device tests through the serial debug protocol. Signal timing is checked on the bench, not by tests | Fast feedback for most of the code, and checks that can run without hardware |
@@ -106,6 +108,16 @@ First picture: 2026-11-16, through a VGA-to-HDMI adapter.
 - The screen updates at 59.6 frames a second (counted by `frames_shown`).
 - The board's UART socket appears on the PC as `/dev/ttyACM0`, now the
   default port of `tools/dbg.py`.
+- A webcam (Logitech StreamCam, `/dev/video4`) watches the monitor, so what
+  the monitor really shows can be checked from the PC with `ffmpeg`.
+- Pointer mixed in at scanout (2026-11-16): the OS fills the video bounce
+  buffers itself (`no_fb` and `on_bounce_empty` in ESP-IDF's RGB panel
+  driver), copying 10 lines at a time from the framebuffer in PSRAM and
+  drawing the pointer over them. Results: still 59.5 frames a second; the
+  filling takes 5.2 % of one core, almost all of it the copy from PSRAM;
+  600 small mouse moves showed no tearing, no doubled or missing pointer
+  and no picture shift on the webcam; the pointer clips cleanly at every
+  edge and corner; moving it leaves the framebuffer byte-identical.
 
 ## To confirm on the bench
 
@@ -118,7 +130,7 @@ First picture: 2026-11-16, through a VGA-to-HDMI adapter.
 1. Bench test of the VGA wiring (`firmware/vga-test`). Done 2026-11-16.
 2. Debug protocol and PC tool, so screenshots and injected input work early.
    Done 2026-11-16, working on the board.
-3. Video driver with a cursor merged in at scanout.
+3. Video driver with a cursor merged in at scanout. Done 2026-11-16.
 4. Window manager and widget toolkit.
 5. Desktop shell, file system and file manager.
 6. Text editor, then image viewer.

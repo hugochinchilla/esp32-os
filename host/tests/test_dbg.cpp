@@ -8,6 +8,7 @@
 #include "core/dbg/crc.hpp"
 #include "core/dbg/protocol.hpp"
 #include "core/demo/demo_screen.hpp"
+#include "core/video/pointer.hpp"
 #include "../host_adapters.hpp"
 
 static int failures = 0;
@@ -147,11 +148,12 @@ static void test_crc()
 
 struct Rig {
     host::MemoryDisplay display{640, 480};
+    host::MemoryPointer pointer;
     host::NoLock lock;
     host::HostSystem system;
     RecordingInput input;
     Capture wire;
-    dbg::Protocol protocol{wire, lock, display, input, system, "test"};
+    dbg::Protocol protocol{wire, lock, display, pointer, input, system, "test"};
 
     std::vector<Frame> request(uint8_t type, uint8_t seq, const Bytes &payload)
     {
@@ -236,9 +238,14 @@ static void test_bad_frames()
     CHECK(got.size() == 1 && got[0].seq == 5);
 }
 
-static void check_screenshot(Rig &rig)
+// Requests a screenshot and checks it against `expected` (by default the
+// framebuffer itself).
+static void check_screenshot(Rig &rig, const Bytes &request = {}, const uint8_t *expected = nullptr)
 {
-    auto got = rig.request(dbg::kScreenshot, 42, {});
+    if (expected == nullptr) {
+        expected = rig.display.pixels();
+    }
+    auto got = rig.request(dbg::kScreenshot, 42, request);
     CHECK(got.size() >= 3);
     if (got.size() < 3) {
         return;
@@ -261,7 +268,7 @@ static void check_screenshot(Rig &rig)
 
     Bytes picture = run_length_decode(packed);
     CHECK(picture.size() == 640u * 480u);
-    CHECK(memcmp(picture.data(), rig.display.pixels(), picture.size()) == 0);
+    CHECK(memcmp(picture.data(), expected, picture.size()) == 0);
     uint32_t crc = static_cast<uint32_t>(tail[2]) | (static_cast<uint32_t>(tail[3]) << 8) |
                    (static_cast<uint32_t>(tail[4]) << 16) | (static_cast<uint32_t>(tail[5]) << 24);
     CHECK(crc == dbg::crc32(picture.data(), picture.size()));
@@ -292,39 +299,137 @@ static void test_screenshot()
     check_screenshot(rig);
 }
 
+// The pointer drawn the slow, obvious way, for comparison.
+static void reference_pointer(uint8_t *screen, int width, int height, const video::PointerState &state)
+{
+    if (!state.visible || state.shape == nullptr) {
+        return;
+    }
+    const video::PointerShape &shape = *state.shape;
+    for (int row = 0; row < shape.height; row++) {
+        for (int col = 0; col < shape.width; col++) {
+            int x = state.x - shape.hot_x + col, y = state.y - shape.hot_y + row;
+            uint8_t p = shape.pixels[row * shape.width + col];
+            if (x >= 0 && x < width && y >= 0 && y < height && p != video::kPointerClear) {
+                screen[y * width + x] = p == video::kPointerBlack ? 0x00 : 0xFF;
+            }
+        }
+    }
+}
+
+static void test_compose_pointer()
+{
+    // A small screen, a shape with its hotspot in the middle, and positions
+    // all around and past every edge and corner.
+    const int w = 40, h = 30;
+    video::PointerShape shape = {};
+    shape.width = 9;
+    shape.height = 7;
+    shape.hot_x = 4;
+    shape.hot_y = 3;
+    for (int i = 0; i < shape.width * shape.height; i++) {
+        shape.pixels[i] = static_cast<uint8_t>(i % 3);
+    }
+    Bytes background(w * h);
+    for (int i = 0; i < w * h; i++) {
+        background[i] = static_cast<uint8_t>(0x20 + i % 50);
+    }
+    int checked = 0;
+    for (int y = -10; y <= h + 10; y++) {
+        for (int x = -12; x <= w + 12; x++) {
+            video::PointerState state = {static_cast<int16_t>(x), static_cast<int16_t>(y), true, &shape};
+            Bytes want = background;
+            reference_pointer(want.data(), w, h, state);
+            // Runs of several lengths, including ones that end mid-row and
+            // ones longer than a row, as the board's line buffers are.
+            for (int run : {1, 7, 40, 64, 1200}) {
+                Bytes got = background;
+                for (int at = 0; at < w * h; at += run) {
+                    int n = at + run > w * h ? w * h - at : run;
+                    video::compose_pointer(got.data() + at, at, n, w, state);
+                }
+                CHECK(got == want);
+                checked++;
+            }
+        }
+    }
+    CHECK(checked > 1000);
+
+    // Hidden, or no shape: nothing changes.
+    Bytes got = background;
+    video::PointerState hidden = {10, 10, false, &shape};
+    video::compose_pointer(got.data(), 0, w * h, w, hidden);
+    video::PointerState no_shape = {10, 10, true, nullptr};
+    video::compose_pointer(got.data(), 0, w * h, w, no_shape);
+    CHECK(got == background);
+}
+
 static void test_demo_screen()
 {
     host::MemoryDisplay display(640, 480);
-    demo::DemoScreen screen(display);
+    host::MemoryPointer pointer;
+    demo::DemoScreen screen(display, pointer);
     screen.draw();
-    Bytes with_pointer(display.pixels(), display.pixels() + 640 * 480);
+    Bytes picture(display.pixels(), display.pixels() + 640 * 480);
+    video::PointerState state = pointer.state();
+    CHECK(state.visible && state.shape != nullptr);
+    CHECK(state.x == 320 && state.y == 240);
+    CHECK(state.shape->width == video::arrow_pointer().width);
 
-    // Moving the pointer away and back restores every pixel.
+    // Moving the pointer never touches the picture in memory.
     screen.mouse({true, 10, 10, 0, 0});
     CHECK(screen.pointer_x() == 10 && screen.pointer_y() == 10);
-    CHECK(memcmp(with_pointer.data(), display.pixels(), with_pointer.size()) != 0);
-    screen.mouse({true, 320, 240, 0, 0});
-    CHECK(memcmp(with_pointer.data(), display.pixels(), with_pointer.size()) == 0);
+    CHECK(pointer.state().x == 10 && pointer.state().y == 10);
+    CHECK(memcmp(picture.data(), display.pixels(), picture.size()) == 0);
 
-    // The pointer stops at the edges, including the bottom right corner
-    // where most of it is off the screen.
+    // The pointer stops at the edges.
     screen.mouse({false, 5000, 5000, 0, 0});
     CHECK(screen.pointer_x() == 639 && screen.pointer_y() == 479);
+    CHECK(pointer.state().x == 639 && pointer.state().y == 479);
     screen.mouse({false, -5000, -5000, 0, 0});
-    CHECK(screen.pointer_x() == 0 && screen.pointer_y() == 0);
-    screen.mouse({true, 320, 240, 0, 0});
-    CHECK(memcmp(with_pointer.data(), display.pixels(), with_pointer.size()) == 0);
+    CHECK(pointer.state().x == 0 && pointer.state().y == 0);
+    CHECK(memcmp(picture.data(), display.pixels(), picture.size()) == 0);
 
     // A key press and a mouse button change the picture; letting go restores it.
     screen.key(0x04, true);
-    CHECK(memcmp(with_pointer.data(), display.pixels(), with_pointer.size()) != 0);
+    CHECK(memcmp(picture.data(), display.pixels(), picture.size()) != 0);
     screen.key(0x04, false);
-    CHECK(memcmp(with_pointer.data(), display.pixels(), with_pointer.size()) == 0);
+    CHECK(memcmp(picture.data(), display.pixels(), picture.size()) == 0);
     screen.mouse({false, 0, 0, 1, 0});
-    CHECK(memcmp(with_pointer.data(), display.pixels(), with_pointer.size()) != 0);
+    CHECK(memcmp(picture.data(), display.pixels(), picture.size()) != 0);
     screen.mouse({false, 0, 0, 0, 0});
-    CHECK(memcmp(with_pointer.data(), display.pixels(), with_pointer.size()) == 0);
+    CHECK(memcmp(picture.data(), display.pixels(), picture.size()) == 0);
     screen.key(500, true); // out of range: ignored
+}
+
+static void test_screenshot_pointer()
+{
+    Rig rig;
+    for (int i = 0; i < 640 * 480; i++) {
+        rig.display.pixels()[i] = static_cast<uint8_t>(0x40 + (i / 640) % 7);
+    }
+    rig.pointer.set_shape(video::arrow_pointer());
+    rig.pointer.set_visible(true);
+    // Middle, and clipped at each edge and corner.
+    const int spots[][2] = {{320, 240}, {0, 0}, {639, 0}, {0, 479}, {639, 479}, {635, 200}, {300, 470}};
+    for (const auto &spot : spots) {
+        rig.pointer.set_position(spot[0], spot[1]);
+        Bytes with(rig.display.pixels(), rig.display.pixels() + 640 * 480);
+        reference_pointer(with.data(), 640, 480, rig.pointer.state());
+        check_screenshot(rig, {}, with.data());                   // default: with pointer
+        check_screenshot(rig, {0}, with.data());                  // flag clear: with pointer
+        check_screenshot(rig, {dbg::kWithoutPointer});            // without: the framebuffer
+        // They differ, and only inside the pointer's box.
+        int differ = 0;
+        for (int i = 0; i < 640 * 480; i++) {
+            if (with[i] != rig.display.pixels()[i]) {
+                int x = i % 640, y = i / 640;
+                CHECK(x >= spot[0] && x < spot[0] + 12 && y >= spot[1] && y < spot[1] + 19);
+                differ++;
+            }
+        }
+        CHECK(differ > 0);
+    }
 }
 
 int main()
@@ -335,7 +440,9 @@ int main()
     test_input();
     test_bad_frames();
     test_screenshot();
+    test_compose_pointer();
     test_demo_screen();
+    test_screenshot_pointer();
     if (failures == 0) {
         printf("all tests passed\n");
     }

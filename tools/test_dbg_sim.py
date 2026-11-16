@@ -28,11 +28,17 @@ def main():
         # The pointer starts in the middle: its tip is black.
         assert first[240 * 640 + 320] == 0x00
 
-        # Moving the pointer changes the picture there and at the new place.
+        # Moving the pointer changes the picture there and at the new place,
+        # but not the picture in memory.
+        _, _, bare = board.screenshot(pointer=False)
+        assert bare[240 * 640 + 320] != 0x00
         board.mouse(100, 50, absolute=True)
         _, _, moved = board.screenshot()
         assert moved[240 * 640 + 320] != 0x00
         assert moved[50 * 640 + 100] == 0x00
+        assert board.screenshot(pointer=False)[2] == bare
+        differ = [i for i in range(640 * 480) if moved[i] != bare[i]]
+        assert differ and all(100 <= i % 640 < 112 and 50 <= i // 640 < 69 for i in differ)
         board.mouse(5, 5)  # relative
         _, _, nudged = board.screenshot()
         assert nudged[55 * 640 + 105] == 0x00
@@ -70,6 +76,11 @@ def main():
         out = subprocess.run([sys.executable, dbg.__file__, "--port", port, "info"],
                              capture_output=True, text=True, timeout=20)
         assert "firmware: sim" in out.stdout, out
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "bare.png")
+            out = subprocess.run([sys.executable, dbg.__file__, "--port", port, "screenshot",
+                                  "--no-pointer", path], capture_output=True, text=True, timeout=20)
+            assert out.returncode == 0 and os.path.exists(path), out
 
         board = dbg.Board(port, timeout=2.0)
         board.reboot()

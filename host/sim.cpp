@@ -57,9 +57,10 @@ int main()
     host::MemoryDisplay display(640, 480);
     host::NoLock lock;
     host::HostSystem system;
-    demo::DemoScreen screen(display);
+    host::MemoryPointer pointer;
+    demo::DemoScreen screen(display, pointer);
     FdSink sink(fd);
-    dbg::Protocol protocol(sink, lock, display, screen, system, "sim");
+    dbg::Protocol protocol(sink, lock, display, pointer, screen, system, "sim");
 
     screen.draw();
 

@@ -50,10 +50,10 @@ and the same sequence number. Every reply payload starts with a status byte:
 | --- | --- | --- | --- |
 | 0x01 | Ping | Any bytes | The same bytes |
 | 0x02 | Info | None | Protocol version (1 byte), width (2), height (2), pixel format (1), firmware name (text) |
-| 0x03 | Screenshot | None | Width (2), height (2), pixel format (1), encoding (1), picture size in bytes (4). Followed by picture frames, see below |
+| 0x03 | Screenshot | None, or flags (1): bit 0 leaves out the mouse pointer | Width (2), height (2), pixel format (1), encoding (1), picture size in bytes (4). Followed by picture frames, see below |
 | 0x04 | Key | Key code (2), pressed (1: 1 down, 0 up) | None |
 | 0x05 | Mouse | Mode (1: 0 movement, 1 position), x (2, signed), y (2, signed), buttons (1), wheel (1, signed) | None |
-| 0x06 | Stats | None | Eight 4-byte numbers: uptime in ms, free internal RAM, free external RAM, frames shown, frames received, receive errors, key events, mouse events |
+| 0x06 | Stats | None | 4-byte numbers: uptime in ms, free internal RAM, free external RAM, frames shown, frames received, receive errors, key events, mouse events, time spent filling video lines in µs (wraps; the first firmware sent only the first eight) |
 | 0x07 | Reboot | None | None. The board restarts after replying |
 
 - Key codes are USB HID keyboard usage codes (0x04 is A, 0x28 is Enter), the
@@ -73,6 +73,12 @@ and the same sequence number. Every reply payload starts with a status byte:
 | 0x73 | Picture end | Number of chunks (2), CRC-32 of the decoded picture (4) |
 
 ## Screenshots
+
+The mouse pointer is not part of the picture in memory; the board mixes it
+into each line on the way to the monitor. A screenshot mixes it in the same
+way, so it shows what the monitor shows. With flag bit 0 set
+(`tools/dbg.py screenshot --no-pointer`) it is left out, which gives the
+picture in memory exactly. An empty request means "with pointer", as before.
 
 After the Screenshot reply, the board sends the picture as numbered Picture
 data frames and finishes with Picture end. They carry the request's sequence

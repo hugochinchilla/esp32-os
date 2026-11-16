@@ -2,14 +2,20 @@
  * VGA output through the LCD peripheral. The settings are the ones proven
  * with firmware/vga-test on the bench: 25.000 MHz pixel clock and bounce
  * buffers (see docs/DECISIONS.md, "Found on the bench").
+ *
+ * We own the single framebuffer and fill the bounce buffers ourselves, so a
+ * line hook (the mouse pointer) can be mixed in on the way out.
  */
 #include "vga.h"
 
 #include <string.h>
 
 #include "driver/gpio.h"
+#include "esp32s3/rom/cache.h"
 #include "esp_attr.h"
+#include "esp_cpu.h"
 #include "esp_err.h"
+#include "esp_heap_caps.h"
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_panel_rgb.h"
 #include "esp_rom_gpio.h"
@@ -30,10 +36,37 @@
 
 #define PIXEL_CLOCK_HZ 25000000
 #define BOUNCE_PIXELS (10 * VGA_WIDTH)
+#define FRAME_BYTES (VGA_WIDTH * VGA_HEIGHT)
 
 static esp_lcd_panel_handle_t s_panel;
 static uint8_t *s_framebuffer;
 static volatile uint32_t s_frames;
+static vga_line_hook_t s_line_hook;
+static volatile uint64_t s_fill_cycles;
+
+/* Runs in the video interrupt, from internal RAM: short, no logging, no
+ * locks, no heap. pos_px is where in the frame this buffer starts. */
+static IRAM_ATTR bool on_bounce_empty(esp_lcd_panel_handle_t panel, void *bounce_buf, int pos_px,
+                                      int len_bytes, void *context)
+{
+    (void)panel;
+    (void)context;
+    uint32_t start = esp_cpu_get_cycle_count();
+    memcpy(bounce_buf, s_framebuffer + pos_px, len_bytes);
+    vga_line_hook_t hook = s_line_hook;
+    if (hook) {
+        hook(bounce_buf, pos_px, len_bytes);
+    }
+    /* Start fetching the next piece from PSRAM, as the driver does when it
+     * owns the framebuffer. */
+    int next = pos_px + len_bytes;
+    if (next >= FRAME_BYTES) {
+        next = 0;
+    }
+    Cache_Start_DCache_Preload((uint32_t)(s_framebuffer + next), len_bytes, 0);
+    s_fill_cycles += esp_cpu_get_cycle_count() - start;
+    return false;
+}
 
 static IRAM_ATTR bool on_vsync(esp_lcd_panel_handle_t panel,
                                const esp_lcd_rgb_panel_event_data_t *event, void *context)
@@ -47,6 +80,12 @@ static IRAM_ATTR bool on_vsync(esp_lcd_panel_handle_t panel,
 
 void vga_start(void)
 {
+    /* The one picture in memory. Allocated before the panel, because the
+     * panel starts filling bounce buffers as soon as it is set up. */
+    s_framebuffer = heap_caps_aligned_alloc(64, FRAME_BYTES, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    ESP_ERROR_CHECK(s_framebuffer ? ESP_OK : ESP_ERR_NO_MEM);
+    memset(s_framebuffer, 0, FRAME_BYTES);
+
     esp_lcd_rgb_panel_config_t config = {
         .clk_src = LCD_CLK_SRC_DEFAULT,
         .timings = {
@@ -67,7 +106,7 @@ void vga_start(void)
         },
         .data_width = 8,
         .bits_per_pixel = 8,
-        .num_fbs = 1,
+        .num_fbs = 0,
         .bounce_buffer_size_px = BOUNCE_PIXELS,
         .hsync_gpio_num = PIN_HSYNC,
         .vsync_gpio_num = PIN_VSYNC,
@@ -79,13 +118,14 @@ void vga_start(void)
             -1, -1, -1, -1, -1, -1, -1, -1,
         },
         .flags = {
-            .fb_in_psram = 1,
+            .no_fb = 1, /* we own the framebuffer, see on_bounce_empty */
         },
     };
     ESP_ERROR_CHECK(esp_lcd_new_rgb_panel(&config, &s_panel));
 
     esp_lcd_rgb_panel_event_callbacks_t callbacks = {
         .on_vsync = on_vsync,
+        .on_bounce_empty = on_bounce_empty,
     };
     ESP_ERROR_CHECK(esp_lcd_rgb_panel_register_event_callbacks(s_panel, &callbacks, NULL));
 
@@ -99,11 +139,16 @@ void vga_start(void)
     };
     ESP_ERROR_CHECK(gpio_config(&mirror));
     esp_rom_gpio_connect_out_signal(PIN_B_MIRROR, LCD_DATA_OUT1_IDX, false, false);
+}
 
-    void *framebuffer = NULL;
-    ESP_ERROR_CHECK(esp_lcd_rgb_panel_get_frame_buffer(s_panel, 1, &framebuffer));
-    s_framebuffer = framebuffer;
-    memset(s_framebuffer, 0, VGA_WIDTH * VGA_HEIGHT);
+void vga_set_line_hook(vga_line_hook_t hook)
+{
+    s_line_hook = hook;
+}
+
+uint32_t vga_fill_us(void)
+{
+    return (uint32_t)(s_fill_cycles / (CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ));
 }
 
 uint8_t *vga_framebuffer(void)

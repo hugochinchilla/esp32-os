@@ -24,33 +24,11 @@ constexpr int kGridX = 176, kGridY = 152, kCell = 18, kCellInner = 14;
 // Mouse button boxes.
 constexpr int kBoxX = 248, kBoxY = 88, kBoxW = 40, kBoxH = 32, kBoxGap = 12;
 
-// Pointer shape: 'X' outline, '.' fill, ' ' see-through.
-const char *const kPointer[19] = {
-    "X           ",
-    "XX          ",
-    "X.X         ",
-    "X..X        ",
-    "X...X       ",
-    "X....X      ",
-    "X.....X     ",
-    "X......X    ",
-    "X.......X   ",
-    "X........X  ",
-    "X.........X ",
-    "X......XXXXX",
-    "X...X..X    ",
-    "X..X X..X   ",
-    "X.X  X..X   ",
-    "XX    X..X  ",
-    "X     X..X  ",
-    "       X..X ",
-    "       XXX  ",
-};
-
 } // namespace
 
-DemoScreen::DemoScreen(ports::Display &display)
-    : display_(display), pointer_x_(display.width() / 2), pointer_y_(display.height() / 2)
+DemoScreen::DemoScreen(ports::Display &display, ports::Pointer &pointer)
+    : display_(display), pointer_(pointer), pointer_x_(display.width() / 2),
+      pointer_y_(display.height() / 2)
 {
 }
 
@@ -108,7 +86,6 @@ void DemoScreen::draw_buttons()
 
 void DemoScreen::draw()
 {
-    pointer_shown_ = false;
     fill(0, 0, display_.width(), display_.height(), kDesktop);
 
     // A panel behind the boxes and the key grid.
@@ -125,48 +102,9 @@ void DemoScreen::draw()
     for (unsigned usage = 0; usage < 128; usage++) {
         draw_key(usage);
     }
-    show_pointer();
-}
-
-void DemoScreen::hide_pointer()
-{
-    if (!pointer_shown_) {
-        return;
-    }
-    const int sw = display_.width(), sh = display_.height();
-    uint8_t *pixels = display_.pixels();
-    for (int row = 0; row < kPointerH; row++) {
-        for (int col = 0; col < kPointerW; col++) {
-            int x = pointer_x_ + col, y = pointer_y_ + row;
-            if (x < sw && y < sh) {
-                pixels[y * sw + x] = under_[row * kPointerW + col];
-            }
-        }
-    }
-    pointer_shown_ = false;
-}
-
-void DemoScreen::show_pointer()
-{
-    const int sw = display_.width(), sh = display_.height();
-    uint8_t *pixels = display_.pixels();
-    for (int row = 0; row < kPointerH; row++) {
-        for (int col = 0; col < kPointerW; col++) {
-            int x = pointer_x_ + col, y = pointer_y_ + row;
-            if (x >= sw || y >= sh) {
-                continue;
-            }
-            uint8_t *pixel = &pixels[y * sw + x];
-            under_[row * kPointerW + col] = *pixel;
-            char shape = kPointer[row][col];
-            if (shape == 'X') {
-                *pixel = kBlack;
-            } else if (shape == '.') {
-                *pixel = kWhite;
-            }
-        }
-    }
-    pointer_shown_ = true;
+    pointer_.set_shape(video::arrow_pointer());
+    pointer_.set_position(pointer_x_, pointer_y_);
+    pointer_.set_visible(true);
 }
 
 void DemoScreen::key(uint16_t usage, bool pressed)
@@ -180,9 +118,7 @@ void DemoScreen::key(uint16_t usage, bool pressed)
     } else {
         keys_down_[usage / 8] &= static_cast<uint8_t>(~bit);
     }
-    hide_pointer();
     draw_key(usage);
-    show_pointer();
 }
 
 void DemoScreen::mouse(const ports::MouseEvent &event)
@@ -193,14 +129,15 @@ void DemoScreen::mouse(const ports::MouseEvent &event)
     x = x < 0 ? 0 : (x > max_x ? max_x : x);
     y = y < 0 ? 0 : (y > max_y ? max_y : y);
 
-    hide_pointer();
-    pointer_x_ = x;
-    pointer_y_ = y;
+    if (x != pointer_x_ || y != pointer_y_) {
+        pointer_x_ = x;
+        pointer_y_ = y;
+        pointer_.set_position(x, y);
+    }
     if (event.buttons != buttons_) {
         buttons_ = event.buttons;
         draw_buttons();
     }
-    show_pointer();
 }
 
 } // namespace demo

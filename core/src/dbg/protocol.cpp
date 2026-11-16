@@ -28,9 +28,10 @@ uint16_t get16(const uint8_t *in)
 } // namespace
 
 Protocol::Protocol(ports::ByteSink &out, ports::Lock &lock, ports::Display &display,
-                   ports::InputSink &input, ports::System &system, const char *firmware_name)
-    : out_(out), lock_(lock), display_(display), input_(input), system_(system),
-      firmware_name_(firmware_name)
+                   ports::Pointer &pointer, ports::InputSink &input, ports::System &system,
+                   const char *firmware_name)
+    : out_(out), lock_(lock), display_(display), pointer_(pointer), input_(input),
+      system_(system), firmware_name_(firmware_name)
 {
 }
 
@@ -86,7 +87,8 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
     }
 
     case kScreenshot:
-        send_screenshot(seq);
+        // An empty payload (the original request) means "with pointer".
+        send_screenshot(seq, args_size == 0 || !(args[0] & kWithoutPointer));
         break;
 
     case kKey:
@@ -119,7 +121,7 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
     case kStats: {
         ports::SystemStats stats = {};
         system_.stats(stats);
-        uint8_t body[32];
+        uint8_t body[36];
         put32(body + 0, stats.uptime_ms);
         put32(body + 4, stats.free_internal_ram);
         put32(body + 8, stats.free_external_ram);
@@ -128,6 +130,7 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
         put32(body + 20, receive_errors_);
         put32(body + 24, keys_);
         put32(body + 28, mouse_events_);
+        put32(body + 32, stats.scanout_us);
         reply(type, seq, kOk, body, sizeof(body));
         break;
     }
@@ -215,13 +218,56 @@ void Protocol::send_log(const char *text, size_t size)
 // The picture is sent run-length encoded, in chunks:
 //   0..127    copy the next (n + 1) bytes
 //   128..255  repeat the next byte (n - 125) times, so 3 to 130
-void Protocol::send_screenshot(uint8_t seq)
+void Protocol::send_screenshot(uint8_t seq, bool with_pointer)
 {
     const uint8_t *src = display_.pixels();
-    const size_t total = static_cast<size_t>(display_.width()) * display_.height();
+    const int width = display_.width();
+    const size_t total = static_cast<size_t>(width) * display_.height();
+
+    // The pointer is mixed in on the way out, exactly as the monitor gets it.
+    // Only pixels in the pointer's rows need the extra step.
+    video::PointerState pointer = {};
+    size_t pointer_lo = 0, pointer_hi = 0;
+    if (with_pointer) {
+        pointer = pointer_.state();
+        if (pointer.visible && pointer.shape != nullptr) {
+            int top = pointer.y - pointer.shape->hot_y;
+            int bottom = top + pointer.shape->height;
+            top = top < 0 ? 0 : top;
+            bottom = bottom > display_.height() ? display_.height() : bottom;
+            if (top < bottom) {
+                pointer_lo = static_cast<size_t>(top) * width;
+                pointer_hi = static_cast<size_t>(bottom) * width;
+            }
+        }
+    }
+    auto pixel = [&](size_t i) -> uint8_t {
+        uint8_t value = src[i];
+        if (i >= pointer_lo && i < pointer_hi) {
+            video::compose_pointer(&value, static_cast<int>(i), 1, width, pointer);
+        }
+        return value;
+    };
+
+    // The CRC first, one row at a time, while chunk_ is free.
+    uint32_t check = 0;
+    if (static_cast<size_t>(width) <= sizeof(chunk_)) {
+        for (size_t row = 0; row < total; row += width) {
+            memcpy(chunk_, src + row, width);
+            if (row >= pointer_lo && row < pointer_hi) {
+                video::compose_pointer(chunk_, static_cast<int>(row), width, width, pointer);
+            }
+            check = crc32(chunk_, width, check);
+        }
+    } else {
+        for (size_t i = 0; i < total; i++) {
+            uint8_t value = pixel(i);
+            check = crc32(&value, 1, check);
+        }
+    }
 
     uint8_t head[10];
-    put16(head + 0, static_cast<uint16_t>(display_.width()));
+    put16(head + 0, static_cast<uint16_t>(width));
     put16(head + 2, static_cast<uint16_t>(display_.height()));
     head[4] = kRgb332;
     head[5] = kRunLength;
@@ -230,7 +276,6 @@ void Protocol::send_screenshot(uint8_t seq)
 
     uint16_t chunks = 0;
     size_t used = 2; // every chunk starts with its number
-    uint32_t check = 0;
 
     auto flush = [&]() {
         put16(chunk_, chunks++);
@@ -246,23 +291,27 @@ void Protocol::send_screenshot(uint8_t seq)
         }
     };
 
+    // Run-length encoding:
+    //   0..127    copy the next (n + 1) bytes
+    //   128..255  repeat the next byte (n - 125) times, so 3 to 130
     size_t i = 0;
     while (i < total) {
+        const uint8_t first = pixel(i);
         size_t run = 1;
-        while (i + run < total && run < 130 && src[i + run] == src[i]) {
+        while (i + run < total && run < 130 && pixel(i + run) == first) {
             run++;
         }
         if (run >= 3) {
             reserve(2);
             chunk_[used++] = static_cast<uint8_t>(125 + run);
-            chunk_[used++] = src[i];
+            chunk_[used++] = first;
             i += run;
             continue;
         }
         // Literal bytes, up to the next run of three or more.
         size_t start = i;
         while (i < total && i - start < 128) {
-            if (i + 2 < total && src[i] == src[i + 1] && src[i] == src[i + 2]) {
+            if (i + 2 < total && pixel(i) == pixel(i + 1) && pixel(i) == pixel(i + 2)) {
                 break;
             }
             i++;
@@ -270,13 +319,13 @@ void Protocol::send_screenshot(uint8_t seq)
         size_t count = i - start;
         reserve(1 + count);
         chunk_[used++] = static_cast<uint8_t>(count - 1);
-        memcpy(chunk_ + used, src + start, count);
-        used += count;
+        for (size_t k = start; k < i; k++) {
+            chunk_[used++] = pixel(k);
+        }
     }
     if (used > 2) {
         flush();
     }
-    check = crc32(src, total);
 
     uint8_t tail[6];
     put16(tail + 0, chunks);

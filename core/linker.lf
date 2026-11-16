@@ -1,0 +1,6 @@
+# The video interrupt calls compose_pointer(), so its code and data must be
+# in internal RAM, reachable while the flash cache is busy or disabled.
+[mapping:core_pointer]
+archive: libcore.a
+entries:
+    pointer (noflash)
