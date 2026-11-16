@@ -90,8 +90,11 @@ the scripts should be retired.
   perfboard, which fits the board in use). Its USB-C sockets line up with the
   right edge, its antenna end points left, with no copper pour under the
   antenna.
-- Back (bottom) edge: VGA, the stacked USB-A pair and the audio jack, all
-  right-angle parts with their fronts at the edge. Left edge: microSD. Right
+- Back (bottom) edge: VGA at the left end, the stacked USB-A pair and the
+  audio jack, all right-angle parts with their fronts at the edge. About
+  22 mm of free wall between the VGA's right screw post and the USB-A
+  socket, so a bulky VGA plug fits and its thumbscrews can be turned. The
+  coin cell sits just above the VGA socket. Left edge: microSD. Right
   edge: the dev board's two USB-C sockets. The piezo header sits inside.
 - Ground: a pour on both layers. The VGA socket's five ground pins and both
   shell lugs go to it (on the perfboard, pin 10 alone gave no picture).
@@ -130,8 +133,8 @@ corner (as in the drawing); heights are above the board's top surface.
 
 | Wall | Opening | Centre | Size (w x h) | Centre height |
 | --- | --- | --- | --- | --- |
-| Back | VGA D shell, plus two 3.5 mm holes 25 mm apart for the screw posts | x = 45.9 | 19 x 10 | 6.3 |
-| Back | Stacked USB-A pair | x = 70.4 | 15 x 16 | 7.8 |
+| Back | VGA D shell, plus two 3.5 mm holes 25 mm apart for the screw posts | x = 24.5 | 19 x 10 | 6.3 |
+| Back | Stacked USB-A pair | x = 67.4 | 15 x 16 | 7.8 |
 | Back | Audio jack | x = 85.5 | 7 x 7 | 3.0 |
 | Left | microSD slot (the card sticks out about 2.5 mm) | y = 15.5 | 13 x 2.5 | 1.0 |
 | Right | Dev board USB-C pair, one slot for both | y = 36.7 | 30 x 5 | 14.2 |

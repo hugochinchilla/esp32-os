@@ -4,20 +4,20 @@
 <rect x="40.0" y="40.0" width="600.0" height="468.0" rx="12.0" fill="#e8f2e8" stroke="black" stroke-width="2"/>
 <rect x="220.0" y="176.20000000000002" width="420.0" height="168.0" fill="none" stroke="#555" stroke-dasharray="6,4"/>
 <text x="238.0" y="266.20000000000005" fill="#555">ESP32-S3-DevKitC-1 (70 x 28 mm, on sockets, about 16 mm tall)</text>
-<circle cx="64.0" cy="62.8" r="9.600000000000001" fill="white" stroke="black"/>
-<text x="64.0" y="83.19999999999999" text-anchor="middle">M3 (4, 3.8)</text>
 <circle cx="616.0" cy="485.20000000000005" r="9.600000000000001" fill="white" stroke="black"/>
 <text x="616.0" y="469.6" text-anchor="middle">M3 (96, 74.2)</text>
-<circle cx="64.0" cy="485.20000000000005" r="9.600000000000001" fill="white" stroke="black"/>
-<text x="64.0" y="469.6" text-anchor="middle">M3 (4, 74.2)</text>
 <circle cx="616.0" cy="62.8" r="9.600000000000001" fill="white" stroke="black"/>
 <text x="616.0" y="83.19999999999999" text-anchor="middle">M3 (96, 3.8)</text>
-<rect x="258.28000000000003" y="504.0" width="114.0" height="8" fill="#c0392b"/>
-<text x="315.28000000000003" y="498.0" text-anchor="middle" fill="#c0392b">VGA</text>
-<text x="315.28000000000003" y="528.0" text-anchor="middle" fill="#c0392b">x = 45.88</text>
-<rect x="417.40000000000003" y="504.0" width="90.0" height="8" fill="#c0392b"/>
-<text x="462.40000000000003" y="498.0" text-anchor="middle" fill="#c0392b">USB-A x2 (stacked)</text>
-<text x="462.40000000000003" y="528.0" text-anchor="middle" fill="#c0392b">x = 70.4</text>
+<circle cx="64.0" cy="485.20000000000005" r="9.600000000000001" fill="white" stroke="black"/>
+<text x="64.0" y="469.6" text-anchor="middle">M3 (4, 74.2)</text>
+<circle cx="64.0" cy="62.8" r="9.600000000000001" fill="white" stroke="black"/>
+<text x="64.0" y="83.19999999999999" text-anchor="middle">M3 (4, 3.8)</text>
+<rect x="129.88" y="504.0" width="114.0" height="8" fill="#c0392b"/>
+<text x="186.88" y="498.0" text-anchor="middle" fill="#c0392b">VGA</text>
+<text x="186.88" y="528.0" text-anchor="middle" fill="#c0392b">x = 24.48</text>
+<rect x="399.40000000000003" y="504.0" width="90.0" height="8" fill="#c0392b"/>
+<text x="444.40000000000003" y="498.0" text-anchor="middle" fill="#c0392b">USB-A x2 (stacked)</text>
+<text x="444.40000000000003" y="528.0" text-anchor="middle" fill="#c0392b">x = 67.4</text>
 <rect x="532.0" y="504.0" width="42.0" height="8" fill="#c0392b"/>
 <text x="553.0" y="498.0" text-anchor="middle" fill="#c0392b">Audio jack</text>
 <text x="553.0" y="528.0" text-anchor="middle" fill="#c0392b">x = 85.5</text>
@@ -40,13 +40,13 @@
 <text x="36.0" y="686.0" text-anchor="end" fill="#888">15</text>
 <line x1="40.0" y1="652.0" x2="640.0" y2="652.0" stroke="#ddd"/>
 <text x="36.0" y="656.0" text-anchor="end" fill="#888">20</text>
-<rect x="258.28000000000003" y="704.2" width="114.0" height="60.0" fill="none" stroke="#c0392b" stroke-width="2"/>
-<text x="315.28000000000003" y="700.2" text-anchor="middle" fill="#c0392b">19 x 10</text>
-<circle cx="240.28000000000003" cy="734.2" r="10.5" fill="none" stroke="#c0392b" stroke-width="2"/>
-<circle cx="390.28000000000003" cy="734.2" r="10.5" fill="none" stroke="#c0392b" stroke-width="2"/>
-<text x="315.28000000000003" y="788.0" text-anchor="middle" fill="#c0392b">+ two 3.5 mm holes 25 mm apart</text>
-<rect x="417.40000000000003" y="676.0" width="90.0" height="96.0" fill="none" stroke="#c0392b" stroke-width="2"/>
-<text x="462.40000000000003" y="672.0" text-anchor="middle" fill="#c0392b">15 x 16</text>
+<rect x="129.88" y="704.2" width="114.0" height="60.0" fill="none" stroke="#c0392b" stroke-width="2"/>
+<text x="186.88" y="700.2" text-anchor="middle" fill="#c0392b">19 x 10</text>
+<circle cx="111.88" cy="734.2" r="10.5" fill="none" stroke="#c0392b" stroke-width="2"/>
+<circle cx="261.88" cy="734.2" r="10.5" fill="none" stroke="#c0392b" stroke-width="2"/>
+<text x="186.88" y="788.0" text-anchor="middle" fill="#c0392b">+ two 3.5 mm holes 25 mm apart</text>
+<rect x="399.40000000000003" y="676.0" width="90.0" height="96.0" fill="none" stroke="#c0392b" stroke-width="2"/>
+<text x="444.40000000000003" y="672.0" text-anchor="middle" fill="#c0392b">15 x 16</text>
 <rect x="532.0" y="730.0" width="42.0" height="42.0" fill="none" stroke="#c0392b" stroke-width="2"/>
 <text x="553.0" y="726.0" text-anchor="middle" fill="#c0392b">7 x 7</text>
 </svg>

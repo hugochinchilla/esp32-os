@@ -45,11 +45,11 @@ def pin_x(n):
     return SOCK_X0 + (n - 1) * 2.54
 
 
-# Back panel (bottom edge): VGA, USB-A pair and audio jack, fronts at the board edge,
+# Back panel (bottom edge): VGA at the left end (room for the cable's thumbscrews), USB-A pair and audio jack, fronts at the board edge,
 # so a 3D-printed case needs cut-outs in one wall (plus microSD on the left wall and
 # the dev board's USB-C sockets on the right wall).
-VGA_X = 50.2     # pin 1 of the HD15; body spans VGA_X - 19.8 .. VGA_X + 11.2
-USB_X = 66.9     # pin 1 of the USB-A pair; body spans USB_X - 3.8 .. USB_X + 10.8
+VGA_X = 28.8     # pin 1 of the HD15; body spans VGA_X - 19.8 .. VGA_X + 11.2
+USB_X = 63.9     # pin 1 of the USB-A pair; body spans USB_X - 3.8 .. USB_X + 10.8
 JACK_X = 85.5    # jack centre; the footprint draws its own notch in the edge (+-6.5 mm)
 
 # ref: (x, y, rotation in degrees), board coordinates (mm, y down)
@@ -59,7 +59,7 @@ PLACE = {
     "J3": (VGA_X, H - 6.99, 0),
     "J4": (JACK_X, H - 4.5, 0), "J8": (96.0, 55.0, 0),
     "J5": (7.0, 15.5, 90),
-    "BT1": (16.5, 62.5, 0),
+    "BT1": (16.5, 56.0, 0),
     "U1": (13.0, 32.0, 0), "C3": (13.0, 27.0, 0), "C4": (13.0, 37.0, 0),
     "R21": (19.5, 29.5, 90), "R22": (21.5, 29.5, 90), "R23": (19.5, 35.0, 90),
     "R24": (19.5, 7.5, 0), "R25": (19.5, 9.7, 0), "R26": (19.5, 11.9, 0),
@@ -78,7 +78,7 @@ for ref, gpio, row in parts.VGA_LADDER:
     PLACE[ref] = (pin_x(parts.DEVKIT_LEFT.index(gpio) + 1), 54.4 + 3.2 * row, 90)
 
 HOLES = [(4.0, 3.8), (96.0, 3.8), (4.0, 74.2), (96.0, 74.2)]
-FIDUCIALS = [(32.0, 3.0), (97.0, 45.0), (3.0, 47.0)]
+FIDUCIALS = [(32.0, 3.0), (97.0, 45.0), (3.0, 40.0)]
 ANTENNA_KEEPOUT = (SOCK_X0 - 12.0, 20.0, SOCK_X0, 52.0)   # no copper pour under the module antenna
 
 
@@ -248,13 +248,13 @@ def build():
     add_text(board, "pin 1: 3V3", SOCK_X0, J1_Y - 3.0, 0.9)
     add_text(board, "CHINCHILLA HAT v0.3", SOCK_X0 + 30.0, 42.0, 1.6, bold=True)
     add_text(board, "github.com/hugochinchilla/esp32-os", SOCK_X0 + 30.0, 44.6, 0.9)
-    add_text(board, "VGA", VGA_X - 4.0, 66.3, 1.2, bold=True)
+    add_text(board, "VGA", VGA_X + 5.5, 66.3, 1.2, bold=True)
     add_text(board, "AUDIO", JACK_X, 62.9, 1.0, bold=True)
     add_text(board, "PIEZO", 96.0, 61.0, 0.8, bold=True)
     add_text(board, "3V3", 98.5, 55.0, 0.8)
     add_text(board, "14", 98.2, 57.54, 0.8)
     add_text(board, "microSD", 11.0, 22.6, 1.0, bold=True)
-    add_text(board, "CR2032 +", 15.5, 54.0, 1.0, bold=True)
+    add_text(board, "CR2032 +", 15.5, 47.5, 1.0, bold=True)
     add_text(board, "EXP: 3V3 38 47 48 5V GND", 46.0, 15.6, 0.8)
     add_text(board, "antenna: keep clear", SOCK_X0 - 6.0, 52.5, 0.8)
 
