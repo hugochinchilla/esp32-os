@@ -234,13 +234,15 @@ ShutDownDialog &shut_down_window()
 constexpr int kMaxApps = 16;
 wm::MenuItem g_program_items[kMaxApps];
 wm::Menu g_programs = {g_program_items, 0};
+void open_screen_saver(void *) { screen_saver_dialog(); }
 void network_panel(void *) { open_network(); }
 wm::MenuItem g_settings_items[] = {
     {"&Control Panel", nullptr, nullptr, nullptr, nullptr, wm::kMenuDisabled},
     {"&Taskbar...", nullptr, nullptr, nullptr, nullptr, wm::kMenuDisabled},
     {"&Network", &network_panel, nullptr, nullptr, nullptr, wm::kMenuDisabled},
+    {"&Screen Saver...", &open_screen_saver, nullptr, nullptr, nullptr, 0},
 };
-wm::Menu g_settings = {g_settings_items, 3};
+wm::Menu g_settings = {g_settings_items, 4};
 wm::MenuItem g_start_items[5];
 wm::Menu g_start = {g_start_items, 5};
 
@@ -353,6 +355,7 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
         g_settings_items[2].flags = 0;
     }
     wm.set_desktop_icons(g_icons, 4);
+    install_screen_saver();
     start_network();
 
     launch(*find_app("Welcome"));

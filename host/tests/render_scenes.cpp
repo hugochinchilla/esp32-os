@@ -383,6 +383,38 @@ int main(int argc, char **argv)
     desktop.tick();
     save("37-defragmenter-done");
 
+    // The screensaver. Its dialog from Start > Settings (its last entry), then a preview of each animation: 150 frames, five seconds.
+    while (desktop.active() != nullptr) {
+        desktop.close(*desktop.active());
+    }
+    centre_of(desktop.taskbar_button(-1), x, y);
+    click(x, y);
+    centre_of(desktop.popup_item(0, 1), x, y);
+    mouse(x, y, 0);
+    clock_.now += wm::Wm::kSubmenuDelayUs;
+    desktop.tick();
+    save("37a-settings-menu");
+    centre_of(desktop.popup_item(1, 3), x, y); // Screen Saver...
+    click(x, y);
+    save("37b-screen-saver-dialog");
+    const char *const savers[3] = {"37c-saver-starfield", "37d-saver-chinchillas", "37e-saver-curves"};
+    for (int i = 0; i < 3; i++) {
+        key(wm::key::Home); // the list: (None), then the three
+        for (int n = 0; n <= i; n++) {
+            key(wm::key::Down);
+        }
+        clock_.now += 1000000;          // the clock is the seed of the run
+        key(0x13, true);                // Alt+P: Preview
+        for (int frame = 0; frame < 150; frame++) {
+            desktop.tick();
+            clock_.now += 33334;
+        }
+        save(savers[i], false);
+        key(wm::key::Escape); // wakes the screen; the dialog stays
+    }
+    save("37f-after-screen-saver");
+    key(wm::key::Escape); // closes the dialog
+
     // Shut Down from the Start menu: Enter picks Shut Down, and the screen
     // says the power can go.
     centre_of(desktop.taskbar_button(-1), x, y);

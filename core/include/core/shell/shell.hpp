@@ -47,6 +47,11 @@ bool powered_down();
 // The Task Manager (also Ctrl+Alt+Del): opens it or brings it to the front.
 void open_task_manager();
 
+// The screensaver's settings (Start > Settings > Screen Saver). It starts
+// after kScreenSaverMinutes without input unless changed there.
+constexpr int kScreenSaverMinutes = 5, kScreenSaverMaxMinutes = 99;
+void screen_saver_dialog();
+
 // File dialogs, for any program. Modal to `owner`. `chosen` gets the full
 // path ("C:\docs\notes.txt") when the user picks one; nothing on Cancel.
 // Save As asks before replacing an existing file.

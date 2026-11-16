@@ -29,6 +29,22 @@ struct DesktopIcon {
     void *context;
 };
 
+// A screensaver: takes the whole screen over after a while with no input.
+// While it shows, the window manager paints nothing and hides the pointer;
+// the next key press, click or real mouse movement brings the desktop back
+// and is not passed on to any window.
+class ScreenSaver {
+public:
+    // The screen is the saver's from here on.
+    virtual void begin(uint8_t *pixels, int width, int height, uint32_t seed) = 0;
+    // Called from every Wm::tick() while it shows; draws when a frame is due.
+    virtual void tick(uint64_t now_us) = 0;
+    virtual void end(uint64_t /*now_us*/) {}
+
+protected:
+    ~ScreenSaver() = default;
+};
+
 class Wm : public ports::InputSink, public ports::Desktop {
 public:
     static constexpr int kMaxWindows = 16;
@@ -41,6 +57,7 @@ public:
     static constexpr uint32_t kRepeatDelayUs = 500000, kRepeatUs = 33000;
     static constexpr uint32_t kSubmenuDelayUs = 300000;
     static constexpr int kMaxTimers = 16;
+    static constexpr int kSaverWakeMove = 4; // pointer movement (pixels) that ends the screensaver
     using TimerFn = void (*)(void *context);
 
     Wm(ports::Display &display, ports::Pointer &pointer, ports::Clock &clock);
@@ -111,6 +128,22 @@ public:
     void stop_timer(int id);
     void tick();
     uint64_t now_us(); // since start-up; does not wrap
+
+    // The screensaver (nullptr: none) and the time without input after
+    // which it starts by itself (0: never). start_screen_saver() shows it
+    // now (a preview).
+    void set_screen_saver(ScreenSaver *saver, uint32_t idle_seconds);
+    void start_screen_saver();
+    void stop_screen_saver();
+    bool screen_saver_active() const { return saver_on_; }
+    // The screensaver says which part of the screen it changed, for whoever
+    // listens for painting (a remote screen).
+    void screen_saver_drew(const Rect &r)
+    {
+        if (damage_fn_ != nullptr) {
+            damage_fn_(r, damage_context_);
+        }
+    }
 
     // Caret blinking: widgets draw their caret only while this is true.
     bool caret_visible() const { return caret_on_ || !animations_; }
@@ -305,6 +338,13 @@ private:
     int repeat_timer_ = 0;
     int submenu_timer_ = 0;
     int submenu_level_ = -1, submenu_item_ = -1;
+
+    ScreenSaver *saver_ = nullptr;
+    uint64_t saver_idle_us_ = 0;
+    uint64_t last_input_us_ = 0;
+    bool saver_on_ = false;
+    int saver_x_ = 0, saver_y_ = 0;  // the pointer when the saver started
+    bool swallow_button_ = false;    // the press that woke the screen, until let go
 };
 
 } // namespace wm

@@ -81,6 +81,10 @@ set_tests_properties(net net_pictures rfb vnc_tool PROPERTIES ENVIRONMENT "ASAN_
 add_executable(dither_eval dither_eval.cpp)
 target_link_libraries(dither_eval PRIVATE core)
 
+add_executable(test_saver tests/test_saver.cpp)
+target_link_libraries(test_saver PRIVATE core)
+add_test(NAME saver COMMAND test_saver)
+
 # Memory-port buffers live as long as the program, as on the board, so the
 # leak checker would report them; applied after every add_test above.
 get_property(all_tests DIRECTORY PROPERTY TESTS)

@@ -36,3 +36,4 @@ Files so far:
 | --- | --- | --- |
 | `viewer.ini` | `[view]` | `dither`: none, bayer2, bayer4, bayer8, blue-noise, floyd-steinberg, floyd-serpentine, atkinson, jarvis-judice-ninke, stucki, sierra-lite |
 | `files.ini` | `[view]` | `show_hidden`: true or false |
+| `screensaver.ini` | `[saver]` | `saver`: none, starfield, chinchillas, curves. `wait_minutes`: 1 to 99 |
