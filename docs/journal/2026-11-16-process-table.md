@@ -315,3 +315,30 @@ has been closed.
 - To confirm with the owner: the choices in 3.2 and 3.6 (the names). He
   confirmed 3.7 the same evening, asked with the three options and the two
   pictures: programs by default, plus the "Show all processes" box.
+
+## On the board (added by the board thread, 2026-11-16)
+
+Built from a fresh sdkconfig with main merged in (e1993b2), flashed, checked:
+
+1. Ctrl+Alt+Del, then Alt+A (Show all processes): init 1, dbgd 2, vncd 3,
+   httpd 4, desktop 5, netd 6, then Task Manager 7. The order differs from
+   the prediction (netd 3): the network starts at the end of `shell::start`,
+   after the desktop. Without "Show all processes" the Task Manager lists the
+   programs but not itself.
+2. PIDs count up: the Editor 8 and the File manager 9; the Editor closed, its
+   row went; opened again it was 10, the next Task Manager 11.
+3. The window list carries each window's owner (`"pid"` in the reply:
+   Documents 9, the Editor 10, the Task Manager 11). `tools/dbg.py windows`
+   did not print it; it does now (a one-line change made at the merge).
+4. After the Task Manager and the File manager closed, the Editor's caret
+   (12 pixels) kept turning on and off every 0.27 s sample, and the clock
+   changed when the minute did.
+5. K held for 1.5 s in the Editor typed 31 letters (one, then a repeat every
+   33 ms after the 500 ms pause). File > Save of a 300 KB file (3.4 s) left
+   the title clean: the key-repeat fix holds with the timer owned by the
+   desktop.
+6. Free internal RAM 102,183 bytes against 105,435 on main (3.2 KB less; the
+   heap total is 3.3 KB smaller, so it is static). Repaint of the empty
+   desktop 14.30 ms against 14.07 ms (within the noise). Video: 0 late, 0
+   missed refills.
+

@@ -772,8 +772,8 @@ def main(argv=None):
             board.reboot(fast=args.fast)
         elif args.command == "windows":
             for w in board.windows():
-                print("%(id)d z%(z)d %(x)d,%(y)d %(w)dx%(h)d %(state)s%(f)s  %(title)s"
-                      % dict(w, f=" focused" if w["focused"] else ""))
+                print("%(id)d pid %(p)s z%(z)d %(x)d,%(y)d %(w)dx%(h)d %(state)s%(f)s  %(title)s"
+                      % dict(w, p=w.get("pid", "?"), f=" focused" if w["focused"] else ""))
         elif args.command == "ls":
             for name, is_folder, size in board.ls(args.folder):
                 print("%-8s %s" % ("<folder>" if is_folder else size, name))
