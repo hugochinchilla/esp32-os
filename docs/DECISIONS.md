@@ -53,6 +53,13 @@ constants run from PSRAM (CONFIG_SPIRAM_XIP_FROM_PSRAM), because writing the
 flash otherwise turns the cache off and the picture shakes (see Found on the
 bench).
 
+### Flash layout (2026-11-16)
+
+Decided by the owner. The app area is 0x10000-0x400000 (3.94 MB, one app now;
+it can later be split into two over-the-air update slots of about 1.9 MB
+without moving C:). C: is LittleFS on the 12 MB above it. A larger C: with no
+room kept for updates was the alternative.
+
 ### Program settings (2026-11-16)
 
 Decided by the owner. Each program keeps its settings in its own plain text
@@ -96,7 +103,6 @@ other threads do not merge their own work.
 | Remote keyboard, mouse and screen for a person | VNC server, web page, debug tool only | VNC server |
 | How apps are delivered | Built into the firmware, or loadable from disk | Built in first, behind an app interface. Still the owner's question; the shell works on that assumption: programs are entries in a table (`core/include/core/shell/shell.hpp`: name, icon, open function) that the Start menu and desktop icons launch the same way |
 | Shell details chosen while building menus, the Start menu and widgets; to confirm or overrule | See "Chosen in the shell milestone" below | As built |
-| Flash layout (provisional) | As built: app area 0x10000-0x400000 (3.94 MB, one app now; it can later be split into two OTA slots of about 1.9 MB without moving C:), C: LittleFS the 12 MB above it; or a larger C: with no room kept for OTA | As built. The app is 607 KB now (the Wi-Fi branch's 1.10 MB fits); with code run from PSRAM (see Found on the bench) the app's size also comes out of external RAM |
 | A RAM disk as well as C: | Drop it, or keep a small one as a separate temporary drive | Dropped with LittleFS, since nothing needs it; the RAM disk code stays for the PC tests and the simulator |
 | Details chosen in the files milestone; to confirm or overrule | See "Chosen in the files milestone" below | As built |
 | Details chosen in the image viewer milestone; to confirm or overrule | See "Chosen in the image viewer milestone" below | As built |
