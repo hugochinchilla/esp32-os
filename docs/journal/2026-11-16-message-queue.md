@@ -164,6 +164,34 @@ the network stays on the clock, and the label-only service rows are being
 removed from the process table by the thread that works on it (kill signals,
 PR 17), not on this branch.
 
+**Then he questioned the arrangement itself**, in his own words:
+
+> It seems odd having the network be monitored by the ui. If I were to make
+> the board detect if a monitor is not plugged in and skip the ui completely
+> from running, who checks the network? Maybe there is an in the middle
+> ground, where it is not a dedicated thread but not inside the loop from the
+> ui, do we have another candidate loop for such tasks?
+
+(Typed on a phone; spelling tidied.) The answer given: there is no other
+loop of ours. The loops that exist besides the UI's belong to ESP-IDF (Wi-Fi,
+the network stack, its timer and event tasks), with small stacks and a system
+that stalls if slow work is done in them. The middle ground is a loop that
+does not exist yet: **one services task** shared by every network service,
+asleep in `select()` on all their sockets, the way Unix's `inetd` listened
+for many services in one process. One stack (about 4 KB) for all of them
+instead of one each, and no polling. It needs the message queue first,
+because the VNC server puts keys and mouse into the window manager, which
+only the UI task may touch; from a services task those become messages. On
+the no-monitor case: VNC shows the desktop, so without the UI it has nothing
+to show; what a headless board wants is telnet and the shell, and the telnet
+listener would live in the services loop.
+
+Three options went on a card: the services loop as a new backlog item after
+this one (recommended, so the queue is checked on the board by itself and
+any change in timing can be pinned on one thing); build it in this same
+change (a much larger change and a later board turn); or leave the network
+in the UI loop. **The owner chose the new backlog item.** It is item 8b.
+
 ## 5. What was built
 
 **The port and the dispatcher** (`core/include/core/msg/queue.hpp`,
@@ -326,5 +354,6 @@ never executed on a board. That is the board turn, section 7.
   another task does (noted in the process table's entry).
 - Wi-Fi events still reach the Network panel through a 250 ms timer that
   asks. They could be messages now.
+- Backlog item 8b, the services loop, takes the network out of the UI loop.
 - Backlog items 10 (jobs), 12 (TTY), 18 (init) and 26 (apps on their own
   tasks) build on this.

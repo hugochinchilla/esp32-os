@@ -28,6 +28,7 @@ board or the merge), `done`.
 | 7 | Watchdog, crash record, and an error screen on the next start | M | 2 | Yes | todo |
 | | **Phase 2: work off the UI task** | | | | |
 | 8 | Message queue into the UI task. The loop sleeps until there is work | M | | Yes | on a branch (`claude/project-thread-2jwyaw`): PC tests pass, firmware compiled, waiting for the board. [Journal](journal/2026-11-16-message-queue.md) |
+| 8b | Services loop: one task for the network services (VNC, the web viewer, later the telnet listener) that sleeps on all their sockets and reaches the desktop only by messages. The network leaves the UI loop | M | 8 | Yes | todo |
 | 9 | Lock on the file system | S | | | todo |
 | 10 | Jobs owned by a process, and "cannot exit until jobs finish". The Editor saves through a job, its window locked meanwhile | M | 2, 8, 9 | Yes | todo |
 | 11 | Three priority classes (Low, Normal, High) for jobs and services | S | 10 | Yes | todo |

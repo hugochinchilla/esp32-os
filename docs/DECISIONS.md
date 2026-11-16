@@ -1165,4 +1165,10 @@ and not yet run on it. The options and the reasons are in
   internal RAM); it goes away by itself when the VNC server becomes a task.
   **Confirmed by the owner, 2026-11-16** ("Ok", after asking who would own
   the watcher: nobody does today, the UI task looks at the network itself).
+  For now only: the owner found it odd that the UI looks after the network
+  (a board with no monitor might not run the UI at all) and chose, on a card,
+  a **services loop** as its own backlog item (8b): one task shared by the
+  network services, asleep on all their sockets, that reaches the desktop
+  only by messages. The other options were to build it in the same change or
+  to leave the network in the UI loop.
 - The UI task runs at most 16 messages per round, then timers and painting.
