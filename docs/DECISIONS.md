@@ -103,6 +103,7 @@ other threads do not merge their own work.
 | Remote keyboard, mouse and screen for a person | VNC server, web page, debug tool only | VNC server |
 | How apps are delivered | Built into the firmware, or loadable from disk | Built in first, behind an app interface. Still the owner's question; the shell works on that assumption: programs are entries in a table (`core/include/core/shell/shell.hpp`: name, icon, open function) that the Start menu and desktop icons launch the same way |
 | Shell details chosen while building menus, the Start menu and widgets; to confirm or overrule | See "Chosen in the shell milestone" below | As built |
+| Who may use the remote screen | As built (VNC on 5900 and the browser page on 80 for anyone on the local network, no password, always on with Wi-Fi); off by default with a switch in a settings file; a password (VNC authentication, and the same for the page) | Asked. Anything that can reach the board on the network gets full mouse and keyboard control. Nothing is reachable from the internet unless the router forwards the ports |
 | A RAM disk as well as C: | Drop it, or keep a small one as a separate temporary drive | Dropped with LittleFS, since nothing needs it; the RAM disk code stays for the PC tests and the simulator |
 | Details chosen in the files milestone; to confirm or overrule | See "Chosen in the files milestone" below | As built |
 | Details chosen in the image viewer milestone; to confirm or overrule | See "Chosen in the image viewer milestone" below | As built |
@@ -229,6 +230,18 @@ First picture: 2026-11-16, through a VGA-to-HDMI adapter.
   partly the camera's compression of fine detail; it is the one pattern
   where shimmer can be seen. The longest timer slice while decoding was
   21 to 31 ms with every dither.
+- Remote screen on the board (2026-11-16, PR 7's VNC and browser parts).
+  VNC on port 5900: colours exact (0 pixels differ from the board's own
+  screenshot), mouse and keys work, a full screen takes 0.37 s with ZRLE
+  (4.5 KB) and 1.9 s as plain pixels (300 KB, about 160 KB/s over Wi-Fi).
+  The browser page on port 80 connects within a second in Chromium, takes
+  mouse and keys, takes over from a VNC client (which is let go) and hands
+  back to the next one. 59.5 frames a second and a steady picture with
+  either viewer. Free internal RAM 141 KB with a viewer connected; firmware
+  1.21 MB. Both listen on every address of the board, start whenever the
+  radio starts, cannot be switched off, and ask for no password (see Still
+  open). There is no VNC viewer on the laptop: `tools/rfb_client.py` checks
+  the server.
 - Wi-Fi on the board (2026-11-16, PR 7's Wi-Fi part). The radio starts in
   70 ms after the start-up screens; a scan takes 2.9 s; after a restart the
   board joins the remembered network on its own about 5 s after the radio
