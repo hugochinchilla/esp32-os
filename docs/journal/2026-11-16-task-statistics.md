@@ -259,3 +259,45 @@ is ESP-IDF's default and looks fine in every short test.
   the PID tag on the Memory port.
 - `dbg.py memory`'s stack list could be replaced by `dbg.py tasks`, which
   shows the same column and more.
+
+## 7. On the board (added by the board thread, 2026-11-16)
+
+Merged with main (one-shot fast start, journal entries), built from a fresh
+sdkconfig (`CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS`, the clock
+`CONFIG_FREERTOS_RUN_TIME_STATS_USING_ESP_TIMER`, a 64-bit counter), flashed,
+and checked:
+
+1. `dbg.py tasks` 6.6 s after a (fast) start:
+
+```
+  ID  NAME             STATE      PRI CORE  %START    %NOW         TIME   STACK IN
+   6  IDLE1            ready        0    1    99.7   100.0     0:06.610     780 internal
+   5  IDLE0            ready        0    0    92.1    96.0     0:06.106     772 internal
+  10  ui               running      5    -     5.1     3.8     0:00.336   10956 internal
+  15  wifi             blocked     23    0     1.7     0.1     0:00.116    3636 internal
+  13  tiT              blocked     18    0     0.3     0.0     0:00.017    1768 internal
+   3  esp_timer        suspended   22    0     0.0     0.0     0:00.003    3164 internal
+  11  scanlog          blocked      1    -     0.0     0.0     0:00.001    2380 internal
+  16  mdns             blocked      1    0     0.0     0.0     0:00.003    2392 internal
+   7  Tmr Svc          blocked      1    -     0.0     0.0     0:00.000    1412 internal
+   1  ipc0             suspended   24    0     0.1     0.0     0:00.005     588 internal
+   2  ipc1             suspended   24    1     0.1     0.0     0:00.005     580 internal
+  14  sys_evt          blocked     20    0     0.0     0.0     0:00.001     772 internal
+12 tasks on 2 cores, up 6.6 s, idle 191.8 % of 200 % since start, 196.0 % in the last 1.01 s
+```
+
+   ui, IDLE0, IDLE1 and the Wi-Fi tasks are there; %NOW sums to 199.9.
+   IDLE1 shows 100 % although the video interrupt takes about 5 % of core 1
+   (`scanout_us`): interrupt time is charged to the task it interrupts, as
+   section 5 expected, so the video does not appear in the list.
+2. Across 20 runs of `dbg.py tasks` (45,744 refills): 0 late, 0 missed.
+3. Repaint of the empty desktop: 14.21 ms on average, against 14.15 ms on
+   main (+0.4 %, within the noise).
+4. Free internal RAM: 105,443 bytes, against 107,479 on main (2.0 KB less).
+5. The picture on the webcam while `dbg.py tasks` ran in a loop: 720 frames,
+   the largest change between frames 0.11 (camera noise; a shaken frame
+   measured 38 before). Steady.
+
+The run-time clock reads esp_timer at every task switch; no change in the UI
+or scanout timing could be measured.
+
