@@ -26,9 +26,10 @@ Format (INI):
 Programs use `fs::Ini` (`core/include/core/fs/ini.hpp`) through
 `shell::load_settings` and `shell::save_settings`. Changing a value rewrites
 only its line: comments, blank lines and keys the program does not know are
-kept. A missing or damaged file gives the program's defaults. Saving writes
-`<program>.ini.tmp` first and then puts it in place of the old file; if power
-is lost in between, the next start reads the `.tmp` file.
+kept. A missing or damaged file gives the program's defaults. Saving writes a
+hidden temporary file (`.~<program>.ini.tmp`) and then gives it the real name
+in one step, so a power cut leaves the old settings or the new ones (see
+`Storage::begin_save`).
 
 Files so far:
 
@@ -41,3 +42,9 @@ Files so far:
 | `desktop.ini` | `[welcome]` | `created`: true once welcome.txt has been put in C:\Documents\Desktop, so a deleted copy does not come back; set it to false to get it again |
 | `desktop.ini` | `[documents]` | `moved`: true once an old C:\docs has been moved into C:\Documents (done by itself at start-up) |
 | `network.ini` | `[wifi]` | `tx_power_dbm`: the radio's top transmit power, 2 to 20, default 2 (higher values put lines on the picture while connecting). `enabled`: false leaves the radio off, default true |
+
+A one-shot fast start for debugging: `tools/dbg.py reboot --fast`, or
+`tools/dbg.py boot fast-next` before flashing, makes the next start behave as
+`fastboot = true` once (no self-test screen, no countdown, no monitor wait, no
+splash, no memory test) and logs "one-shot fast boot". boot.ini is not
+changed; the start after that is normal again. The flag is kept in NVS.

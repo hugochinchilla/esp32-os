@@ -174,6 +174,15 @@ options and why each was or was not taken, is in
 - **Figures in Task Manager**: FreeRTOS run-time statistics for the task view,
   and the window manager's own timing charged to the PID it is calling for
   programs that share the UI task.
+  - The run-time statistics are switched on (backlog item 1,
+    `docs/journal/2026-11-16-task-statistics.md`): the kernel reads the
+    microsecond clock (`esp_timer`, the same for both cores) at every task
+    switch and keeps a 64-bit total per task. The System port hands them out
+    as a list of tasks with raw counters (`ports::System::tasks`); whoever
+    shows them takes two readings and divides. `tools/dbg.py tasks` is the
+    first reader. Time spent in interrupts is counted as the interrupted
+    task's, so the video's share still comes from its own stopwatch
+    (`scanout_us`).
 - **Signals**: TERM (asks, like the close button), KILL (the OS removes what
   the process owns; it takes effect at a safe point, never while the task
   holds an OS lock) and INT (Ctrl+C). End Task asks politely first and offers
@@ -899,6 +908,19 @@ tested on the PC only (not yet compiled for or run on the board).
 - The folder is read again every 2 s (a few directory reads) instead of
   hooks in every program that writes files.
 
+### One-shot fast start for debug restarts (2026-11-16)
+
+Asked for by the owner: restarts made by the agents skip the deliberately slow
+start-up. `tools/dbg.py reboot --fast` (Reboot with flag bit 0) or
+`tools/dbg.py boot fast-next` (Boot screen 2, for before flashing) arms one
+fast start: the next boot behaves as `fastboot = true`, logs "one-shot fast
+boot", and clears the flag; boot.ini is untouched. The flag is a word in NVS:
+RTC no-init memory was tried first and survives a software restart, but the
+reset after flashing cleared it on this board. The agents use it for their
+own restarts and post-flash restarts, except when the start-up screens are
+what is being tested or shown. Measured: desktop 0.27 s after the video
+starts, against 11.3 s for a normal start.
+
 ### Submenus with a slow pointer (2026-11-16)
 
 Found by the owner: moving slowly from Programs into its submenu closed it.
@@ -958,10 +980,32 @@ moves 2 px every 20 ms, straight and on a slant.
   on the empty desktop does nothing (it could move into
   C:\Documents\Desktop).
 
+### Chosen for safe saves and the hourglass (2026-11-16)
+
+Journal: `docs/journal/2026-11-16-safe-saves-and-hourglass.md`.
+
+- Decided by the owner: the busy pointer is drawing A, the sand timer (15x22,
+  own art), out of four (`docs/look/hourglass-options.png`). Not chosen: a
+  round glass, the arrow with a small glass beside it, a timer with
+  chinchilla ears.
+- To confirm: the temporary file sits beside the document under a hidden
+  name, `.~<name>.tmp` (not a visible `name.tmp`, not one `C:\.tmp` folder).
+- To confirm: every whole-file write saves this way, the settings files
+  included, not only the Editor.
+- To confirm: the hourglass shows for every save and load in the Editor,
+  however short, and does not move or animate. A temporary file left by a
+  power cut stays hidden until that document is saved again.
+- A save needs room for both copies until its last step; a disk too full
+  refuses the save and keeps the old document.
+- `Volume::rename()` still refuses an existing name (the Rename command);
+  `Volume::replace()` is the one that takes a file's place.
+
 ## To confirm on the bench
 
 - The picture is stable at 640x480 with the framebuffer in PSRAM.
 - The colours and the four greys look right in both modes.
+- Safe saves and the hourglass (PC only so far): the six checks in section 7
+  of `docs/journal/2026-11-16-safe-saves-and-hourglass.md`.
 - The picture stays stable with Wi-Fi active and during flash writes.
 - Wi-Fi (never run on the board yet): the radio starts and how long it
   takes; a scan lists the networks around; a wrong password is reported as

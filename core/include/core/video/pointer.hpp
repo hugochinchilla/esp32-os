@@ -38,6 +38,8 @@ const PointerShape &resize_we_pointer();   // left-right
 const PointerShape &resize_ns_pointer();   // up-down
 const PointerShape &resize_nwse_pointer(); // top left to bottom right
 const PointerShape &resize_nesw_pointer(); // top right to bottom left
+// The hourglass, shown while a program makes the user wait (original art).
+const PointerShape &busy_pointer();
 
 // Mixes the pointer into a run of pixels on their way out. `out` holds
 // `pixel_count` pixels starting at pixel number `first_pixel_index` of the

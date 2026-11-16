@@ -33,6 +33,10 @@ void parent(const char *path, char *out, int capacity);
 bool join(const char *folder, const char *name, char *out, int capacity);
 // A name that can be used for a file or folder.
 bool valid_name(const char *name);
+// Where a file is written before it takes the place of `path`: a hidden name
+// in the same folder ("C:\docs\a.txt" -> "C:\docs\.~a.txt.tmp"). False if it
+// does not fit.
+bool temporary(const char *path, char *out, int capacity);
 } // namespace path
 
 // A file opened through Storage.
@@ -40,6 +44,13 @@ struct File {
     ports::Volume *volume = nullptr;
     int handle = -1;
     bool open() const { return volume != nullptr; }
+};
+
+// A file being saved the safe way: see Storage::begin_save().
+struct Save {
+    File file;
+    char path[kMaxPath] = {};
+    char temporary[kMaxPath] = {};
 };
 
 class Storage {
@@ -57,6 +68,8 @@ public:
     FsError make_folder(const char *path) const;
     FsError remove(const char *path) const;
     FsError rename(const char *from, const char *to) const; // same drive only
+    // `from` takes the name `to` in one step, over a file already there.
+    FsError replace(const char *from, const char *to) const; // same drive only
 
     FsError open(const char *path, OpenMode mode, File &file) const;
     FsError read(File &file, void *data, size_t size, size_t &done) const;
@@ -64,7 +77,16 @@ public:
     FsError seek(File &file, uint32_t offset) const;
     FsError close(File &file) const;
 
-    // Whole files at once.
+    // Saving without putting the old file at risk. The new contents go to a
+    // temporary file beside it (write() to save.file); finish_save() closes
+    // it and gives it the real name in one step. Until then the old file is
+    // untouched, so a power cut, a full disk or a failed write leaves it as
+    // it was. finish_save(save, false) gives up: it removes the temporary
+    // file. It also does that by itself when its own steps fail.
+    FsError begin_save(const char *path, Save &save) const;
+    FsError finish_save(Save &save, bool keep = true) const;
+
+    // Whole files at once. write_file() saves the safe way too.
     FsError read_file(const char *path, void *data, size_t capacity, size_t &size) const;
     FsError write_file(const char *path, const void *data, size_t size) const;
 

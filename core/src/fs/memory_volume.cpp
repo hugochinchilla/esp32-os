@@ -276,6 +276,34 @@ FsError MemoryVolume::rename(const char *from, const char *to)
     return FsError::Ok;
 }
 
+FsError MemoryVolume::replace(const char *from, const char *to)
+{
+    const int at = find(from);
+    if (at < 0) {
+        return FsError::NotFound;
+    }
+    const int old = find(to);
+    if (at == 0 || nodes_[at].folder || (old >= 0 && nodes_[old].folder)) {
+        return FsError::IsFolder;
+    }
+    if (old == at) {
+        return FsError::Ok;
+    }
+    if (in_use(at) || (old >= 0 && in_use(old))) {
+        return FsError::InUse;
+    }
+    if (old < 0) {
+        return rename(from, to);
+    }
+    // The old file's entry takes the new contents, so it keeps its name as
+    // written and its place in the folder.
+    free_chain(nodes_[old].first);
+    nodes_[old].first = nodes_[at].first;
+    nodes_[old].size = nodes_[at].size;
+    nodes_[at].used = 0;
+    return FsError::Ok;
+}
+
 FsError MemoryVolume::open(const char *path, OpenMode mode, int &file)
 {
     int slot = -1;

@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <string>
+#include <vector>
 
 #include "core/fs/memory_volume.hpp"
 #include "core/shell/boot.hpp"
@@ -23,14 +24,19 @@ wm::Wm desktop(display, pointer, clock_);
 std::string folder;
 int failures = 0;
 
-void save(const char *name, bool update = true)
+// `with_pointer`: the pointer mixed in, as the monitor shows it.
+void save(const char *name, bool update = true, bool with_pointer = false)
 {
     if (update) {
         desktop.update(); // paint what direct calls (not events) changed
     }
+    std::vector<uint8_t> shown(display.pixels(), display.pixels() + 640 * 480);
+    if (with_pointer) {
+        video::compose_pointer(shown.data(), 0, 640 * 480, 640, pointer.state());
+    }
     std::string path = folder + "/" + name + ".raw";
     FILE *f = fopen(path.c_str(), "wb");
-    if (f == nullptr || fwrite(display.pixels(), 1, 640 * 480, f) != 640 * 480) {
+    if (f == nullptr || fwrite(shown.data(), 1, 640 * 480, f) != 640 * 480) {
         printf("cannot write %s\n", path.c_str());
         failures++;
     }
@@ -612,6 +618,18 @@ int main(int argc, char **argv)
         key(wm::key::Enter); // Yes
     }
     expect(there("C:\\.trash\\a.txt") && there("C:\\.trash\\a (2).txt"), "the second a.txt was not numbered");
+    while (desktop.active() != nullptr) {
+        desktop.close(*desktop.active());
+    }
+
+    // The Editor in the middle of a save: nothing is painted meanwhile, but
+    // the pointer, mixed in on the way to the monitor, is the hourglass.
+    shell::open_in_editor("C:\\Documents\\notes.txt");
+    mouse(330, 250, 0);
+    {
+        const wm::Wait saving(desktop);
+        save("39-editor-saving-hourglass", true, true);
+    }
     while (desktop.active() != nullptr) {
         desktop.close(*desktop.active());
     }

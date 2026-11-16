@@ -132,6 +132,16 @@ bool valid_name(const char *n)
     return last != ' ' && last != '.';
 }
 
+bool temporary(const char *p, char *out, int capacity)
+{
+    // ".~" hides it from folder windows; ".tmp" keeps the name valid when
+    // the cut falls on a dot or a space. 57 of the name's 63 characters fit.
+    char folder[kMaxPath], leaf[64];
+    parent(p, folder, sizeof(folder));
+    snprintf(leaf, sizeof(leaf), ".~%.57s.tmp", name(p));
+    return name(p)[0] != 0 && join(folder, leaf, out, capacity);
+}
+
 } // namespace path
 
 void Storage::mount(char letter, ports::Volume &volume)
@@ -228,6 +238,49 @@ FsError Storage::rename(const char *from, const char *to) const
     return v->rename(path::relative(from), path::relative(to));
 }
 
+FsError Storage::replace(const char *from, const char *to) const
+{
+    FsError e;
+    ports::Volume *v = resolve(from, e);
+    if (v == nullptr) {
+        return e;
+    }
+    if (path::drive(to) != 0 && path::drive(to) != path::drive(from)) {
+        return FsError::BadName;
+    }
+    return v->replace(path::relative(from), path::relative(to));
+}
+
+FsError Storage::begin_save(const char *p, Save &save) const
+{
+    save.file = File();
+    DirEntry there;
+    if (stat(p, there) == FsError::Ok && there.folder) {
+        return FsError::IsFolder;
+    }
+    if (snprintf(save.path, sizeof(save.path), "%s", p) >= static_cast<int>(sizeof(save.path)) ||
+        !path::temporary(p, save.temporary, sizeof(save.temporary))) {
+        return FsError::BadName;
+    }
+    return open(save.temporary, OpenMode::Write, save.file);
+}
+
+FsError Storage::finish_save(Save &save, bool keep) const
+{
+    if (!save.file.open()) {
+        return FsError::NotFound; // never begun
+    }
+    FsError e = close(save.file);
+    save.file = File();
+    if (e == FsError::Ok && keep) {
+        e = replace(save.temporary, save.path);
+    }
+    if (e != FsError::Ok || !keep) {
+        remove(save.temporary);
+    }
+    return e;
+}
+
 FsError Storage::open(const char *p, OpenMode mode, File &file) const
 {
     FsError e;
@@ -286,13 +339,13 @@ FsError Storage::read_file(const char *p, void *data, size_t capacity, size_t &s
 
 FsError Storage::write_file(const char *p, const void *data, size_t size) const
 {
-    File f;
-    FsError e = open(p, OpenMode::Write, f);
+    Save save;
+    FsError e = begin_save(p, save);
     if (e != FsError::Ok) {
         return e;
     }
-    e = write(f, data, size);
-    FsError c = close(f);
+    e = write(save.file, data, size);
+    const FsError c = finish_save(save, e == FsError::Ok);
     return e != FsError::Ok ? e : c;
 }
 

@@ -638,19 +638,20 @@ void Wm::key(uint16_t usage, bool pressed)
     }
     const bool modifier = usage >= key::LeftCtrl && usage <= key::RightGui;
     if (!modifier) {
-        // A held key repeats, after a pause, until it is let go.
-        if (pressed) {
-            stop_timer(repeat_timer_);
-            repeat_usage_ = usage;
-            repeat_timer_ = start_timer_for(desktop_pid_, kRepeatDelayUs, kRepeatUs, &Wm::key_repeat, this);
-        } else if (usage == repeat_usage_) {
-            stop_timer(repeat_timer_);
-            repeat_timer_ = 0;
+        stop_timer(repeat_timer_);
+        repeat_timer_ = 0;
+        if (pressed || usage == repeat_usage_) {
             repeat_usage_ = 0;
         }
         caret_moved();
     }
     handle_key(usage, pressed);
+    if (!modifier && pressed) {
+        // A held key repeats, after a pause counted from the end of its own
+        // handling: a press that took long (a save) does not repeat at once.
+        repeat_usage_ = usage;
+        repeat_timer_ = start_timer_for(desktop_pid_, kRepeatDelayUs, kRepeatUs, &Wm::key_repeat, this);
+    }
     update();
     event_done(start);
 }
@@ -1384,7 +1385,9 @@ void Wm::update_pointer_shape()
     }
     const video::PointerShape *shape = &video::arrow_pointer();
     const bool horizontal = edges & (kLeft | kRight), vertical = edges & (kTop | kBottom);
-    if (horizontal && vertical) {
+    if (waiting_ > 0) {
+        shape = &video::busy_pointer();
+    } else if (horizontal && vertical) {
         const bool falling = (edges & kLeft) == ((edges & kTop) ? kLeft : 0);
         shape = falling ? &video::resize_nwse_pointer() : &video::resize_nesw_pointer();
     } else if (horizontal) {
@@ -1395,6 +1398,20 @@ void Wm::update_pointer_shape()
     if (shape != shape_) {
         shape_ = shape;
         pointer_.set_shape(*shape);
+    }
+}
+
+void Wm::begin_wait()
+{
+    if (waiting_++ == 0) {
+        update_pointer_shape();
+    }
+}
+
+void Wm::end_wait()
+{
+    if (waiting_ > 0 && --waiting_ == 0) {
+        update_pointer_shape();
     }
 }
 

@@ -26,6 +26,15 @@ CONFIG_LCD_RGB_ISR_IRAM_SAFE=y
 CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
 # Task list for tools/dbg.py memory (stack high-water marks)
 CONFIG_FREERTOS_USE_TRACE_FACILITY=y
+# Processor time per task for tools/dbg.py tasks (docs/DECISIONS.md, "OS
+# architecture"): the kernel reads the microsecond clock at every task switch
+# and adds the time to the task that was running. The 64-bit counter does not
+# wrap; the default 32-bit one would after 71 minutes. The last setting adds
+# the core a task is tied to. Delete the sdkconfig file after changing these.
+CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS=y
+CONFIG_FREERTOS_RUN_TIME_STATS_USING_ESP_TIMER=y
+CONFIG_FREERTOS_RUN_TIME_COUNTER_TYPE_U64=y
+CONFIG_FREERTOS_VTASKLIST_INCLUDE_COREID=y
 # Internal RAM (docs/DECISIONS.md, measured 2026-11-16): 8 static Wi-Fi
 # receive buffers instead of 16, and the Wi-Fi code not kept in internal RAM.
 # Together 32 KB more internal RAM free, and Wi-Fi was no slower.

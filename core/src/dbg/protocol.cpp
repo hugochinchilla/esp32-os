@@ -21,6 +21,12 @@ void put32(uint8_t *out, uint32_t value)
     put16(out + 2, static_cast<uint16_t>(value >> 16));
 }
 
+void put64(uint8_t *out, uint64_t value)
+{
+    put32(out, static_cast<uint32_t>(value));
+    put32(out + 4, static_cast<uint32_t>(value >> 32));
+}
+
 uint16_t get16(const uint8_t *in)
 {
     return static_cast<uint16_t>(in[0] | (in[1] << 8));
@@ -165,7 +171,53 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
         break;
     }
 
+    case kTasks: {
+        // Clock (8), cores (1), tasks that follow (1), tasks left out (1),
+        // then per task: id (2), state (1), priority (1), core (1, 0xFF
+        // either), flags (1), run time (8), unused stack (4), name length
+        // (1), name.
+        static ports::TaskInfo tasks[kMaxTasks];
+        ports::TaskTotals totals = {};
+        const int count = system_.tasks(tasks, kMaxTasks, totals);
+        if (count <= 0) {
+            reply(type, seq, kUnknownCommand, nullptr, 0);
+            break;
+        }
+        uint8_t *body = chunk_;
+        size_t n = 11;
+        int sent = 0;
+        for (; sent < count; sent++) {
+            const ports::TaskInfo &t = tasks[sent];
+            const size_t name = strnlen(t.name, sizeof(t.name));
+            if (n + 19 + name > kMaxReplyPayload - 1) {
+                break;
+            }
+            put16(body + n, t.id);
+            body[n + 2] = static_cast<uint8_t>(t.state);
+            body[n + 3] = t.priority;
+            body[n + 4] = static_cast<uint8_t>(t.core);
+            body[n + 5] = t.stack_external ? 1 : 0;
+            put64(body + n + 6, t.run_time_us);
+            put32(body + n + 14, t.stack_free);
+            body[n + 18] = static_cast<uint8_t>(name);
+            memcpy(body + n + 19, t.name, name);
+            n += 19 + name;
+        }
+        const int left_out = totals.left_out + (count - sent);
+        put64(body, totals.clock_us);
+        body[8] = totals.cores;
+        body[9] = static_cast<uint8_t>(sent);
+        body[10] = static_cast<uint8_t>(left_out > 255 ? 255 : left_out);
+        reply(type, seq, kOk, body, static_cast<uint16_t>(n));
+        break;
+    }
+
     case kBootScreen:
+        if (args_size == 1 && args[0] == 2) {
+            system_.arm_fast_boot(); // 2: no screen, the next start is a fast one
+            reply(type, seq, kOk, nullptr, 0);
+            break;
+        }
         if (boot_show_ == nullptr || args_size != 1 || args[0] > 1) {
             reply(type, seq, boot_show_ == nullptr ? kUnknownCommand : kBadArguments, nullptr, 0);
             break;
@@ -208,6 +260,9 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
     }
 
     case kReboot:
+        if (args_size >= 1 && (args[0] & 1)) {
+            system_.arm_fast_boot(); // bit 0: the next start is a fast one
+        }
         reply(type, seq, kOk, nullptr, 0);
         system_.reboot();
         break;

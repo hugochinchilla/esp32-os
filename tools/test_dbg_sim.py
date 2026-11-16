@@ -81,6 +81,29 @@ def main():
         assert stats["mouse_events"] == 7, stats
         assert stats["receive_errors"] == 0, stats
 
+        # The kernel's tasks (the simulator makes a list up), read twice.
+        totals, tasks = board.tasks()
+        assert totals["cores"] == 2 and totals["left_out"] == 0 and totals["clock_us"] > 0, totals
+        by_name = {t["name"]: t for t in tasks}
+        assert {"ui", "IDLE0", "IDLE1", "wifi"} <= set(by_name), by_name
+        assert by_name["ui"]["core"] is None and by_name["IDLE1"]["core"] == 1
+        assert by_name["ui"]["state"] == "running" and by_name["wifi"]["priority"] == 23
+        time.sleep(0.05)
+        later = board.tasks()
+        assert later[0]["clock_us"] > totals["clock_us"]
+        lines = dbg.task_table(later[0], later[1], (totals, tasks))
+        assert lines[0].split() == ["ID", "NAME", "STATE", "PRI", "CORE", "%START", "%NOW", "TIME", "STACK", "IN"]
+        assert lines[1].split()[1] == "IDLE0" and lines[1].split()[5:7] == ["93.0", "93.0"], lines[1]
+        assert "idle 182.0 % of 200 % since start, 182.0 % in the last" in lines[-1], lines[-1]
+        # A task that started between the readings counts from zero, and
+        # one reading alone has no %NOW column.
+        fresh = dbg.task_table({"clock_us": 2000000, "cores": 2, "left_out": 3},
+                               [dict(by_name["ui"], id=99, name="job", run_us=500000)],
+                               ({"clock_us": 1000000, "cores": 2, "left_out": 0}, []))
+        assert fresh[1].split()[5:7] == ["25.0", "50.0"], fresh
+        assert fresh[-1] == "3 more tasks did not fit in the reply"
+        assert "%NOW" not in dbg.task_table(totals, tasks)[0]
+
         # Files: the RAM disk has the samples; put, list, get, delete.
         names = [n for n, _, _ in board.ls("C:\\")]
         assert "Documents" in names and "readme.txt" in names, names
