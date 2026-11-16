@@ -510,8 +510,9 @@ only; not yet run on the board. Each is easy to change. Pictures:
   mascot asleep under a night sky, "It is safe to power down the system
   now." (the owner's wording) and a line saying that Ctrl+Alt+Del starts
   Chinchilla again, since the board has no power switch to press. The
-  pointer goes and all other input is ignored. Nothing is flushed to a
-  drive yet: once there is a flash file system, this is the place.
+  pointer goes and all other input is ignored. Nothing needs flushing:
+  the storage port has no open-ended writes (a file is on the flash once
+  it is closed), and every program has closed by then.
 - Defragmenter: a show only. Its disk is made up (864 blocks, about 60 %
   full, some 30 files in pieces, laid out from a fixed sequence of seeds);
   no drive is read or written, and the window says so. Each file has its
