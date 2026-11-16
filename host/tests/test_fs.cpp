@@ -9,6 +9,9 @@
 #include "core/fs/ini.hpp"
 #include "core/fs/memory_volume.hpp"
 #include "../folder_volume.hpp"
+#include "../host_adapters.hpp"
+#include <atomic>
+#include <thread>
 #include <unistd.h>
 
 static int failures = 0;
@@ -387,8 +390,225 @@ static void test_save_on_a_full_disk()
     CHECK(!fs::path::temporary("C:\\", t, sizeof(t)));
 }
 
+// A drive that notices two tasks inside it at once. It passes every call on
+// to the drive behind it (with none it only answers Ok), and stays inside for
+// a moment so that a second task has time to walk in if nothing stops it.
+class WatchedVolume : public ports::Volume {
+public:
+    explicit WatchedVolume(ports::Volume *behind) : behind_(behind) {}
+
+    std::atomic<int> calls{0};
+    std::atomic<int> met{0}; // times a task found another one already inside
+
+    FsError info(ports::VolumeInfo &out) override
+    {
+        const Inside in(*this);
+        return behind_ ? behind_->info(out) : FsError::Ok;
+    }
+    FsError entry(const char *folder, int index, ports::DirEntry &out) override
+    {
+        const Inside in(*this);
+        return behind_ ? behind_->entry(folder, index, out) : FsError::Ok;
+    }
+    FsError stat(const char *path, ports::DirEntry &out) override
+    {
+        const Inside in(*this);
+        return behind_ ? behind_->stat(path, out) : FsError::Ok;
+    }
+    FsError make_folder(const char *path) override
+    {
+        const Inside in(*this);
+        return behind_ ? behind_->make_folder(path) : FsError::Ok;
+    }
+    FsError remove(const char *path) override
+    {
+        const Inside in(*this);
+        return behind_ ? behind_->remove(path) : FsError::Ok;
+    }
+    FsError rename(const char *from, const char *to) override
+    {
+        const Inside in(*this);
+        return behind_ ? behind_->rename(from, to) : FsError::Ok;
+    }
+    FsError replace(const char *from, const char *to) override
+    {
+        const Inside in(*this);
+        return behind_ ? behind_->replace(from, to) : FsError::Ok;
+    }
+    FsError open(const char *path, OpenMode mode, int &file) override
+    {
+        const Inside in(*this);
+        return behind_ ? behind_->open(path, mode, file) : FsError::Ok;
+    }
+    FsError read(int file, void *data, size_t size, size_t &done) override
+    {
+        const Inside in(*this);
+        return behind_ ? behind_->read(file, data, size, done) : FsError::Ok;
+    }
+    FsError write(int file, const void *data, size_t size) override
+    {
+        const Inside in(*this);
+        return behind_ ? behind_->write(file, data, size) : FsError::Ok;
+    }
+    FsError seek(int file, uint32_t offset) override
+    {
+        const Inside in(*this);
+        return behind_ ? behind_->seek(file, offset) : FsError::Ok;
+    }
+    FsError close(int file) override
+    {
+        const Inside in(*this);
+        return behind_ ? behind_->close(file) : FsError::Ok;
+    }
+
+private:
+    struct Inside {
+        explicit Inside(WatchedVolume &v) : v_(v)
+        {
+            v_.calls++;
+            if (v_.inside_.fetch_add(1) != 0) {
+                v_.met++;
+            }
+            std::this_thread::yield();
+        }
+        ~Inside() { v_.inside_--; }
+        WatchedVolume &v_;
+    };
+
+    ports::Volume *behind_;
+    std::atomic<int> inside_{0};
+};
+
+// Two tasks use the file system at once: each keeps its own folder of files
+// and both write one shared file. With the lock no two calls ever meet inside
+// the drive, every file reads back as it was written, and nothing is left
+// open or lost at the end.
+static void test_two_tasks()
+{
+    std::vector<uint8_t> pool(256 * 1024);
+    fs::MemoryVolume ram(pool.data(), pool.size(), "RAM disk");
+    WatchedVolume watched(&ram);
+    host::ThreadLock lock;
+    fs::Storage s;
+    s.set_lock(&lock);
+    s.mount('C', watched);
+    ports::VolumeInfo before = {};
+    CHECK(s.info('C', before) == FsError::Ok);
+
+    constexpr int kRounds = 300;
+    constexpr size_t kShared = 3000;
+    std::atomic<int> wrong{0};
+    auto task = [&](char who) {
+        auto must = [&](bool ok) {
+            if (!ok) {
+                wrong++;
+            }
+        };
+        const std::string folder = std::string("C:\\task-") + who;
+        const std::string a = folder + "\\a.bin", b = folder + "\\b.bin";
+        std::vector<uint8_t> data(5000), back(8000);
+        const std::vector<uint8_t> mine(kShared, static_cast<uint8_t>(who));
+        must(s.make_folder(folder.c_str()) == FsError::Ok);
+        for (int round = 0; round < kRounds; round++) {
+            // Its own file, whole: written, read back, renamed, removed.
+            const size_t size = 1 + static_cast<size_t>(round * 37 + who) % data.size();
+            for (size_t i = 0; i < size; i++) {
+                data[i] = static_cast<uint8_t>(who + round + i);
+            }
+            size_t n = 0;
+            must(s.write_file(a.c_str(), data.data(), size) == FsError::Ok);
+            must(s.read_file(a.c_str(), back.data(), back.size(), n) == FsError::Ok && n == size &&
+                 memcmp(back.data(), data.data(), n) == 0);
+            // Piece by piece, the way the Editor saves and reads.
+            fs::Save save;
+            must(s.begin_save(b.c_str(), save) == FsError::Ok);
+            for (size_t at = 0; at < size; at += 700) {
+                must(s.write(save.file, data.data() + at, std::min<size_t>(700, size - at)) == FsError::Ok);
+            }
+            must(s.finish_save(save) == FsError::Ok);
+            fs::File f;
+            must(s.open(b.c_str(), OpenMode::Read, f) == FsError::Ok);
+            size_t total = 0;
+            for (;;) {
+                must(s.read(f, back.data() + total, 512, n) == FsError::Ok);
+                if (n == 0) {
+                    break;
+                }
+                total += n;
+            }
+            must(s.close(f) == FsError::Ok);
+            must(total == size && memcmp(back.data(), data.data(), size) == 0);
+            ports::DirEntry e;
+            must(s.stat(b.c_str(), e) == FsError::Ok && e.size == size);
+            must(s.entry(folder.c_str(), 0, e) == FsError::Ok);
+            must(s.remove(a.c_str()) == FsError::Ok);
+            must(s.rename(b.c_str(), a.c_str()) == FsError::Ok);
+            must(s.remove(a.c_str()) == FsError::Ok);
+            // The file both write. A whole write is one step, so neither
+            // finds the other's temporary file in use, and what is read is
+            // all of one task's bytes, never a mix.
+            must(s.write_file("C:\\shared.bin", mine.data(), mine.size()) == FsError::Ok);
+            must(s.read_file("C:\\shared.bin", back.data(), back.size(), n) == FsError::Ok && n == kShared);
+            bool whole = n == kShared && (back[0] == 'A' || back[0] == 'B');
+            for (size_t i = 1; whole && i < n; i++) {
+                whole = back[i] == back[0];
+            }
+            must(whole);
+        }
+        must(s.remove(folder.c_str()) == FsError::Ok);
+    };
+    std::thread first(task, 'A'), second(task, 'B');
+    first.join();
+    second.join();
+
+    CHECK(wrong == 0);
+    CHECK(watched.met == 0);
+    CHECK(watched.calls > 2 * kRounds * 20);
+    // Nothing left behind: the space is back and every file slot is free.
+    CHECK(s.remove("C:\\shared.bin") == FsError::Ok);
+    ports::VolumeInfo after = {};
+    ports::DirEntry e;
+    CHECK(s.info('C', after) == FsError::Ok && after.free_bytes == before.free_bytes);
+    CHECK(s.entry("C:\\", 0, e) == FsError::NotFound);
+    fs::File files[fs::MemoryVolume::kMaxOpen];
+    CHECK(s.write_file("C:\\x", "x", 1) == FsError::Ok);
+    for (fs::File &f : files) {
+        CHECK(s.open("C:\\x", OpenMode::Read, f) == FsError::Ok);
+    }
+    for (fs::File &f : files) {
+        CHECK(s.close(f) == FsError::Ok);
+    }
+}
+
+// The same watch without a lock does see the two tasks meet, so the test
+// above would notice a lock that was missing. (Nothing behind the drive:
+// two tasks inside the real RAM disk at once would corrupt it.)
+static void test_the_watch_sees_two_tasks()
+{
+    WatchedVolume watched(nullptr);
+    fs::Storage s;
+    s.mount('C', watched);
+    std::atomic<bool> stop{false};
+    auto task = [&] {
+        ports::DirEntry e;
+        while (!stop) {
+            s.stat("C:\\a", e);
+        }
+    };
+    std::thread first(task), second(task);
+    for (int ms = 0; ms < 5000 && watched.met == 0; ms++) {
+        usleep(1000);
+    }
+    stop = true;
+    first.join();
+    second.join();
+    CHECK(watched.met > 0);
+}
+
 int main()
 {
+    test_two_tasks();
+    test_the_watch_sees_two_tasks();
     test_save_on_a_full_disk();
     test_drives_behave_alike();
     test_ini();

@@ -144,11 +144,44 @@ bool temporary(const char *p, char *out, int capacity)
 
 } // namespace path
 
+namespace {
+
+// Holds the file system's lock for as long as it lives.
+class Held {
+public:
+    explicit Held(ports::Lock *lock) : lock_(lock)
+    {
+        if (lock_ != nullptr) {
+            lock_->lock();
+        }
+    }
+    ~Held()
+    {
+        if (lock_ != nullptr) {
+            lock_->unlock();
+        }
+    }
+    Held(const Held &) = delete;
+    Held &operator=(const Held &) = delete;
+
+private:
+    ports::Lock *lock_;
+};
+
+char upper(char letter)
+{
+    return (letter >= 'a' && letter <= 'z') ? static_cast<char>(letter - 'a' + 'A') : letter;
+}
+
+} // namespace
+
+// The public calls: each takes the lock once and does its work through the
+// do_ functions below, which never take it.
+
 void Storage::mount(char letter, ports::Volume &volume)
 {
-    if (letter >= 'a' && letter <= 'z') {
-        letter = static_cast<char>(letter - 'a' + 'A');
-    }
+    const Held held(lock_);
+    letter = upper(letter);
     for (int i = 0; i < count_; i++) {
         if (letters_[i] == letter) {
             volumes_[i] = &volume;
@@ -164,19 +197,13 @@ void Storage::mount(char letter, ports::Volume &volume)
 
 ports::Volume *Storage::volume(char letter) const
 {
-    if (letter >= 'a' && letter <= 'z') {
-        letter = static_cast<char>(letter - 'a' + 'A');
-    }
-    for (int i = 0; i < count_; i++) {
-        if (letters_[i] == letter) {
-            return volumes_[i];
-        }
-    }
-    return nullptr;
+    const Held held(lock_);
+    return find(letter);
 }
 
 int Storage::drives(char *letters, int capacity) const
 {
+    const Held held(lock_);
     int n = 0;
     for (int i = 0; i < count_ && n < capacity; i++) {
         letters[n++] = letters_[i];
@@ -184,21 +211,16 @@ int Storage::drives(char *letters, int capacity) const
     return n;
 }
 
-ports::Volume *Storage::resolve(const char *p, FsError &error) const
-{
-    ports::Volume *v = volume(path::drive(p));
-    error = v != nullptr ? FsError::Ok : FsError::NotFound;
-    return v;
-}
-
 FsError Storage::info(char letter, VolumeInfo &out) const
 {
-    ports::Volume *v = volume(letter);
+    const Held held(lock_);
+    ports::Volume *v = find(letter);
     return v != nullptr ? v->info(out) : FsError::NotFound;
 }
 
 FsError Storage::entry(const char *folder, int index, DirEntry &out) const
 {
+    const Held held(lock_);
     FsError e;
     ports::Volume *v = resolve(folder, e);
     return v != nullptr ? v->entry(path::relative(folder), index, out) : e;
@@ -206,13 +228,13 @@ FsError Storage::entry(const char *folder, int index, DirEntry &out) const
 
 FsError Storage::stat(const char *p, DirEntry &out) const
 {
-    FsError e;
-    ports::Volume *v = resolve(p, e);
-    return v != nullptr ? v->stat(path::relative(p), out) : e;
+    const Held held(lock_);
+    return do_stat(p, out);
 }
 
 FsError Storage::make_folder(const char *p) const
 {
+    const Held held(lock_);
     FsError e;
     ports::Volume *v = resolve(p, e);
     return v != nullptr ? v->make_folder(path::relative(p)) : e;
@@ -220,13 +242,13 @@ FsError Storage::make_folder(const char *p) const
 
 FsError Storage::remove(const char *p) const
 {
-    FsError e;
-    ports::Volume *v = resolve(p, e);
-    return v != nullptr ? v->remove(path::relative(p)) : e;
+    const Held held(lock_);
+    return do_remove(p);
 }
 
 FsError Storage::rename(const char *from, const char *to) const
 {
+    const Held held(lock_);
     FsError e;
     ports::Volume *v = resolve(from, e);
     if (v == nullptr) {
@@ -240,6 +262,121 @@ FsError Storage::rename(const char *from, const char *to) const
 
 FsError Storage::replace(const char *from, const char *to) const
 {
+    const Held held(lock_);
+    return do_replace(from, to);
+}
+
+FsError Storage::open(const char *p, OpenMode mode, File &file) const
+{
+    const Held held(lock_);
+    return do_open(p, mode, file);
+}
+
+FsError Storage::read(File &file, void *data, size_t size, size_t &done) const
+{
+    const Held held(lock_);
+    return do_read(file, data, size, done);
+}
+
+FsError Storage::write(File &file, const void *data, size_t size) const
+{
+    const Held held(lock_);
+    return do_write(file, data, size);
+}
+
+FsError Storage::seek(File &file, uint32_t offset) const
+{
+    const Held held(lock_);
+    return file.open() ? file.volume->seek(file.handle, offset) : FsError::NotFound;
+}
+
+FsError Storage::close(File &file) const
+{
+    const Held held(lock_);
+    return do_close(file);
+}
+
+FsError Storage::begin_save(const char *p, Save &save) const
+{
+    const Held held(lock_);
+    return do_begin_save(p, save);
+}
+
+FsError Storage::finish_save(Save &save, bool keep) const
+{
+    const Held held(lock_);
+    return do_finish_save(save, keep);
+}
+
+FsError Storage::read_file(const char *p, void *data, size_t capacity, size_t &size) const
+{
+    // One step for the other tasks: a file swapped in by a save while this
+    // runs is read whole, the old one or the new one.
+    const Held held(lock_);
+    size = 0;
+    File f;
+    FsError e = do_open(p, OpenMode::Read, f);
+    if (e != FsError::Ok) {
+        return e;
+    }
+    e = do_read(f, data, capacity, size);
+    do_close(f);
+    return e;
+}
+
+FsError Storage::write_file(const char *p, const void *data, size_t size) const
+{
+    // One step too, so two tasks writing the same file take turns instead of
+    // meeting in its temporary file. The others wait for the whole write:
+    // this is for small files (settings); a long save goes piece by piece
+    // through begin_save().
+    const Held held(lock_);
+    Save save;
+    FsError e = do_begin_save(p, save);
+    if (e != FsError::Ok) {
+        return e;
+    }
+    e = do_write(save.file, data, size);
+    const FsError c = do_finish_save(save, e == FsError::Ok);
+    return e != FsError::Ok ? e : c;
+}
+
+// From here on the lock is already held (or there is none).
+
+ports::Volume *Storage::find(char letter) const
+{
+    letter = upper(letter);
+    for (int i = 0; i < count_; i++) {
+        if (letters_[i] == letter) {
+            return volumes_[i];
+        }
+    }
+    return nullptr;
+}
+
+ports::Volume *Storage::resolve(const char *p, FsError &error) const
+{
+    ports::Volume *v = find(path::drive(p));
+    error = v != nullptr ? FsError::Ok : FsError::NotFound;
+    return v;
+}
+
+FsError Storage::do_stat(const char *p, DirEntry &out) const
+{
+    FsError e;
+    ports::Volume *v = resolve(p, e);
+    return v != nullptr ? v->stat(path::relative(p), out) : e;
+}
+
+FsError Storage::do_remove(const char *p) const
+{
+    FsError e;
+    ports::Volume *v = resolve(p, e);
+    return v != nullptr ? v->remove(path::relative(p)) : e;
+}
+
+FsError Storage::do_replace(const char *from, const char *to) const
+{
     FsError e;
     ports::Volume *v = resolve(from, e);
     if (v == nullptr) {
@@ -251,37 +388,7 @@ FsError Storage::replace(const char *from, const char *to) const
     return v->replace(path::relative(from), path::relative(to));
 }
 
-FsError Storage::begin_save(const char *p, Save &save) const
-{
-    save.file = File();
-    DirEntry there;
-    if (stat(p, there) == FsError::Ok && there.folder) {
-        return FsError::IsFolder;
-    }
-    if (snprintf(save.path, sizeof(save.path), "%s", p) >= static_cast<int>(sizeof(save.path)) ||
-        !path::temporary(p, save.temporary, sizeof(save.temporary))) {
-        return FsError::BadName;
-    }
-    return open(save.temporary, OpenMode::Write, save.file);
-}
-
-FsError Storage::finish_save(Save &save, bool keep) const
-{
-    if (!save.file.open()) {
-        return FsError::NotFound; // never begun
-    }
-    FsError e = close(save.file);
-    save.file = File();
-    if (e == FsError::Ok && keep) {
-        e = replace(save.temporary, save.path);
-    }
-    if (e != FsError::Ok || !keep) {
-        remove(save.temporary);
-    }
-    return e;
-}
-
-FsError Storage::open(const char *p, OpenMode mode, File &file) const
+FsError Storage::do_open(const char *p, OpenMode mode, File &file) const
 {
     FsError e;
     ports::Volume *v = resolve(p, e);
@@ -297,23 +404,18 @@ FsError Storage::open(const char *p, OpenMode mode, File &file) const
     return e;
 }
 
-FsError Storage::read(File &file, void *data, size_t size, size_t &done) const
+FsError Storage::do_read(File &file, void *data, size_t size, size_t &done) const
 {
     done = 0;
     return file.open() ? file.volume->read(file.handle, data, size, done) : FsError::NotFound;
 }
 
-FsError Storage::write(File &file, const void *data, size_t size) const
+FsError Storage::do_write(File &file, const void *data, size_t size) const
 {
     return file.open() ? file.volume->write(file.handle, data, size) : FsError::NotFound;
 }
 
-FsError Storage::seek(File &file, uint32_t offset) const
-{
-    return file.open() ? file.volume->seek(file.handle, offset) : FsError::NotFound;
-}
-
-FsError Storage::close(File &file) const
+FsError Storage::do_close(File &file) const
 {
     if (!file.open()) {
         return FsError::NotFound;
@@ -324,29 +426,34 @@ FsError Storage::close(File &file) const
     return e;
 }
 
-FsError Storage::read_file(const char *p, void *data, size_t capacity, size_t &size) const
+FsError Storage::do_begin_save(const char *p, Save &save) const
 {
-    size = 0;
-    File f;
-    FsError e = open(p, OpenMode::Read, f);
-    if (e != FsError::Ok) {
-        return e;
+    save.file = File();
+    DirEntry there;
+    if (do_stat(p, there) == FsError::Ok && there.folder) {
+        return FsError::IsFolder;
     }
-    e = read(f, data, capacity, size);
-    close(f);
-    return e;
+    if (snprintf(save.path, sizeof(save.path), "%s", p) >= static_cast<int>(sizeof(save.path)) ||
+        !path::temporary(p, save.temporary, sizeof(save.temporary))) {
+        return FsError::BadName;
+    }
+    return do_open(save.temporary, OpenMode::Write, save.file);
 }
 
-FsError Storage::write_file(const char *p, const void *data, size_t size) const
+FsError Storage::do_finish_save(Save &save, bool keep) const
 {
-    Save save;
-    FsError e = begin_save(p, save);
-    if (e != FsError::Ok) {
-        return e;
+    if (!save.file.open()) {
+        return FsError::NotFound; // never begun
     }
-    e = write(save.file, data, size);
-    const FsError c = finish_save(save, e == FsError::Ok);
-    return e != FsError::Ok ? e : c;
+    FsError e = do_close(save.file);
+    save.file = File();
+    if (e == FsError::Ok && keep) {
+        e = do_replace(save.temporary, save.path);
+    }
+    if (e != FsError::Ok || !keep) {
+        do_remove(save.temporary);
+    }
+    return e;
 }
 
 void add_samples(Storage &storage, char drive)

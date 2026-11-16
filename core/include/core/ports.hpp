@@ -18,7 +18,9 @@ protected:
     ~ByteSink() = default;
 };
 
-// Guards the debug link when several tasks send on it.
+// Guards something several tasks use, one task at a time: the debug link
+// when several tasks send on it, the file system (fs::Storage). Not
+// recursive: a task that holds it must not ask for it again.
 class Lock {
 public:
     virtual void lock() = 0;
