@@ -228,3 +228,36 @@ Left for later, not on the backlog yet:
 - An animated hourglass, driven by the frame count in the video interrupt.
 - Pointer C (arrow with a glass) for a window that is busy while the rest of
   the desktop is not, when item 10 arrives.
+
+## 8. On the board (added by the board thread, 2026-11-16)
+
+Merged with main, built from a fresh sdkconfig, flashed. Every Volume has
+`replace()` (memory volume, POSIX volume, which the board's LittleFS volume
+inherits, the test spy); the Trash keeps using renames, as moves should.
+Saves run on the UI task inside `wm::Wait`, not on a worker task, so there is
+no new stack.
+
+1. Saves from the Editor: a small file, and a 300 KB file (307,218 bytes) in
+   1.06 s and, another time, 2.58 s from File > Save until the board answered
+   again (the time varies with the state of LittleFS). Both read back whole.
+   On the webcam the hourglass shows for the length of the save and the arrow
+   comes back after it; it is composed at scanout like the arrow. LittleFS
+   took the rename over the existing file.
+2. The picture during the saves: 0 late and 0 missed refills in the video
+   counters, and no shifted bands on the webcam (the only larger changes
+   between frames are the menu closing and the title updating).
+3. No `.~*.tmp` left after a save.
+4. The reset line pulled 0.61 s into the 300 KB save: after the restart the
+   file was the previous version, whole, byte for byte; an empty
+   `.~big.txt.tmp` was left, as expected.
+5. View > Show hidden files written to files.ini, kept after a restart, no
+   temporary file left.
+6. Remote viewers: the browser viewer's cursor stayed the arrow during the
+   save and after it. The servers run on the UI task, which is busy saving,
+   so the hourglass never reaches a viewer; the arrow is there afterwards.
+
+Free internal RAM 105,435 bytes against 105,443 on main. A key bug found on
+the way is not this branch's: a long save started from a menu letter made the
+key repeat at once; fixed on main ("the key repeat counts from the end of its
+handling").
+
