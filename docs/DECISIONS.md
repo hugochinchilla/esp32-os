@@ -156,6 +156,59 @@ threads only. The owner decided that the laptop-and-board thread ("board
 manager") merges each branch into `main` after it has passed on the board; the
 other threads do not merge their own work.
 
+### OS architecture (2026-11-16)
+
+Decided by the owner after the architecture review; the full story, with the
+options and why each was or was not taken, is in
+`docs/journal/2026-11-16-architecture-review.md`. The work is listed in
+`docs/BACKLOG.md`.
+
+- **The model to aim for is AmigaOS's**: real tasks with priorities, one
+  shared memory space, no protection between programs. The lack of memory
+  isolation is accepted on purpose.
+- **A process** is a row in a process table kept by the portable core: PID
+  (counting up from 1), parent, name, state, flags, and what it owns (windows,
+  timers, jobs, large memory). Window code stays on the UI task; a process may
+  also own real FreeRTOS tasks (background jobs, shell sessions, services).
+  Apps can move to their own task later, one at a time.
+- **Figures in Task Manager**: FreeRTOS run-time statistics for the task view,
+  and the window manager's own timing charged to the PID it is calling for
+  programs that share the UI task.
+- **Signals**: TERM (asks, like the close button), KILL (the OS removes what
+  the process owns; it takes effect at a safe point, never while the task
+  holds an OS lock) and INT (Ctrl+C). End Task asks politely first and offers
+  force if the program has not closed after a few seconds.
+- **Flags**: system (hidden in Task Manager's default view), protected (the
+  user cannot signal it), respawn (started again if it ends). Protected: the
+  serial console, the debug service, init and the window server. The taskbar
+  is not protected; it restarts.
+- **Priorities**: three classes, Low, Normal and High, in a narrow band below
+  the video, Wi-Fi and the network stack. The FreeRTOS scheduler is not
+  changed.
+- **Saves**: written by a job on a worker task that belongs to the program;
+  the program cannot end until its jobs have. The window is locked while it
+  saves and the pointer shows an hourglass (asked for by the owner; own art).
+  A save writes a temporary file and renames it over the original.
+- **Shell**: in the portable core, commands built in, Linux names with DOS
+  aliases (`dir`, `type`, `del`); paths keep drive letters and accept both
+  `\` and `/`. One session is one task. It runs on a TTY object whose other
+  end is the serial port, a telnet connection or a terminal window.
+- **Serial port**: the console and the debug protocol are both live on it at
+  all times. Bytes between two zero bytes that pass the frame check go to the
+  debug service, everything else to the console, so `tools/dbg.py` keeps
+  working whatever state the shell is in.
+- **Start-up**: init is PID 1 and starts the rest from a text file. First the
+  services move to after the first paint; splitting the wallpaper (window
+  server) from the taskbar and icons (desktop shell) comes in a later phase.
+  No artificial delays.
+- **After a crash**: the machine restarts and shows an error screen naming
+  the program.
+- **No users and no passwords.** Security is not a goal: the OS is for
+  recreation, not real use. This covers telnet; whether telnet starts by
+  default or is switched on in a settings file is asked before it is built.
+- **A written record**: every piece of work adds an entry to `docs/journal/`
+  (what was asked, options, choice and reasons, what was built and tested).
+
 ## Rejected
 
 | Option | Why not |
@@ -172,6 +225,13 @@ other threads do not merge their own work.
 | "Tom's Diner" as a sample sound | A commercial recording, not ours to distribute. Same as above: not in the repository or the firmware; `tools/dbg.py put` works for his own copies |
 | Kodak Lossless True Color Image Suite as sample pictures | Its usual source says only that it is "my understanding" Kodak released it for unrestricted use; no licence statement from Kodak could be found, so its status was not confirmed (2026-11-16). Can be added if a clear statement turns up |
 | A central settings registry, as in Windows | The owner does not want one (2026-11-16). Settings are separate plain text files, one per program |
+| One FreeRTOS task for every app, now | A rewrite of the window manager and every widget, and 4 to 8 KB of internal RAM per app. Kept as a later step, app by app (2026-11-16) |
+| Staying cooperative only (no tasks besides the UI task) | The shell and telnet would have to be hand-sliced state machines and nothing could run in the background (2026-11-16) |
+| The serial console switching into the debug protocol by a command | The agents' tool would be locked out whenever the shell is stuck. Both share the wire instead (2026-11-16) |
+| Changing the FreeRTOS scheduler for priorities | Not needed: fixed priorities are built in (2026-11-16) |
+| Typing while a save runs (the job saves a copy) | Up to 512 KB more memory and more states to get wrong, for saves of a few seconds. The window is locked instead (2026-11-16) |
+| Users, logins and passwords (telnet and VNC included) | The owner does not want them: security is not a goal of a recreational OS (2026-11-16) |
+| Artificial delays to make start-up look layered | The screen shows what the machine is really doing (2026-11-16) |
 
 ## Still open
 
@@ -209,6 +269,7 @@ Not scheduled. To be revisited once a basic OS boots.
 | Battery-backed clock | I2C clock chip with a coin cell on GPIO1 and GPIO2 | Only if parts are already at home |
 | Bluetooth keyboard and mouse | The chip's Bluetooth LE radio acts as a HID host, so wireless keyboards and mice that speak Bluetooth LE feed the same input path as USB and the debug link. Needs a pairing window. Out of place for the era, wanted anyway (2026-11-16) | No hardware. Older Bluetooth Classic keyboards and mice will not work: the ESP32-S3 has Bluetooth LE only. Shares the radio with Wi-Fi and takes flash and RAM for the Bluetooth stack |
 | Bluetooth audio | Not possible on this chip: the ESP32-S3 has no Bluetooth Classic (so no A2DP) and no LE Audio | Ruled out |
+| A virus, for fun | The owner would like to write one for Chinchilla later, to see how they work: with no memory protection every program can reach every other, as on the home computers of the time (2026-11-16) | Needs programs that can be loaded from disk to be interesting |
 
 ### System programs the owner would like (2026-11-16)
 
