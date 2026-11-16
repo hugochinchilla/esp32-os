@@ -585,8 +585,11 @@ int main(int argc, char **argv)
     // Empty Trash asks first, saying how many.
     centre_of(desktop.desktop_icon_rect(3), x, y);
     double_click(x, y);
-    key(0x09, true); // Alt+F
-    key(0x08);       // E
+    {
+        // The Empty Trash button in the toolbar (File > Empty Trash does the same).
+        const gfx::Rect c = desktop.active()->client();
+        click(c.x + 4 + 36, c.y + 17);
+    }
     save("37m-empty-trash");
     key(wm::key::Enter); // Yes
     expect(!there("C:\\.trash\\welcome.txt"), "Empty Trash left welcome.txt");

@@ -765,11 +765,15 @@ public:
     TrashWindow()
         : Window("Trash", {120, 60, 400, 280}, &gfx::bin_icon_16()),
           view_({0, 0, 100, 100}, listing_, &TrashWindow::opened, &TrashWindow::selected, &TrashWindow::dragged, this),
-          status_({0, 0, 100, 20}, false), free_({0, 0, 100, 20}, false)
+          status_({0, 0, 100, 20}, false), free_({0, 0, 100, 20}, false),
+          empty_button_({4, 0, 72, 34}, "Empty Trash", &gfx::bin_icon_16(), &TrashWindow::empty, this),
+          groove_({0, 36, 100, 2})
     {
         add(view_);
         add(status_);
         add(free_);
+        add(empty_button_);
+        add(groove_);
         file_items_[0] = {"&Restore", &TrashWindow::restore, this, nullptr, nullptr, 0};
         file_items_[1] = {"&Delete", &TrashWindow::remove, this, nullptr, nullptr, 0};
         file_items_[2] = {nullptr, nullptr, nullptr, nullptr, nullptr, wm::kMenuSeparator};
@@ -783,7 +787,8 @@ public:
     void resized() override
     {
         const gfx::Rect c = client();
-        view_.rect = {0, 0, c.w, c.h - 22};
+        groove_.rect = {0, 36, c.w, 2};
+        view_.rect = {0, 40, c.w, c.h - 40 - 22};
         status_.rect = {0, c.h - 20, c.w - 120, 20};
         free_.rect = {c.w - 118, c.h - 20, 118, 20};
         view_.layout();
@@ -797,6 +802,7 @@ public:
         listing_.read(storage(), kTrashFolder);
         Listing::show_hidden = hidden;
         view_.reset();
+        empty_button_.set_enabled(listing_.count() > 0);
         ports::VolumeInfo info = {};
         storage().info('C', info);
         char t[40];
@@ -924,6 +930,8 @@ private:
     Listing listing_;
     FolderView view_;
     Panel status_, free_;
+    ToolButton empty_button_; // the owner: Empty Trash in the toolbar too
+    Groove groove_;
     char name_[fs::kMaxPath] = "";
     char message_[fs::kMaxPath + 80] = "";
     wm::MenuItem file_items_[6];

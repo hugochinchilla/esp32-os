@@ -877,6 +877,8 @@ moves 2 px every 20 ms, straight and on a slant.
   came from, so File > Restore puts it back (numbered if the name is taken
   again, its folder made again if it is gone). The status bar shows where
   the chosen entry came from.
+- Empty Trash is a button in the Trash window's toolbar (the owner: "an
+  option in the navigation bar"), greyed out when empty, and in its File menu.
 - Delete asks "move ... to the Trash?" first. Dragging onto the Trash does
   not ask. Delete inside the Trash, and Empty Trash (which says how many),
   remove for good after asking.
