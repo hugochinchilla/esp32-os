@@ -59,6 +59,10 @@ tools/dbg.py wifi connect "My network"   # asks for the password, not shown
 tools/dbg.py wifi                        # link, address, signal
 ```
 
+Once the board has joined a Wi-Fi network, any VNC viewer can show and
+control the screen: connect it to the address the Network panel shows
+(`tools/dbg.py wifi` prints it too), port 5900, no password.
+
 `shot.png` should match what the monitor shows. The UI runs on one task
 (`ui_task` in `main/main.cpp`), which also serves the debug link.
 

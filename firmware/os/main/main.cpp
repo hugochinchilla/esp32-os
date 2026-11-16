@@ -25,6 +25,8 @@
 
 #include "core/dbg/protocol.hpp"
 #include "littlefs_volume.hpp"
+#include "core/net/posix_tcp.hpp"
+#include "core/net/rfb.hpp"
 #include "core/net/wifi.hpp"
 #include "core/shell/boot.hpp"
 #include "core/shell/shell.hpp"
@@ -323,6 +325,18 @@ void ui_task(void *)
     ESP_LOGI(TAG, "wifi %s in %lld ms", radio ? "started" : "did not start",
              (esp_timer_get_time() - wifi_start) / 1000);
 
+    // The remote screen: a VNC viewer connects to the board's address, port
+    // 5900. The port opens now and viewers reach it once Wi-Fi has joined.
+    static rfb::Server remote(display, pointer, desktop, clock, memory);
+    static net::PosixTcpListener vnc_port;
+    desktop.set_damage_listener([](const gfx::Rect &r, void *) { remote.damage(r); }, nullptr);
+    if (radio && vnc_port.listen(rfb::kPort)) {
+        remote.set_listener(&vnc_port);
+        ESP_LOGI(TAG, "remote screen (VNC) on port %d", rfb::kPort);
+    } else {
+        ESP_LOGW(TAG, "remote screen (VNC) not available");
+    }
+
     shell::start(desktop, system, storage, memory);
     protocol.set_counters(shell::picture_timings(), shell::kPictureTimings);
     desktop.start();
@@ -335,12 +349,25 @@ void ui_task(void *)
     ESP_LOGI(TAG, "first full paint took %u us", static_cast<unsigned>(first_paint_us));
 
     static uint8_t buffer[256];
+    bool viewer = false;
     while (true) {
         int got = uart_read_bytes(kDebugUart, buffer, sizeof(buffer), pdMS_TO_TICKS(10));
         if (got > 0) {
             protocol.feed(buffer, static_cast<size_t>(got));
         }
         desktop.tick(); // timers (caret, key repeat, clock), then any painting
+        remote.poll();  // the VNC viewer: its keys and mouse in, changed screen out
+        if (remote.stats().connected != viewer) {
+            viewer = remote.stats().connected;
+            const rfb::Server::Stats &v = remote.stats();
+            if (viewer) {
+                ESP_LOGI(TAG, "VNC viewer connected");
+            } else {
+                ESP_LOGI(TAG, "VNC viewer gone: %u updates, %u rectangles, %u bytes sent",
+                         static_cast<unsigned>(v.updates), static_cast<unsigned>(v.rectangles),
+                         static_cast<unsigned>(v.bytes_sent));
+            }
+        }
     }
 }
 

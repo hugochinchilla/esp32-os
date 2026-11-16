@@ -16,6 +16,8 @@
 #include "core/fs/memory_volume.hpp"
 #include "core/shell/boot.hpp"
 #include "core/shell/shell.hpp"
+#include "core/net/posix_tcp.hpp"
+#include "core/net/rfb.hpp"
 #include "core/net/wifi.hpp"
 #include "fake_wifi.hpp"
 #include "folder_volume.hpp"
@@ -45,7 +47,8 @@ private:
 
 } // namespace
 
-// ./sim [folder]: the folder, if given, is drive D:.
+// ./sim [folder [vnc-port]]: the folder, if given, is drive D:; with a port,
+// the remote screen (VNC) is offered on it, to this computer only.
 int main(int argc, char **argv)
 {
     int fd = posix_openpt(O_RDWR | O_NOCTTY);
@@ -117,6 +120,18 @@ int main(int argc, char **argv)
     protocol.set_counters(shell::picture_timings(), shell::kPictureTimings);
     screen.start();
 
+    // The remote screen, for a VNC viewer on this computer.
+    static rfb::Server remote(display, pointer, screen, clock, memory);
+    static net::PosixTcpListener vnc_port;
+    screen.set_damage_listener([](const gfx::Rect &r, void *) { remote.damage(r); }, nullptr);
+    if (argc > 2) {
+        if (vnc_port.listen(atoi(argv[2]), true)) {
+            remote.set_listener(&vnc_port);
+        } else {
+            fprintf(stderr, "cannot listen on port %s\n", argv[2]);
+        }
+    }
+
     // A real board first prints start-up text that is not part of the
     // protocol, then says hello.
     const char boot[] = "boot text outside the protocol\r\n";
@@ -131,9 +146,10 @@ int main(int argc, char **argv)
             protocol.feed(buffer, static_cast<size_t>(got));
         } else {
             // Nobody has the other end open yet (or any more).
-            usleep(10000);
+            usleep(vnc_port.listening() ? 2000 : 10000);
         }
         screen.tick();
+        remote.poll();
     }
     return 0;
 }
