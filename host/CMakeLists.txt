@@ -81,6 +81,9 @@ set_tests_properties(net net_pictures rfb vnc_tool PROPERTIES ENVIRONMENT "ASAN_
 add_executable(dither_eval dither_eval.cpp)
 target_link_libraries(dither_eval PRIVATE core)
 
+add_executable(test_snake tests/test_snake.cpp)
+target_link_libraries(test_snake PRIVATE core)
+add_test(NAME snake COMMAND test_snake)
 add_executable(test_saver tests/test_saver.cpp)
 target_link_libraries(test_saver PRIVATE core)
 add_test(NAME saver COMMAND test_saver)

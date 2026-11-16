@@ -86,6 +86,46 @@ wm::Window *find(const char *title)
     exit(1);
 }
 
+// Lets time pass in small slices, as the UI loop ticks.
+void wait(uint32_t us)
+{
+    for (uint32_t done = 0; done < us; done += 10000) {
+        clock_.now += 10000;
+        desktop.tick();
+    }
+}
+
+// Plays Culebra towards the berry until `berries` have been eaten.
+void play_culebra(int berries)
+{
+    using games::Snake;
+    const Snake &g = shell::culebra_game();
+    const uint16_t keys[4] = {wm::key::Up, wm::key::Right, wm::key::Down, wm::key::Left};
+    for (int steps = 0; steps < 600 && g.berries() < berries; steps++) {
+        const int dx = g.berry_col() - g.head_col(), dy = g.berry_row() - g.head_row();
+        // Towards the berry along the row first, then the column; any
+        // other way when those are blocked.
+        const int order[4] = {dx > 0 ? 1 : 3, dy > 0 ? 2 : 0, dy > 0 ? 0 : 2, dx > 0 ? 3 : 1};
+        const int first = dx != 0 ? 0 : 1;
+        int want = order[first];
+        for (int i = 0; i < 4; i++) {
+            const int d = order[(first + i) & 3];
+            const int col = g.head_col() + (d == 1) - (d == 3), row = g.head_row() + (d == 2) - (d == 0);
+            if (col >= 0 && col < Snake::kCols && row >= 0 && row < Snake::kRows &&
+                g.at(col, row).kind != Snake::Kind::Body) {
+                want = d;
+                break;
+            }
+        }
+        key(keys[want]);
+        wait(130000);
+    }
+    if (g.berries() < berries || g.state() != Snake::State::Playing) {
+        printf("the Culebra scene did not play out\n");
+        failures++;
+    }
+}
+
 void centre_of(const gfx::Rect &r, int &x, int &y)
 {
     x = r.x + r.w / 2;
@@ -168,7 +208,7 @@ int main(int argc, char **argv)
     save("08-start-menu-programs");
 
     // Launch the Widget gallery from Programs, type into its text field.
-    centre_of(desktop.popup_item(1, 7), x, y);
+    centre_of(desktop.popup_item(1, 8), x, y); // Widget gallery
     click(x, y);
     key(wm::key::End);
     desktop.text(" año");
@@ -362,6 +402,28 @@ int main(int argc, char **argv)
     key(wm::key::Down);
     save("34-task-manager");
     key(wm::key::Escape);
+
+    // Culebra, the snake game: a new game, a few berries in, its menu,
+    // paused, and the end against a wall.
+    while (desktop.active() != nullptr) {
+        desktop.close(*desktop.active());
+    }
+    shell::launch(*shell::find_app("Culebra"));
+    save("39-culebra-new-game");
+    play_culebra(8);
+    save("40-culebra-playing");
+    key(0x0A, true); // Alt+G
+    key(0x16);       // S: Speed
+    save("41-culebra-menu");
+    key(wm::key::Escape);
+    key(wm::key::Escape);
+    wait(130000); // the step that was due finds the game was left: paused
+    save("42-culebra-paused");
+    key(wm::key::Space);
+    key(wm::key::Up);
+    wait(130000 * 20);
+    save("43-culebra-game-over");
+    key(wm::key::F4, true);
 
     // The Defragmenter: its made-up disk, part of the way, and tidy.
     while (desktop.active() != nullptr) {

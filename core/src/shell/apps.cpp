@@ -1,4 +1,6 @@
 // The built-in programs: About Chinchilla, Welcome, Widget gallery.
+// (Larger ones have their own files: Editor, File manager, Picture viewer,
+// Culebra.)
 #include <cstdio>
 
 #include "core/gfx/art.hpp"
@@ -275,6 +277,7 @@ struct Entry {
 };
 const Entry kApps[] = {
     {{"About Chinchilla", nullptr, &open_about}, &gfx::mascot_16},
+    {{"Culebra", nullptr, &open_culebra}, &gfx::snake_icon_16},
     {{"Defragmenter", nullptr, &open_defragmenter}, &gfx::drive_icon_16},
     {{"Editor", nullptr, &open_editor}, &gfx::text_icon_16},
     {{"File manager", nullptr, &open_file_manager}, &gfx::folder_icon_16},

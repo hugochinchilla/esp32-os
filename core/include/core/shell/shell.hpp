@@ -7,6 +7,7 @@
 
 #include "core/fs/fs.hpp"
 #include "core/fs/ini.hpp"
+#include "core/games/snake.hpp"
 #include "core/gfx/canvas.hpp"
 #include "core/ports.hpp"
 #include "core/wm/wm.hpp"
@@ -82,6 +83,9 @@ void open_picture(const char *path);
 void finish_picture();
 const uint32_t *picture_timings();
 constexpr int kPictureTimings = 3;
+// Culebra, the snake game. Tests: the game in its window.
+void open_culebra();
+const games::Snake &culebra_game();
 
 // Wi-Fi, if the machine has it: call before start(). The shell then shows
 // the signal icon in the tray, keeps the manager running and sets the clock
