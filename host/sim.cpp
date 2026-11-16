@@ -140,6 +140,7 @@ int main(int argc, char **argv)
         if (web_port.listen(atoi(argv[3]), true)) {
             web.set_port(&web_port);
             web.set_page(net::viewer_page(), net::viewer_page_size());
+            web.set_second_page("/novnc", net::novnc_page(), net::novnc_page_size());
             remote.set_listener(&web, 1);
         } else {
             fprintf(stderr, "cannot listen on port %s\n", argv[3]);

@@ -379,6 +379,7 @@ void ui_task(void *)
     if (radio && web_port.listen(80)) {
         web.set_port(&web_port);
         web.set_page(net::viewer_page(), net::viewer_page_size());
+        web.set_second_page("/novnc", net::novnc_page(), net::novnc_page_size());
         remote.set_listener(&web, 1);
         ESP_LOGI(TAG, "remote screen for a browser on port 80");
     } else {
