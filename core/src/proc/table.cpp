@@ -110,9 +110,75 @@ bool Table::exit(Pid pid)
         }
     }
     count_ = kept;
+    if (p->pending != 0) {
+        waiting_--;
+    }
+    if (p->is(kRespawn) && p->restart != nullptr && due_count_ < kMaxDue) {
+        due_[due_count_++] = {p->restart, p->restart_context};
+    }
     *p = Process();
     changes_++;
     return true;
+}
+
+Sent Table::signal(Pid pid, Signal signal)
+{
+    Process *p = row(pid);
+    if (p == nullptr) {
+        return Sent::NoSuchProcess;
+    }
+    if (p->is(kProtected)) {
+        return Sent::NotPermitted;
+    }
+    if (!p->is(kWindowed)) {
+        // A service is a row and a name for now: there is nothing behind
+        // the row that could be stopped, so saying "ended" would be a lie.
+        return Sent::NotSupported;
+    }
+    if (p->pending == 0) {
+        waiting_++;
+    }
+    p->pending |= static_cast<uint8_t>(signal);
+    return Sent::Ok;
+}
+
+uint8_t Table::take_signals(Pid pid)
+{
+    Process *p = row(pid);
+    if (p == nullptr || p->pending == 0) {
+        return 0;
+    }
+    const uint8_t bits = p->pending;
+    p->pending = 0;
+    waiting_--;
+    return bits;
+}
+
+void Table::set_restart(Pid pid, StartFn start, void *context)
+{
+    Process *p = row(pid);
+    if (p != nullptr && pid != kInit) {
+        p->flags |= kRespawn;
+        p->restart = start;
+        p->restart_context = context;
+        changes_++;
+    }
+}
+
+int Table::restart_due()
+{
+    // The list is emptied first: a start function may end a process too.
+    Restart now[kMaxDue];
+    const int n = due_count_;
+    for (int i = 0; i < n; i++) {
+        now[i] = due_[i];
+    }
+    due_count_ = 0;
+    for (int i = 0; i < n; i++) {
+        const Scope as_init(this, init());
+        now[i].start(now[i].context);
+    }
+    return n;
 }
 
 void Table::set_state(Pid pid, State state)
@@ -141,6 +207,8 @@ void Table::reset()
     count_ = 0;
     next_ = kInit;
     current_ = kNone;
+    waiting_ = 0;
+    due_count_ = 0;
     changes_++;
 }
 

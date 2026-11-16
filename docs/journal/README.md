@@ -51,4 +51,5 @@ Plain words, real numbers, no summaries of summaries.
 | 2026-11-16 | [One-shot fast start](2026-11-16-one-shot-fast-boot.md) | `dbg.py reboot --fast` and `boot fast-next`; why NVS and not RTC memory |
 | 2026-11-16 | [Key repeat after a long save](2026-11-16-key-repeat.md) | Why a letter appeared in the Editor after File > Save, and the fix |
 | 2026-11-16 | [The process table](2026-11-16-process-table.md) | PIDs for programs and services, windows and timers that know their owner, how the OS knows who is asking, when a process ends, and Task Manager's new list |
+| 2026-11-16 | [TERM, KILL and protected processes](2026-11-16-signals-and-flags.md) | Signals that wait on the process's row until a safe point, End Task that asks first and offers force after 5 seconds, a greyed End Task for protected processes, and respawn |
 | 2026-11-16 | [A lock on the file system](2026-11-16-file-system-lock.md) | Backlog item 9: one lock around `fs::Storage` so a second task can use files; where it could have gone instead, how long it is held, and a two-thread test that proves itself |

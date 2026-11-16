@@ -1,6 +1,7 @@
 // The process table: PIDs, parents and flags; windows and timers that carry
 // their owner; programs that get a row when launched and lose it when their
-// last window closes; the services' rows; and the Task Manager's list.
+// last window closes; the services' rows; the Task Manager's list; and the
+// signals TERM and KILL, protected processes and those that come back.
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -121,6 +122,92 @@ void test_table()
     t.reset();
 }
 
+/* ---- Signals and restarts, in the table alone ------------------------------------- */
+
+proc::Table *restart_table = nullptr;
+int restarts = 0;
+Pid restarted_as = proc::kNone, restarted_by = proc::kNone;
+
+void start_again(void *context)
+{
+    restarts++;
+    restarted_by = restart_table->current();
+    restarted_as = restart_table->spawn(static_cast<const char *>(context), restart_table->current(), proc::kWindowed);
+    restart_table->set_restart(restarted_as, &start_again, context);
+}
+
+void test_signals_in_the_table()
+{
+    static proc::Table t;
+    const Pid service = t.spawn_service("netd");
+    const Pid guarded = t.spawn_service("desktop", proc::kProtected);
+    const Pid program = t.spawn("Editor", guarded, proc::kWindowed);
+    const Pid shielded = t.spawn("Console", guarded, proc::kWindowed | proc::kProtected);
+
+    // Who can be signalled: nobody that is not there, nothing protected
+    // (init is), and no service yet. Refusing leaves nothing waiting.
+    CHECK(t.signal(99, proc::Signal::Term) == proc::Sent::NoSuchProcess);
+    CHECK(t.signal(proc::kInit, proc::Signal::Kill) == proc::Sent::NotPermitted);
+    CHECK(t.signal(guarded, proc::Signal::Term) == proc::Sent::NotPermitted);
+    CHECK(t.signal(shielded, proc::Signal::Kill) == proc::Sent::NotPermitted);
+    CHECK(t.signal(service, proc::Signal::Kill) == proc::Sent::NotSupported);
+    CHECK(!t.signals_waiting() && t.take_signals(guarded) == 0 && t.take_signals(service) == 0);
+
+    // A signal waits on the row until it is taken. Sending does nothing to
+    // the process, and the same signal twice is one signal.
+    CHECK(t.signal(program, proc::Signal::Term) == proc::Sent::Ok);
+    CHECK(t.signals_waiting() && t.alive(program) && t.find(program)->state == proc::State::Running);
+    CHECK(t.signal(program, proc::Signal::Term) == proc::Sent::Ok);
+    CHECK(t.signal(program, proc::Signal::Kill) == proc::Sent::Ok);
+    const uint8_t both = static_cast<uint8_t>(proc::Signal::Term) | static_cast<uint8_t>(proc::Signal::Kill);
+    CHECK(t.take_signals(program) == both);
+    CHECK(!t.signals_waiting() && t.take_signals(program) == 0 && t.take_signals(99) == 0);
+    // A process that ends with one waiting takes it along.
+    CHECK(t.signal(program, proc::Signal::Term) == proc::Sent::Ok && t.signals_waiting());
+    t.exit(program);
+    CHECK(!t.signals_waiting() && t.signal(program, proc::Signal::Term) == proc::Sent::NoSuchProcess);
+
+    // Respawn: ending the process does not start it at once. The start
+    // function waits for restart_due(), and runs with init as the current
+    // process, so the new one is init's child under a new number.
+    restart_table = &t;
+    static const char name[] = "Taskbar";
+    const Pid first = t.spawn(name, guarded, proc::kWindowed);
+    t.set_restart(first, &start_again, const_cast<char *>(name));
+    CHECK(t.find(first)->is(proc::kRespawn) && t.find(first)->is(proc::kWindowed));
+    CHECK(t.restart_due() == 0 && restarts == 0); // nothing has ended
+    t.exit(first);
+    CHECK(restarts == 0 && t.find_by_name(name) == proc::kNone);
+    {
+        const proc::Scope as(&t, guarded);
+        CHECK(t.restart_due() == 1 && t.current() == guarded);
+    }
+    CHECK(restarts == 1 && restarted_by == proc::kInit && restarted_as == first + 1);
+    CHECK(t.find(restarted_as)->parent == proc::kInit && t.find(restarted_as)->is(proc::kRespawn));
+    CHECK(t.restart_due() == 0 && restarts == 1); // once per ending
+    // It comes back every time it ends.
+    t.exit(restarted_as);
+    CHECK(t.restart_due() == 1 && restarts == 2 && restarted_as == first + 2 && t.alive(restarted_as));
+    // The flag without a start function does nothing; init is never one.
+    const Pid flag_only = t.spawn("flag only", guarded, proc::kRespawn);
+    t.exit(flag_only);
+    t.set_restart(proc::kInit, &start_again, const_cast<char *>(name));
+    CHECK(t.restart_due() == 0 && restarts == 2 && !t.find(proc::kInit)->is(proc::kRespawn));
+    // More endings than the list holds (8) between two safe points: the
+    // extra ones are not started again, and nothing is overrun.
+    Pid many[10];
+    for (Pid &pid : many) {
+        pid = t.spawn("many", guarded);
+        t.set_restart(pid, &start_again, const_cast<char *>(name));
+    }
+    for (const Pid pid : many) {
+        t.exit(pid);
+    }
+    CHECK(t.restart_due() == 8 && restarts == 10);
+    t.reset();
+    CHECK(!t.signals_waiting() && t.restart_due() == 0);
+}
+
 /* ---- Windows and timers that know their owner ------------------------------------- */
 
 proc::Table procs;
@@ -156,9 +243,22 @@ public:
     bool close_requested() override
     {
         asked_pid = procs.current();
-        return true;
+        asked++;
+        return !stays;
     }
-    void closed() override { closed_pid = procs.current(); }
+    void closed() override
+    {
+        closed_pid = procs.current();
+        closed_at = ++close_counter;
+        if (reopens > 0) {
+            // A program that will not go: every window closed opens again.
+            reopens--;
+            manager_->add(*this);
+        }
+    }
+    static inline int close_counter = 0;
+    bool stays = false;
+    int asked = 0, closed_at = 0, reopens = 0;
 
     static void tick(void *context)
     {
@@ -314,6 +414,184 @@ void test_owners()
     m.close(b);
     wait(10);
     CHECK(procs.count() == 2); // init and the desktop
+
+    // ---- Signals.
+    auto open_as = [&](Pid pid, OwnedWindow &w) {
+        const proc::Scope as(&procs, pid);
+        m.add(w);
+    };
+    auto fresh = [&](OwnedWindow &w) {
+        w.asked = 0;
+        w.asked_pid = w.closed_pid = -1;
+        w.stays = false;
+    };
+    static OwnedWindow dialog("Question", {120, 120, 200, 100});
+    dialog.manager_ = &m;
+
+    // TERM is the close button: the window is asked, as its owner, and
+    // closes. Nothing happens when the signal is sent; it takes effect at
+    // the next safe point (here a tick). The process goes by the usual rule.
+    Pid pt = procs.spawn("T", desktop, proc::kWindowed);
+    const Pid pu = procs.spawn("U", desktop, proc::kWindowed);
+    fresh(a);
+    fresh(b);
+    open_as(pt, a);
+    open_as(pu, b); // in front
+    CHECK(procs.signal(pt, proc::Signal::Term) == proc::Sent::Ok);
+    CHECK(a.open() && a.asked == 0 && procs.alive(pt));
+    wait(10);
+    CHECK(a.asked == 1 && a.asked_pid == pt && !a.open() && a.closed_pid == pt && !procs.alive(pt));
+    CHECK(m.active() == &b && b.asked == 0); // whoever was in front still is
+
+    // A program may refuse: it stays, and so does who was in front.
+    pt = procs.spawn("T", desktop, proc::kWindowed);
+    fresh(a);
+    a.stays = true;
+    open_as(pt, a);
+    m.activate(b);
+    procs.signal(pt, proc::Signal::Term);
+    wait(10);
+    CHECK(a.asked == 1 && a.open() && procs.alive(pt) && procs.find(pt)->state == proc::State::Running);
+    CHECK(m.active() == &b);
+    // Every window of the process is asked, each once; a refusal by one
+    // does not stop the others being asked.
+    fresh(second);
+    open_as(pt, second);
+    m.activate(b);
+    procs.signal(pt, proc::Signal::Term);
+    wait(10);
+    CHECK(a.asked == 2 && a.open() && second.asked == 1 && !second.open() && procs.alive(pt));
+
+    // A window held by its dialog is not asked: the dialog comes forward
+    // (the program is in the middle of a question), and the process stays.
+    dialog.set_modal(&a);
+    fresh(dialog);
+    open_as(pt, dialog);
+    m.activate(b);
+    a.asked = 0;
+    procs.signal(pt, proc::Signal::Term);
+    wait(10);
+    CHECK(a.asked == 0 && dialog.asked == 0 && a.open() && dialog.open() && m.active() == &dialog);
+
+    // KILL asks nobody. The dialog goes before its window, the timer and
+    // the open menu go, and the row is removed at the same safe point.
+    // closed() still runs, as the owner: the window objects are used again.
+    m.close(dialog);
+    key(wm::key::Z); // A starts a timer
+    key(wm::key::A + ('m' - 'a'), kAltBit);
+    CHECK(m.timers_of(pt) == 1 && m.menu_open() && m.active() == &a);
+    dialog.set_modal(&a);
+    open_as(pt, dialog); // opening it closes the menu...
+    m.open_menu_bar(a, 0); // ...so open it again behind the dialog
+    CHECK(m.menu_open() && m.windows_of(pt) == 2);
+    fresh(a);
+    fresh(dialog);
+    a.stays = true;
+    const int kill_ticks = a.ticks;
+    CHECK(procs.signal(pt, proc::Signal::Kill) == proc::Sent::Ok && a.open());
+    wait(10);
+    CHECK(!a.open() && !dialog.open() && a.asked == 0 && dialog.asked == 0);
+    CHECK(a.closed_pid == pt && dialog.closed_pid == pt && dialog.closed_at < a.closed_at);
+    CHECK(!procs.alive(pt) && m.timers_of(pt) == 0 && m.windows_of(pt) == 0 && !m.menu_open());
+    wait(5000);
+    CHECK(a.ticks <= kill_ticks + 1 && m.active() == &b && b.open() && procs.alive(pu));
+    const int after_kill = a.ticks;
+    wait(5000);
+    CHECK(a.ticks == after_kill); // the timer is gone for good
+
+    // TERM and KILL waiting together: KILL wins, and nothing is asked.
+    pt = procs.spawn("T", desktop, proc::kWindowed);
+    fresh(a);
+    open_as(pt, a);
+    procs.signal(pt, proc::Signal::Term);
+    procs.signal(pt, proc::Signal::Kill);
+    wait(10);
+    CHECK(!a.open() && a.asked == 0 && !procs.alive(pt));
+
+    // A program that opens a window again whenever one closes cannot hold
+    // on: KILL closes those too, a bounded number of times, and the row
+    // goes whatever it does.
+    pt = procs.spawn("T", desktop, proc::kWindowed);
+    fresh(a);
+    open_as(pt, a);
+    a.reopens = 5;
+    procs.signal(pt, proc::Signal::Kill);
+    wait(10);
+    CHECK(!a.open() && a.reopens == 0 && !procs.alive(pt) && m.windows_of(pt) == 0);
+
+    // Sent from inside an event (a program signalling itself, or the Task
+    // Manager's button): it takes effect when that event has been handled.
+    pt = procs.spawn("T", desktop, proc::kWindowed);
+    fresh(a);
+    open_as(pt, a);
+    {
+        const proc::Scope as(&procs, pt);
+        procs.signal(pt, proc::Signal::Kill);
+        CHECK(a.open());
+    }
+    key(wm::key::A + 2); // any event: its end is a safe point
+    CHECK(!a.open() && a.key_pid == pt && !procs.alive(pt));
+
+    // Protected: no signal reaches it, so nothing happens at the safe
+    // point. Its own close button still works; protection is about signals.
+    const Pid pp = procs.spawn("Console", desktop, proc::kWindowed | proc::kProtected);
+    fresh(a);
+    open_as(pp, a);
+    CHECK(procs.signal(pp, proc::Signal::Term) == proc::Sent::NotPermitted);
+    CHECK(procs.signal(pp, proc::Signal::Kill) == proc::Sent::NotPermitted);
+    wait(10);
+    CHECK(a.open() && a.asked == 0 && procs.alive(pp));
+    key(wm::key::F4, kAltBit);
+    CHECK(!a.open() && a.asked == 1 && !procs.alive(pp));
+    // A service cannot be signalled yet, and the desktop is protected... if
+    // it says so (this test's desktop does not, so it reads as a service).
+    CHECK(procs.signal(desktop, proc::Signal::Kill) == proc::Sent::NotSupported);
+    CHECK(procs.signal(proc::kInit, proc::Signal::Kill) == proc::Sent::NotPermitted);
+
+    // Respawn: killed, the process is back after the same safe point, as
+    // init's child with a new number, with its window open again.
+    struct Again {
+        wm::Wm *m;
+        OwnedWindow *w;
+        Pid pid;
+        int starts;
+        static void start(void *context)
+        {
+            auto *self = static_cast<Again *>(context);
+            self->starts++;
+            self->pid = procs.spawn("Taskbar", procs.current(), proc::kWindowed);
+            procs.set_restart(self->pid, &Again::start, self);
+            const proc::Scope as(&procs, self->pid);
+            self->m->add(*self->w);
+        }
+    };
+    static Again again = {&m, &a, proc::kNone, 0};
+    fresh(a);
+    {
+        const proc::Scope as(&procs, desktop);
+        Again::start(&again);
+    }
+    const Pid bar1 = again.pid;
+    CHECK(a.open() && a.owner() == bar1 && procs.find(bar1)->parent == desktop);
+    procs.signal(bar1, proc::Signal::Kill);
+    wait(10);
+    CHECK(!procs.alive(bar1) && again.starts == 2 && again.pid != bar1 && procs.alive(again.pid));
+    CHECK(a.open() && a.owner() == again.pid && procs.find(again.pid)->parent == proc::kInit);
+    CHECK(procs.current() == proc::kNone);
+    // Closed politely, by its own close button, it comes back all the same.
+    const Pid bar2 = again.pid;
+    m.activate(a);
+    key(wm::key::F4, kAltBit);
+    CHECK(!procs.alive(bar2) && again.starts == 3 && a.open() && a.owner() == again.pid);
+    // Without the flag it stays away.
+    procs.set_flags(again.pid, proc::kWindowed);
+    procs.signal(again.pid, proc::Signal::Kill);
+    wait(10);
+    CHECK(!a.open() && again.starts == 3 && !procs.alive(again.pid));
+
+    m.close(b);
+    wait(10);
+    CHECK(procs.count() == 2 && m.window_count() == 0 && !procs.signals_waiting());
     m.set_processes(nullptr, 0);
 }
 
@@ -493,25 +771,67 @@ void test_shell()
     key(wm::key::Home);
     letter('e', kAlt);
     CHECK(!t.alive(culebra) && find("Culebra") == nullptr && t.alive(gallery));
+    CHECK(strcmp(title(), "Task Manager") == 0);
+    wait(10000); // the list is read again at the next tick
     // Switch To on what is now the first row.
     key(wm::key::Home);
     letter('s', kAlt);
     CHECK(strcmp(title(), "Widget gallery") == 0);
 
-    // "Show all processes": every row of the table, init first. End Task
-    // on a process without windows says it cannot, and ends nothing.
+    // "Show all processes": every row of the table, init first. On a
+    // protected process (init, the debug link, the desktop) End Task is
+    // greyed out: its letter does nothing, a click does nothing, and the
+    // button is drawn differently.
     key(wm::key::Delete, kCtrl | kAlt);
     const std::string programs_only = screen();
     letter('a', kAlt);
     wm::Window *const its_window = desktop.active();
     CHECK(programs_only != screen());
     letter('p', kAlt); // the list, by its heading's letter
-    key(wm::key::Home);
+    key(wm::key::End); // the Task Manager's own row: End Task can be used
+    const gfx::Rect at = its_window->client();
+    auto end_button = [&] {
+        std::string pixels;
+        for (int y = at.y + 136; y < at.y + 159; y++) {
+            pixels.append(reinterpret_cast<char *>(display.pixels()) + y * 640 + at.x + 8, 75);
+        }
+        return pixels;
+    };
+    auto click_end = [&] {
+        desktop.mouse({true, static_cast<int16_t>(at.x + 40), static_cast<int16_t>(at.y + 147), 1, 0});
+        desktop.mouse({true, static_cast<int16_t>(at.x + 40), static_cast<int16_t>(at.y + 147), 0, 0});
+    };
+    const std::string usable = end_button();
+    const int rows[3] = {0, 1, 2}; // init, dbgd, desktop
+    for (const int row : rows) {
+        key(wm::key::Home);
+        for (int i = 0; i < row; i++) {
+            key(wm::key::Down);
+        }
+        CHECK(end_button() != usable);
+        letter('e', kAlt);
+        click_end();
+        wait(10000);
+        CHECK(desktop.active() == its_window && desktop.windows_of(manager) == 1 && t.count() == 6);
+    }
+    CHECK(t.alive(proc::kInit) && process("dbgd") != nullptr && process("desktop") != nullptr);
+    // The Wi-Fi manager is a service but not protected: the button can be
+    // used, and says that services cannot be ended yet. Nothing ends.
+    key(wm::key::Down); // init, dbgd, desktop, netd
+    CHECK(end_button() == usable);
     letter('e', kAlt);
     CHECK(desktop.active() != its_window && desktop.active()->owner() == manager); // its message
-    CHECK(desktop.windows_of(manager) == 2 && t.alive(proc::kInit) && t.count() == 6);
+    CHECK(desktop.windows_of(manager) == 2 && process("netd") != nullptr && t.count() == 6);
+    CHECK(desktop.timers_of(netd_pid) == 1);
     key(wm::key::Enter);
     CHECK(desktop.active() == its_window);
+    wait(7000000);
+    CHECK(desktop.active() == its_window && desktop.windows_of(manager) == 1); // nothing to force
+    // A click on the button of a program's row works as before.
+    key(wm::key::Down); // Widget gallery
+    click_end();
+    wait(10000);
+    CHECK(!t.alive(gallery) && find("Widget gallery") == nullptr);
     // The last row is the Task Manager itself: End Task closes it.
     letter('p', kAlt);
     key(wm::key::End);
@@ -554,6 +874,7 @@ void test_shell()
 int main()
 {
     test_table();
+    test_signals_in_the_table();
     test_owners();
 
     static fs::MemoryVolume ram_disk(memory.allocate(1 << 20), 1 << 20, "RAM disk");

@@ -1138,6 +1138,43 @@ for the table, the rest for Task Manager's rows).
 - The table has no lock: one task uses it. The first item that starts a
   process from another task has to add one.
 
+### Chosen for signals and flags (2026-11-16, to confirm)
+
+Backlog items 4 and 5, built on a branch and tested on the PC only. The
+options and the reasons are in `docs/journal/2026-11-16-signals-and-flags.md`.
+Each is easy to change. This replaces what the two sections above say End
+Task does.
+
+- One function sends a signal: `proc::Table::signal(pid, signal)`, with TERM
+  and KILL. It does nothing to the process: the signal waits on the row, and
+  the window manager acts on it at its safe point (the end of each event and
+  tick). It answers Ok, NoSuchProcess, NotPermitted (protected) or
+  NotSupported (a service). The other option was to act at once in the
+  sender's call.
+- TERM asks every window of the process, as its close button would, after
+  bringing it to the front. A window held by a dialog is not asked: the
+  dialog comes forward and the program stays.
+- KILL closes the process's menus and windows (dialogs first), stops its
+  timers and removes its row, without `close_requested()`. `closed()` still
+  runs, because window objects are used again by the next launch.
+- Protected processes (`init`, `dbgd`, `desktop`) refuse both signals. Task
+  Manager greys End Task out on them.
+- Services without windows (`netd`, `vncd`, `httpd`) cannot be signalled yet:
+  Task Manager says so. Removing only the row would leave `vncd` and `httpd`
+  running. Each gets a stop function in backlog item 5b.
+- End Task sends TERM. If the process is still there 5 seconds later, a box
+  offers End Now (KILL) or Cancel, but only once the Task Manager is the
+  window in front, so it never lands on a question the program is asking.
+  End Task again on the same process offers at once. The other options were a
+  box after 5 seconds whatever is on screen, or the button turning into "End
+  Now". **Asked of the owner on a card, 2026-11-16.**
+- Respawn: `Table::set_restart(pid, start, context)`. When such a process
+  ends, for any reason, its start function runs at the next safe point as
+  init, and the new process is init's child with a new PID. No process on the
+  real desktop has the flag yet (the taskbar gets it in item 21), and there
+  is no brake on restarting too fast (with init, item 18).
+
+
 ### Chosen for the file system lock (2026-11-16, to confirm)
 
 Backlog item 9. Journal: `docs/journal/2026-11-16-file-system-lock.md`.

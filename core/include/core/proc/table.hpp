@@ -9,6 +9,12 @@
 // so whatever the program asks for meanwhile (a window, a timer) is recorded
 // as its own.
 //
+// Signals are how a process is told to end (docs/journal/
+// 2026-11-16-signals-and-flags.md). Table::signal() is the one way in: it
+// checks that the process may be signalled and leaves the signal waiting on
+// the row. Whoever runs the process's code (the window manager, for window
+// programs) acts on it at its next safe point, between two events.
+//
 // One task only for now: the UI task makes and ends every process. No heap.
 #pragma once
 
@@ -30,14 +36,30 @@ enum class State : uint8_t {
     Exiting, // has lost its last window; removed at the next safe point
 };
 
-// Flag bits. What each one makes the OS do is built separately (backlog
-// item 4); the table only stores them.
+// Flag bits.
 enum Flag : uint8_t {
     kSystem = 1,    // part of the OS: hidden in Task Manager's default view
-    kProtected = 2, // the user cannot signal it
-    kRespawn = 4,   // started again if it ends
+    kProtected = 2, // cannot be signalled: signal() answers NotPermitted
+    kRespawn = 4,   // started again if it ends, whatever ended it (set_restart)
     kWindowed = 8,  // a window program: it ends when its last window closes
 };
+
+// What a process can be told.
+enum class Signal : uint8_t {
+    Term = 1, // please close: the same as its close button, so it may ask first, or stay
+    Kill = 2, // close now: it is not asked, and the OS takes away what it owns
+};
+
+// The answer to signal(), named after what Unix's kill prints.
+enum class Sent : uint8_t {
+    Ok,            // left for the process; acted on at the next safe point
+    NoSuchProcess,
+    NotPermitted,  // the process is protected
+    NotSupported,  // a service without windows: nothing can end those yet
+};
+
+// Starts a program again (see Table::set_restart).
+using StartFn = void (*)(void *context);
 
 struct Process {
     static constexpr int kNameSize = 24;
@@ -46,7 +68,10 @@ struct Process {
     Pid parent = kNone;
     State state = State::Free;
     uint8_t flags = 0;
+    uint8_t pending = 0; // Signal bits sent and not yet acted on
     char name[kNameSize] = "";
+    StartFn restart = nullptr; // for kRespawn
+    void *restart_context = nullptr;
 
     bool is(Flag f) const { return (flags & f) != 0; }
 };
@@ -80,6 +105,25 @@ public:
     void set_state(Pid pid, State state);
     void set_flags(Pid pid, uint8_t flags);
 
+    // Sends a signal to a process: the one function every sender uses (End
+    // Task today, the shell's kill later). Nothing happens to the process
+    // here. The signal waits on its row until whoever runs its code takes it
+    // with take_signals() at a safe point.
+    Sent signal(Pid pid, Signal signal);
+    // For whoever acts on signals: the Signal bits waiting for a process,
+    // which are cleared. signals_waiting() says whether any row has some.
+    uint8_t take_signals(Pid pid);
+    bool signals_waiting() const { return waiting_ != 0; }
+
+    // Respawn: sets the flag and remembers how to start the program again.
+    // When the process ends, by a signal or by itself, `start` is put on a
+    // list, and restart_due() runs the list with init as the current process
+    // (so what it starts is init's child). It is called at safe points, not
+    // from inside exit(). `start` must make the new process itself, and call
+    // set_restart() on it if that one is to come back too.
+    void set_restart(Pid pid, StartFn start, void *context);
+    int restart_due(); // how many were started
+
     // Live processes in order of creation (lowest PID first, until the
     // numbers have gone round).
     int count() const { return count_; }
@@ -104,6 +148,15 @@ private:
     Pid next_ = kInit;
     Pid current_ = kNone;
     uint32_t changes_ = 0;
+    int waiting_ = 0; // rows with a signal pending
+
+    struct Restart {
+        StartFn start;
+        void *context;
+    };
+    static constexpr int kMaxDue = 8;
+    Restart due_[kMaxDue] = {};
+    int due_count_ = 0;
 };
 
 // Makes `pid` the current process until the end of the block, then puts the
