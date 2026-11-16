@@ -100,7 +100,8 @@ int main(int argc, char **argv)
 
     static host::HostMemory memory;
     static fs::Storage storage;
-    static fs::MemoryVolume ram_disk(memory.allocate(1 << 20), 1 << 20, "RAM disk");
+    // The same size as on the board, so "KB free" matches too.
+    static fs::MemoryVolume ram_disk(memory.allocate(2 << 20), 2 << 20, "RAM disk");
     storage.mount('C', ram_disk);
     fs::add_samples(storage, 'C');
     shell::start(desktop, system_, storage, memory);
@@ -205,9 +206,10 @@ int main(int argc, char **argv)
     key(wm::key::Enter); // docs is the first folder
     save("17-docs");
 
-    // Open notes.txt (folders come first: docs has no folders, so it is
-    // third after español.txt and... found by name instead).
-    shell::open_file("C:\\docs\\notes.txt");
+    // Open notes.txt with the keyboard: español.txt, notes.txt, todo.txt.
+    key(wm::key::Home);
+    key(wm::key::Right);
+    key(wm::key::Enter);
     key(wm::key::End, false);
     desktop.text(" (añadido)");
     save("18-editor");

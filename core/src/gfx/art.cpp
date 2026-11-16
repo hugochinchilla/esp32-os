@@ -12,69 +12,71 @@ struct Ink {
 };
 
 // Builds a 16x16 bitmap from text rows; characters not in `inks` are clear.
-template <int N> struct Picture16 {
-    uint8_t pixels[256];
-    Bitmap bitmap;
-
-    Picture16(const char *const (&rows)[16], const Ink (&inks)[N])
-        : bitmap{16, 16, pixels, kClear}
-    {
-        for (int r = 0; r < 16; r++) {
-            for (int q = 0; q < 16; q++) {
-                uint8_t p = kClear;
-                for (const Ink &ink : inks) {
-                    if (rows[r][q] == ink.key) {
-                        p = ink.colour;
-                    }
-                }
-                pixels[r * 16 + q] = p;
-            }
-        }
-    }
+// The pixels of a picture drawn as text rows, worked out by the compiler so
+// the result sits in flash, not in RAM. Characters not in `inks` are clear.
+template <int S> struct Pixels {
+    uint8_t p[S * S] = {};
 };
 
-const char *const kMascot[16] = {
+template <int S, int N> constexpr Pixels<S> paint(const char *const (&rows)[S], const Ink (&inks)[N])
+{
+    Pixels<S> out;
+    for (int r = 0; r < S; r++) {
+        for (int q = 0; q < S; q++) {
+            uint8_t v = kClear;
+            for (int i = 0; i < N; i++) {
+                if (rows[r][q] == inks[i].key) {
+                    v = inks[i].colour;
+                }
+            }
+            out.p[r * S + q] = v;
+        }
+    }
+    return out;
+}
+
+constexpr const char *kMascot[16] = {
     "................", ".GGG........GGG.", "GPPPG......GPPPG", "GPPPG.GGGG.GPPPG",
     "GPPPGGLLLLGGPPPG", ".GGGLLLLLLLLGGG.", "..GLLLLLLLLLLG..", "..GLKLLLLLLKLG..",
     "..GLKLLLLLLKLG..", "..GLLLLNNLLLLG..", "D.GLLLLNNLLLLG.D", ".DDGLLLLLLLLGDD.",
     "D..GGLLLLLLGG..D", "....GGGGGGGG....", "................", "................",
 };
-const Ink kMascotInks[] = {{'G', kDarkGrey}, {'L', kWhite}, {'P', rgb(7, 4, 2)},
+constexpr Ink kMascotInks[] = {{'G', kDarkGrey}, {'L', kWhite}, {'P', rgb(7, 4, 2)},
                            {'K', kBlack},    {'N', rgb(7, 3, 2)}, {'D', kDarkGrey}};
 
-const char *const kFolder[16] = {
+constexpr const char *kFolder[16] = {
     "................", "................", "................", "................",
     "..KKKKKK........", ".KKKKKKKKKKKKKK.", ".KHHHHHHHHHHHHH.", ".KYYYYYYYYYYYYK.",
     ".KYYYYYYYYYYYYK.", ".KYYYYYYYYYYYYK.", ".KYYYYYYYYYYYYK.", ".KYYYYYYYYYYYYK.",
     ".KYYYYYYYYYYYYK.", ".KKKKKKKKKKKKKK.", "................", "................",
 };
-const Ink kFolderInks[] = {{'K', kBlack}, {'H', rgb(7, 7, 2)}, {'Y', rgb(7, 6, 1)}};
+constexpr Ink kFolderInks[] = {{'K', kBlack}, {'H', rgb(7, 7, 2)}, {'Y', rgb(7, 6, 1)}};
 
-const char *const kText[16] = {
+constexpr const char *kText[16] = {
     "................", "................", "....KKKKKKKKK...", "....KWWWWWWWK...",
     "....KBBBBBBBK...", "....KWWWWWWWK...", "....KBBBBBBBK...", "....KWWWWWWWK...",
     "....KWWWWWWWK...", "....KBBBBBBBK...", "....KWWWWWWWK...", "....KWWWWWWWK...",
     "....KBBBBBBBK...", "....KWWWWWWWK...", "....KKKKKKKKK...", "................",
 };
-const Ink kTextInks[] = {{'K', kBlack}, {'W', kWhite}, {'B', rgb(0, 0, 2)}};
+constexpr Ink kTextInks[] = {{'K', kBlack}, {'W', kWhite}, {'B', rgb(0, 0, 2)}};
 
-const char *const kNetwork[16] = {
+constexpr const char *kNetwork[16] = {
     "................", "................", "................", "..KKKKKKKK......",
     "..KSSSSSSK......", "..KSSSSSSK......", "..KSSSSSSK......", "..KSSSSKKKKKKKK.",
     "..KKKKKKSSSSSSK.", "....KKKKSSSSSSK.", "....KKKKSSSSSSK.", ".......KSSSSSSK.",
     ".......KKKKKKKK.", ".........KKKK...", ".........KKKK...", "................",
 };
-const Ink kNetworkInks[] = {{'K', kBlack}, {'S', rgb(1, 5, 3)}};
+constexpr Ink kNetworkInks[] = {{'K', kBlack}, {'S', rgb(1, 5, 3)}};
 
-const char *const kSettings[16] = {
+constexpr const char *kSettings[16] = {
     "................", "..KKKKKKKKKKKK..", "..KWWWWWWWWWWK..", "..KWKWWWKWWWWK..",
     "..KWKWWWKWWKWK..", "..KRRRWWKWWKWK..", "..KWKWWRRRWKWK..", "..KWKWWWKWWKWK..",
     "..KWKWWWKWRRRK..", "..KWKWWWKWWKWK..", "..KWWWWWWWWWWK..", "..KKKKKKKKKKKK..",
     "................", "................", "................", "................",
 };
-const Ink kSettingsInks[] = {{'K', kBlack}, {'W', kGrey}, {'R', rgb(7, 0, 0)}};
+constexpr Ink kSettingsInks[] = {{'K', kBlack}, {'W', kGrey}, {'R', rgb(7, 0, 0)}};
 
-const char *const kBoard32[32] = {
+constexpr const char *kBoard32[32] = {
     "................................", "................................",
     "................................", ".....KKKKKKKKKKKKKKKKKKKKKK.....",
     ".....KPPPPPPPPPPPPPPPPPPPPK.....", ".....KPPPPPPPPPPPPPPPPPPPPK.....",
@@ -92,7 +94,7 @@ const char *const kBoard32[32] = {
     ".....KKKKKKKKKKKKKKKKKKKKKK.....", "................................",
     "................................", "................................",
 };
-const char *const kFolder32[32] = {
+constexpr const char *kFolder32[32] = {
     "................................", "................................",
     "................................", "................................",
     "................................", "................................",
@@ -110,7 +112,7 @@ const char *const kFolder32[32] = {
     "................................", "................................",
     "................................", "................................",
 };
-const char *const kNet32[32] = {
+constexpr const char *kNet32[32] = {
     "................................", "................................",
     "................................", "................................",
     "................................", "................................",
@@ -128,7 +130,7 @@ const char *const kNet32[32] = {
     "..................KKKKKKK.......", "................................",
     "................................", "................................",
 };
-const char *const kBin32[32] = {
+constexpr const char *kBin32[32] = {
     "................................", "................................",
     "................................", ".............KKKKKK.............",
     ".............KGGGGK.............", "......KKKKKKKKKKKKKKKKKKKK......",
@@ -147,12 +149,12 @@ const char *const kBin32[32] = {
     "................................", "................................",
 };
 
-const Ink kBoardInks[] = {{'K', kBlack}, {'P', rgb(0, 3, 1)}, {'G', kGrey}, {'O', rgb(6, 5, 0)}};
-const Ink kFolderInks32[] = {{'K', kBlack}, {'T', rgb(6, 5, 0)}, {'Y', rgb(7, 6, 1)}, {'H', rgb(7, 7, 2)}};
-const Ink kNetInks32[] = {{'K', kBlack}, {'S', rgb(1, 5, 3)}, {'G', kGrey}};
-const Ink kBinInks[] = {{'K', kBlack}, {'G', kGrey}, {'D', kDarkGrey}};
+constexpr Ink kBoardInks[] = {{'K', kBlack}, {'P', rgb(0, 3, 1)}, {'G', kGrey}, {'O', rgb(6, 5, 0)}};
+constexpr Ink kFolderInks32[] = {{'K', kBlack}, {'T', rgb(6, 5, 0)}, {'Y', rgb(7, 6, 1)}, {'H', rgb(7, 7, 2)}};
+constexpr Ink kNetInks32[] = {{'K', kBlack}, {'S', rgb(1, 5, 3)}, {'G', kGrey}};
+constexpr Ink kBinInks[] = {{'K', kBlack}, {'G', kGrey}, {'D', kDarkGrey}};
 
-const char *const kText32[32] = {
+constexpr const char *kText32[32] = {
     "................................", "................................",
     "................................", ".......KKKKKKKKKKKKKKKKKKK......",
     ".......KWWWWWWWWWWWWWWWWWK......", ".......KWWWWWWWWWWWWWWWWWK......",
@@ -170,7 +172,7 @@ const char *const kText32[32] = {
     ".......KKKKKKKKKKKKKKKKKKK......", "................................",
     "................................", "................................",
 };
-const char *const kPicture32[32] = {
+constexpr const char *kPicture32[32] = {
     "................................", "................................",
     "................................", "................................",
     "................................", "....KKKKKKKKKKKKKKKKKKKKKKKKK...",
@@ -188,7 +190,7 @@ const char *const kPicture32[32] = {
     "................................", "................................",
     "................................", "................................",
 };
-const char *const kDrive32[32] = {
+constexpr const char *kDrive32[32] = {
     "................................", "................................",
     "................................", "................................",
     "................................", "................................",
@@ -206,7 +208,7 @@ const char *const kDrive32[32] = {
     "................................", "................................",
     "................................", "................................",
 };
-const char *const kFile32[32] = {
+constexpr const char *kFile32[32] = {
     "................................", "................................",
     "................................", ".......KKKKKKKKKKKKKK...........",
     ".......KWWWWWWWWWWWWKK..........", ".......KWWWWWWWWWWWWKWK.........",
@@ -224,7 +226,7 @@ const char *const kFile32[32] = {
     ".......KKKKKKKKKKKKKKKKKKK......", "................................",
     "................................", "................................",
 };
-const char *const kDrive16[16] = {
+constexpr const char *kDrive16[16] = {
     "................", "................",
     "................", "................",
     "................", ".KKKKKKKKKKKKKK.",
@@ -235,115 +237,111 @@ const char *const kDrive16[16] = {
     "................", "................",
 };
 
-const Ink kTextInks32[] = {{'K', kBlack}, {'W', kWhite}, {'B', rgb(0, 0, 2)}};
-const Ink kPictureInks[] = {{'K', kBlack}, {'W', kWhite}, {'S', rgb(3, 5, 3)}, {'G', rgb(0, 4, 0)}, {'Y', rgb(7, 6, 0)}};
-const Ink kDriveInks[] = {{'K', kBlack}, {'L', kGrey}, {'W', kWhite}, {'D', kDarkGrey}, {'N', rgb(0, 7, 0)}};
-const Ink kFileInks[] = {{'K', kBlack}, {'W', kWhite}};
+constexpr Ink kTextInks32[] = {{'K', kBlack}, {'W', kWhite}, {'B', rgb(0, 0, 2)}};
+constexpr Ink kPictureInks[] = {{'K', kBlack}, {'W', kWhite}, {'S', rgb(3, 5, 3)}, {'G', rgb(0, 4, 0)}, {'Y', rgb(7, 6, 0)}};
+constexpr Ink kDriveInks[] = {{'K', kBlack}, {'L', kGrey}, {'W', kWhite}, {'D', kDarkGrey}, {'N', rgb(0, 7, 0)}};
+constexpr Ink kFileInks[] = {{'K', kBlack}, {'W', kWhite}};
 
-template <int N> struct Picture32 {
-    uint8_t pixels[1024];
-    Bitmap bitmap;
 
-    Picture32(const char *const (&rows)[32], const Ink (&inks)[N]) : bitmap{32, 32, pixels, kClear}
-    {
-        for (int r = 0; r < 32; r++) {
-            for (int q = 0; q < 32; q++) {
-                uint8_t p = kClear;
-                for (const Ink &ink : inks) {
-                    if (rows[r][q] == ink.key) {
-                        p = ink.colour;
-                    }
-                }
-                pixels[r * 32 + q] = p;
-            }
-        }
-    }
-};
 
 } // namespace
 
 const Bitmap &settings_icon_16()
 {
-    static const Picture16<3> picture(kSettings, kSettingsInks);
-    return picture.bitmap;
+    static constexpr Pixels<16> pixels = paint<16>(kSettings, kSettingsInks);
+    static constexpr Bitmap bitmap = {16, 16, pixels.p, kClear};
+    return bitmap;
 }
 
 const Bitmap &drive_icon_16()
 {
-    static const Picture16<5> picture(kDrive16, kDriveInks);
-    return picture.bitmap;
+    static constexpr Pixels<16> pixels = paint<16>(kDrive16, kDriveInks);
+    static constexpr Bitmap bitmap = {16, 16, pixels.p, kClear};
+    return bitmap;
 }
 
 const Bitmap &text_icon_32()
 {
-    static const Picture32<3> picture(kText32, kTextInks32);
-    return picture.bitmap;
+    static constexpr Pixels<32> pixels = paint<32>(kText32, kTextInks32);
+    static constexpr Bitmap bitmap = {32, 32, pixels.p, kClear};
+    return bitmap;
 }
 
 const Bitmap &picture_icon_32()
 {
-    static const Picture32<5> picture(kPicture32, kPictureInks);
-    return picture.bitmap;
+    static constexpr Pixels<32> pixels = paint<32>(kPicture32, kPictureInks);
+    static constexpr Bitmap bitmap = {32, 32, pixels.p, kClear};
+    return bitmap;
 }
 
 const Bitmap &drive_icon_32()
 {
-    static const Picture32<5> picture(kDrive32, kDriveInks);
-    return picture.bitmap;
+    static constexpr Pixels<32> pixels = paint<32>(kDrive32, kDriveInks);
+    static constexpr Bitmap bitmap = {32, 32, pixels.p, kClear};
+    return bitmap;
 }
 
 const Bitmap &file_icon_32()
 {
-    static const Picture32<2> picture(kFile32, kFileInks);
-    return picture.bitmap;
+    static constexpr Pixels<32> pixels = paint<32>(kFile32, kFileInks);
+    static constexpr Bitmap bitmap = {32, 32, pixels.p, kClear};
+    return bitmap;
 }
 
 const Bitmap &board_icon_32()
 {
-    static const Picture32<4> picture(kBoard32, kBoardInks);
-    return picture.bitmap;
+    static constexpr Pixels<32> pixels = paint<32>(kBoard32, kBoardInks);
+    static constexpr Bitmap bitmap = {32, 32, pixels.p, kClear};
+    return bitmap;
 }
 
 const Bitmap &folder_icon_32()
 {
-    static const Picture32<4> picture(kFolder32, kFolderInks32);
-    return picture.bitmap;
+    static constexpr Pixels<32> pixels = paint<32>(kFolder32, kFolderInks32);
+    static constexpr Bitmap bitmap = {32, 32, pixels.p, kClear};
+    return bitmap;
 }
 
 const Bitmap &network_icon_32()
 {
-    static const Picture32<3> picture(kNet32, kNetInks32);
-    return picture.bitmap;
+    static constexpr Pixels<32> pixels = paint<32>(kNet32, kNetInks32);
+    static constexpr Bitmap bitmap = {32, 32, pixels.p, kClear};
+    return bitmap;
 }
 
 const Bitmap &bin_icon_32()
 {
-    static const Picture32<3> picture(kBin32, kBinInks);
-    return picture.bitmap;
+    static constexpr Pixels<32> pixels = paint<32>(kBin32, kBinInks);
+    static constexpr Bitmap bitmap = {32, 32, pixels.p, kClear};
+    return bitmap;
 }
 
 const Bitmap &mascot_16()
 {
-    static const Picture16<6> picture(kMascot, kMascotInks);
-    return picture.bitmap;
+    static constexpr Pixels<16> pixels = paint<16>(kMascot, kMascotInks);
+    static constexpr Bitmap bitmap = {16, 16, pixels.p, kClear};
+    return bitmap;
 }
 
 const Bitmap &folder_icon_16()
 {
-    static const Picture16<3> picture(kFolder, kFolderInks);
-    return picture.bitmap;
+    static constexpr Pixels<16> pixels = paint<16>(kFolder, kFolderInks);
+    static constexpr Bitmap bitmap = {16, 16, pixels.p, kClear};
+    return bitmap;
 }
 
 const Bitmap &text_icon_16()
 {
-    static const Picture16<3> picture(kText, kTextInks);
-    return picture.bitmap;
+    static constexpr Pixels<16> pixels = paint<16>(kText, kTextInks);
+    static constexpr Bitmap bitmap = {16, 16, pixels.p, kClear};
+    return bitmap;
 }
 
 const Bitmap &network_icon_16()
 {
-    static const Picture16<2> picture(kNetwork, kNetworkInks);
-    return picture.bitmap;
+    static constexpr Pixels<16> pixels = paint<16>(kNetwork, kNetworkInks);
+    static constexpr Bitmap bitmap = {16, 16, pixels.p, kClear};
+    return bitmap;
 }
 
 } // namespace gfx
