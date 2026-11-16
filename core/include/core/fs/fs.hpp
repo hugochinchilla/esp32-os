@@ -53,9 +53,25 @@ struct Save {
     char temporary[kMaxPath] = {};
 };
 
+// Safe to use from several tasks once it has a lock (set_lock()): every call
+// below runs from start to end with the lock held, so the drive list and each
+// drive's own tables (open files, free blocks) only ever see one task at a
+// time. One lock covers all the drives. The calls that are several steps
+// (begin_save, finish_save, read_file, write_file) hold it across all of
+// them. Between calls nothing is held: a task that reads or writes a file
+// piece by piece lets the others in between the pieces.
+//
+// What the lock does not do: it does not stop two tasks from working on the
+// same file. A File belongs to the task that opened it, and two saves of the
+// same path at once use the same temporary file.
 class Storage {
 public:
     static constexpr int kMaxDrives = 4;
+
+    // The lock to take around every call; nullptr (the default) for none,
+    // which is right while only one task uses the file system. Set it before
+    // a second task starts, never while a call is running.
+    void set_lock(ports::Lock *lock) { lock_ = lock; }
 
     void mount(char letter, ports::Volume &volume);
     ports::Volume *volume(char letter) const;
@@ -91,8 +107,22 @@ public:
     FsError write_file(const char *path, const void *data, size_t size) const;
 
 private:
+    // The work of the calls above without taking the lock, for the calls
+    // made of several steps: the lock is not recursive, so nothing in here
+    // may call the public ones.
+    ports::Volume *find(char letter) const;
     ports::Volume *resolve(const char *path, FsError &error) const;
+    FsError do_stat(const char *path, DirEntry &out) const;
+    FsError do_remove(const char *path) const;
+    FsError do_replace(const char *from, const char *to) const;
+    FsError do_open(const char *path, OpenMode mode, File &file) const;
+    FsError do_read(File &file, void *data, size_t size, size_t &done) const;
+    FsError do_write(File &file, const void *data, size_t size) const;
+    FsError do_close(File &file) const;
+    FsError do_begin_save(const char *path, Save &save) const;
+    FsError do_finish_save(Save &save, bool keep) const;
 
+    ports::Lock *lock_ = nullptr;
     char letters_[kMaxDrives] = {};
     ports::Volume *volumes_[kMaxDrives] = {};
     int count_ = 0;
