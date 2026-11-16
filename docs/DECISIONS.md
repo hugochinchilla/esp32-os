@@ -91,6 +91,8 @@ Not scheduled. To be revisited once a basic OS boots.
 | Port to Rust | Rewrite the OS in Rust as a later adventure, either on ESP-IDF or without it | A full rewrite. Check the state of Rust's display and USB host support for this chip first |
 | Wired Ethernet | SPI module with an RJ45 socket, 5 pins | Rejected for now: a module would have to be bought |
 | Battery-backed clock | I2C clock chip with a coin cell on GPIO1 and GPIO2 | Only if parts are already at home |
+| Bluetooth keyboard and mouse | The chip's Bluetooth LE radio acts as a HID host, so wireless keyboards and mice that speak Bluetooth LE feed the same input path as USB and the debug link. Needs a pairing window. Out of place for the era, wanted anyway (2026-11-16) | No hardware. Older Bluetooth Classic keyboards and mice will not work: the ESP32-S3 has Bluetooth LE only. Shares the radio with Wi-Fi and takes flash and RAM for the Bluetooth stack |
+| Bluetooth audio | Not possible on this chip: the ESP32-S3 has no Bluetooth Classic (so no A2DP) and no LE Audio | Ruled out |
 
 ### System programs the owner would like (2026-11-16)
 
