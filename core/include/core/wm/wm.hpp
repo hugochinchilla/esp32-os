@@ -159,6 +159,7 @@ private:
     Window *topmost_visible() const;
     void raise(Window &w);
     void on_press();
+    void on_right_press();
     void on_release();
     void on_move();
     void update_pointer_shape();

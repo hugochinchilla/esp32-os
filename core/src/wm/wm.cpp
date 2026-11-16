@@ -656,7 +656,11 @@ void Wm::mouse(const ports::MouseEvent &event)
         on_move();
     }
     const bool was = buttons_ & 1, now = event.buttons & 1;
+    const bool right_pressed = !(buttons_ & 2) && (event.buttons & 2);
     buttons_ = event.buttons;
+    if (right_pressed) {
+        on_right_press();
+    }
     if (!was && now) {
         on_press();
     } else if (was && !now) {
@@ -815,6 +819,24 @@ void Wm::on_press()
         capture_ = Capture::None;
         break;
     }
+}
+
+void Wm::on_right_press()
+{
+    // Only for the client area of a window that can be used, and only when
+    // nothing else (a drag, a menu, a held left button) is going on.
+    if (capture_ != Capture::None || menu_open() || taskbar().contains(pointer_x_, pointer_y_)) {
+        return;
+    }
+    Window *w = window_under(pointer_x_, pointer_y_);
+    Window *sys = system_modal();
+    if (w == nullptr || (sys != nullptr && sys != w) || blocker(*w) != nullptr ||
+        part_at(*w, pointer_x_, pointer_y_) != Part::Client) {
+        return;
+    }
+    activate(*w);
+    const Rect c = w->client();
+    w->right_click(pointer_x_ - c.x, pointer_y_ - c.y);
 }
 
 void Wm::on_move()

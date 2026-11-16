@@ -6,6 +6,7 @@
 #pragma once
 
 #include "core/fs/fs.hpp"
+#include "core/games/cactus.hpp"
 #include "core/gfx/canvas.hpp"
 #include "core/ports.hpp"
 #include "core/wm/wm.hpp"
@@ -60,6 +61,12 @@ void open_picture(const char *path);
 void finish_picture();
 const uint32_t *picture_timings();
 constexpr int kPictureTimings = 3;
+
+// Tests and reference pictures: the game in the Cactus Patch window, and a
+// repaint after changing it directly.
+games::CactusField &cactus_patch_field();
+void cactus_patch_refresh();
+int cactus_patch_seconds();
 
 // Sets up the desktop icons and the Start menu, and opens the first windows.
 // `storage` holds the drives; `memory` gives the large buffers (editor,

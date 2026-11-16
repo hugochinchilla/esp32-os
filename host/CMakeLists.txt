@@ -67,3 +67,12 @@ add_test(NAME dbg_tool
 
 add_executable(dither_eval dither_eval.cpp)
 target_link_libraries(dither_eval PRIVATE core)
+
+# Cactus Patch: rules and window tests, and its own reference pictures (the
+# same program writes them when given a folder).
+add_executable(test_cactus tests/test_cactus.cpp)
+target_link_libraries(test_cactus PRIVATE core)
+add_test(NAME cactus COMMAND test_cactus)
+add_test(NAME cactus_pictures
+         COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/check_pictures.py $<TARGET_FILE:test_cactus>)
+set_tests_properties(cactus cactus_pictures PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
