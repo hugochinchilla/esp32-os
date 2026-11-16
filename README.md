@@ -1,4 +1,6 @@
-# esp32-os
+# Chinchilla (esp32-os)
+
+![Target look](docs/look/target-98.png)
 
 A 90s-style desktop operating environment (think Windows 95/98) for the
 ESP32-S3, with VGA output from GPIO pins, Wi-Fi, and USB keyboard and mouse.
