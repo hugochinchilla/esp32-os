@@ -52,6 +52,9 @@ Last updated: 2026-11-16.
 | Ethernet module (W5500, ENC28J60) | Would have to be bought |
 | Writing our own kernel from scratch, without FreeRTOS | Would mean porting or rewriting Wi-Fi support, USB host, display and network code, and the chip cannot isolate apps from each other anyway |
 | LVGL for the desktop | No overlapping window manager, and its widgets are built for touch panels |
+| The "Lenna" test photo as a sample picture | A copyrighted magazine photograph; the person in it has asked for it to be retired, and journals no longer accept it. It does not go in the repository or the firmware. The owner can still copy any file of his own onto his board with `tools/dbg.py put` |
+| "Tom's Diner" as a sample sound | A commercial recording, not ours to distribute. Same as above: not in the repository or the firmware; `tools/dbg.py put` works for his own copies |
+| Kodak Lossless True Color Image Suite as sample pictures | Its usual source says only that it is "my understanding" Kodak released it for unrestricted use; no licence statement from Kodak could be found, so its status was not confirmed (2026-11-16). Can be added if a clear statement turns up |
 
 ## Still open
 
@@ -65,6 +68,7 @@ Last updated: 2026-11-16.
 | Details chosen in the files milestone; to confirm or overrule | See "Chosen in the files milestone" below | As built |
 | Details chosen in the image viewer milestone; to confirm or overrule | See "Chosen in the image viewer milestone" below | As built |
 | Desktop wallpaper from a picture (Settings > Display) | Yes (a picture shrunk to 640x480 in external RAM, 300 KB, repainted from it), later, never | Later: there is no Settings program yet and the desktop would need a picture store; skipped in this milestone |
+| Picture viewer settings surviving a restart | Keep them in a settings file once there is a flash file system and a settings store, or not | Until then the dithering chosen in the viewer lasts until restart; this needs the file system choice first |
 | Interlaced PNG and progressive JPEG | Support them (a whole-picture buffer for progressive JPEG: 6 bytes a pixel), keep them refused | Keep refused for now: they say "not supported" in an error box |
 | SD card in the first version | Yes, later, never | Later (pins are reserved) |
 | How two USB sockets are provided | External hub, hub module on the board, shared receiver | One socket now, space for a hub module |
@@ -97,7 +101,7 @@ Not scheduled. Each needs its design choices put to the owner before it is built
 | Disk defragmenter | Purely nostalgic: flash storage does not need it. A block map that slowly tidies itself. It must not really rewrite the flash, which would only wear it out |
 | Task manager | Opened with Ctrl+Alt+Del. Lists running programs with memory and processor use, and can close one |
 | Power-down screen | Shut Down ends on a full screen saying "It is now safe to turn off your computer", as machines without soft power did. Wording and artwork must be our own |
-| Audio player | Compact player in the spirit of late-90s players, with no visualiser and no equaliser. Opens WAV and MP3. The look must be original, not a copy of an existing player or its skins. Needs the sound output (GPIO13) working first, and a freely licensed MP3 decoder |
+| Audio player | Compact player in the spirit of late-90s players, with no visualiser and no equaliser. Opens WAV and MP3. The look must be original, not a copy of an existing player or its skins. Needs the sound output (GPIO13) working first, and a freely licensed MP3 decoder. Its sample files must be public domain, openly licensed, or made by us, with the source and licence recorded as in `third_party/samples/README.md` |
 | Mine-sweeping game | A grid puzzle of the mine-clearing kind: numbers show how many neighbours are mined. Our own name, artwork and icons; not a copy of any existing game's look |
 | Snake game | The classic grow-as-you-eat arcade game, with our own name and artwork. A good first program driven by the timer and the keyboard |
 
@@ -153,6 +157,36 @@ First picture: 2026-11-16, through a VGA-to-HDMI adapter.
   and the 64 KB clipboard); opening the Editor takes another 0.6 MB external
   (its 512 KB text and 64 KB undo). Icons and pointer shapes moved from RAM
   to flash on the way (15 KB).
+- Dithering comparison (2026-11-16). Quality: PSNR in dB against the
+  original after a Gaussian blur in linear light (sigma 1 pixel), on the PC
+  (`host/dither_eval.cpp`, pictures from `tools/gen_pictures.py dither`).
+  Time: decoding plus converting a 640x480 JPEG on the board, fitted to the
+  maximised window / at actual size. Webcam: a 600x380 test picture at
+  actual size, 3 s at 60 fps per dither; "noise" is the per-pixel standard
+  deviation over time in the sky and skin areas (0.8 for flat colour, the
+  camera's own noise); no frame-to-frame flash was seen with any of them.
+
+  | Dither | Sky | Skin | Grey ramp | Test card | Text on photo | Landscape | Earthrise | Blue Marble | Mean | Fitted | Actual | Webcam noise | On the monitor |
+  | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+  | None | 24.9 | 23.1 | 23.8 | 25.3 | 21.3 | 21.1 | 31.8 | 32.3 | 25.4 | 0.96 s | 1.21 s | 0.8 | Hard bands everywhere |
+  | Bayer 2x2 | 35.4 | 30.8 | 30.9 | 29.6 | 30.3 | 30.2 | 41.2 | 35.9 | 33.0 | 0.85 s | 1.03 s | 1.1 | Visible steps in gradients |
+  | Bayer 4x4 | 37.7 | 32.0 | 31.4 | 34.2 | 30.3 | 30.1 | 40.8 | 35.7 | 34.0 | 0.85 s | 1.04 s | 1.3 | Smooth; faint regular lines in the sky |
+  | Bayer 8x8 | 37.2 | 31.8 | 31.3 | 31.8 | 30.4 | 30.3 | 40.6 | 35.6 | 33.6 | 0.85 s | 1.02 s | 1.4 | Smooth; faint cross-hatch |
+  | Blue noise | 37.4 | 31.9 | 31.3 | 32.2 | 30.4 | 30.3 | 40.6 | 35.6 | 33.7 | 0.85 s | 1.03 s | 2.1 | Smooth but grainy, and the most shimmer |
+  | Floyd-Steinberg | 37.2 | 32.1 | 31.8 | 33.4 | 30.9 | 30.7 | 41.4 | 38.2 | 34.5 | 1.32 s | 1.75 s | 1.4 | Smooth, no grid |
+  | FS serpentine | 37.8 | 32.1 | 31.6 | 32.6 | 30.7 | 30.5 | 41.6 | 38.0 | 34.4 | 1.35 s | 1.80 s | 1.4 | Smooth, no grid |
+  | Atkinson | 33.5 | 31.2 | 31.5 | 36.8 | 31.1 | 30.9 | 39.5 | 37.4 | 34.0 | 1.46 s | 1.98 s | 1.4 | Colour patches in skin and sky (it drops 1/4 of the error); crisp on the test card |
+  | Jarvis-Judice-Ninke | 36.5 | 31.9 | 31.4 | 32.6 | 30.3 | 30.2 | 40.8 | 36.9 | 33.8 | 1.79 s | 2.48 s | 1.5 | Smooth, visible worm texture in skin |
+  | Stucki | 37.0 | 32.0 | 31.5 | 32.7 | 30.5 | 30.4 | 41.1 | 37.2 | 34.1 | 1.79 s | 2.48 s | 1.4 | As JJN |
+  | Sierra Lite | 38.0 | 32.1 | 31.5 | 32.7 | 30.7 | 30.6 | 41.7 | 38.1 | 34.4 | 1.28 s | 1.71 s | 1.5 | Smooth, no grid |
+
+  The NASA photographs come out best with Sierra Lite and the two
+  Floyd-Steinberg variants by the numbers; on the monitor the small Earth
+  discs look the same with any of the error diffusions. Blue noise's
+  higher webcam noise is partly the monitor sampling its isolated dots and
+  partly the camera's compression of fine detail; it is the one pattern
+  where shimmer can be seen. The longest timer slice while decoding was
+  21 to 31 ms with every dither.
 - Image viewer milestone (2026-11-16): all 33 PC render steps, including
   the 11 new ones (pictures folder, the viewer with each dither, fitted and
   actual size with scroll bars, the Open dialog, the mascot BMP, the test
@@ -313,18 +347,43 @@ practical. Each is easy to change.
   to 1600x1200 pixels; larger pictures are always fitted. The space around
   the picture is dark grey (73, 73, 73), and transparent PNG pixels are laid
   on that grey.
-- Ordered 4x4 dither by default (the pattern the desktop uses), with error
-  diffusion (Floyd-Steinberg) and no dither in the View menu. The choice is
-  remembered while the board runs.
+- Dithering: 11 ways, chosen in View > Dithering (a check marks the one
+  in use) or in View > Options (a list with a line about each). The choice
+  lasts until restart. What used to be "Error diffusion" is Floyd-Steinberg,
+  kept byte for byte as it was (errors in whole values). The others:
+  nearest colour; Bayer 2x2, 4x4 (the desktop's pattern, the old
+  "Ordered") and 8x8; a 64x64 blue-noise mask made by
+  `tools/gen_blue_noise.py` (void and cluster, fixed seed); Floyd-Steinberg
+  serpentine, Atkinson, Jarvis-Judice-Ninke, Stucki and Sierra Lite, which
+  keep their errors in 16ths, because with whole values the small shares of
+  the wide kernels (1/48, 1/42) round to nothing and gradients band.
+  Errors are measured against the level the board really shows (blue:
+  0, 73, 182, 255) and diffused in the picture's own gamma-encoded values,
+  not linear light: the board's resistor ladder spaces its levels evenly in
+  those values, the thresholds of the ordered patterns are in them too, and
+  linear-light diffusion with so few levels leaves dark areas speckled with
+  isolated bright pixels.
+- Default: Floyd-Steinberg. Chosen by measurement: on 8 test pictures (sky,
+  skin tones, grey ramp, test card, text on a photo, the landscape, the two
+  NASA photographs) its error after a blur that stands for viewing
+  distance was the lowest (34.5 dB on average; Sierra Lite 34.4, Bayer 4x4
+  34.0, blue noise 33.7, none 25.4); on the monitor it is smooth with no
+  regular grid, and it costs 1.32 s for a 640x480 JPEG fitted to the
+  maximised window against 0.85 s for the ordered patterns. Runner-up:
+  Sierra Lite (the same look, 3 % quicker). Bayer 4x4 stays the fastest
+  good choice. Full table under "Found on the bench".
 - Decoding runs from a timer: up to 8 ms of decoding every 15 ms, showing
   rows as they come and "Loading... N%" in the status bar. The status bar
   then shows name, size, format and "(fitted)" when shrunk.
 - A damaged file shows the rows decoded so far and an error box; the
   status bar says the picture is damaged.
 - The Picture viewer is one window (98's Imaging opened one per picture).
-- Three sample pictures made by `tools/gen_pictures.py` are put in
-  C:\pictures at start-up: a test card (PNG), a landscape (JPEG) and the
-  mascot (4-bit BMP), 18 KB together in the firmware.
+- Sample pictures in C:\pictures at start-up: three made by
+  `tools/gen_pictures.py` (a test card PNG, a landscape JPEG, the mascot as a
+  4-bit BMP, 18 KB) and two public-domain NASA photographs (Earthrise as a
+  640x480 JPEG, 14.6 KB; the Blue Marble as a 320x320 PNG, 124 KB), see
+  `third_party/samples/README.md`. 160 KB in the firmware in all; the RAM
+  disk still has 1849 KB of its 2048 KB free.
 - The 16x16 picture icon is the 32x32 one with every other pixel, made at
   compile time.
 

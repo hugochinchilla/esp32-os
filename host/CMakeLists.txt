@@ -60,3 +60,6 @@ add_test(NAME pictures
          COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/check_pictures.py $<TARGET_FILE:render_scenes>)
 add_test(NAME dbg_tool
          COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/test_dbg_sim.py $<TARGET_FILE:sim>)
+
+add_executable(dither_eval dither_eval.cpp)
+target_link_libraries(dither_eval PRIVATE core)

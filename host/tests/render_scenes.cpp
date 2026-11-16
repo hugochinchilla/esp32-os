@@ -245,32 +245,51 @@ int main(int argc, char **argv)
     storage.read_file("C:\\pictures\\landscape.jpg", bytes, sizeof(bytes), size);
     storage.write_file("C:\\pictures\\broken.jpg", bytes, size / 2);
 
-    // Up to C:, into pictures: broken.jpg, landscape.jpg, mascot.bmp, test card.png.
+    // Up to C:, into pictures: blue marble.png, broken.jpg, earthrise.jpg,
+    // landscape.jpg, mascot.bmp, test card.png.
     key(wm::key::Backspace);
     key(wm::key::Home);
     key(wm::key::Right);
     key(wm::key::Enter);
     save("23-pictures-folder");
 
-    // Open landscape.jpg in the Picture viewer, decoded to the end.
+    // Open landscape.jpg (the fourth) in the Picture viewer, decoded to the end.
     key(wm::key::Home);
-    key(wm::key::Right);
+    for (int i = 0; i < 3; i++) {
+        key(wm::key::Right);
+    }
     key(wm::key::Enter);
     shell::finish_picture();
     save("24-viewer-landscape");
 
-    // The View menu (Alt+V), then error diffusion and no dither.
+    // The View menu (Alt+V) with Dithering open (D), then Bayer 4x4
+    // and no dither from it.
     key(0x19, true);
+    key(0x07); // D
     save("25-viewer-menu");
-    key(0x08); // E: Error diffusion
+    key(0x21); // 4: Bayer 4x4
     shell::finish_picture();
-    save("26-viewer-diffusion");
+    save("26-viewer-bayer4");
     key(0x19, true);
-    key(0x11); // N: No dither
+    key(0x07);
+    key(0x11); // N: None
     shell::finish_picture();
     save("27-viewer-no-dither");
+
+    // View > Options (O): the dialog, Blue noise picked from the list.
     key(0x19, true);
-    key(0x12); // O: Ordered dither again
+    key(0x12);
+    key(wm::key::Home);
+    for (int i = 0; i < 4; i++) {
+        key(wm::key::Down);
+    }
+    save("27a-viewer-options");
+    key(wm::key::Enter);
+    shell::finish_picture();
+    save("27b-viewer-blue-noise");
+    key(0x19, true);
+    key(0x07);
+    key(0x09); // F: Floyd-Steinberg (the default) again
     shell::finish_picture();
 
     // Smaller window: fitted, then actual size with scroll bars.

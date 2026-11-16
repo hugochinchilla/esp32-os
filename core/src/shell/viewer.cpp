@@ -158,6 +158,101 @@ private:
 
 void close_window(void *context) { static_cast<wm::Window *>(context)->close(); }
 
+const char *const *dither_names()
+{
+    static const char *names[image::kDitherCount];
+    for (int i = 0; i < image::kDitherCount; i++) {
+        names[i] = image::dither_info(static_cast<image::Dither>(i)).name;
+    }
+    return names;
+}
+
+// View > Options: the dithering, from a list with a line about each.
+class OptionsDialog : public wm::Window {
+public:
+    using Done = void (*)(image::Dither d);
+
+    OptionsDialog()
+        : Window("Options", {0, 0, 380, 252}, nullptr),
+          group_({8, 6, 358, 180}, "Dithering"),
+          list_({18, 24, 338, 116}, dither_names(), image::kDitherCount, &OptionsDialog::selected, this),
+          about_({18, 150, 338, 14}, ""),
+          ok_({210, 196, 75, 23}, "OK", &OptionsDialog::ok, this),
+          cancel_({291, 196, 75, 23}, "Cancel", &OptionsDialog::cancel, this)
+    {
+        set_dialog(true);
+        add(group_);
+        add(list_);
+        add(about_);
+        add(ok_);
+        add(cancel_);
+        ok_.set_default(true);
+        set_default(&ok_);
+    }
+
+    void show(wm::Window *owner, image::Dither current, Done done)
+    {
+        if (open()) {
+            close();
+        }
+        done_ = done;
+        list_.select(static_cast<int>(current));
+        set_modal(owner);
+        set_frame(centred(shell::manager(), frame().w, frame().h));
+        shell::manager().add(*this);
+        set_focus(&list_);
+    }
+
+    bool key(const wm::KeyMsg &k) override
+    {
+        if (k.pressed && k.usage == wm::key::Escape) {
+            close();
+            return true;
+        }
+        return Window::key(k);
+    }
+
+private:
+    static void selected(wm::ListBox &list, void *context)
+    {
+        auto *d = static_cast<OptionsDialog *>(context);
+        if (list.selected() >= 0) {
+            d->about_.set_text(image::dither_info(static_cast<image::Dither>(list.selected())).description);
+        }
+    }
+    static void ok(wm::Button &, void *context)
+    {
+        auto *d = static_cast<OptionsDialog *>(context);
+        const int i = d->list_.selected();
+        d->close();
+        if (i >= 0 && d->done_ != nullptr) {
+            d->done_(static_cast<image::Dither>(i));
+        }
+    }
+    static void cancel(wm::Button &, void *context) { static_cast<OptionsDialog *>(context)->close(); }
+
+    Done done_ = nullptr;
+    wm::GroupFrame group_;
+    wm::ListBox list_;
+    wm::Label about_;
+    wm::Button ok_, cancel_;
+};
+
+OptionsDialog &options()
+{
+    static OptionsDialog d;
+    return d;
+}
+
+const image::Dither kDithers[image::kDitherCount] = {
+    image::Dither::None,           image::Dither::Bayer2,          image::Dither::Bayer4,
+    image::Dither::Bayer8,         image::Dither::BlueNoise,       image::Dither::FloydSteinberg,
+    image::Dither::FloydSerpentine, image::Dither::Atkinson,       image::Dither::JarvisJudiceNinke,
+    image::Dither::Stucki,         image::Dither::SierraLite,
+};
+
+void set_dither(image::Dither d);
+
 class ViewerWindow : public wm::Window {
 public:
     ViewerWindow() : Window("Picture viewer", {110, 40, 420, 360}, &gfx::picture_icon_16())
@@ -168,9 +263,12 @@ public:
         view_items_[0] = {"&Fit to window", &ViewerWindow::menu_fit, this, nullptr, nullptr, 0};
         view_items_[1] = {"&Actual size", &ViewerWindow::menu_actual, this, nullptr, nullptr, 0};
         view_items_[2] = {nullptr, nullptr, nullptr, nullptr, nullptr, wm::kMenuSeparator};
-        view_items_[3] = {"&Ordered dither", &ViewerWindow::menu_ordered, this, nullptr, nullptr, 0};
-        view_items_[4] = {"&Error diffusion", &ViewerWindow::menu_diffusion, this, nullptr, nullptr, 0};
-        view_items_[5] = {"&No dither", &ViewerWindow::menu_none, this, nullptr, nullptr, 0};
+        view_items_[3] = {"&Dithering", nullptr, nullptr, &dither_menu_, nullptr, 0};
+        view_items_[4] = {"&Options...", &ViewerWindow::menu_options, this, nullptr, nullptr, 0};
+        for (int i = 0; i < image::kDitherCount; i++) {
+            dither_items_[i] = {image::dither_info(kDithers[i]).menu, &ViewerWindow::menu_dither,
+                                const_cast<image::Dither *>(&kDithers[i]), nullptr, nullptr, 0};
+        }
         set_menu_bar(&bar_);
         add(view_);
         add(status_);
@@ -213,9 +311,9 @@ public:
         }
         view_items_[0].flags = fit_ ? wm::kMenuChecked : 0;
         view_items_[1].flags = fit_ ? 0 : wm::kMenuChecked;
-        view_items_[3].flags = dither_ == image::Dither::Ordered ? wm::kMenuChecked : 0;
-        view_items_[4].flags = dither_ == image::Dither::Diffusion ? wm::kMenuChecked : 0;
-        view_items_[5].flags = dither_ == image::Dither::None ? wm::kMenuChecked : 0;
+        for (int i = 0; i < image::kDitherCount; i++) {
+            dither_items_[i].flags = dither_ == kDithers[i] ? wm::kMenuChecked : 0;
+        }
     }
 
     void closed() override { stop(); }
@@ -359,17 +457,20 @@ private:
         v->fit_ = false;
         v->again();
     }
-    static void set_dither(void *c, image::Dither d)
+    static void menu_dither(void *c) { set_dither(*static_cast<image::Dither *>(c)); }
+    static void menu_options(void *c)
     {
         auto *v = static_cast<ViewerWindow *>(c);
-        v->dither_ = d;
-        v->again();
+        options().show(v, v->dither_, &set_dither);
     }
-    static void menu_ordered(void *c) { set_dither(c, image::Dither::Ordered); }
-    static void menu_diffusion(void *c) { set_dither(c, image::Dither::Diffusion); }
-    static void menu_none(void *c) { set_dither(c, image::Dither::None); }
 
 public:
+    void use_dither(image::Dither d)
+    {
+        dither_ = d;
+        again();
+    }
+
     uint32_t timings_[kPictureTimings] = {}; // see picture_timings()
     uint32_t busy_us_ = 0;
 
@@ -385,14 +486,16 @@ private:
     int timer_ = 0;
     uint64_t started_us_ = 0;
     bool fit_ = true;
-    image::Dither dither_ = image::Dither::Ordered;
+    image::Dither dither_ = image::Dither::FloydSteinberg; // kept while the board runs
     int last_w_ = 0, last_h_ = 0;
     PictureView view_;
     StatusBar status_;
     wm::MenuItem file_items_[3];
-    wm::MenuItem view_items_[6];
+    wm::MenuItem view_items_[5];
+    wm::MenuItem dither_items_[image::kDitherCount];
     wm::Menu file_ = {file_items_, 3};
-    wm::Menu view_menu_ = {view_items_, 6};
+    wm::Menu view_menu_ = {view_items_, 5};
+    wm::Menu dither_menu_ = {dither_items_, image::kDitherCount};
     const wm::MenuBarEntry entries_[2] = {{"&File", &file_}, {"&View", &view_menu_}};
     const wm::MenuBar bar_ = {entries_, 2};
 };
@@ -401,6 +504,11 @@ ViewerWindow &viewer()
 {
     static ViewerWindow w;
     return w;
+}
+
+void set_dither(image::Dither d)
+{
+    viewer().use_dither(d);
 }
 
 } // namespace

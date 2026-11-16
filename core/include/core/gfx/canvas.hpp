@@ -31,6 +31,10 @@ struct Rgb {
 
 // The board colour used at screen position (x, y) for `c`.
 Colour dither(Rgb c, int x, int y);
+// Each channel: the board level below, or the one above when the value is
+// more than (t + 0.5) / n of the way to it. dither() is this with the 4x4
+// Bayer matrix, n = 16.
+Colour threshold(Rgb c, unsigned t, unsigned n);
 // The nearest board colour, and (if asked) what it really shows as.
 Colour nearest(Rgb c, Rgb *shown = nullptr);
 // What a board colour really shows as (blue has levels 0, 2, 5, 7 of 7).

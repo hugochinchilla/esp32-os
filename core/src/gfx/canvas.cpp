@@ -12,10 +12,10 @@ const uint8_t kLevels3[8] = {0, 36, 73, 109, 146, 182, 219, 255};
 const uint8_t kLevelsB[4] = {0, 73, 182, 255};
 const uint8_t kBayer[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
 
-// The level index for value `v` at threshold `t` (0..15): the nearest level
+// The level index for value `v` at threshold `t` (0..n-1): the nearest level
 // below, or the one above when v is far enough past it. Same rule as
-// tools/mockup/desktop.py: (v - lo) / (hi - lo) > (t + 0.5) / 16.
-unsigned channel(unsigned v, const uint8_t *levels, unsigned count, unsigned t)
+// tools/mockup/desktop.py: (v - lo) / (hi - lo) > (t + 0.5) / n.
+unsigned channel(unsigned v, const uint8_t *levels, unsigned count, unsigned t, unsigned n = 16)
 {
     unsigned lo = 0;
     while (lo + 1 < count && levels[lo + 1] <= v) {
@@ -25,7 +25,7 @@ unsigned channel(unsigned v, const uint8_t *levels, unsigned count, unsigned t)
         return lo;
     }
     unsigned span = levels[lo + 1] - levels[lo];
-    return 32 * (v - levels[lo]) > (2 * t + 1) * span ? lo + 1 : lo;
+    return 2 * n * (v - levels[lo]) > (2 * t + 1) * span ? lo + 1 : lo;
 }
 
 Colour dither_t(Rgb c, unsigned t)
@@ -67,6 +67,12 @@ Colour nearest(Rgb c, Rgb *shown_as)
 Rgb shown(Colour c)
 {
     return {kLevels3[c >> 5], kLevels3[(c >> 2) & 7], kLevelsB[c & 3]};
+}
+
+Colour threshold(Rgb c, unsigned t, unsigned n)
+{
+    return rgb(channel(c.r, kLevels3, 8, t, n), channel(c.g, kLevels3, 8, t, n),
+               channel(c.b, kLevelsB, 4, t, n));
 }
 
 Colour dither(Rgb c, int x, int y)

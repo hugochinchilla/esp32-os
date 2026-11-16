@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <iterator>
 #include <random>
 #include <sstream>
 #include <string>
@@ -228,7 +229,7 @@ void test_converter()
         row[x * 3 + 1] = flat.g;
         row[x * 3 + 2] = flat.b;
     }
-    for (image::Dither d : {image::Dither::Ordered, image::Dither::Diffusion, image::Dither::None}) {
+    for (image::Dither d : {image::Dither::Bayer4, image::Dither::FloydSteinberg, image::Dither::None}) {
         conv.begin(64, 64, 64, 64, out, d);
         for (int y = 0; y < 64; y++) {
             conv.row(y, row);
@@ -251,6 +252,65 @@ void test_converter()
     }
 }
 
+
+// Each dither: the same as tools/dither.py on a small picture, the same
+// twice, board colours stay flat, flat colours keep their average.
+void test_dithers()
+{
+    static const char *const kNames[image::kDitherCount] = {
+        "none", "bayer2", "bayer4", "bayer8", "blue-noise", "floyd-steinberg", "floyd-serpentine",
+        "atkinson", "jarvis-judice-ninke", "stucki", "sierra-lite"};
+    static image::Converter conv;
+    CHECK(conv.ready(memory));
+    const int w = 70, h = 40;
+    const std::vector<uint8_t> in = read_all(folder + "/dither-in.rgb");
+    CHECK(in.size() == static_cast<size_t>(w * h * 3));
+    std::vector<uint8_t> out(w * h), again(w * h);
+    for (int i = 0; i < image::kDitherCount && in.size() == static_cast<size_t>(w * h * 3); i++) {
+        const auto d = static_cast<image::Dither>(i);
+        for (std::vector<uint8_t> *o : {&out, &again}) {
+            conv.begin(w, h, w, h, o->data(), d);
+            for (int y = 0; y < h; y++) {
+                conv.row(y, &in[y * w * 3]);
+            }
+        }
+        const std::vector<uint8_t> want = read_all(folder + "/dither-" + kNames[i] + ".idx");
+        if (out != want || out != again) {
+            printf("dither %s differs from tools/dither.py (or from itself)\n", kNames[i]);
+            failures++;
+        }
+        for (int x = 0; x < w; x++) {
+            CHECK(out[9 * w + x] == gfx::rgb(5, 2, 3)); // the flat board colour row
+        }
+        // A flat in-between colour: its average stays close.
+        static uint8_t flat_out[64 * 64];
+        uint8_t row[64 * 3];
+        for (int x = 0; x < 64; x++) {
+            row[x * 3] = 150;
+            row[x * 3 + 1] = 100;
+            row[x * 3 + 2] = 60;
+        }
+        conv.begin(64, 64, 64, 64, flat_out, d);
+        for (int y = 0; y < 64; y++) {
+            conv.row(y, row);
+        }
+        long sum[3] = {};
+        for (uint8_t c : flat_out) {
+            const gfx::Rgb s = gfx::shown(c);
+            sum[0] += s.r;
+            sum[1] += s.g;
+            sum[2] += s.b;
+        }
+        const int avg[3] = {int(sum[0] / 4096), int(sum[1] / 4096), int(sum[2] / 4096)};
+        // None and Atkinson (which drops a quarter of the error) are not exact.
+        const int slack = d == image::Dither::None ? 40 : (d == image::Dither::Atkinson ? 20 : 8);
+        if (std::abs(avg[0] - 150) > slack || std::abs(avg[1] - 100) > slack || std::abs(avg[2] - 60) > slack) {
+            printf("dither %s: flat (150,100,60) averages (%d,%d,%d)\n", kNames[i], avg[0], avg[1], avg[2]);
+            failures++;
+        }
+    }
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -263,6 +323,7 @@ int main(int argc, char **argv)
     static host::FolderVolume volume(folder);
     storage.mount('D', volume);
     test_converter();
+    test_dithers();
     test_manifest();
     test_too_wide();
     test_damaged();

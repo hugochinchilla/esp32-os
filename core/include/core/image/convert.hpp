@@ -9,11 +9,29 @@
 
 namespace image {
 
+// How colours between the board's levels are made. Every one works row by
+// row with integers only, so the PC and the board give the same pixels.
 enum class Dither : uint8_t {
-    Ordered,   // the 4x4 pattern used everywhere on the desktop (default)
-    Diffusion, // Floyd-Steinberg error diffusion: finer, but it crawls when redrawn
-    None,      // nearest colour: banding in gradients
+    None,              // nearest colour
+    Bayer2,            // ordered, 2x2 matrix
+    Bayer4,            // ordered, 4x4 matrix (the desktop's pattern)
+    Bayer8,            // ordered, 8x8 matrix
+    BlueNoise,         // ordered, 64x64 blue-noise mask
+    FloydSteinberg,    // error diffusion, left to right
+    FloydSerpentine,   // Floyd-Steinberg, every other row right to left
+    Atkinson,          // error diffusion, 3/4 of the error kept
+    JarvisJudiceNinke, // error diffusion over three rows
+    Stucki,            // error diffusion over three rows
+    SierraLite,        // error diffusion, three neighbours
 };
+constexpr int kDitherCount = 11;
+
+struct DitherInfo {
+    const char *name;        // e.g. "Floyd-Steinberg"
+    const char *menu;        // with its access letter, e.g. "&Floyd-Steinberg"
+    const char *description; // one line
+};
+const DitherInfo &dither_info(Dither d);
 
 // A RowSink that turns each row into board colours in `out`. Shrinking uses
 // a box filter (the average of the source pixels each one covers); the same
@@ -30,16 +48,19 @@ public:
     int rows_done() const { return dy_; } // finished rows of the result
 
 private:
+    static constexpr int kMargin = 2; // error columns beyond each edge
     void emit();
+    void diffuse(const int *avg_row);
 
     uint32_t *sums_ = nullptr;   // per result column, R G B
-    int16_t *errors_ = nullptr;  // two rows of (dst_w + 2) x 3, for diffusion
+    int16_t *errors_ = nullptr;  // three rows of (dst_w + 4) x 3
     uint16_t *col_start_ = nullptr;
     int src_w_ = 0, src_h_ = 0, dst_w_ = 0, dst_h_ = 0;
     uint8_t *out_ = nullptr;
-    Dither dither_ = Dither::Ordered;
+    Dither dither_ = Dither::Bayer4;
     int dy_ = 0;        // result row being gathered
     int rows_in_ = 0;   // source rows added to it
+    int *avg_ = nullptr; // the averaged row, R G B
 };
 
 } // namespace image
