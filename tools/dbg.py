@@ -296,9 +296,10 @@ class Board:
 
         With pointer=False the mouse pointer is left out: the picture in memory."""
         for _ in range(2):
-            head = self.request(SCREENSHOT, b"" if pointer else b"\x01")
+            flags = 2 | (0 if pointer else 1)  # bit 1: encoding 2 understood
+            head = self.request(SCREENSHOT, bytes([flags]))
             width, height, fmt, encoding, total = struct.unpack("<HHBBI", head)
-            if fmt != 1 or encoding != 1:
+            if fmt != 1 or encoding not in (1, 2):
                 raise DebugError("this tool does not know picture format %d/%d" % (fmt, encoding))
             seq = self.seq
             packed = bytearray()
@@ -318,13 +319,36 @@ class Board:
                 packed += payload[2:]
                 expected += 1
             if complete:
-                pixels = run_length_decode(packed)
+                pixels = (run_length_decode(packed) if encoding == 1
+                          else back_reference_decode(packed, width))
                 if len(pixels) == total and zlib.crc32(pixels) == crc:
                     return width, height, pixels
             time.sleep(0.3)  # let the rest of a broken transfer drain, then retry
             self._read()
             self.pending.clear()
         raise DebugError("the screenshot arrived damaged twice")
+
+
+def back_reference_decode(data, width):
+    """Encoding 2: literals, and copies from a few fixed distances back."""
+    distances = (1, 2, 4, width, 2 * width, 4 * width)
+    out = bytearray()
+    i = 0
+    while i < len(data):
+        control = data[i]
+        i += 1
+        if control < 128:
+            out += data[i:i + control + 1]
+            i += control + 1
+        else:
+            d = distances[data[i]]
+            i += 1
+            n = control - 125
+            while n > 0:  # the source may overlap what is being written
+                piece = out[len(out) - d:len(out) - d + min(n, d)]
+                out += piece
+                n -= len(piece)
+    return bytes(out)
 
 
 def run_length_decode(data):

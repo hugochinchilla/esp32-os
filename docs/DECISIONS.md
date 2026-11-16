@@ -121,8 +121,10 @@ First picture: 2026-11-16, through a VGA-to-HDMI adapter.
   board: full-screen repaint 22 ms; bringing a window to the front 16 ms;
   each mouse move while dragging 0.4 to 1.1 ms (only the outline changes);
   dropping a 300x160 window 6.6 ms; closing it 16 ms. Still 59.5 frames a
-  second, no receive errors. A screenshot now takes 2.2 s instead of 0.3 s,
-  because the dithered desktop colour does not compress with run lengths.
+  second, no receive errors. A screenshot took 2.2 s instead of 0.3 s,
+  because the dithered desktop colour does not compress with run lengths;
+  screenshot encoding 2 (copies from 1, 2, 4 pixels or 1, 2, 4 rows back)
+  brought it back to 0.4 s.
 - Pointer mixed in at scanout (2026-11-16): the OS fills the video bounce
   buffers itself (`no_fb` and `on_bounce_empty` in ESP-IDF's RGB panel
   driver), copying 10 lines at a time from the framebuffer in PSRAM and

@@ -50,7 +50,7 @@ and the same sequence number. Every reply payload starts with a status byte:
 | --- | --- | --- | --- |
 | 0x01 | Ping | Any bytes | The same bytes |
 | 0x02 | Info | None | Protocol version (1 byte), width (2), height (2), pixel format (1), firmware name (text) |
-| 0x03 | Screenshot | None, or flags (1): bit 0 leaves out the mouse pointer | Width (2), height (2), pixel format (1), encoding (1), picture size in bytes (4). Followed by picture frames, see below |
+| 0x03 | Screenshot | None, or flags (1): bit 0 leaves out the mouse pointer, bit 1 says the computer understands encoding 2 | Width (2), height (2), pixel format (1), encoding (1), picture size in bytes (4). Followed by picture frames, see below |
 | 0x04 | Key | Key code (2), pressed (1: 1 down, 0 up) | None |
 | 0x05 | Mouse | Mode (1: 0 movement, 1 position), x (2, signed), y (2, signed), buttons (1), wheel (1, signed) | None |
 | 0x06 | Stats | None | 4-byte numbers: uptime in ms, free internal RAM, free external RAM, frames shown, frames received, receive errors, key events, mouse events, time spent filling video lines in µs (wraps; the first firmware sent only the first eight) |
@@ -96,9 +96,23 @@ Encoding 1 is a run-length code. Each token starts with a control byte:
 
 A token never straddles two chunks. A plain desktop shrinks to a few
 kilobytes; the worst case (nothing repeats) is 0.8 % larger than the raw
-307,200 bytes, about 3.5 seconds at 921,600 baud. On the bench the desktop
-takes 2.2 seconds, including opening the port: its dithered colour leaves
-few runs.
+307,200 bytes, about 3.5 seconds at 921,600 baud.
+
+Encoding 2 is sent only when the request sets flag bit 1 (`tools/dbg.py`
+always does). It adds copies from a few fixed distances back, which suit the
+dithered desktop colour, where nothing repeats three times in a row but
+everything repeats every 4 pixels and every 4 rows:
+
+| Control byte | Meaning |
+| --- | --- |
+| 0 to 127 | Copy the next (n + 1) bytes as they are |
+| 128 to 255 | One more byte d follows. Repeat (n - 125) bytes, 3 to 130, starting d' bytes back in the decoded picture, where d' is 1, 2, 4, one row, two rows or four rows for d = 0 to 5. The bytes may overlap what is being written, so copy them one at a time (or in pieces of at most d') |
+
+On the PC tests the dithered desktop takes 308 KB with encoding 1 and 4.7 KB
+with encoding 2; a flat colour takes 4.7 KB with either; noise costs 0.8 %
+more than the raw picture with either. On the board a screenshot of the
+desktop takes 0.4 seconds with encoding 2 (2.2 seconds with encoding 1),
+including opening the port.
 
 ## Windows
 

@@ -41,10 +41,13 @@ enum Status : uint8_t {
 };
 
 enum PixelFormat : uint8_t { kRgb332 = 1 };
-enum Encoding : uint8_t { kRunLength = 1 };
+enum Encoding : uint8_t { kRunLength = 1, kBackReference = 2 };
 
 // Screenshot request flags (optional payload byte).
-enum ScreenshotFlags : uint8_t { kWithoutPointer = 1 };
+enum ScreenshotFlags : uint8_t {
+    kWithoutPointer = 1,
+    kAcceptBackReference = 2, // the computer can decode encoding 2
+};
 
 class Protocol {
 public:
@@ -74,7 +77,7 @@ private:
     void reply(uint8_t type, uint8_t seq, Status status, const uint8_t *body, size_t size);
     void send(uint8_t type, uint8_t seq, const uint8_t *payload, size_t size);
     size_t write_info(uint8_t *out);
-    void send_screenshot(uint8_t seq, bool with_pointer);
+    void send_screenshot(uint8_t seq, bool with_pointer, bool back_references);
 
     ports::ByteSink &out_;
     ports::Lock &lock_;

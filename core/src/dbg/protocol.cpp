@@ -88,7 +88,8 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
 
     case kScreenshot:
         // An empty payload (the original request) means "with pointer".
-        send_screenshot(seq, args_size == 0 || !(args[0] & kWithoutPointer));
+        send_screenshot(seq, args_size == 0 || !(args[0] & kWithoutPointer),
+                        args_size > 0 && (args[0] & kAcceptBackReference));
         break;
 
     case kKey:
@@ -241,7 +242,7 @@ void Protocol::send_log(const char *text, size_t size)
 // The picture is sent run-length encoded, in chunks:
 //   0..127    copy the next (n + 1) bytes
 //   128..255  repeat the next byte (n - 125) times, so 3 to 130
-void Protocol::send_screenshot(uint8_t seq, bool with_pointer)
+void Protocol::send_screenshot(uint8_t seq, bool with_pointer, bool back_references)
 {
     const uint8_t *src = display_.pixels();
     const int width = display_.width();
@@ -293,7 +294,7 @@ void Protocol::send_screenshot(uint8_t seq, bool with_pointer)
     put16(head + 0, static_cast<uint16_t>(width));
     put16(head + 2, static_cast<uint16_t>(display_.height()));
     head[4] = kRgb332;
-    head[5] = kRunLength;
+    head[5] = back_references ? kBackReference : kRunLength;
     put32(head + 6, static_cast<uint32_t>(total));
     reply(kScreenshot, seq, kOk, head, sizeof(head));
 
@@ -314,10 +315,62 @@ void Protocol::send_screenshot(uint8_t seq, bool with_pointer)
         }
     };
 
-    // Run-length encoding:
+    if (back_references) {
+        // Encoding 2 (docs/debug-protocol.md):
+        //   0..127    copy the next (n + 1) bytes
+        //   128..255  then a distance code d: repeat (n - 125) bytes, 3 to
+        //             130, from kDistance[d] bytes back (they may overlap)
+        // The few distances cover flat colour (1), the 4x4 dither (2, 4)
+        // and repeated rows (1, 2 or 4 rows up).
+        const size_t distance[6] = {1, 2, 4, static_cast<size_t>(width),
+                                    2 * static_cast<size_t>(width), 4 * static_cast<size_t>(width)};
+        size_t literal = 0; // first byte not yet sent
+        auto send_literals = [&](size_t end) {
+            while (literal < end) {
+                size_t n = end - literal < 128 ? end - literal : 128;
+                reserve(1 + n);
+                chunk_[used++] = static_cast<uint8_t>(n - 1);
+                for (size_t k = literal; k < literal + n; k++) {
+                    chunk_[used++] = pixel(k);
+                }
+                literal += n;
+            }
+        };
+        size_t i = 0;
+        while (i < total) {
+            size_t best = 0;
+            uint8_t code = 0;
+            for (uint8_t d = 0; d < 6 && best < 130; d++) {
+                if (distance[d] > i) {
+                    break;
+                }
+                size_t n = 0;
+                while (n < 130 && i + n < total && pixel(i + n) == pixel(i + n - distance[d])) {
+                    n++;
+                }
+                if (n > best) {
+                    best = n;
+                    code = d;
+                }
+            }
+            if (best < 3) {
+                i++;
+                continue;
+            }
+            send_literals(i);
+            reserve(2);
+            chunk_[used++] = static_cast<uint8_t>(125 + best);
+            chunk_[used++] = code;
+            i += best;
+            literal = i;
+        }
+        send_literals(total);
+    }
+
+    // Encoding 1, run lengths:
     //   0..127    copy the next (n + 1) bytes
     //   128..255  repeat the next byte (n - 125) times, so 3 to 130
-    size_t i = 0;
+    size_t i = back_references ? total : 0;
     while (i < total) {
         const uint8_t first = pixel(i);
         size_t run = 1;

@@ -2,11 +2,13 @@
 // prints the line that failed, and the program's exit code is the result.
 #include <cstdio>
 #include <cstring>
+#include <utility>
 #include <vector>
 
 #include "core/dbg/cobs.hpp"
 #include "core/dbg/crc.hpp"
 #include "core/dbg/protocol.hpp"
+#include "core/gfx/canvas.hpp"
 #include "core/video/pointer.hpp"
 #include "../host_adapters.hpp"
 
@@ -108,6 +110,26 @@ static Bytes run_length_decode(const Bytes &in)
             i += control + 1u;
         } else {
             out.insert(out.end(), control - 125u, in[i++]);
+        }
+    }
+    return out;
+}
+
+static Bytes back_reference_decode(const Bytes &in, size_t width)
+{
+    const size_t distance[6] = {1, 2, 4, width, 2 * width, 4 * width};
+    Bytes out;
+    size_t i = 0;
+    while (i < in.size()) {
+        uint8_t control = in[i++];
+        if (control < 128) {
+            out.insert(out.end(), in.begin() + i, in.begin() + i + control + 1);
+            i += control + 1u;
+        } else {
+            size_t d = distance[in[i++]];
+            for (int n = 0; n < control - 125; n++) {
+                out.push_back(out[out.size() - d]);
+            }
         }
     }
     return out;
@@ -237,6 +259,8 @@ static void test_bad_frames()
     CHECK(got.size() == 1 && got[0].seq == 5);
 }
 
+static size_t last_packed_size = 0;
+
 // Requests a screenshot and checks it against `expected` (by default the
 // framebuffer itself).
 static void check_screenshot(Rig &rig, const Bytes &request = {}, const uint8_t *expected = nullptr)
@@ -252,7 +276,8 @@ static void check_screenshot(Rig &rig, const Bytes &request = {}, const uint8_t 
     const Bytes &head = got.front().payload;
     CHECK(got.front().type == (dbg::kScreenshot | dbg::kReplyBit));
     CHECK(head.size() == 11 && head[0] == dbg::kOk);
-    CHECK(head[5] == dbg::kRgb332 && head[6] == dbg::kRunLength);
+    const bool patterns = !request.empty() && (request[0] & dbg::kAcceptBackReference);
+    CHECK(head[5] == dbg::kRgb332 && head[6] == (patterns ? dbg::kBackReference : dbg::kRunLength));
 
     Bytes packed;
     for (size_t i = 1; i + 1 < got.size(); i++) {
@@ -265,7 +290,8 @@ static void check_screenshot(Rig &rig, const Bytes &request = {}, const uint8_t 
     CHECK(got.back().type == dbg::kShotEnd && tail.size() == 6);
     CHECK((tail[0] | (tail[1] << 8)) == static_cast<int>(got.size() - 2));
 
-    Bytes picture = run_length_decode(packed);
+    Bytes picture = patterns ? back_reference_decode(packed, 640) : run_length_decode(packed);
+    last_packed_size = packed.size();
     CHECK(picture.size() == 640u * 480u);
     CHECK(memcmp(picture.data(), expected, picture.size()) == 0);
     uint32_t crc = static_cast<uint32_t>(tail[2]) | (static_cast<uint32_t>(tail[3]) << 8) |
@@ -275,10 +301,30 @@ static void check_screenshot(Rig &rig, const Bytes &request = {}, const uint8_t 
 
 static void test_screenshot()
 {
+    // Every picture is checked with both encodings.
+    auto both = [](Rig &rig) {
+        check_screenshot(rig);
+        size_t one = last_packed_size;
+        check_screenshot(rig, {dbg::kAcceptBackReference});
+        check_screenshot(rig, {dbg::kAcceptBackReference | dbg::kWithoutPointer});
+        return std::make_pair(one, last_packed_size);
+    };
     Rig rig;
-    // Flat colour: the best case for the encoder.
+    // Flat colour: the best case for both.
     memset(rig.display.pixels(), 0x1F, 640 * 480);
-    check_screenshot(rig);
+    auto flat = both(rig);
+    CHECK(flat.second < 5000);
+
+    // The 4x4 dither of the desktop: poor with run lengths, small with
+    // back-references.
+    for (int y = 0; y < 480; y++) {
+        for (int x = 0; x < 640; x++) {
+            rig.display.pixels()[y * 640 + x] = gfx::dither({58, 110, 165}, x, y);
+        }
+    }
+    auto dithered = both(rig);
+    CHECK(dithered.first > 100000);
+    CHECK(dithered.second < 12000);
 
     // Noise: the worst case, nothing repeats.
     uint32_t state = 12345;
@@ -286,16 +332,19 @@ static void test_screenshot()
         state = state * 1664525u + 1013904223u;
         rig.display.pixels()[i] = static_cast<uint8_t>(state >> 24);
     }
-    check_screenshot(rig);
+    auto noise = both(rig);
+    CHECK(noise.second < 640 * 480 * 102 / 100);
 
-    // Runs of every length from 1 to 300, to cover the encoder's limits.
+    // Runs of every length from 1 to 300, to cover the encoders' limits.
     uint8_t *p = rig.display.pixels();
     int at = 0;
     for (int length = 1; length <= 300 && at + length < 640 * 480; length++) {
         memset(p + at, length & 1 ? 0xAA : 0x33, static_cast<size_t>(length));
         at += length;
     }
-    check_screenshot(rig);
+    both(rig);
+    printf("screenshot sizes (run-length / back-reference): flat %zu / %zu, dithered %zu / %zu, noise %zu / %zu\n",
+           flat.first, flat.second, dithered.first, dithered.second, noise.first, noise.second);
 }
 
 // The pointer drawn the slow, obvious way, for comparison.
@@ -379,6 +428,7 @@ static void test_screenshot_pointer()
         reference_pointer(with.data(), 640, 480, rig.pointer.state());
         check_screenshot(rig, {}, with.data());                   // default: with pointer
         check_screenshot(rig, {0}, with.data());                  // flag clear: with pointer
+        check_screenshot(rig, {dbg::kAcceptBackReference}, with.data()); // encoding 2, with pointer
         check_screenshot(rig, {dbg::kWithoutPointer});            // without: the framebuffer
         // They differ, and only inside the pointer's box.
         int differ = 0;
