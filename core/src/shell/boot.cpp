@@ -1,6 +1,5 @@
 #include "core/shell/boot.hpp"
 
-#include <algorithm>
 #include <cstdio>
 #include <cstring>
 
@@ -18,7 +17,6 @@ constexpr gfx::Colour kOk = gfx::rgb(2, 7, 1);     // green
 constexpr gfx::Colour kFail = gfx::rgb(7, 1, 0);   // red
 constexpr gfx::Colour kHeading = gfx::rgb(7, 6, 1); // warm yellow
 constexpr int kLabelX = 32, kValueX = 200, kStatusX = 560, kTop = 84, kLineH = 18;
-constexpr int kSplashTop = 110;
 
 struct Screen {
     explicit Screen(ports::Display &d) : display(d)
@@ -52,24 +50,6 @@ void blit_big(gfx::Canvas &c, const gfx::Bitmap &b, int x, int y, int k)
             }
         }
     }
-}
-
-// Spleen text enlarged k times.
-int text_big(gfx::Canvas &c, int x, int y, const char *s, gfx::Colour colour, int k)
-{
-    const gfx::Font &f = gfx::kSpleen6x12;
-    while (*s != 0) {
-        const uint8_t *g = f.glyph(gfx::next_latin1(s));
-        for (int row = 0; row < f.height; row++) {
-            for (int col = 0; col < f.width; col++) {
-                if (g[row] & (0x80 >> col)) {
-                    c.fill({x + col * k, y + row * k, k, k}, colour);
-                }
-            }
-        }
-        x += f.width * k;
-    }
-    return x;
 }
 
 struct Line {
@@ -327,51 +307,84 @@ int run_self_test(BootIo &io, bool hold)
     return failures;
 }
 
+// The approved splash (docs/look/boot/boot-e-colour-ribbon.png), drawn the way
+// option_c() in tools/mockup/boot_drafts.py draws it.
+namespace {
+
+const char *const kSplashMascot[16] = {
+    "................", ".GGG........GGG.", "GPPPG......GPPPG", "GPPPG.GGGG.GPPPG",
+    "GPPPGGLLLLGGPPPG", ".GGGLLLLLLLLGGG.", "..GLLLLLLLLLLG..", "..GLKLLLLLLKLG..",
+    "..GLKLLLLLLKLG..", "..GLLLLNNLLLLG..", "D.GLLLLNNLLLLG.D", ".DDGLLLLLLLLGDD.",
+    "D..GGLLLLLLGG..D", "....GGGGGGGG....", "................", "................"};
+
+void splash_mascot(gfx::Canvas &c, int x, int y, int s)
+{
+    for (int r = 0; r < 16; r++) {
+        for (int q = 0; q < 16; q++) {
+            gfx::Colour col;
+            switch (kSplashMascot[r][q]) {
+            case 'G':
+            case 'D': col = gfx::kDarkGrey; break;
+            case 'L': col = gfx::kWhite; break;
+            case 'P': col = gfx::rgb(7, 4, 2); break;
+            case 'K': col = gfx::kBlack; break;
+            case 'N': col = gfx::rgb(7, 3, 2); break;
+            default: continue;
+            }
+            c.fill({x + q * s, y + r * s, s, s}, col);
+        }
+    }
+}
+
+void wide_text(gfx::Canvas &c, const gfx::WideFont &f, int x, int y, const char *s, gfx::Colour col)
+{
+    for (; *s != 0; s++, x += f.width) {
+        const uint8_t *g = f.glyph(*s);
+        if (g == nullptr) {
+            continue;
+        }
+        for (int row = 0; row < f.height; row++) {
+            const uint8_t *bits = g + row * f.bytes_per_row;
+            for (int q = 0; q < f.width; q++) {
+                if (bits[q / 8] & (0x80 >> (q % 8))) {
+                    c.fill({x + q, y + row, 1, 1}, col);
+                }
+            }
+        }
+    }
+}
+
+// The nine resistors as a progress row: three reds, three greens, three
+// blues; the first `lit` in colour, the rest dark with a grey border.
+void nine(gfx::Canvas &c, int x, int y, int size, int gap, int lit)
+{
+    const gfx::Colour cols[9] = {gfx::rgb(7, 0, 0), gfx::rgb(5, 0, 0), gfx::rgb(3, 0, 0),
+                                 gfx::rgb(0, 7, 0), gfx::rgb(0, 5, 0), gfx::rgb(0, 3, 0),
+                                 gfx::rgb(0, 0, 3), gfx::rgb(0, 0, 2), gfx::rgb(0, 0, 1)};
+    for (int i = 0; i < 9; i++) {
+        const gfx::Rect r = {x + i * (size + gap), y, size, size};
+        c.fill(r, i < lit ? gfx::kWhite : gfx::kDarkGrey); // the border
+        c.fill({r.x + 1, r.y + 1, size - 2, size - 2}, i < lit ? cols[i] : gfx::rgb(1, 1, 0));
+    }
+}
+
+} // namespace
+
 void show_splash(BootIo &io, bool hold)
 {
     Screen s(io.display);
     gfx::Canvas c = s.canvas();
-    const int w = io.display.width(), h = io.display.height();
-    c.fill({0, 0, w, h}, gfx::kGrey);
-    // The mascot, six times its size, and the name in Spleen four times.
-    const gfx::Bitmap &m = gfx::mascot_16();
-    const int k = 6;
-    blit_big(c, m, (w - m.width * k) / 2, kSplashTop, k);
-    const char *name = "Chinchilla";
-    const int tw = static_cast<int>(strlen(name)) * gfx::kSpleen6x12.width * 4;
-    text_big(c, (w - tw) / 2 + 2, kSplashTop + m.height * k + 26, name, gfx::kWhite, 4); // highlight
-    text_big(c, (w - tw) / 2, kSplashTop + m.height * k + 24, name, gfx::rgb(1, 1, 2), 4);
-    // The ribbon: all 256 colours, ordered by hue, greys at the end.
-    struct Entry {
-        int key;
-        uint8_t colour;
-    };
-    Entry e[256];
-    for (int i = 0; i < 256; i++) {
-        const gfx::Rgb rgb = gfx::shown(static_cast<gfx::Colour>(i));
-        const int r = rgb.r, g = rgb.g, b = rgb.b;
-        const int mx = std::max(r, std::max(g, b)), mn = std::min(r, std::min(g, b));
-        int hue = 0; // 0..1535
-        if (mx == mn) {
-            hue = 2000 + mx; // greys last, dark to light
-        } else if (mx == r) {
-            hue = ((g - b) * 256 / (mx - mn) + 1536) % 1536;
-        } else if (mx == g) {
-            hue = (b - r) * 256 / (mx - mn) + 512;
-        } else {
-            hue = (r - g) * 256 / (mx - mn) + 1024;
-        }
-        // Within a hue, light to dark.
-        e[i] = {hue * 1024 + (1023 - (mx + mn)), static_cast<uint8_t>(i)};
+    c.fill({0, 0, io.display.width(), io.display.height()}, gfx::kWhite);
+    splash_mascot(c, 70, 130, 11);
+    wide_text(c, gfx::kSpleen32x64, 270, 150, "Chinchilla", gfx::kBlack);
+    wide_text(c, gfx::kSpleen12x24, 274, 222, "ninety-six", gfx::rgb(0, 0, 2));
+    c.text(274, 262, "A small desktop for a small computer", gfx::kDarkGrey);
+    // The ribbon: all 256 colours in 16 rows of 16, 40 x 6 pixels each.
+    for (int v = 0; v < 256; v++) {
+        const int r = v >> 5, g = (v >> 2) & 7, b = v & 3;
+        c.fill({(g * 2 + (b >> 1)) * 40, 380 + (r * 2 + (b & 1)) * 6, 40, 6}, static_cast<gfx::Colour>(v));
     }
-    std::sort(e, e + 256, [](const Entry &a, const Entry &b) { return a.key < b.key; });
-    const int rx = (w - 512) / 2, ry = kSplashTop + m.height * k + 24 + 12 * 4 + 40;
-    c.fill({rx - 1, ry - 1, 514, 26}, gfx::kDarkGrey);
-    for (int i = 0; i < 256; i++) {
-        c.fill({rx + i * 2, ry, 2, 24}, e[i].colour);
-    }
-    const char *caption = "256 colours  -  640 x 480";
-    c.text((w - gfx::Canvas::text_width(caption)) / 2, ry + 36, caption, gfx::kDarkGrey);
+    nine(c, 274, 300, 12, 6, 4);
     if (hold) {
         wait_ms(io, kSplashMs);
     }

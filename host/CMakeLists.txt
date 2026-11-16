@@ -59,7 +59,7 @@ add_test(NAME shell COMMAND test_shell)
 
 add_executable(test_boot tests/test_boot.cpp)
 target_link_libraries(test_boot PRIVATE core)
-add_test(NAME boot COMMAND test_boot)
+add_test(NAME boot COMMAND test_boot ${CMAKE_CURRENT_SOURCE_DIR}/../docs/look/boot)
 add_test(NAME pictures
          COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/check_pictures.py $<TARGET_FILE:render_scenes>)
 add_test(NAME dbg_tool

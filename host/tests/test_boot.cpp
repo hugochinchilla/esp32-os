@@ -7,7 +7,9 @@
 #include <cstring>
 
 #include "core/gfx/canvas.hpp"
+#include "core/image/image.hpp"
 #include "core/shell/boot.hpp"
+#include "../folder_volume.hpp"
 #include "../host_adapters.hpp"
 
 namespace {
@@ -101,12 +103,66 @@ void test_failed_check()
     CHECK(red);
 }
 
+// The splash is the approved drawing, pixel for pixel: the PNG in
+// docs/look/boot/, read with our own decoder.
+struct Rows : image::RowSink {
+    uint8_t *out;
+    void row(int y, const uint8_t *rgb) override
+    {
+        for (int x = 0; x < 640; x++) {
+            out[y * 640 + x] = gfx::nearest({rgb[x * 3], rgb[x * 3 + 1], rgb[x * 3 + 2]});
+        }
+    }
+};
+
+void test_splash_matches_approved(const char *look_folder)
+{
+    static host::FolderVolume volume(look_folder);
+    static fs::Storage storage;
+    storage.mount('L', volume);
+    host::HostMemory memory;
+    static uint8_t approved[640 * 480];
+    image::Decoder d;
+    image::Info info;
+    CHECK(d.open(storage, "L:\\boot-e-colour-ribbon.png", memory, info) == image::Error::None);
+    CHECK(info.width == 640 && info.height == 480);
+    Rows rows;
+    rows.out = approved;
+    while (!d.done()) {
+        if (d.step(rows, 16) != image::Error::None) {
+            CHECK(false);
+            break;
+        }
+    }
+    d.close();
+
+    host::MemoryDisplay display(640, 480);
+    host::HostSystem system;
+    host::FixedClock clock;
+    shell::BootIo io{display, system, memory, clock, nullptr, nullptr, nullptr, nullptr};
+    shell::show_splash(io, false);
+    int differ = 0;
+    for (int i = 0; i < 640 * 480; i++) {
+        differ += display.pixels()[i] != approved[i];
+    }
+    if (differ != 0) {
+        printf("the splash differs from the approved drawing in %d pixels\n", differ);
+    }
+    CHECK(differ == 0);
+}
+
 } // namespace
 
-int main()
+int main(int argc, char **argv)
 {
     test_memory_fault();
     test_failed_check();
+    if (argc > 1) {
+        test_splash_matches_approved(argv[1]);
+    } else {
+        printf("no docs/look/boot folder given: splash not compared\n");
+        failures++;
+    }
     if (failures == 0) {
         printf("all tests passed\n");
     }

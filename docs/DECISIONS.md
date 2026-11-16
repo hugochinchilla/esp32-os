@@ -205,7 +205,10 @@ First picture: 2026-11-16, through a VGA-to-HDMI adapter.
 - Start-up screens (2026-11-16): self-test 624 ms (the checks 274 ms, of
   which the memory test 254 ms, then the 350 ms hold), splash 511 ms, from
   the start of the UI task to the desktop 1247 ms; the first full paint of
-  the desktop 29 ms. Firmware 556 KB. Both screens are pixel-identical to
+  the desktop 29 ms. Firmware 557 KB. The splash is the approved drawing
+  (docs/look/boot/boot-e-colour-ribbon.png) pixel for pixel, on the PC and
+  on the board; it uses Spleen 32x64 and 12x24 for the name and subtitle,
+  only the 11 letters needed (5 KB). Both screens are pixel-identical to
   the PC pictures (the self-test apart from its values, which differ from
   the simulator's). The webcam shows both when asked for with `tools/dbg.py
   boot`, but not after a restart: the monitor needs about 3.6 s to show a
