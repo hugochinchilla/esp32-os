@@ -27,6 +27,8 @@ enum FrameType : uint8_t {
     kWindows = 0x08, // list of windows as JSON
     kRepaint = 0x09, // paint the whole screen again, reply with the time taken
     kText = 0x0A,    // typed text, UTF-8
+    kTime = 0x0B,    // read or set the clock
+    kAnimations = 0x0C, // blinking on or off
     // Sent by the board without being asked.
     kLog = 0x70,
     kHello = 0x71,

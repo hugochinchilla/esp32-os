@@ -64,6 +64,17 @@ bool Widget::has_focus() const
     return window_ != nullptr && window_->focus() == this && window_->focused();
 }
 
+Wm *Widget::manager() const
+{
+    return window_ != nullptr ? window_->manager() : nullptr;
+}
+
+bool Widget::caret_shown() const
+{
+    Wm *wm = manager();
+    return wm == nullptr || wm->caret_visible();
+}
+
 void Widget::invalidate()
 {
     if (window_ != nullptr) {
@@ -186,7 +197,7 @@ void Window::mouse(const MouseMsg &m)
         if (m.kind == MouseKind::Up) {
             captured_ = nullptr;
         }
-        w->mouse({m.kind, m.x - w->rect.x, m.y - w->rect.y});
+        w->mouse({m.kind, m.x - w->rect.x, m.y - w->rect.y, m.double_click});
     }
 }
 

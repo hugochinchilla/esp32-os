@@ -41,6 +41,11 @@ public:
     void press() override { click(); }
     char access() const override { return access_letter(text_); }
     bool pressed() const { return pressed_; }
+    void set_label(const char *text)
+    {
+        text_ = text;
+        invalidate();
+    }
     // The window's default button gets the extra dark frame.
     void set_default(bool on)
     {
@@ -163,10 +168,15 @@ public:
     int maximum() const { return maximum_; }
     // Where the thumb is, in the bar's own coordinates (for tests).
     Rect thumb() const;
+    // A bar inside another widget (a list box) uses that widget's window.
+    void set_parent(Widget *parent) { parent_ = parent; }
 
 private:
     int length() const { return vertical_ ? rect.h : rect.w; }
     void changed();
+    void step();
+    static void repeat(void *self);
+    Wm *host() const { return parent_ != nullptr ? parent_->manager() : manager(); }
 
     bool vertical_;
     Callback on_change_;
@@ -175,6 +185,9 @@ private:
     int held_ = 0;        // 0 none, -1 / 1 arrows, -2 / 2 track, 3 thumb
     int grab_ = 0;        // where the thumb was taken, along the bar
     int grab_value_ = 0;
+    int last_along_ = 0;  // pointer position, for repeating track presses
+    int timer_ = 0;
+    Widget *parent_ = nullptr;
 };
 
 class ListBox : public Widget {

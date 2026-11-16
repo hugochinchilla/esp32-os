@@ -208,6 +208,12 @@ struct Rig {
         clock.now += 200000;
         quick(x, y, buttons);
     }
+    // Lets time pass and fires the timers that are due.
+    void wait(uint32_t us)
+    {
+        clock.now += us;
+        wm.tick();
+    }
     void quick(int x, int y, uint8_t buttons)
     {
         wm.mouse({true, static_cast<int16_t>(x), static_cast<int16_t>(y), buttons, 0});
@@ -587,6 +593,8 @@ static void test_menus()
     // Hovering More opens its submenu to the right.
     Rect more = rig.wm.popup_item(0, 3);
     rig.move(more.x + 10, more.y + 5, 0);
+    CHECK(rig.wm.popup_count() == 1); // after a short rest
+    rig.wait(wm::Wm::kSubmenuDelayUs);
     CHECK(rig.wm.popup_count() == 2 && rig.wm.popup_rect(1).x >= more.right());
     // The disabled item does nothing.
     Rect grey = rig.wm.popup_item(0, 2);
@@ -783,6 +791,135 @@ static void test_widgets()
     CHECK(rig.no_stale_pixels());
 }
 
+
+/* ---- Timers, clock, modal dialogs ---------------------------------------------- */
+
+static int g_fired = 0;
+static void fire(void *) { g_fired++; }
+
+static void test_timers_and_clock()
+{
+    Rig rig;
+    WidgetWindow w;
+    rig.wm.add(w);
+    rig.wm.start();
+
+    // One-shot and repeating timers, and stopping them.
+    g_fired = 0;
+    int once = rig.wm.start_timer(1000, 0, &fire, nullptr);
+    int every = rig.wm.start_timer(500, 500, &fire, nullptr);
+    CHECK(once != 0 && every != 0);
+    rig.wait(400);
+    CHECK(g_fired == 0);
+    rig.wait(600); // t = 1000: once, and every at 500 and 1000 (one call per tick)
+    CHECK(g_fired == 2);
+    rig.wait(500);
+    CHECK(g_fired == 3);
+    rig.wm.stop_timer(every);
+    rig.wait(5000);
+    CHECK(g_fired == 3);
+
+    // The caret blinks, and shows again at once when something is typed.
+    const Rect c = w.client();
+    rig.click(c.x + w.field.rect.x + 5, c.y + w.field.rect.y + 5);
+    CHECK(rig.wm.caret_visible());
+    rig.wait(wm::Wm::kBlinkUs);
+    CHECK(!rig.wm.caret_visible());
+    CHECK(rig.no_stale_pixels());
+    rig.wm.text("x");
+    CHECK(rig.wm.caret_visible());
+    rig.wm.set_animations(false);
+    rig.wait(wm::Wm::kBlinkUs);
+    CHECK(rig.wm.caret_visible());
+    rig.wm.set_animations(true);
+
+    // A held key repeats after a pause; letting go stops it.
+    char text[64];
+    rig.key(wm::key::End);
+    rig.wm.key(0x04, true); // a, held
+    rig.wait(wm::Wm::kRepeatDelayUs);
+    rig.wait(wm::Wm::kRepeatUs);
+    rig.wait(wm::Wm::kRepeatUs);
+    rig.wm.key(0x04, false);
+    rig.wait(1000000);
+    w.field.get(text, sizeof(text));
+    CHECK(strcmp(text, "xabcaaaa") == 0); // "x" went in where the click put the caret
+
+    // A held scroll arrow repeats too.
+    const Rect bar = w.bar.rect.offset(c.x, c.y);
+    rig.move(bar.x + 8, bar.bottom() - 8, 0);
+    rig.quick(bar.x + 8, bar.bottom() - 8, 1);
+    CHECK(w.bar.value() == 1);
+    rig.wait(400000);
+    rig.wait(50000);
+    rig.wait(50000);
+    CHECK(w.bar.value() == 4);
+    rig.quick(bar.x + 8, bar.bottom() - 8, 0);
+    rig.wait(500000);
+    CHECK(w.bar.value() == 4);
+
+    // The clock counts from midnight, can be set, and shows on the taskbar.
+    int h, m, s;
+    rig.wm.set_time(13, 59, 58);
+    rig.wait(3000000);
+    rig.wm.get_time(h, m, s);
+    CHECK(h == 14 && m == 0 && s == 1);
+    rig.wm.set_time(23, 59, 59);
+    rig.wait(2000000);
+    rig.wm.get_time(h, m, s);
+    CHECK(h == 0 && m == 0 && s == 1);
+    CHECK(rig.no_stale_pixels());
+}
+
+static void test_modal()
+{
+    Rig rig;
+    TestWindow owner("Owner", {50, 50, 300, 200}, 0x1C), other("Other", {380, 60, 200, 150}, 0xE0);
+    TestWindow dialog("Dialog", {120, 100, 200, 120}, 0x03);
+    rig.wm.add(other);
+    rig.wm.add(owner);
+    dialog.set_dialog(true);
+    dialog.set_modal(&owner);
+    rig.wm.add(dialog);
+    rig.wm.start();
+    CHECK(rig.wm.active() == &dialog && rig.wm.blocker(owner) == &dialog);
+    CHECK(rig.wm.blocker(other) == nullptr);
+
+    // Only the close button on a dialog, and it cannot be resized.
+    CHECK(rig.wm.title_button(dialog, wm::Part::Maximize).empty());
+    CHECK(rig.wm.edges_at(dialog, 121, 150) == 0);
+
+    // A click on the owner brings the dialog forward; the owner gets nothing.
+    owner.clicks = 0;
+    const Rect oc = owner.client();
+    rig.click(oc.x + 20, oc.y + 20);
+    CHECK(rig.wm.active() == &dialog && owner.clicks == 0);
+    // So do its taskbar button and Alt+Tab.
+    Rect tb = rig.wm.taskbar_button(1);
+    rig.click(tb.x + 10, tb.y + 10);
+    CHECK(rig.wm.active() == &dialog);
+    // Other windows still work.
+    rig.click(450, 150);
+    CHECK(rig.wm.active() == &other);
+    // Closing the dialog gives the owner the focus back.
+    Rect close = rig.wm.title_button(dialog, wm::Part::Close);
+    rig.click(close.x + 5, close.y + 5);
+    CHECK(!dialog.open());
+    rig.wm.activate(owner);
+    rig.click(oc.x + 15, oc.y + 15);
+    CHECK(owner.clicks == 1);
+
+    // A dialog for the whole desktop blocks everything else.
+    dialog.set_modal(nullptr, true);
+    rig.wm.add(dialog);
+    rig.click(450, 150);
+    CHECK(rig.wm.active() == &dialog);
+    Rect sb = rig.wm.taskbar_button(-1);
+    rig.click(sb.x + 5, sb.y + 5);
+    CHECK(!rig.wm.menu_open() && rig.wm.active() == &dialog);
+    CHECK(rig.no_stale_pixels());
+}
+
 int main()
 {
     test_rect_list();
@@ -799,6 +936,8 @@ int main()
     test_menus();
     test_start_menu_and_icons();
     test_widgets();
+    test_timers_and_clock();
+    test_modal();
     if (failures == 0) {
         printf("all tests passed\n");
     }

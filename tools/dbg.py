@@ -28,7 +28,7 @@ import zlib
 PROTOCOL_VERSION = 1
 
 PING, INFO, SCREENSHOT, KEY, MOUSE, STATS, REBOOT = 1, 2, 3, 4, 5, 6, 7
-WINDOWS, REPAINT, TEXT = 8, 9, 10
+WINDOWS, REPAINT, TEXT, TIME, ANIMATIONS = 8, 9, 10, 11, 12
 LOG, HELLO, SHOT_DATA, SHOT_END = 0x70, 0x71, 0x72, 0x73
 REPLY = 0x80
 
@@ -288,6 +288,14 @@ class Board:
             self.mouse(x, y, 1, absolute=True)
             self.mouse(x, y, 0, absolute=True)
 
+    def time(self, hms=None):
+        """Reads the board's clock, or sets it to (hours, minutes, seconds)."""
+        body = self.request(TIME, bytes(hms) if hms else b"")
+        return tuple(body[:3])
+
+    def animations(self, on):
+        self.request(ANIMATIONS, b"\x01" if on else b"\x00")
+
     def windows(self):
         """The windows, bottom to top, as a list of dicts."""
         return json.loads(self.request(WINDOWS).decode("utf-8"))["windows"]
@@ -416,6 +424,11 @@ def main(argv=None):
     sub.add_parser("stats", help="uptime, free memory, counters")
     sub.add_parser("reboot", help="restart the board")
     sub.add_parser("windows", help="list the windows, bottom to top")
+    p = sub.add_parser("time", help="read the board's clock, or set it")
+    p.add_argument("action", choices=["now", "set"])
+    p.add_argument("value", nargs="?", help="HH:MM[:SS]; default: this computer's time")
+    p = sub.add_parser("animations", help="caret blinking on or off (off for stable screenshots)")
+    p.add_argument("state", choices=["on", "off"])
     sub.add_parser("repaint", help="paint the whole screen again and time it")
     sub.add_parser("monitor", help="show the board's log text until Ctrl+C")
 
@@ -472,6 +485,20 @@ def main(argv=None):
             for w in board.windows():
                 print("%(id)d z%(z)d %(x)d,%(y)d %(w)dx%(h)d %(state)s%(f)s  %(title)s"
                       % dict(w, f=" focused" if w["focused"] else ""))
+        elif args.command == "time":
+            if args.action == "set":
+                if args.value:
+                    parts = [int(v) for v in args.value.split(":")] + [0]
+                    hms = parts[:3]
+                else:
+                    t = time.localtime()
+                    hms = [t.tm_hour, t.tm_min, t.tm_sec]
+                h, m, s = board.time(hms)
+            else:
+                h, m, s = board.time()
+            print("%02d:%02d:%02d" % (h, m, s))
+        elif args.command == "animations":
+            board.animations(args.state == "on")
         elif args.command == "repaint":
             print("repainted in %d us" % board.repaint())
         elif args.command == "monitor":

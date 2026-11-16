@@ -22,9 +22,14 @@ const App &app(int index);
 const App *find_app(const char *name);
 void launch(const App &app);
 
-// A small window with a message and an OK button. One at a time: a new
-// message replaces the one shown.
+// A small window with a message and an OK button. It is modal to the window
+// in use when it opens. One at a time: a new message replaces the one shown.
 void message_box(const char *title, const char *text);
+// The same with a question and up to three buttons; `answer` gets the index
+// of the button chosen (closing it some other way picks the last button).
+using AnswerFn = void (*)(int choice, void *context);
+void ask(const char *title, const char *text, const char *const *buttons, int count, AnswerFn answer,
+         void *context);
 // The Shut Down dialog: Restart (through the System port) or Cancel.
 void shut_down_dialog();
 

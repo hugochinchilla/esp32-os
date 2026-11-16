@@ -199,7 +199,7 @@ void ui_task(void *)
         if (got > 0) {
             protocol.feed(buffer, static_cast<size_t>(got));
         }
-        desktop.update(); // anything a window asked to repaint on its own
+        desktop.tick(); // timers (caret, key repeat, clock), then any painting
     }
 }
 

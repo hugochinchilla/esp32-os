@@ -120,6 +120,8 @@ Wm::Wm(ports::Display &display, ports::Pointer &pointer, ports::Clock &clock)
 
 void Wm::start()
 {
+    blink_timer_ = start_timer(kBlinkUs, kBlinkUs, &Wm::blink, this);
+    start_timer(1000000, 1000000, &Wm::clock_tick, this);
     shape_ = &video::arrow_pointer();
     pointer_.set_shape(*shape_);
     pointer_.set_position(pointer_x_, pointer_y_);
@@ -202,7 +204,9 @@ void Wm::close(Window &w)
     w.captured_ = nullptr;
     if (active_ == &w) {
         active_ = nullptr;
-        if (Window *next = topmost_visible()) {
+        if (w.modal_owner_ != nullptr && w.modal_owner_->wm_ == this) {
+            activate(*w.modal_owner_);
+        } else if (Window *next = topmost_visible()) {
             activate(*next);
         }
     }
@@ -240,6 +244,10 @@ void Wm::set_active(Window *w)
 void Wm::activate(Window &w)
 {
     if (w.wm_ != this) {
+        return;
+    }
+    if (Window *b = blocker(w)) {
+        activate(*b); // a modal dialog is in the way: it comes forward instead
         return;
     }
     if (w.state_ == WindowState::Minimized) {
@@ -356,6 +364,9 @@ Rect Wm::title_button(const Window &w, Part which) const
 {
     const Rect &f = w.frame_;
     const int close_x = f.right() - 22;
+    if (w.dialog_ && which != Part::Close) {
+        return {};
+    }
     switch (which) {
     case Part::Close:
         return {close_x, f.y + 6, 16, 14};
@@ -495,6 +506,36 @@ Rect Wm::desktop_icon_rect(int index) const
 void Wm::key(uint16_t usage, bool pressed)
 {
     const uint32_t start = clock_.micros();
+    const bool modifier = usage >= key::LeftCtrl && usage <= key::RightGui;
+    if (!modifier) {
+        // A held key repeats, after a pause, until it is let go.
+        if (pressed) {
+            stop_timer(repeat_timer_);
+            repeat_usage_ = usage;
+            repeat_timer_ = start_timer(kRepeatDelayUs, kRepeatUs, &Wm::key_repeat, this);
+        } else if (usage == repeat_usage_) {
+            stop_timer(repeat_timer_);
+            repeat_timer_ = 0;
+            repeat_usage_ = 0;
+        }
+        caret_moved();
+    }
+    handle_key(usage, pressed);
+    update();
+    last_event_us_ = clock_.micros() - start;
+}
+
+void Wm::key_repeat(void *self)
+{
+    Wm &wm = *static_cast<Wm *>(self);
+    if (wm.repeat_usage_ != 0) {
+        wm.caret_moved();
+        wm.handle_key(wm.repeat_usage_, true);
+    }
+}
+
+void Wm::handle_key(uint16_t usage, bool pressed)
+{
     uint8_t bit = 0;
     switch (usage) {
     case key::LeftShift:
@@ -565,14 +606,13 @@ void Wm::key(uint16_t usage, bool pressed)
             }
         }
     }
-    update();
-    last_event_us_ = clock_.micros() - start;
 }
 
 void Wm::text(const char *utf8)
 {
     const uint32_t start = clock_.micros();
     if (!menu_open() && active_ != nullptr) {
+        caret_moved();
         active_->text(utf8);
     }
     update();
@@ -620,6 +660,15 @@ bool Wm::double_click(int target)
 void Wm::on_press()
 {
     const int x = pointer_x_, y = pointer_y_;
+    caret_moved();
+    if (Window *sys = system_modal()) {
+        // Only the dialog that holds the whole desktop can be used.
+        if (!sys->frame_.contains(x, y)) {
+            activate(*sys);
+            capture_ = Capture::Swallow;
+            return;
+        }
+    }
     if (menu_open()) {
         if (popup_at(x, y) >= 0) {
             capture_ = Capture::Menu;
@@ -675,6 +724,11 @@ void Wm::on_press()
         }
         return;
     }
+    if (Window *b = blocker(*w)) {
+        activate(*b);
+        capture_ = Capture::Swallow;
+        return;
+    }
     activate(*w);
     const Part part = part_at(*w, x, y);
     captured_ = w;
@@ -718,7 +772,8 @@ void Wm::on_press()
     case Part::Client: {
         capture_ = Capture::Client;
         const Rect c = w->client();
-        w->mouse({MouseKind::Down, x - c.x, y - c.y});
+        const bool twice = double_click(2000 + w->id_);
+        w->mouse({MouseKind::Down, x - c.x, y - c.y, twice});
         break;
     }
     case Part::Border: {
@@ -749,11 +804,15 @@ void Wm::on_move()
             if (item != popups_[level].hover) {
                 set_hover(level, item);
                 close_popups_from(level + 1);
+                stop_timer(submenu_timer_);
+                submenu_timer_ = 0;
                 if (item >= 0) {
                     const MenuItem &it = popups_[level].menu->items[item];
                     if (it.submenu != nullptr && !(it.flags & kMenuDisabled)) {
-                        const Rect r = popup_item(level, item);
-                        open_popup(*it.submenu, r.right() + kMenuEdge, r.y - kMenuEdge, false, false);
+                        // A submenu opens after a short rest on its entry.
+                        submenu_level_ = level;
+                        submenu_item_ = item;
+                        submenu_timer_ = start_timer(kSubmenuDelayUs, 0, &Wm::submenu_due, this);
                     }
                 }
             }
@@ -880,7 +939,8 @@ void Wm::on_release()
         const int level = popup_at(pointer_x_, pointer_y_);
         if (level >= 0) {
             const int item = item_at(level, pointer_x_, pointer_y_);
-            if (item >= 0 && popups_[level].menu->items[item].submenu == nullptr) {
+            if (item >= 0 && (popups_[level].menu->items[item].submenu == nullptr ||
+                              popup_count_ == level + 1)) {
                 choose(level, item);
             }
         }
@@ -1002,8 +1062,22 @@ void Wm::close_popups_from(int level)
     }
 }
 
+void Wm::submenu_due(void *self)
+{
+    Wm &wm = *static_cast<Wm *>(self);
+    wm.submenu_timer_ = 0;
+    const int level = wm.submenu_level_, item = wm.submenu_item_;
+    if (wm.popup_count_ == level + 1 && wm.popups_[level].hover == item) {
+        const Rect r = wm.popup_item(level, item);
+        wm.open_popup(*wm.popups_[level].menu->items[item].submenu, r.right() + kMenuEdge,
+                      r.y - kMenuEdge, false, false);
+    }
+}
+
 void Wm::close_menus()
 {
+    stop_timer(submenu_timer_);
+    submenu_timer_ = 0;
     close_popups_from(0);
     if (menu_window_ != nullptr) {
         invalidate(menu_bar_entry(*menu_window_, menu_entry_));
@@ -1354,12 +1428,15 @@ void Wm::paint_frame(Canvas &c, Window &w)
     if (w.icon_ != nullptr) {
         c.blit(*w.icon_, f.x + 5, f.y + 6);
     }
-    const Rect minimize = title_button(w, Part::Minimize);
-    Canvas text = c.sub({title.x, title.y, minimize.x - 2 - title.x, title.h});
+    const Rect first = title_button(w, w.dialog_ ? Part::Close : Part::Minimize);
+    Canvas text = c.sub({title.x, title.y, first.x - 2 - title.x, title.h});
     text.text(22, 3, w.title_, active ? gfx::kWhite : gfx::kGrey, true);
 
     for (Part p : {Part::Close, Part::Maximize, Part::Minimize}) {
         const Rect r = title_button(w, p);
+        if (r.empty()) {
+            continue;
+        }
         const bool held = capture_ == Capture::TitleButton && captured_ == &w &&
                           captured_part_ == p && captured_inside_;
         c.button(r, held ? ButtonLook::Pressed : ButtonLook::Raised);
@@ -1488,11 +1565,164 @@ void Wm::paint_taskbar(const RectList &clip)
         inner.text(21 + d, 2 + d, w.title_, gfx::kBlack, on);
     }
 
-    // The clock. ponytail: placeholder until there is a clock.
-    const Rect clock = {width_ - kClockW - 2, ty + 4, kClockW, 22};
+    // The clock, 12-hour as in the target picture.
+    const Rect clock = clock_rect();
     c.edge(clock, gfx::kDarkGrey, gfx::kWhite);
-    const char *time = "--:--";
+    int h, m, s;
+    get_time(h, m, s);
+    char time[12];
+    snprintf(time, sizeof(time), "%d:%02d %s", h % 12 == 0 ? 12 : h % 12, m, h < 12 ? "AM" : "PM");
     c.text(clock.x + (kClockW - Canvas::text_width(time)) / 2, ty + 9, time, gfx::kBlack);
+}
+
+/* ---- Timers and clock ------------------------------------------------------- */
+
+uint64_t Wm::now_us()
+{
+    const uint32_t raw = clock_.micros();
+    if (!clock_started_) {
+        clock_started_ = true;
+        last_raw_us_ = raw;
+    }
+    now64_ += static_cast<uint32_t>(raw - last_raw_us_);
+    last_raw_us_ = raw;
+    return now64_;
+}
+
+int Wm::start_timer(uint32_t delay_us, uint32_t period_us, TimerFn fn, void *context)
+{
+    for (Timer &t : timers_) {
+        if (t.id == 0) {
+            t = {fn, context, now_us() + delay_us, period_us, next_timer_id_++};
+            if (next_timer_id_ <= 0) {
+                next_timer_id_ = 1;
+            }
+            return t.id;
+        }
+    }
+    return 0;
+}
+
+void Wm::stop_timer(int id)
+{
+    if (id == 0) {
+        return;
+    }
+    for (Timer &t : timers_) {
+        if (t.id == id) {
+            t.id = 0;
+        }
+    }
+}
+
+void Wm::tick()
+{
+    const uint64_t now = now_us();
+    for (Timer &t : timers_) {
+        if (t.id == 0 || now < t.due) {
+            continue;
+        }
+        const TimerFn fn = t.fn;
+        void *context = t.context;
+        if (t.period != 0) {
+            t.due += t.period;
+            if (t.due <= now) {
+                t.due = now + t.period; // fell behind: no burst of catch-up calls
+            }
+        } else {
+            t.id = 0;
+        }
+        fn(context);
+    }
+    update();
+}
+
+void Wm::blink(void *self)
+{
+    Wm &wm = *static_cast<Wm *>(self);
+    wm.caret_on_ = !wm.caret_on_;
+    if (wm.animations_ && wm.active_ != nullptr && wm.active_->focus() != nullptr) {
+        wm.active_->focus()->invalidate();
+    }
+}
+
+void Wm::caret_moved()
+{
+    if (!caret_on_ && active_ != nullptr && active_->focus() != nullptr) {
+        active_->focus()->invalidate();
+    }
+    caret_on_ = true;
+    stop_timer(blink_timer_);
+    if (blink_timer_ != 0) {
+        blink_timer_ = start_timer(kBlinkUs, kBlinkUs, &Wm::blink, this);
+    }
+}
+
+void Wm::set_animations(bool on)
+{
+    animations_ = on;
+    if (active_ != nullptr && active_->focus() != nullptr) {
+        active_->focus()->invalidate();
+    }
+    update();
+}
+
+Rect Wm::clock_rect() const
+{
+    return {width_ - kClockW - 2, height_ - kTaskbarHeight + 4, kClockW, 22};
+}
+
+void Wm::set_time(int hours, int minutes, int seconds)
+{
+    time_base_s_ = hours * 3600 + minutes * 60 + seconds;
+    time_base_us_ = now_us();
+    invalidate(clock_rect());
+    update();
+}
+
+void Wm::get_time(int &hours, int &minutes, int &seconds)
+{
+    const int64_t s = (time_base_s_ + static_cast<int64_t>((now_us() - time_base_us_) / 1000000)) % 86400;
+    hours = static_cast<int>(s / 3600);
+    minutes = static_cast<int>(s / 60 % 60);
+    seconds = static_cast<int>(s % 60);
+}
+
+void Wm::clock_tick(void *self)
+{
+    Wm &wm = *static_cast<Wm *>(self);
+    int h, m, s;
+    wm.get_time(h, m, s);
+    if (h * 60 + m != wm.shown_minute_) {
+        wm.shown_minute_ = h * 60 + m;
+        wm.invalidate(wm.clock_rect());
+    }
+}
+
+/* ---- Modal dialogs ---------------------------------------------------------- */
+
+Window *Wm::system_modal() const
+{
+    for (int i = count_ - 1; i >= 0; i--) {
+        if (stack_[i]->modal_ && stack_[i]->system_modal_) {
+            return stack_[i];
+        }
+    }
+    return nullptr;
+}
+
+Window *Wm::blocker(const Window &w) const
+{
+    for (int i = count_ - 1; i >= 0; i--) {
+        const Window *d = stack_[i];
+        if (d == &w || !d->modal_) {
+            continue;
+        }
+        if (d->system_modal_ || d->modal_owner_ == &w) {
+            return stack_[i];
+        }
+    }
+    return nullptr;
 }
 
 /* ---- Drag outline ---------------------------------------------------------- */

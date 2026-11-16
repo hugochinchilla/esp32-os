@@ -1,5 +1,7 @@
 #include "core/wm/widgets.hpp"
 
+#include "core/wm/wm.hpp"
+
 #include <cstring>
 
 namespace wm {
@@ -321,7 +323,7 @@ void TextField::paint(Canvas &c)
         }
         inner.text(x, y, one, chosen ? kWhite : kBlack);
     }
-    if (focus) {
+    if (focus && caret_shown()) {
         inner.vline(1 + (caret_ - scroll_) * 6, y, kTextH, kBlack);
     }
 }
@@ -526,29 +528,64 @@ void ScrollBar::paint(Canvas &c)
     }
 }
 
+// One step for the held arrow or track. A track press stops once the
+// thumb reaches the pointer.
+void ScrollBar::step()
+{
+    const Rect t = thumb();
+    const int t0 = vertical_ ? t.y : t.x, t1 = t0 + (vertical_ ? t.h : t.w);
+    switch (held_) {
+    case -1:
+        set_value(value_ - 1);
+        break;
+    case 1:
+        set_value(value_ + 1);
+        break;
+    case -2:
+        if (last_along_ < t0) {
+            set_value(value_ - page_);
+        }
+        break;
+    case 2:
+        if (last_along_ >= t1) {
+            set_value(value_ + page_);
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+void ScrollBar::repeat(void *self)
+{
+    static_cast<ScrollBar *>(self)->step();
+}
+
 void ScrollBar::mouse(const MouseMsg &m)
 {
     const int along = vertical_ ? m.y : m.x;
     const Rect t = thumb();
     const int t0 = vertical_ ? t.y : t.x, t1 = t0 + (vertical_ ? t.h : t.w);
+    last_along_ = along;
     switch (m.kind) {
     case MouseKind::Down:
         if (along < kThickness) {
             held_ = -1;
-            set_value(value_ - 1);
         } else if (along >= length() - kThickness) {
             held_ = 1;
-            set_value(value_ + 1);
         } else if (maximum_ > 0 && along >= t0 && along < t1) {
             held_ = 3;
             grab_ = along;
             grab_value_ = value_;
-        } else if (along < t0) {
-            held_ = -2;
-            set_value(value_ - page_);
         } else {
-            held_ = 2;
-            set_value(value_ + page_);
+            held_ = along < t0 ? -2 : 2;
+        }
+        if (held_ != 3) {
+            step();
+            // Held down, it repeats: after a pause, then quickly.
+            if (Wm *wm = host()) {
+                timer_ = wm->start_timer(400000, 50000, &ScrollBar::repeat, this);
+            }
         }
         invalidate();
         break;
@@ -562,6 +599,10 @@ void ScrollBar::mouse(const MouseMsg &m)
         break;
     case MouseKind::Up:
         held_ = 0;
+        if (Wm *wm = host()) {
+            wm->stop_timer(timer_);
+        }
+        timer_ = 0;
         invalidate();
         break;
     }
@@ -577,6 +618,7 @@ ListBox::ListBox(const Rect &r, const char *const *items, int count, Callback on
 {
     const int rows = (r.h - 4) / kRowHeight;
     bar_.set_range(count > rows ? count - rows : 0, rows);
+    bar_.set_parent(this);
 }
 
 Rect ListBox::bar_rect() const

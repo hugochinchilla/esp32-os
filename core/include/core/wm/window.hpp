@@ -22,6 +22,7 @@ struct MouseMsg {
     MouseKind kind;
     int x;
     int y;
+    bool double_click = false; // a Down that completes a double click
 };
 
 // Modifier keys held, as bits.
@@ -112,6 +113,10 @@ public:
     virtual char access() const { return 0; }
 
     bool has_focus() const;
+    // The window manager, through the window (nullptr before it opens).
+    Wm *manager() const;
+    // Whether a caret should be drawn now (it blinks).
+    bool caret_shown() const;
     // Asks for the widget to be painted again.
     void invalidate();
     Window *window() const { return window_; }
@@ -159,6 +164,29 @@ public:
     const MenuBar *menu_bar() const { return menu_bar_; }
     void set_resizable(bool on) { resizable_ = on; }
     bool resizable() const { return resizable_; }
+    // A dialog: fixed size, only the close button in its title bar.
+    void set_dialog(bool on)
+    {
+        dialog_ = on;
+        resizable_ = !on;
+    }
+    bool dialog() const { return dialog_; }
+    // Modal: while open, `owner` cannot be used (with no owner, nothing else
+    // can). Set before opening.
+    void set_modal(Window *owner, bool whole_desktop = false)
+    {
+        modal_ = true;
+        modal_owner_ = owner;
+        system_modal_ = whole_desktop;
+    }
+    void set_modeless()
+    {
+        modal_ = false;
+        modal_owner_ = nullptr;
+        system_modal_ = false;
+    }
+    bool modal() const { return modal_; }
+    Window *modal_owner() const { return modal_owner_; }
     int min_height() const { return kClientTop + (menu_bar_ ? kMenuBarHeight : 0) + 24; }
     void set_frame(const Rect &r); // before the window is opened, or to move it
     void set_title(const char *title); // the text must stay valid
@@ -207,6 +235,10 @@ private:
     WindowState state_ = WindowState::Normal;
     bool was_maximized_ = false; // state to return to from minimised
     bool resizable_ = true;
+    bool dialog_ = false;
+    bool modal_ = false;
+    bool system_modal_ = false;
+    Window *modal_owner_ = nullptr;
     const MenuBar *menu_bar_ = nullptr;
     Wm *wm_ = nullptr;
     int id_ = 0;

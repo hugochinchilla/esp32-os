@@ -27,7 +27,7 @@ public:
           line_({56, 52, 220, 14}, "A 90s desktop for the ESP32-S3."),
           ok_({292 - 75 - 10, 132 - 23 - 10, 75, 23}, "OK", &AboutWindow::ok, this)
     {
-        set_resizable(false);
+        set_dialog(true);
         add(name_);
         add(version_);
         add(line_);

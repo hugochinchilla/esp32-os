@@ -99,6 +99,7 @@ int main(int argc, char **argv)
 
     shell::start(desktop, system_);
     desktop.start();
+    desktop.set_animations(false); // the caret stays on: pictures do not depend on timing
     save("01-desktop");
 
     click(150, 200); // into the Welcome window: it comes to the front
@@ -139,6 +140,8 @@ int main(int argc, char **argv)
     click(x, y);
     centre_of(desktop.popup_item(0, 0), x, y);
     mouse(x, y, 0);
+    clock_.now += wm::Wm::kSubmenuDelayUs; // Programs opens after a short rest
+    desktop.tick();
     save("08-start-menu-programs");
 
     // Launch the Widget gallery from Programs, type into its text field.

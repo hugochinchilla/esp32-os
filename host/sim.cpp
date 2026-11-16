@@ -46,6 +46,8 @@ int main()
         perror("pseudo-terminal");
         return 1;
     }
+    // Never wait for bytes: the timers (clock, caret) keep running.
+    fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
     // Raw bytes both ways: no echo, no line editing, no newline changes.
     termios tio;
     tcgetattr(fd, &tio);
@@ -82,8 +84,9 @@ int main()
             protocol.feed(buffer, static_cast<size_t>(got));
         } else {
             // Nobody has the other end open yet (or any more).
-            usleep(20000);
+            usleep(10000);
         }
+        screen.tick();
     }
     return 0;
 }

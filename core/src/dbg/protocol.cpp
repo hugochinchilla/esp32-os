@@ -128,6 +128,34 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
         break;
     }
 
+    case kTime: {
+        if (desktop_ == nullptr || (args_size != 0 && args_size != 3)) {
+            reply(type, seq, desktop_ == nullptr ? kUnknownCommand : kBadArguments, nullptr, 0);
+            break;
+        }
+        if (args_size == 3) {
+            if (args[0] > 23 || args[1] > 59 || args[2] > 59) {
+                reply(type, seq, kBadArguments, nullptr, 0);
+                break;
+            }
+            desktop_->set_time(args[0], args[1], args[2]);
+        }
+        int h, m, s;
+        desktop_->get_time(h, m, s);
+        const uint8_t body[3] = {static_cast<uint8_t>(h), static_cast<uint8_t>(m), static_cast<uint8_t>(s)};
+        reply(type, seq, kOk, body, sizeof(body));
+        break;
+    }
+
+    case kAnimations:
+        if (desktop_ == nullptr || args_size != 1) {
+            reply(type, seq, desktop_ == nullptr ? kUnknownCommand : kBadArguments, nullptr, 0);
+            break;
+        }
+        desktop_->set_animations(args[0] != 0);
+        reply(type, seq, kOk, nullptr, 0);
+        break;
+
     case kStats: {
         ports::SystemStats stats = {};
         system_.stats(stats);

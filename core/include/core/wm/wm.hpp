@@ -37,6 +37,11 @@ public:
     static constexpr int kTaskbarHeight = 28;
     static constexpr int kOutline = 3;        // width of the outline while dragging
     static constexpr uint32_t kDoubleClickUs = 500000;
+    static constexpr uint32_t kBlinkUs = 530000;
+    static constexpr uint32_t kRepeatDelayUs = 500000, kRepeatUs = 33000;
+    static constexpr uint32_t kSubmenuDelayUs = 300000;
+    static constexpr int kMaxTimers = 16;
+    using TimerFn = void (*)(void *context);
 
     Wm(ports::Display &display, ports::Pointer &pointer, ports::Clock &clock);
 
@@ -71,6 +76,21 @@ public:
     Rect popup_item(int level, int item) const;
     int popup_hover(int level) const { return popups_[level].hover; }
 
+    // Timers on the UI task. tick() fires those that are due and paints;
+    // the UI loop calls it often (every 10 ms on the board). A period of 0
+    // fires once. Returns an id for stop_timer(), 0 if there is no room.
+    int start_timer(uint32_t delay_us, uint32_t period_us, TimerFn fn, void *context);
+    void stop_timer(int id);
+    void tick();
+    uint64_t now_us(); // since start-up; does not wrap
+
+    // Caret blinking: widgets draw their caret only while this is true.
+    bool caret_visible() const { return caret_on_ || !animations_; }
+    void caret_moved(); // shows the caret and starts the blink again
+
+    // The window that blocks `w` (a modal dialog), or nullptr.
+    Window *blocker(const Window &w) const;
+
     // Marks part of the screen for painting; update() paints it.
     void invalidate(const Rect &r);
     void update();
@@ -83,6 +103,10 @@ public:
     // Inspection (ports::Desktop), used by the debug protocol and tests.
     size_t describe_windows(char *out, size_t capacity) override;
     uint32_t repaint_all() override;
+    void set_time(int hours, int minutes, int seconds) override;
+    void get_time(int &hours, int &minutes, int &seconds) override;
+    void set_animations(bool on) override;
+    Rect clock_rect() const;
 
     int window_count() const { return count_; }
     Window *window_at(int z) const { return z < count_ ? stack_[z] : nullptr; } // 0 = bottom
@@ -115,6 +139,21 @@ private:
         int hover;   // item under the pointer or chosen by keys, -1 none
         bool start;  // the Start menu (banner, icons, taller items)
     };
+
+    struct Timer {
+        TimerFn fn;
+        void *context;
+        uint64_t due;
+        uint32_t period;
+        int id;
+    };
+
+    static void blink(void *self);
+    static void clock_tick(void *self);
+    static void key_repeat(void *self);
+    static void submenu_due(void *self);
+    void handle_key(uint16_t usage, bool pressed);
+    Window *system_modal() const;
 
     int stack_index(const Window &w) const;
     Window *topmost_visible() const;
@@ -201,6 +240,22 @@ private:
 
     uint32_t last_update_us_ = 0;
     uint32_t last_event_us_ = 0;
+
+    Timer timers_[kMaxTimers] = {};
+    int next_timer_id_ = 1;
+    bool clock_started_ = false;
+    uint32_t last_raw_us_ = 0;
+    uint64_t now64_ = 0;
+    bool caret_on_ = true;
+    bool animations_ = true;
+    int blink_timer_ = 0;
+    int64_t time_base_s_ = 0;  // time of day (s) at time_base_us_
+    uint64_t time_base_us_ = 0;
+    int shown_minute_ = -1;
+    uint16_t repeat_usage_ = 0;
+    int repeat_timer_ = 0;
+    int submenu_timer_ = 0;
+    int submenu_level_ = -1, submenu_item_ = -1;
 };
 
 } // namespace wm

@@ -1,4 +1,5 @@
 // The desktop: Start menu, desktop icons, message box and Shut Down dialog.
+#include <cstdio>
 #include <cstring>
 
 #include "core/gfx/art.hpp"
@@ -18,24 +19,36 @@ ports::System *g_system = nullptr;
 class MessageBox : public wm::Window {
 public:
     static constexpr int kMaxLines = 8;
+    static constexpr int kMaxButtons = 3;
 
     MessageBox()
         : Window("", {0, 0, 300, 140}, nullptr),
-          ok_({0, 0, 75, 23}, "OK", &MessageBox::ok, this)
+          buttons_{{{0, 0, 75, 23}, "", &MessageBox::pressed, this},
+                   {{0, 0, 75, 23}, "", &MessageBox::pressed, this},
+                   {{0, 0, 75, 23}, "", &MessageBox::pressed, this}}
     {
-        set_resizable(false);
-        add(ok_);
-        ok_.set_default(true);
-        set_default(&ok_);
+        set_dialog(true);
+        for (wm::Button &b : buttons_) {
+            add(b);
+        }
     }
 
-    void show_message(const char *title, const char *text)
+    void ask(const char *title, const char *text, const char *const *labels, int count,
+             AnswerFn answer, void *context)
     {
-        title_text_ = title;
-        text_ = text;
+        if (open()) {
+            answered_ = true; // the old question is dropped without an answer
+            close();
+        }
+        snprintf(title_, sizeof(title_), "%s", title);
+        snprintf(text_, sizeof(text_), "%s", text);
+        answer_ = answer;
+        context_ = context;
+        answered_ = false;
+        count_ = count < 1 ? 1 : (count > kMaxButtons ? kMaxButtons : count);
         // Size to the text: the longest line and the number of lines.
         int lines = 1, longest = 0, run = 0;
-        for (const char *p = text; *p != 0; p++) {
+        for (const char *p = text_; *p != 0; p++) {
             if (*p == '\n') {
                 lines++;
                 run = 0;
@@ -45,17 +58,28 @@ public:
             }
         }
         lines = lines > kMaxLines ? kMaxLines : lines;
+        const int buttons_w = count_ * 75 + (count_ - 1) * 6;
         int w = 56 + longest * 6 + 20 + 2 * kBorder;
+        w = w < buttons_w + 40 ? buttons_w + 40 : w;
         w = w < 220 ? 220 : w;
         const int text_h = lines * 13;
         const int client_h = (text_h > 32 ? text_h : 32) + 20 + 23 + 12;
         const int h = kClientTop + client_h + kBorder;
-        if (open()) {
-            close();
-        }
         set_frame(centred(shell::manager(), w, h));
-        ok_.rect = {(w - 2 * kBorder - 75) / 2, client_h - 23 - 10, 75, 23};
-        set_title(title_text_);
+        const int x0 = (w - 2 * kBorder - buttons_w) / 2;
+        for (int i = 0; i < kMaxButtons; i++) {
+            buttons_[i].rect = i < count_ ? gfx::Rect{x0 + i * 81, client_h - 23 - 10, 75, 23}
+                                          : gfx::Rect{-200, -200, 0, 0};
+            labels_[i] = i < count_ ? labels[i] : "";
+            buttons_[i].set_label(labels_[i]);
+            buttons_[i].set_default(i == 0);
+        }
+        set_default(&buttons_[0]);
+        set_focus(&buttons_[0]);
+        set_title(title_);
+        // Modal to the window that was in use.
+        wm::Window *owner = shell::manager().active();
+        set_modal(owner != this ? owner : nullptr);
         shell::manager().add(*this);
     }
 
@@ -83,18 +107,55 @@ public:
     bool key(const wm::KeyMsg &k) override
     {
         if (k.pressed && k.usage == wm::key::Escape) {
-            close();
+            close(); // answers as Cancel (closed() below)
             return true;
         }
         return Window::key(k);
     }
 
-private:
-    static void ok(wm::Button &, void *context) { static_cast<MessageBox *>(context)->close(); }
+    void closed() override
+    {
+        // Closed without a button (Escape, the close box): the last button,
+        // which is Cancel or No when there is more than one.
+        finish(count_ - 1);
+    }
 
-    const char *title_text_ = "";
-    const char *text_ = "";
-    wm::Button ok_;
+private:
+    static void pressed(wm::Button &button, void *context)
+    {
+        auto *box = static_cast<MessageBox *>(context);
+        for (int i = 0; i < box->count_; i++) {
+            if (&box->buttons_[i] == &button) {
+                box->chosen_ = i;
+            }
+        }
+        box->answered_by_button_ = true;
+        box->close();
+    }
+
+    void finish(int fallback)
+    {
+        if (answered_) {
+            return;
+        }
+        answered_ = true;
+        const int choice = answered_by_button_ ? chosen_ : fallback;
+        answered_by_button_ = false;
+        if (answer_ != nullptr) {
+            answer_(choice, context_);
+        }
+    }
+
+    char title_[64] = "";
+    char text_[320] = "";
+    const char *labels_[kMaxButtons] = {"", "", ""};
+    wm::Button buttons_[kMaxButtons];
+    int count_ = 1;
+    int chosen_ = 0;
+    bool answered_ = true;
+    bool answered_by_button_ = false;
+    AnswerFn answer_ = nullptr;
+    void *context_ = nullptr;
 };
 
 MessageBox &message_window()
@@ -114,7 +175,8 @@ public:
           restart_({312 - 2 * 75 - 6 - 10, 122 - 23 - 10, 75, 23}, "&Restart", &ShutDownDialog::restart, this),
           cancel_({312 - 75 - 10, 122 - 23 - 10, 75, 23}, "Cancel", &ShutDownDialog::cancel, this)
     {
-        set_resizable(false);
+        set_dialog(true);
+        set_modal(nullptr, true); // the whole desktop waits for an answer
         add(question_);
         add(detail_);
         add(restart_);
@@ -215,7 +277,14 @@ gfx::Rect centred(const wm::Wm &wm, int w, int h)
 
 void message_box(const char *title, const char *text)
 {
-    message_window().show_message(title, text);
+    static const char *const ok[] = {"OK"};
+    message_window().ask(title, text, ok, 1, nullptr, nullptr);
+}
+
+void ask(const char *title, const char *text, const char *const *buttons, int count, AnswerFn answer,
+         void *context)
+{
+    message_window().ask(title, text, buttons, count, answer, context);
 }
 
 void shut_down_dialog()

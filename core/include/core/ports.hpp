@@ -74,6 +74,11 @@ public:
     virtual size_t describe_windows(char *out, size_t capacity) = 0;
     // Paints the whole screen again; returns how long it took in µs.
     virtual uint32_t repaint_all() = 0;
+    // The clock on the taskbar.
+    virtual void set_time(int hours, int minutes, int seconds) = 0;
+    virtual void get_time(int &hours, int &minutes, int &seconds) = 0;
+    // Blinking off (caret always shown), for screenshots that compare.
+    virtual void set_animations(bool on) = 0;
 
 protected:
     ~Desktop() = default;
