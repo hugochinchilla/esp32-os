@@ -3,9 +3,9 @@
 A 90s-style desktop operating environment (think Windows 95/98) for the
 ESP32-S3, with VGA output from GPIO pins, Wi-Fi, and USB keyboard and mouse.
 
-Status: **design settled enough to start, hardware bring-up in progress.**
-There is no OS yet. The first code is a VGA test program that checks the
-resistor DAC wiring.
+Status: **the VGA adapter works, and the first piece of the OS is written.**
+There is no desktop yet. The firmware shows a demo screen and answers a debug
+protocol for screenshots and injected keyboard and mouse events.
 
 ## What it will be
 
@@ -40,9 +40,26 @@ resistor values and build notes.
 | --- | --- |
 | `docs/DECISIONS.md` | What has been decided, what was rejected, and what is still open |
 | `docs/hardware/` | VGA adapter pin map, resistor values and board diagram |
+| `docs/debug-protocol.md` | The serial protocol for screenshots and injected input |
+| `core/` | The portable part of the OS (C++). Depends on no hardware; builds for the board and for a PC |
+| `firmware/os/` | The OS firmware: ESP-IDF project with the ESP32 adapters for `core/` |
 | `firmware/vga-test/` | ESP-IDF test program for the VGA wiring |
+| `host/` | PC build: unit tests for `core/` and a simulated board |
 | `ci/` | GitHub Actions workflow to copy into `.github/workflows/` |
-| `tools/` | Setup script for Arch-based systems, and the script that regenerates the board diagram |
+| `tools/` | `dbg.py`, the debug tool; the setup script for Arch-based systems; the script that regenerates the board diagram |
+
+## Tests on the PC
+
+No board needed. Requires CMake, a C++ compiler, Python 3 and pyserial.
+
+```sh
+cmake -S host -B build/host
+cmake --build build/host
+ctest --test-dir build/host --output-on-failure
+```
+
+`build/host/sim` is a simulated board: it prints a port name that
+`tools/dbg.py --port <name>` can talk to.
 
 ## Building the VGA test
 

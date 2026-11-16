@@ -4,7 +4,7 @@ A running record of what this project will and will not do, so that anyone
 picking it up (person or agent) does not have to ask again. Newest decisions
 are added to the tables; nothing is deleted, only marked as replaced.
 
-Last updated: 2026-11-15.
+Last updated: 2026-11-16.
 
 ## Decided
 
@@ -28,6 +28,9 @@ Last updated: 2026-11-15.
 | First code | A VGA test program in ESP-IDF (C) showing 64-colour and 256-colour test cards | Proves the wiring before anything else is built on it |
 | Code structure | Ports and adapters. The core (drawing, window manager, widgets, shell, apps) depends only on interfaces such as display, input, clock, storage, network and debug link. Adapters implement them for the ESP32, for a PC, and in memory for tests. Interfaces are coarse (framebuffer access, changed rectangles), never one call per pixel; the scanout interrupt sits below them | One seam gives host tests, a desktop that runs on a PC, and a small hardware-bound layer. Applies whichever language is chosen |
 | PC build | Yes. The core builds and runs on a PC | Follows from the code structure; lets the desktop be developed and tested without the board |
+| Debug protocol | Framed packets (COBS, CRC-16) on UART0 at 921,600 baud, with 115,200 as fallback. Log text travels inside the protocol on the same port. Described in `docs/debug-protocol.md` | A screenshot takes seconds, not half a minute; logs cannot corrupt a transfer |
+| Debug tool | `tools/dbg.py`, in Python | Already installed with ESP-IDF, quick to change, easy for an agent to drive |
+| Repository layout | `core/` portable C++, `firmware/os/` ESP-IDF project with the ESP32 adapters, `host/` PC tests and a simulated board | Follows from the code structure |
 | Testing | Three layers: unit tests of the core on the PC, test-first where practical; framebuffer snapshots compared with stored images; a small number of on-device tests through the serial debug protocol. Signal timing is checked on the bench, not by tests | Fast feedback for most of the code, and checks that can run without hardware |
 
 ## Rejected
@@ -98,11 +101,15 @@ First picture: 2026-11-16, through a VGA-to-HDMI adapter.
 - The picture is stable at 640x480 with the framebuffer in PSRAM.
 - The colours and the four greys look right in both modes.
 - The picture stays stable with Wi-Fi active and during flash writes.
+- `firmware/os` compiles and runs (written without access to ESP-IDF).
+- The debug link is reliable at 921,600 baud, and how long a screenshot takes.
+- Opening the serial port with `tools/dbg.py` does not restart the board.
 
 ## Planned order of work
 
-1. Bench test of the VGA wiring (`firmware/vga-test`).
+1. Bench test of the VGA wiring (`firmware/vga-test`). Done 2026-11-16.
 2. Debug protocol and PC tool, so screenshots and injected input work early.
+   Written and tested against a simulated board; not yet tried on the board.
 3. Video driver with a cursor merged in at scanout.
 4. Window manager and widget toolkit.
 5. Desktop shell, file system and file manager.

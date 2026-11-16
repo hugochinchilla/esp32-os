@@ -1,0 +1,289 @@
+#include "core/dbg/protocol.hpp"
+
+#include <cstring>
+
+#include "core/dbg/crc.hpp"
+
+namespace dbg {
+
+namespace {
+
+void put16(uint8_t *out, uint16_t value)
+{
+    out[0] = static_cast<uint8_t>(value);
+    out[1] = static_cast<uint8_t>(value >> 8);
+}
+
+void put32(uint8_t *out, uint32_t value)
+{
+    put16(out, static_cast<uint16_t>(value));
+    put16(out + 2, static_cast<uint16_t>(value >> 16));
+}
+
+uint16_t get16(const uint8_t *in)
+{
+    return static_cast<uint16_t>(in[0] | (in[1] << 8));
+}
+
+} // namespace
+
+Protocol::Protocol(ports::ByteSink &out, ports::Lock &lock, ports::Display &display,
+                   ports::InputSink &input, ports::System &system, const char *firmware_name)
+    : out_(out), lock_(lock), display_(display), input_(input), system_(system),
+      firmware_name_(firmware_name)
+{
+}
+
+/* ---- Receiving ----------------------------------------------------------- */
+
+void Protocol::feed(const uint8_t *data, size_t size)
+{
+    for (size_t i = 0; i < size; i++) {
+        uint8_t byte = data[i];
+        if (byte != 0) {
+            if (rx_size_ < sizeof(rx_)) {
+                rx_[rx_size_++] = byte;
+            } else {
+                overflow_ = true;
+            }
+            continue;
+        }
+        // A zero ends whatever came before it. Frames are sent with a zero on
+        // both sides, so anything between two zeros that is not a valid
+        // frame (line noise, stray text) is counted and dropped, and can
+        // never knock the following frames out of step.
+        if (rx_size_ > 0 || overflow_) {
+            size_t raw = overflow_ ? 0 : cobs_decode(rx_, rx_size_, rx_);
+            bool good = raw >= 4 && crc16(rx_, raw - 2) == get16(rx_ + raw - 2);
+            if (good) {
+                frames_received_++;
+                handle_frame(rx_, raw - 2);
+            } else {
+                receive_errors_++;
+            }
+        }
+        rx_size_ = 0;
+        overflow_ = false;
+    }
+}
+
+void Protocol::handle_frame(const uint8_t *frame, size_t size)
+{
+    uint8_t type = frame[0];
+    uint8_t seq = frame[1];
+    const uint8_t *args = frame + 2;
+    size_t args_size = size - 2;
+
+    switch (type) {
+    case kPing:
+        reply(type, seq, kOk, args, args_size);
+        break;
+
+    case kInfo: {
+        uint8_t body[64];
+        reply(type, seq, kOk, body, write_info(body));
+        break;
+    }
+
+    case kScreenshot:
+        send_screenshot(seq);
+        break;
+
+    case kKey:
+        if (args_size != 3) {
+            reply(type, seq, kBadArguments, nullptr, 0);
+            break;
+        }
+        keys_++;
+        input_.key(get16(args), args[2] != 0);
+        reply(type, seq, kOk, nullptr, 0);
+        break;
+
+    case kMouse: {
+        if (args_size != 7) {
+            reply(type, seq, kBadArguments, nullptr, 0);
+            break;
+        }
+        ports::MouseEvent event;
+        event.absolute = args[0] != 0;
+        event.x = static_cast<int16_t>(get16(args + 1));
+        event.y = static_cast<int16_t>(get16(args + 3));
+        event.buttons = args[5];
+        event.wheel = static_cast<int8_t>(args[6]);
+        mouse_events_++;
+        input_.mouse(event);
+        reply(type, seq, kOk, nullptr, 0);
+        break;
+    }
+
+    case kStats: {
+        ports::SystemStats stats = {};
+        system_.stats(stats);
+        uint8_t body[32];
+        put32(body + 0, stats.uptime_ms);
+        put32(body + 4, stats.free_internal_ram);
+        put32(body + 8, stats.free_external_ram);
+        put32(body + 12, stats.frames_shown);
+        put32(body + 16, frames_received_);
+        put32(body + 20, receive_errors_);
+        put32(body + 24, keys_);
+        put32(body + 28, mouse_events_);
+        reply(type, seq, kOk, body, sizeof(body));
+        break;
+    }
+
+    case kReboot:
+        reply(type, seq, kOk, nullptr, 0);
+        system_.reboot();
+        break;
+
+    default:
+        reply(type, seq, kUnknownCommand, nullptr, 0);
+        break;
+    }
+}
+
+/* ---- Sending ------------------------------------------------------------- */
+
+// Caller must hold the lock.
+void Protocol::send(uint8_t type, uint8_t seq, const uint8_t *payload, size_t size)
+{
+    if (size > kMaxReplyPayload) {
+        size = kMaxReplyPayload;
+    }
+    tx_raw_[0] = type;
+    tx_raw_[1] = seq;
+    if (size > 0) {
+        memcpy(tx_raw_ + 2, payload, size);
+    }
+    put16(tx_raw_ + 2 + size, crc16(tx_raw_, 2 + size));
+    tx_wire_[0] = 0;
+    size_t encoded = cobs_encode(tx_raw_, size + 4, tx_wire_ + 1);
+    tx_wire_[1 + encoded] = 0;
+    out_.write(tx_wire_, encoded + 2);
+}
+
+void Protocol::reply(uint8_t type, uint8_t seq, Status status, const uint8_t *body, size_t size)
+{
+    uint8_t payload[kMaxRequestPayload + 1];
+    if (size > kMaxRequestPayload) {
+        size = kMaxRequestPayload;
+    }
+    payload[0] = status;
+    if (size > 0) {
+        memcpy(payload + 1, body, size);
+    }
+    lock_.lock();
+    send(static_cast<uint8_t>(type | kReplyBit), seq, payload, size + 1);
+    lock_.unlock();
+}
+
+size_t Protocol::write_info(uint8_t *out)
+{
+    out[0] = kProtocolVersion;
+    put16(out + 1, static_cast<uint16_t>(display_.width()));
+    put16(out + 3, static_cast<uint16_t>(display_.height()));
+    out[5] = kRgb332;
+    size_t name = strlen(firmware_name_);
+    if (name > 32) {
+        name = 32;
+    }
+    memcpy(out + 6, firmware_name_, name);
+    return 6 + name;
+}
+
+void Protocol::send_hello()
+{
+    uint8_t body[64];
+    size_t size = write_info(body);
+    lock_.lock();
+    send(kHello, 0, body, size);
+    lock_.unlock();
+}
+
+void Protocol::send_log(const char *text, size_t size)
+{
+    if (size == 0 || !lock_.try_lock()) {
+        return;
+    }
+    send(kLog, 0, reinterpret_cast<const uint8_t *>(text), size);
+    lock_.unlock();
+}
+
+/* ---- Screenshot ---------------------------------------------------------- */
+
+// The picture is sent run-length encoded, in chunks:
+//   0..127    copy the next (n + 1) bytes
+//   128..255  repeat the next byte (n - 125) times, so 3 to 130
+void Protocol::send_screenshot(uint8_t seq)
+{
+    const uint8_t *src = display_.pixels();
+    const size_t total = static_cast<size_t>(display_.width()) * display_.height();
+
+    uint8_t head[10];
+    put16(head + 0, static_cast<uint16_t>(display_.width()));
+    put16(head + 2, static_cast<uint16_t>(display_.height()));
+    head[4] = kRgb332;
+    head[5] = kRunLength;
+    put32(head + 6, static_cast<uint32_t>(total));
+    reply(kScreenshot, seq, kOk, head, sizeof(head));
+
+    uint16_t chunks = 0;
+    size_t used = 2; // every chunk starts with its number
+    uint32_t check = 0;
+
+    auto flush = [&]() {
+        put16(chunk_, chunks++);
+        lock_.lock();
+        send(kShotData, seq, chunk_, used);
+        lock_.unlock();
+        used = 2;
+    };
+    // Keeps a token (control byte plus its data) inside one chunk.
+    auto reserve = [&](size_t bytes) {
+        if (used + bytes > sizeof(chunk_)) {
+            flush();
+        }
+    };
+
+    size_t i = 0;
+    while (i < total) {
+        size_t run = 1;
+        while (i + run < total && run < 130 && src[i + run] == src[i]) {
+            run++;
+        }
+        if (run >= 3) {
+            reserve(2);
+            chunk_[used++] = static_cast<uint8_t>(125 + run);
+            chunk_[used++] = src[i];
+            i += run;
+            continue;
+        }
+        // Literal bytes, up to the next run of three or more.
+        size_t start = i;
+        while (i < total && i - start < 128) {
+            if (i + 2 < total && src[i] == src[i + 1] && src[i] == src[i + 2]) {
+                break;
+            }
+            i++;
+        }
+        size_t count = i - start;
+        reserve(1 + count);
+        chunk_[used++] = static_cast<uint8_t>(count - 1);
+        memcpy(chunk_ + used, src + start, count);
+        used += count;
+    }
+    if (used > 2) {
+        flush();
+    }
+    check = crc32(src, total);
+
+    uint8_t tail[6];
+    put16(tail + 0, chunks);
+    put32(tail + 2, check);
+    lock_.lock();
+    send(kShotEnd, seq, tail, sizeof(tail));
+    lock_.unlock();
+}
+
+} // namespace dbg

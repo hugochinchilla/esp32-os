@@ -4,13 +4,33 @@ on:
   push:
     paths:
       - "firmware/**"
-      - ".github/workflows/build.yml"
-  pull_request:
-    paths:
-      - "firmware/**"
+      - "core/**"
+      - "host/**"
+      - "tools/**"
       - ".github/workflows/build.yml"
 
 jobs:
+  pc-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install pyserial
+      - run: cmake -S host -B build/host && cmake --build build/host
+      - run: ctest --test-dir build/host --output-on-failure
+
+  os:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build with ESP-IDF
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: release-v5.5
+          target: esp32s3
+          path: firmware/os
+          command: idf.py build
+
   vga-test:
     runs-on: ubuntu-latest
     steps:
