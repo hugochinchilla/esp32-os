@@ -42,6 +42,14 @@ Last updated: 2026-11-16.
 | Memory test at start-up | Real and on by default, decided by the owner: writes and reads back an address-dependent pattern over external RAM borrowed from the heap (never memory in use) for about 250 ms, counting KB on screen; a wrong word is shown with its address and logged, and the start goes on. On the board it covers 4992 KB in 254 ms (about 20 MB/s written and read back), of roughly 6 MB free at that point; all of it would take about 0.31 s | Real figures, a quick flash |
 | Testing | Three layers: unit tests of the core on the PC, test-first where practical; framebuffer snapshots compared with stored images; a small number of on-device tests through the serial debug protocol. Signal timing is checked on the bench, not by tests | Fast feedback for most of the code, and checks that can run without hardware |
 
+### Program settings (2026-11-16)
+
+Decided by the owner. Each program keeps its settings in its own plain text
+file in a hidden folder, Linux style: `C:\.config\<program>.ini`. The format
+is INI (`[section]`, `key = value`, `;` and `#` comments), chosen over TOML and
+YAML. Names that start with a dot are hidden in the File manager unless hidden
+files are shown. There is no central registry.
+
 ### Parallel work (2026-11-16)
 
 The owner asked for work to be split across several threads, each in its own
@@ -67,6 +75,7 @@ other threads do not merge their own work.
 | The "Lenna" test photo as a sample picture | A copyrighted magazine photograph; the person in it has asked for it to be retired, and journals no longer accept it. It does not go in the repository or the firmware. The owner can still copy any file of his own onto his board with `tools/dbg.py put` |
 | "Tom's Diner" as a sample sound | A commercial recording, not ours to distribute. Same as above: not in the repository or the firmware; `tools/dbg.py put` works for his own copies |
 | Kodak Lossless True Color Image Suite as sample pictures | Its usual source says only that it is "my understanding" Kodak released it for unrestricted use; no licence statement from Kodak could be found, so its status was not confirmed (2026-11-16). Can be added if a clear statement turns up |
+| A central settings registry, as in Windows | The owner does not want one (2026-11-16). Settings are separate plain text files, one per program |
 
 ## Still open
 
