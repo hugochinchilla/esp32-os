@@ -550,19 +550,20 @@ void Wm::key(uint16_t usage, bool pressed)
     }
     const bool modifier = usage >= key::LeftCtrl && usage <= key::RightGui;
     if (!modifier) {
-        // A held key repeats, after a pause, until it is let go.
-        if (pressed) {
-            stop_timer(repeat_timer_);
-            repeat_usage_ = usage;
-            repeat_timer_ = start_timer(kRepeatDelayUs, kRepeatUs, &Wm::key_repeat, this);
-        } else if (usage == repeat_usage_) {
-            stop_timer(repeat_timer_);
-            repeat_timer_ = 0;
+        stop_timer(repeat_timer_);
+        repeat_timer_ = 0;
+        if (pressed || usage == repeat_usage_) {
             repeat_usage_ = 0;
         }
         caret_moved();
     }
     handle_key(usage, pressed);
+    if (!modifier && pressed) {
+        // A held key repeats, after a pause counted from the end of its own
+        // handling: a press that took long (a save) does not repeat at once.
+        repeat_usage_ = usage;
+        repeat_timer_ = start_timer(kRepeatDelayUs, kRepeatUs, &Wm::key_repeat, this);
+    }
     update();
     event_done(start);
 }

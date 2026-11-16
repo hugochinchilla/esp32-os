@@ -698,6 +698,46 @@ static void test_slow_submenu()
     CHECK(rig.no_stale_pixels());
 }
 
+// A key whose handling takes long (a save, about 1 s on the board) must not
+// repeat as soon as it returns: the repeat counts from the end of the
+// handling. Before, the press chose File > Save in a menu, and the overdue
+// repeat then typed the letter into the Editor.
+class SlowKeyWindow final : public wm::Window {
+public:
+    SlowKeyWindow(host::FixedClock &clock) : Window("Slow", {100, 100, 200, 100}, nullptr), clock_(clock) {}
+    void paint(gfx::Canvas &c) override { c.fill({0, 0, client().w, client().h}, gfx::kGrey); }
+    bool key(const wm::KeyMsg &k) override
+    {
+        if (k.pressed) {
+            presses++;
+            clock_.now += 1000000; // a second's work
+        }
+        return true;
+    }
+    int presses = 0;
+
+private:
+    host::FixedClock &clock_;
+};
+
+static void test_slow_key_does_not_repeat()
+{
+    Rig rig;
+    SlowKeyWindow w(rig.clock);
+    rig.wm.add(w);
+    rig.wm.start();
+    rig.wm.key(wm::key::A, true);
+    rig.wm.tick(); // the loop comes back after the slow press...
+    rig.wm.key(wm::key::A, false); // ...and finds the release waiting
+    rig.wait(wm::Wm::kRepeatDelayUs + 100000);
+    CHECK(w.presses == 1);
+    // A key really held still repeats.
+    rig.wm.key(static_cast<uint16_t>(wm::key::A + 1), true); // B
+    rig.wait(wm::Wm::kRepeatDelayUs + 10000);
+    CHECK(w.presses >= 2);
+    rig.wm.key(static_cast<uint16_t>(wm::key::A + 1), false);
+}
+
 static void test_start_menu_and_icons()
 {
     Rig rig;
@@ -1013,6 +1053,7 @@ int main()
     test_shortcuts();
     test_menus();
     test_slow_submenu();
+    test_slow_key_does_not_repeat();
     test_start_menu_and_icons();
     test_widgets();
     test_timers_and_clock();
