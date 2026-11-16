@@ -8,7 +8,7 @@
 #
 # Espressif's own servers are not reachable from the container, so the
 # Python packages are installed without Espressif's version constraints
-# file, and LittleFS comes from GitHub instead of the component registry
+# file, and LittleFS and mDNS come from GitHub instead of the component registry
 # (into firmware/os/components/, which is not committed; "env" also turns
 # the component manager off).
 export IDF_TOOLS_PATH="${IDF_TOOLS_PATH:-$HOME/.espressif}"
@@ -27,5 +27,10 @@ else
     [ -d "$HERE/firmware/os/components/joltwallet__littlefs" ] || git clone --depth 1 --branch v1.23.1 \
         --recurse-submodules --shallow-submodules https://github.com/joltwallet/esp_littlefs.git \
         "$HERE/firmware/os/components/joltwallet__littlefs" || exit 1
+    if [ ! -d "$HERE/firmware/os/components/espressif__mdns" ]; then
+        git clone --depth 1 --branch mdns-v1.15.1 https://github.com/espressif/esp-protocols.git \
+            "$HOME/esp-protocols" || exit 1
+        cp -r "$HOME/esp-protocols/components/mdns" "$HERE/firmware/os/components/espressif__mdns" || exit 1
+    fi
     echo "done: . tools/setup-cloud-idf.sh env"
 fi

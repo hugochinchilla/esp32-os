@@ -497,10 +497,16 @@ void ui_task(void *)
     if (radio && web_port.listen(80)) {
         web.set_port(&web_port);
         web.set_page(net::viewer_page(), net::viewer_page_size());
+        web.set_second_page("/novnc", net::novnc_page(), net::novnc_page_size());
         remote.set_listener(&web, 1);
         ESP_LOGI(TAG, "remote screen for a browser on port 80");
     } else {
         ESP_LOGW(TAG, "remote screen for a browser not available");
+    }
+    // By name instead of by address: chinchilla.local, and viewers that
+    // browse the network list the board.
+    if (radio && wifi_announce("chinchilla", vnc_port.listening() ? rfb::kPort : 0, web_port.listening() ? 80 : 0)) {
+        ESP_LOGI(TAG, "answers to chinchilla.local (mDNS)");
     }
 
     shell::start(desktop, system, storage, memory);

@@ -729,6 +729,39 @@ tested on the PC only (not yet compiled for or run on the board).
   `core/src/shell/cactus_patch.cpp`. Its tests and reference pictures are
   `host/tests/test_cactus.cpp` (pictures 50 to 54).
 
+### noVNC from a CDN (asked 2026-11-16, to confirm)
+
+- The owner asked whether noVNC could be used from a trusted CDN at a pinned
+  version. It can, and is added as a second page, `http://<address>/novnc`,
+  beside the built-in viewer at `/` so the two can be compared; which one
+  stays at `/` (or both) is his to say.
+- The page loads noVNC 1.7.0 from jsDelivr's mirror of noVNC's GitHub
+  repository at that release's commit
+  (`63107bd06d9e1f6136ff21aeda8cd62cbf0d433e`), not from npm: the npm
+  package holds no files a browser can load directly, and a commit cannot be
+  changed afterwards, where a version tag could. The browser's integrity
+  check (SRI) would only cover the first of noVNC's about 50 files.
+- Costs: the viewing computer needs the internet; whoever serves those
+  files could control the board's keyboard and mouse; and noVNC warns that it
+  wants an https page, which the board does not have. It worked without one
+  in Chromium against the simulator (same picture as the built-in viewer,
+  mouse and keys), with the CDN's files served from a local copy because
+  the cloud container cannot reach jsDelivr: the real address has not been
+  fetched.
+
+### Chosen for finding the board by name (asked 2026-11-16, to confirm)
+
+- The owner asked whether the remote screen can be announced over mDNS. It
+  can: the board answers to `chinchilla.local` and announces `_rfb._tcp`
+  (5900) and `_http._tcp` (80), both named "Chinchilla", so VNC viewers that
+  browse the network list it and `http://chinchilla.local/` opens the page.
+  Done with Espressif's `mdns` component (1.15.1), in the Wi-Fi adapter.
+- The name is fixed in the code for now. Put to the owner: another name, or
+  a name he can change (in the Network panel, kept in
+  `C:\.config\network.ini`). Two boards on one network would be told apart
+  by the component itself, which adds a number to the second.
+- Firmware 1.28 MB with it (1.21 MB before).
+
 ## To confirm on the bench
 
 - The picture is stable at 640x480 with the framebuffer in PSRAM.
@@ -746,6 +779,12 @@ tested on the PC only (not yet compiled for or run on the board).
   meanwhile; the VGA picture stays stable with a viewer connected. If
   updates are slow, the UI loop's 10 ms pace (FreeRTOS at 100 ticks a
   second) is the first thing to look at.
+- Finding by name (compiled and linked, never run on the board): the log
+  says `answers to chinchilla.local (mDNS)`; `ping chinchilla.local` from
+  the laptop answers; `http://chinchilla.local/` opens the viewer; the two
+  services show in a browse (`avahi-browse -art` or `dns-sd -B _rfb._tcp`);
+  free internal RAM with it (`tools/dbg.py memory`); the picture stays
+  steady.
 
 ## Planned order of work
 
