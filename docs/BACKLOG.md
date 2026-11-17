@@ -68,7 +68,7 @@ at the same time.
 | 29 | Refined icons for every program, at 32x32 and 16x16. The owner picks from drawn proposals | M | | | done (checked on the board 2026-11-17). [Journal](journal/2026-11-16-icon-proposals.md) |
 | 30 | Quick-launch icons by the Start button that launch something | S | 29 | | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-quick-launch.md) |
 | 31 | Desktop background: 16 colours and 10 patterns, chosen in a Display dialog (Start > Settings, or a right click on the desktop) | S | | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-desktop-background.md) |
-| 40 | Submenus hand over at once: with a submenu open, another item of a parent menu closes it, is highlighted and opens its own in the same move, at every depth | S | | | built, PC tests pass (2026-11-17); not compiled for the board, not run on the board. [Journal](journal/2026-11-17-submenus-at-once.md) |
+| 40 | Submenus hand over at once: with a submenu open, another item of a parent menu closes it, is highlighted and opens its own in the same move, at every depth | S | | | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-submenus-at-once.md) |
 | | **Memory** | | | | |
 | 35 | Our static objects in external RAM: the core's and the firmware's big ones, about 121 KB out of internal RAM | S | | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-statics-in-psram.md) |
 | 36 | The remote screen holds its 183 KB of buffers only while a viewer is connected | S | 8b | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-remote-screen-memory.md) |

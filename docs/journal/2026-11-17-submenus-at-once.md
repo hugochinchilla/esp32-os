@@ -98,3 +98,29 @@ arriving. Direction can.
 ## What is left
 
 The owner's answer on the triangle; a turn on the board (backlog item 40).
+
+
+## On the board (added by the board thread, 2026-11-17)
+
+Branch tip 072f25a (PR 28) with main c976928 merged in. Main by then had the
+window server split (cut 2), which reworked `wm::Wm`; the merge was clean but
+for the journal index, and the change sits where it should: the pointer
+trail in `Wm::mouse`, `heading_for`, and the hand-over in the menu part of
+`on_move`. The backlog item was already 40. PC tests 42 of 42, the first
+ESP32 build (0x1616d0), flashed by cable, the app only.
+
+1. Start > Programs open, the pointer inside its list (on Defragmenter),
+   then one single move onto Settings. The picture 60 ms after that move was
+   still the old one in every respect (the Start menu still highlighted
+   Programs): the move had not been handled yet. From 65 to 110 ms, 20
+   pictures in 5 ms steps: every one shows Programs closed and Settings open,
+   and none shows a moment with both lists open or neither. With the old rule
+   Programs would have stayed until the pointer had rested 300 ms.
+2. A slow slant (26 moves, 40 ms apart) from the Programs entry across
+   Settings to Welcome near the bottom of the list: the Programs list stayed
+   open all the way (picture while over Settings), and a click on Welcome
+   opened it.
+3. Out of the list onto the desktop and back into it: the list stayed open.
+4. A click on the desktop closes the menu; Ctrl+Esc opens it.
+5. `dbg.py misses`: no missed refill not caused by the debug link. VNC took
+   a full screen; telnet answered.
