@@ -2380,7 +2380,9 @@ Step 1 of backlog item 46, built on the PC only
 The owner asked for other looks of the era beside the current one, to be
 chosen in Display, changing only what is painted (frames, title bars,
 buttons, scroll bars, perhaps icons), never how the desktop works. Two
-alternatives are drawn in `docs/look/themes/` (B, one bit; C, workbench).
+alternatives were drawn in `docs/look/themes/` (B, one bit; C, workbench),
+and three more modern ones at his request (D, sky; E, glacier; F, midnight).
 Open, for the owner: which direction, whether a theme may move the title
 buttons or change sizes, and whether icons belong to a theme. Nothing is
-built. [Journal](journal/2026-11-17-window-themes.md).
+built. Journal: [first round](journal/2026-11-17-window-themes.md),
+[second round](journal/2026-11-17-window-themes-modern.md).
