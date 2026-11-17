@@ -10,6 +10,14 @@ add_compile_options(-Wall -Wextra -Werror -fno-exceptions -fno-rtti)
 # Address and undefined-behaviour checks on everything built for the PC, so a
 # bad read in a decoder fails the tests instead of passing by luck.
 option(HOST_SANITIZE "Build the PC tests with sanitizers" ON)
+# The thread checker instead (it cannot be combined with the other two), for
+# the tests with more than one thread:
+#   cmake -S host -B build/tsan -DHOST_SANITIZE=OFF -DHOST_TSAN=ON
+option(HOST_TSAN "Build the PC tests with the thread sanitizer" OFF)
+if(HOST_TSAN)
+    add_compile_options(-fsanitize=thread -fno-omit-frame-pointer -g)
+    add_link_options(-fsanitize=thread)
+endif()
 if(HOST_SANITIZE)
     add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=all)
     add_link_options(-fsanitize=address,undefined)
@@ -17,8 +25,9 @@ endif()
 
 add_subdirectory(../core core)
 
+find_package(Threads REQUIRED) # the simulated board's services thread
 add_executable(sim sim.cpp)
-target_link_libraries(sim PRIVATE core)
+target_link_libraries(sim PRIVATE core Threads::Threads)
 
 add_executable(test_dbg tests/test_dbg.cpp)
 target_link_libraries(test_dbg PRIVATE core)
@@ -111,6 +120,12 @@ find_package(Threads REQUIRED)
 add_executable(test_msg tests/test_msg.cpp)
 target_link_libraries(test_msg PRIVATE core Threads::Threads)
 add_test(NAME msg COMMAND test_msg)
+
+# The services loop: its rounds and rests, input as messages, and a viewer on
+# a real socket while one thread paints and another serves.
+add_executable(test_services tests/test_services.cpp)
+target_link_libraries(test_services PRIVATE core Threads::Threads)
+add_test(NAME services COMMAND test_services)
 
 # The watchdog's bookkeeping, the crash record and the error screen.
 add_executable(test_crash tests/test_crash.cpp)

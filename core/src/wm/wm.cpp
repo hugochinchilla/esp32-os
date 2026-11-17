@@ -2541,14 +2541,16 @@ void Wm::xor_outline()
     const Rect screen = {0, 0, width_, height_};
     for (const Rect &band : bands) {
         const Rect s = band.intersect(screen);
-        if (damage_fn_ != nullptr && !s.empty()) {
-            damage_fn_(s, damage_context_);
-        }
         for (int y = s.y; y < s.bottom(); y++) {
             uint8_t *row = pixels + y * width_;
             for (int x = s.x + ((s.x + y) & 1); x < s.right(); x += 2) {
                 row[x] ^= 0xFF;
             }
+        }
+        // After the pixels, as update() does: whoever listens may be another
+        // task (the remote screen), reading the screen as soon as it is told.
+        if (damage_fn_ != nullptr && !s.empty()) {
+            damage_fn_(s, damage_context_);
         }
     }
 }

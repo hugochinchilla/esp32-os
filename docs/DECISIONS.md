@@ -1212,9 +1212,9 @@ Journal: `docs/journal/2026-11-16-safe-saves-and-hourglass.md`.
 - Remote screen (compiled and linked for the board, never run there): a VNC
   viewer connects to the board's address, and a browser opens
   `http://<address>/`; the picture is right; keys and mouse work; how long a full-screen update takes and how the desktop feels
-  meanwhile; the VGA picture stays stable with a viewer connected. If
-  updates are slow, the UI loop's 10 ms pace (FreeRTOS at 100 ticks a
-  second) is the first thing to look at.
+  meanwhile; the VGA picture stays stable with a viewer connected. (The
+  remote screen runs on the services task since item 8b; the UI loop's pace
+  no longer limits it.)
 - Finding by name (compiled and linked, never run on the board): the log
   says `answers to chinchilla.local (mDNS)`; `ping chinchilla.local` from
   the laptop answers; `http://chinchilla.local/` opens the viewer; the two
@@ -1356,14 +1356,58 @@ and not yet run on it. The options and the reasons are in
   next timer (`Wm::idle_us()`), one second at most. Serial bytes wake it
   through the serial driver's notification hook. Timers are as exact as
   before: one kernel tick, 10 ms.
-- The network is still looked at by the clock, since nothing can wake the
+- **Replaced 2026-11-17 by the services loop** (next section): the network
+  was still looked at by the clock, since nothing can wake the
   loop for a socket: every 10 ms while a viewer is connected or a web page
   is being sent, every 50 ms while only waiting for a connection, never
   with no port open. The other option was a watcher task (about 3 KB of
   internal RAM); it goes away by itself when the VNC server becomes a task.
   **Confirmed by the owner, 2026-11-16** ("Ok", after asking who would own
   the watcher: nobody does today, the UI task looks at the network itself).
+  For now only: the owner found it odd that the UI looks after the network
+  (a board with no monitor might not run the UI at all) and chose, on a card,
+  a **services loop** as its own backlog item (8b): one task shared by the
+  network services, asleep on all their sockets, that reaches the desktop
+  only by messages. The other options were to build it in the same change or
+  to leave the network in the UI loop.
 - The UI task runs at most 16 messages per round, then timers and painting.
+
+### Chosen for the services loop (2026-11-17, to confirm)
+
+Backlog item 8b, built on a branch, tested on the PC, compiled for the board
+and not yet run on it. The owner chose the services loop itself (above); he
+was away for the rest, so the points below are the agent's and his to
+change. The options and the reasons are in
+`docs/journal/2026-11-17-services-loop.md`.
+
+- One task, `inetd`, runs every network service: the remote screen (VNC) and
+  its web page today, the telnet listener next. 4 KB of stack in internal
+  RAM, priority 4, just under the UI task. It is started after the desktop,
+  and only if a port could be opened. It has a row in the process table
+  (system flag), one row for the one task; `vncd` and `httpd` stay unused
+  names. The other options were a task per service, or leaving the network
+  in the UI loop.
+- It sleeps in `select()` on all the services' sockets (`net::Services`,
+  `net::PosixWait`). Each service says what it waits for (`watch()`); the
+  loop knows nothing of VNC. With nobody connected it does not wake at all.
+  The UI loop no longer looks at the network.
+- The services task never touches windows, timers or the process table. A
+  viewer's keys, mouse and typed text reach the window manager as messages
+  (`msg::PostedInput`); when the queue is full the sender waits a second,
+  then the event is lost and counted. Anything a later service needs from
+  the process table also goes through `msg::post()`.
+- The grid of what was painted, written by the UI task and read by the
+  services task, has a lock (a `ports::Lock`). The screen's pixels have
+  none: a block read while it is being painted is sent again, because the
+  window manager reports a rectangle after painting it. The other option
+  was a lock around painting.
+- While a viewer waits for the screen to change, the services task looks
+  every 10 ms, since the UI task cannot end a `select()`. The other option,
+  an event the UI task signals (ESP-IDF's `eventfd`), is left for later.
+- A service with work left comes straight back; after 40 ms without a sleep
+  the loop rests 10 ms, so lower tasks and the idle task always run.
+- A departing viewer's held buttons are released where that viewer last had
+  the pointer.
 
 ### Chosen for signals and flags (2026-11-16, to confirm)
 
@@ -1440,7 +1484,8 @@ confusing". The story is in `docs/journal/2026-11-16-only-real-tasks.md`.
   manager's timer is the desktop's. Before any program starts the table is
   `desktop` 1.
 - A service gets its row, with the name planned for it, in the change that
-  makes it a task (items 14, 18 and 26).
+  makes it a task (items 14, 18 and 26). The first: the network services
+  became one task with one row, `inetd`, in item 8b (2026-11-17).
 - There is no `init` row either, until init is a real program (item 18).
   **The owner's decision, 2026-11-16**: "make desktop pid 1 for now". The
   first process made is the root of the tree, PID 1, and today that is the

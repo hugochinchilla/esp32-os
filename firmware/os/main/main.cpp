@@ -33,9 +33,11 @@
 #include "core/fs/ini.hpp"
 #include "littlefs_volume.hpp"
 #include "rtos_queue.hpp"
+#include "core/msg/input.hpp"
 #include "core/msg/queue.hpp"
 #include "core/net/posix_tcp.hpp"
 #include "core/net/rfb.hpp"
+#include "core/net/services.hpp"
 #include "core/net/web.hpp"
 #include "core/net/wifi.hpp"
 #include "core/proc/table.hpp"
@@ -97,13 +99,22 @@ volatile int s_scan_count = 0;
 // that could post to it. The UI loop also sleeps on it.
 RtosQueue *s_queue;
 
+// The services task's stack, in bytes. The deepest path is a log line sent
+// from inside a round (256 bytes of text and newlib's formatting).
+constexpr uint32_t kServicesStack = 4096;
+
 // The UI loop, counted for tools/dbg.py memory: how often it went round,
 // and how many of its sleeps were ended by a message or by serial bytes
-// (the others ran out: a timer was due, or it was the network's turn).
+// (the others ran out: a timer was due).
 struct LoopStats {
     uint32_t rounds, woken, no_sleep, delivered, dropped;
 };
 LoopStats s_loop;
+
+// The services task (inetd): the remote screen and its web page, asleep in
+// select() on all their sockets. Its counters for tools/dbg.py memory.
+net::Services *s_services;
+msg::PostedInput *s_remote_input;
 
 // The serial driver's interrupt has put bytes in its buffer: wake the UI
 // task. (The driver offers this call for select(); nothing else here uses
@@ -338,6 +349,15 @@ public:
             static_cast<unsigned>(s_loop.no_sleep), static_cast<unsigned>(s_loop.delivered),
             static_cast<unsigned>(s_loop.dropped), static_cast<unsigned>(s_queue->refused()),
             static_cast<unsigned>(s_queue->most_waiting()), RtosQueue::kDepth);
+        if (s_services != nullptr) {
+            const net::Services::Stats &v = s_services->stats();
+            add("services loop (inetd): %u rounds, %u sleeps (%u ended by the network, %u forced rests), "
+                "%u keys or mouse events lost (queue full)\n",
+                static_cast<unsigned>(v.rounds), static_cast<unsigned>(v.sleeps), static_cast<unsigned>(v.woken),
+                static_cast<unsigned>(v.rests), static_cast<unsigned>(s_remote_input->lost()));
+        } else {
+            add("services loop (inetd): not started (no radio, or no port could be opened)\n");
+        }
 #if CONFIG_FREERTOS_USE_TRACE_FACILITY
         static TaskStatus_t tasks[24];
         const UBaseType_t count = uxTaskGetSystemState(tasks, 24, nullptr);
@@ -549,6 +569,35 @@ void show_boot_screen(int which, void *context)
     }
 }
 
+// The services task, "inetd": every network service in one loop that sleeps
+// in select() on all their sockets (core/net/services.hpp). It never touches
+// the desktop or the process table: a viewer's keys and mouse are posted to
+// the UI task as messages.
+struct ServicesTask {
+    net::Services *services;
+    rfb::Server *remote;
+};
+
+void services_task(void *context)
+{
+    const ServicesTask &my = *static_cast<ServicesTask *>(context);
+    bool viewer = false;
+    while (true) {
+        my.services->round();
+        const rfb::Server::Stats &v = my.remote->stats();
+        if (v.connected != viewer) {
+            viewer = v.connected;
+            if (viewer) {
+                ESP_LOGI(TAG, "VNC viewer connected");
+            } else {
+                ESP_LOGI(TAG, "VNC viewer gone: %u updates, %u rectangles, %u bytes sent",
+                         static_cast<unsigned>(v.updates), static_cast<unsigned>(v.rectangles),
+                         static_cast<unsigned>(v.bytes_sent));
+            }
+        }
+    }
+}
+
 // The UI task: the window manager runs here, and input (for now injected
 // through the debug link) arrives here as events, one at a time.
 void ui_task(void *)
@@ -563,9 +612,9 @@ void ui_task(void *)
     static BootInput input(desktop);
     static EXT_RAM_BSS_ATTR dbg::Protocol protocol(sink, lock, display, pointer, input, system, "esp32-os");
     protocol.set_desktop(&desktop);
-    // The debug link, the remote screen and the web page have no rows in the
-    // process table: they all run on this task. A service gets a row when it
-    // is a task of its own (the owner's rule, 2026-11-16).
+    // The debug link has no row in the process table: it runs on this task.
+    // A service gets a row when it is a task of its own (the owner's rule,
+    // 2026-11-16), as the network services have now: `inetd`, further down.
     // The debug link answers from here on, also during the start-up screens.
     s_protocol = &protocol;
     esp_log_set_vprintf(log_to_debug_link);
@@ -661,7 +710,13 @@ void ui_task(void *)
 
     // The remote screen: a VNC viewer connects to the board's address, port
     // 5900. The port opens now and viewers reach it once Wi-Fi has joined.
-    static EXT_RAM_BSS_ATTR rfb::Server remote(display, pointer, desktop, clock, memory);
+    // It runs on the services task, so the viewer's keys and mouse come to
+    // the desktop as messages, and the list of what was painted, which both
+    // tasks use, has a lock.
+    static msg::PostedInput remote_input(desktop);
+    static EXT_RAM_BSS_ATTR rfb::Server remote(display, pointer, remote_input, clock, memory);
+    static RtosLock damage_lock;
+    remote.set_lock(&damage_lock);
     static net::PosixTcpListener vnc_port;
     desktop.set_damage_listener([](const gfx::Rect &r, void *) { remote.damage(r); }, nullptr);
     if (radio && vnc_port.listen(rfb::kPort)) {
@@ -694,6 +749,26 @@ void ui_task(void *)
     desktop.start();
     const uint32_t first_paint_us = desktop.last_update_us();
 
+    // The network services, after the desktop: one task for all of them. Not
+    // started when there is nothing to listen on. Its stack is in internal
+    // RAM, like every task's here; priority just under this task's, so a
+    // viewer that asks for a lot never holds the desktop back.
+    if (vnc_port.listening() || web_port.listening()) {
+        static net::PosixWait sockets;
+        static net::Services services(sockets, clock);
+        static ServicesTask context = {&services, &remote};
+        services.add(remote);
+        s_remote_input = &remote_input;
+        s_services = &services;
+        if (xTaskCreate(services_task, "inetd", kServicesStack, &context, 4, nullptr) == pdPASS) {
+            proc::table().spawn_service("inetd");
+            ESP_LOGI(TAG, "network services (inetd) started");
+        } else {
+            s_services = nullptr;
+            ESP_LOGE(TAG, "network services: no memory for the task");
+        }
+    }
+
     ESP_LOGI(TAG, "debug link ready at %d baud", CONFIG_ESP_CONSOLE_UART_BAUDRATE);
     ESP_LOGI(TAG, "%s: %d failed, %lld ms (on screen until %u ms after the video started); splash %lld ms; "
              "boot to desktop %lld ms, %lld ms after the video started",
@@ -705,17 +780,15 @@ void ui_task(void *)
 
     // The loop. Each round takes everything that has arrived (serial bytes,
     // messages from other tasks), lets the desktop run its timers and paint,
-    // gives the remote screen its turn, and then sleeps until the next
-    // thing: a message or serial bytes wake it at once; otherwise it sleeps
-    // until the desktop's next timer or the network's next turn. Nothing
-    // wakes it when the network has data, so that is still looked at by the
-    // clock (rfb::Server::poll_interval_us()).
+    // and then sleeps until the next thing: a message or serial bytes wake
+    // it at once; otherwise it sleeps until the desktop's next timer. The
+    // network is not looked at here: that is the services task, and what a
+    // viewer types arrives as messages.
     constexpr uint32_t kLongestSleepUs = 1000000; // a lost wake costs a second, not the desktop
     constexpr uint32_t kShortestSleepUs = 1000;   // the kernel makes it one tick: lower tasks always get a turn
     constexpr int kSerialReads = 16;              // 4 KB of serial bytes per round at most
     static msg::Inbox inbox(*s_queue);
     static uint8_t buffer[256];
-    bool viewer = false;
     // From here on the loop must keep coming round: the watchdog restarts
     // the machine if it is silent for [watchdog] timeout_s (boot.ini).
     watchdog_start("ui", sys::watchdog_limit_ms(boot.watchdog_s));
@@ -735,23 +808,9 @@ void ui_task(void *)
         }
         more |= inbox.deliver(); // what other tasks asked the UI task to do
         desktop.tick();          // timers (caret, key repeat, clock), then any painting
-        remote.poll();           // the VNC viewer: its keys and mouse in, changed screen out
-        if (remote.stats().connected != viewer) {
-            viewer = remote.stats().connected;
-            const rfb::Server::Stats &v = remote.stats();
-            if (viewer) {
-                ESP_LOGI(TAG, "VNC viewer connected");
-            } else {
-                ESP_LOGI(TAG, "VNC viewer gone: %u updates, %u rectangles, %u bytes sent",
-                         static_cast<unsigned>(v.updates), static_cast<unsigned>(v.rectangles),
-                         static_cast<unsigned>(v.bytes_sent));
-            }
-        }
         uint32_t sleep_us = 0;
         if (!more) {
             sleep_us = desktop.idle_us();
-            const uint32_t network_us = remote.poll_interval_us();
-            sleep_us = network_us < sleep_us ? network_us : sleep_us;
             sleep_us = sleep_us > kLongestSleepUs ? kLongestSleepUs : sleep_us;
             sleep_us = sleep_us < kShortestSleepUs ? kShortestSleepUs : sleep_us;
         }

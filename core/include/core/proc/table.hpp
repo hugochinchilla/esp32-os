@@ -89,8 +89,9 @@ public:
     Pid spawn(const char *name, Pid parent, uint8_t flags = 0);
     // A system process started by the machine: a child of the root with the
     // system flag. Only for what really is a task of its own (the desktop is
-    // the UI task). A service polled from the UI loop gets no row: a row
-    // without a task behind it says something that is not true.
+    // the UI task; `inetd` is the network services' task). A service polled
+    // from the UI loop gets no row: a row without a task behind it says
+    // something that is not true.
     Pid spawn_service(const char *name, uint8_t flags = 0) { return spawn(name, kNone, flags | kSystem); }
 
     // Removes the row. Its children are handed to the root, as orphans go to init on Unix. Returns

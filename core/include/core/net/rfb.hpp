@@ -2,11 +2,20 @@
 // for one viewer at a time. An ordinary VNC program sees the screen and
 // sends keys and mouse.
 //
-// It runs on the UI task, a little at each poll(), and never waits for the
-// network. Only what changed is sent: the window manager reports every
-// rectangle it paints (damage()), kept here as a grid of 16x16 cells. The
-// pointer is not in the picture; its shape goes to the viewer, which draws
-// it itself, so moving the mouse costs no screen updates.
+// It runs on the services task (core/net/services.hpp), a little at each
+// poll(), and never waits for the network. Only what changed is sent: the
+// window manager reports every rectangle it paints (damage()), kept here as
+// a grid of 16x16 cells. The pointer is not in the picture; its shape goes
+// to the viewer, which draws it itself, so moving the mouse costs no screen
+// updates.
+//
+// Two tasks meet here. damage() is called by the UI task, everything else by
+// the services task; the grid they share has a lock (set_lock()). The
+// viewer's keys and mouse go to `input`, which on the board is a
+// msg::PostedInput: they reach the window manager as messages. The screen is
+// read while the UI task may be painting it, with no lock: a block caught
+// half painted is sent again, because the window manager reports a
+// rectangle after painting it.
 //
 // No password: anyone on the network can connect (the owner's choice,
 // docs/DECISIONS.md).
@@ -17,6 +26,7 @@
 
 #include "core/gfx/rect.hpp"
 #include "core/net/deflate.hpp"
+#include "core/net/services.hpp"
 #include "core/net/stream.hpp"
 #include "core/ports.hpp"
 
@@ -24,12 +34,12 @@ namespace rfb {
 
 constexpr int kPort = 5900;
 
-class Server {
+class Server : public net::Service {
 public:
     static constexpr int kCell = 16;   // damage is kept per 16x16 pixels
     static constexpr int kBlock = 64;  // sent as rectangles of up to 64x64
     static constexpr int kMaxWidth = 1024, kMaxHeight = 768;
-    static constexpr uint32_t kBudgetUs = 4000; // encoding time per poll()
+    static constexpr uint32_t kBudgetUs = 4000; // encoding time per poll(), then a look at the sockets
 
     struct Stats {
         uint32_t connections;
@@ -51,19 +61,26 @@ public:
     // WebSocket); nullptr while there is none.
     static constexpr int kListeners = 2;
     void set_listener(net::Listener *listener, int which = 0) { listeners_[which] = listener; }
-    // A part of the screen was painted.
+    // Guards the damage grid, for when damage() and poll() are called by
+    // different tasks. Without one they must be the same task.
+    void set_lock(ports::Lock *lock) { lock_ = lock; }
+    // A part of the screen was painted. The one call here for another task
+    // than the one that polls.
     void damage(const gfx::Rect &r);
     // Takes new viewers, reads what the viewer sent, sends what fits.
-    void poll();
-    // How long the UI loop may leave before the next poll(), in µs. Nothing
-    // wakes the loop when the network has something, so it comes back by
-    // the clock: often while a viewer is connected or a web page is on its
-    // way, seldom while it only waits for someone to connect, and never
-    // (kNever) when there is nowhere to connect to.
+    void poll() override;
+    // What the next poll() waits for, and how long the loop may sleep if
+    // none of it happens. With sockets (net::PosixTcpListener) it sleeps
+    // until one has something: for ever with no viewer, and with a viewer
+    // that has not asked for anything. Two things have no socket to wake
+    // the loop and are looked at by the clock instead: fresh damage for a
+    // viewer that is waiting for it (kBusyPollUs), and listeners or streams
+    // that cannot be watched (as before the services loop: kBusyPollUs with
+    // a viewer or a busy listener, kListenPollUs otherwise).
     static constexpr uint32_t kBusyPollUs = 10000;
     static constexpr uint32_t kListenPollUs = 50000;
-    static constexpr uint32_t kNever = 0xFFFFFFFF;
-    uint32_t poll_interval_us() const;
+    static constexpr uint32_t kNever = net::kNever;
+    uint32_t watch(net::Watch &watch) override;
     const Stats &stats() const { return stats_; }
 
 private:
@@ -99,6 +116,9 @@ private:
     size_t encode_tile(const gfx::Rect &r, uint8_t *out) const;
     gfx::Rect block_damage(const uint8_t *grid, int index) const;
     uint32_t shape_stamp() const;
+    void mark(const gfx::Rect &r); // with the lock held
+    bool anything_dirty();
+    void collect(bool on);         // empties the grid; damage() counts from now on, or not
 
     ports::Display &display_;
     ports::Pointer &pointer_;
@@ -106,6 +126,7 @@ private:
     ports::Clock &clock_;
     ports::Memory &memory_;
     net::Listener *listeners_[kListeners] = {};
+    ports::Lock *lock_ = nullptr;
     net::Stream *stream_ = nullptr;
     State state_ = State::Idle;
     int minor_ = 8; // protocol version 3.x agreed
@@ -117,6 +138,7 @@ private:
     uint8_t dirty_[kCells] = {};   // changed since the last update began
     uint8_t sending_[kCells] = {}; // the update being sent
     bool any_dirty_ = false;
+    bool collecting_ = false; // a viewer is past its greeting: damage() counts
 
     // The viewer's wishes.
     Format format_ = {};
@@ -138,6 +160,7 @@ private:
     uint32_t skip_ = 0;          // bytes of a long message still to pass over
     uint32_t encodings_left_ = 0;
     uint8_t buttons_ = 0;
+    int16_t last_x_ = 0, last_y_ = 0; // where the viewer last put the pointer
     uint8_t wheel_ = 0; // wheel bits of the last pointer event
     uint8_t mods_ = 0; // bit 0 shift, bit 1 ctrl, bit 2 alt
     struct Held {
@@ -152,6 +175,10 @@ private:
     uint8_t *out_ = nullptr;
     size_t out_size_ = 0, out_sent_ = 0;
     uint8_t *tile_ = nullptr;
+    // The pointer's shape as it was read for sending. The UI task may be
+    // changing the shape meanwhile; what is remembered as sent is the stamp
+    // of this copy, so a copy caught half changed is followed by a good one.
+    video::PointerShape shape_ = {};
     net::Deflater deflater_;
 };
 
