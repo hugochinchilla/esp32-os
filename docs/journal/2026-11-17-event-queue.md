@@ -143,7 +143,8 @@ down to four pixels.
 
 ## Tested
 
-On the PC only. The firmware's state is in "Not tested" below.
+On the PC, and the firmware compiled and linked in the cloud container
+(ESP-IDF v5.5; it says that it compiles, not that it runs).
 
 - `test_prog`, with real threads: nothing waits for a program that
   answers; kept, dropped and latest while it hangs; the order when it is
