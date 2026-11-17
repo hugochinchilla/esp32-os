@@ -62,6 +62,8 @@ public:
     void set_listener(Listener *listener) { listener_ = listener; }
 
     void poll() override;
+    // Whoever is connected is hung up on and their session ended.
+    void stop() override;
     uint32_t watch(Watch &watch) override;
 
     bool connected() const { return stream_ != nullptr; }

@@ -53,6 +53,7 @@ public:
     }
 
     void poll() override;
+    void stop() override { hang_up(); } // an update under way is abandoned
     uint32_t watch(Watch &watch) override;
 
     bool busy() const { return stream_ != nullptr; }

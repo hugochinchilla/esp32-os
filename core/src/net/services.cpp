@@ -11,8 +11,17 @@ bool Services::add(Service &service)
     return true;
 }
 
-void Services::round()
+bool Services::round()
 {
+    if (stop_.load()) {
+        if (!stopped_.load()) {
+            for (int i = 0; i < count_; i++) {
+                services_[i]->stop();
+            }
+            stopped_ = true;
+        }
+        return false;
+    }
     for (int i = 0; i < count_; i++) {
         services_[i]->poll();
     }
@@ -30,7 +39,7 @@ void Services::round()
             working_since_ = now;
         }
         if (now - working_since_ < kWorkUs) {
-            return;
+            return true;
         }
         // A rest is a rest: with nothing watched, nothing ends it early.
         wait_.clear();
@@ -39,7 +48,8 @@ void Services::round()
     }
     working_ = false;
     stats_.sleeps++;
-    stats_.woken += wait_.sleep(sleep_us) ? 1 : 0;
+    stats_.woken += wait_.sleep(sleep_us < longest_us_ ? sleep_us : longest_us_) ? 1 : 0;
+    return true;
 }
 
 } // namespace net

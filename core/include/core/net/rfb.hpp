@@ -71,6 +71,12 @@ public:
     void damage(const gfx::Rect &r);
     // Takes new viewers, reads what the viewer sent, sends what fits.
     void poll() override;
+    // The viewer is let go and its memory given back.
+    void stop() override
+    {
+        drop();
+        free_buffers();
+    }
     // What the next poll() waits for, and how long the loop may sleep if
     // none of it happens. With sockets (net::PosixTcpListener) it sleeps
     // until one has something: for ever with no viewer, and with a viewer

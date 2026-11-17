@@ -342,11 +342,27 @@ int main(int argc, char **argv)
                     nullptr);
                 services.add(update);
             }
-            proc::table().spawn_service("inetd");
+            static proc::Pid inetd_pid, telnetd_pid;
+            inetd_pid = proc::table().spawn_service("inetd");
+            telnetd_pid = proc::table().find_by_name("telnetd");
+            // Stoppable, as on the board: End Task or kill on inetd.
+            services.set_longest_sleep(200000);
+            proc::table().set_stop(
+                inetd_pid, [](proc::Pid, proc::Signal, void *) { services.request_stop(); }, nullptr);
             std::thread([] {
-                while (true) {
-                    services.round();
+                while (services.round()) {
                 }
+                vnc_port.stop();
+                web_port.stop();
+                telnet_port.stop();
+                update_port.stop();
+                msg::post(
+                    proc::kNone,
+                    [](const msg::Message &) {
+                        proc::table().exit(inetd_pid);
+                        proc::table().exit(telnetd_pid);
+                    },
+                    nullptr, 0, 0, 1000);
             }).detach();
             return true;
         },

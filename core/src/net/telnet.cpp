@@ -27,7 +27,9 @@ constexpr size_t kEchoRoom = 256;
 
 Telnet::Telnet(const sh::Env &env, const TelnetKit &kit) : env_(env), kit_(kit) {}
 
-Telnet::~Telnet()
+Telnet::~Telnet() { stop(); }
+
+void Telnet::stop()
 {
     if (stream_ != nullptr) {
         lost();

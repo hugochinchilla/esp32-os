@@ -399,8 +399,13 @@ bool Wm::deliver_signals()
             continue;
         }
         acted = true;
+        const bool service = !p->is(proc::kWindowed);
         const uint8_t bits = procs_->take_signals(pids[i]);
-        if (bits & static_cast<uint8_t>(proc::Signal::Kill)) {
+        if (service) {
+            // No windows to close: its own stop function ends it.
+            procs_->stop_service(pids[i], (bits & static_cast<uint8_t>(proc::Signal::Kill)) != 0 ? proc::Signal::Kill
+                                                                                                    : proc::Signal::Term);
+        } else if (bits & static_cast<uint8_t>(proc::Signal::Kill)) {
             end_process(pids[i]); // a TERM sent with it no longer matters
         } else if (bits & static_cast<uint8_t>(proc::Signal::Term)) {
             ask_to_close(pids[i]);

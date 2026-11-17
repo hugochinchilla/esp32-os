@@ -61,6 +61,9 @@ enum class Sent : uint8_t {
 // Tells a process's jobs to stop early (see Table::set_stop_jobs).
 using StopJobsFn = void (*)(Pid pid, void *context);
 
+// Ends a service: a process without windows (see Table::set_stop).
+using StopFn = void (*)(Pid pid, Signal signal, void *context);
+
 // Starts a program again (see Table::set_restart).
 using StartFn = void (*)(void *context);
 
@@ -84,6 +87,8 @@ struct Process {
                           // Memory port for, and the stacks of its jobs
     uint32_t born = 0;    // the table's clock when it was made (the brake on restarts)
     char name[kNameSize] = "";
+    StopFn stop = nullptr;     // a service that can be ended (set_stop)
+    void *stop_context = nullptr;
     StartFn restart = nullptr; // for kRespawn
     void *restart_context = nullptr;
 
@@ -130,6 +135,15 @@ public:
     // which are cleared. signals_waiting() says whether any row has some.
     uint8_t take_signals(Pid pid);
     bool signals_waiting() const { return waiting_ != 0; }
+
+    // Services (backlog item 5b). A process without windows can be
+    // signalled only once it has a stop function: the code that really ends
+    // what the row stands for. Whoever acts on signals calls stop_service()
+    // at a safe point; the function runs on the UI task, may take its time
+    // to finish elsewhere, and removes the row (exit()) when the service
+    // has ended. TERM and KILL are the same to most services.
+    void set_stop(Pid pid, StopFn stop, void *context);
+    bool stop_service(Pid pid, Signal signal);
 
     // Background jobs. A process with jobs running is not ended: whoever
     // acts on signals leaves a KILL waiting on the row, and a window program

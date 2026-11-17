@@ -642,6 +642,7 @@ void show_boot_screen(int which, void *context)
 struct ServicesTask {
     net::Services *services;
     rfb::Server *remote;
+    void (*ended)(); // after the loop has been stopped: closes the ports, tells the UI task
 };
 
 void ConsoleOut::write(const uint8_t *data, size_t size)
@@ -655,8 +656,7 @@ void services_task(void *context)
 {
     const ServicesTask &my = *static_cast<ServicesTask *>(context);
     bool viewer = false;
-    while (true) {
-        my.services->round();
+    while (my.services->round()) {
         const rfb::Server::Stats &v = my.remote->stats();
         if (v.connected != viewer) {
             viewer = v.connected;
@@ -669,6 +669,10 @@ void services_task(void *context)
             }
         }
     }
+    // Stopped (End Task or kill on inetd): every service has let go of what
+    // it had. The ports are closed, the rows go, and so does this task.
+    my.ended();
+    vTaskDelete(nullptr);
 }
 
 // The UI task: the window manager runs here, and input (for now injected
@@ -921,7 +925,25 @@ void ui_task(void *)
             if (vnc_port.listening() || web_port.listening() || telnet != nullptr || update != nullptr) {
                 static net::PosixWait sockets;
                 static net::Services services(sockets, clock);
-                static ServicesTask context = {&services, &remote};
+                static proc::Pid inetd_pid = proc::kNone, telnetd_pid = proc::kNone;
+                static ServicesTask context = {&services, &remote, [] {
+                                                   vnc_port.stop();
+                                                   web_port.stop();
+                                                   telnet_port.stop();
+                                                   update_port.stop();
+                                                   msg::post(
+                                                       proc::kNone,
+                                                       [](const msg::Message &) {
+                                                           proc::table().exit(inetd_pid);
+                                                           proc::table().exit(telnetd_pid);
+                                                           ESP_LOGW(TAG, "network services (inetd) ended: the ports are closed");
+                                                       },
+                                                       nullptr, 0, 0, 1000);
+                                               }};
+                telnetd_pid = proc::table().find_by_name("telnetd");
+                // Stoppable (backlog 5b): the loop looks once a second
+                // whether it has been told to end.
+                services.set_longest_sleep(1000000);
                 services.add(remote);
                 if (telnet != nullptr) {
                     services.add(*telnet);
@@ -933,7 +955,9 @@ void ui_task(void *)
                 s_services = &services;
                 if (xTaskCreate(services_task, "inetd", kServicesStack, &context, rtos_priority(ports::Priority::Normal), nullptr) ==
                     pdPASS) {
-                    proc::table().spawn_service("inetd");
+                    inetd_pid = proc::table().spawn_service("inetd");
+                    proc::table().set_stop(
+                        inetd_pid, [](proc::Pid, proc::Signal, void *) { s_services->request_stop(); }, nullptr);
                     started = true;
                 } else {
                     s_services = nullptr;

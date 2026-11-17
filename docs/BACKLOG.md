@@ -23,7 +23,7 @@ board or the merge), `done`.
 | 3 | Per-process processor time and memory. Task Manager shows PID, time and memory columns | M | 1, 2 | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-process-figures.md) |
 | 4 | System, protected and respawn flags | S | 2 | | done (checked on the board 2026-11-16). [Journal](journal/2026-11-16-signals-and-flags.md) |
 | 5 | TERM and KILL for window programs. End Task asks politely, then offers force | S | 2 | | done (checked on the board 2026-11-16). [Journal](journal/2026-11-16-signals-and-flags.md) |
-| 5b | TERM and KILL for services: each gets a stop function, so ending one really stops it. Waits until a service is a real task with a row (their label-only rows were removed, [journal](journal/2026-11-16-only-real-tasks.md)) | S | 5, 18 | Yes | todo |
+| 5b | TERM and KILL for services: each gets a stop function, so ending one really stops it. Waits until a service is a real task with a row (their label-only rows were removed, [journal](journal/2026-11-16-only-real-tasks.md)) | S | 5, 18 | Yes | on a branch (`claude/project-thread-8q7ksu`): `inetd` can be ended (End Task, `kill`); PC tests pass, firmware compiles, not run on the board. [Journal](journal/2026-11-17-stopping-services.md) |
 | 6 | Atomic saves: temporary file, then rename | S | | Yes | done (checked on the board 2026-11-16) |
 | 6b | Hourglass pointer while a program makes the user wait, first of all during a save (own art) | S | | Yes | done (checked on the board 2026-11-16) |
 | 7 | Watchdog, crash record, and an error screen on the next start | M | 2 | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-watchdog.md) |
