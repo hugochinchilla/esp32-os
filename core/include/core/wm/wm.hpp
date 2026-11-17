@@ -182,6 +182,20 @@ public:
                        void *context = nullptr);
     Rect tray_icon_rect() const; // empty without an icon
 
+    // Quick launch: small icons between the Start button and the window
+    // buttons, each of which does one thing when clicked (the desktop sets
+    // them to open a program). The array is copied; at most kMaxQuick, none
+    // by default. `click` runs as the desktop's process.
+    struct QuickLaunch {
+        const gfx::Bitmap *icon; // 16x16
+        void (*click)(void *context);
+        void *context;
+    };
+    static constexpr int kMaxQuick = 4;
+    void set_quick_launch(const QuickLaunch *items, int count);
+    int quick_launch_count() const { return quick_count_; }
+    Rect quick_launch_rect(int index) const;
+
     // Pop-up menus. open_menu() opens a free-standing one at (x, y).
     void open_menu(Menu &menu, int x, int y);
     void open_start_menu();
@@ -375,6 +389,9 @@ private:
     int icon_count_ = 0;
     int selected_icon_ = -1;
 
+    QuickLaunch quick_[kMaxQuick] = {};
+    int quick_count_ = 0;
+    int buttons_x() const; // where the window buttons start
     const gfx::Bitmap *tray_icon_ = nullptr;
     void (*tray_click_)(void *context) = nullptr;
     void *tray_context_ = nullptr;

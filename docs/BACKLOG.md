@@ -63,7 +63,7 @@ at the same time.
 | | **The look** | | | | |
 | 28 | Taskbar without the dead quick-launch icons; Back and Up with their own icons in the File manager | S | | | done (checked on the board 2026-11-16). [Journal](journal/2026-11-16-icons.md) |
 | 29 | Refined icons for every program, at 32x32 and 16x16. The owner picks from drawn proposals | M | | | done (checked on the board 2026-11-17). [Journal](journal/2026-11-16-icon-proposals.md) |
-| 30 | Quick-launch icons by the Start button that launch something | S | 29 | | todo |
+| 30 | Quick-launch icons by the Start button that launch something | S | 29 | | on a branch (`claude/project-thread-8q7ksu`): File manager, Editor, Terminal; PC tests pass, firmware compiles, not run on the board. [Journal](journal/2026-11-17-quick-launch.md) |
 | 31 | Desktop background: 16 colours and 10 patterns, chosen in a Display dialog (Start > Settings, or a right click on the desktop) | S | | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-desktop-background.md) |
 | | **Memory** | | | | |
 | 35 | Our static objects in external RAM: the core's and the firmware's big ones, about 121 KB out of internal RAM | S | | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-statics-in-psram.md) |

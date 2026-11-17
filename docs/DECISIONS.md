@@ -655,6 +655,8 @@ practical. Each is easy to change.
   2026-11-16 at the owner's request: the taskbar shows only what works
   (Start, the window buttons, the Wi-Fi signal icon, the clock). They come
   back when they launch something. The window buttons start at x = 72.
+  They are back with item 30 ("Chosen for the quick-launch icons"), and the
+  window buttons start after them.
 - ~~The About window's OK button has no extra dark "default button"
   frame~~: replaced in the shell milestone, default buttons now have it.
 
@@ -1714,6 +1716,21 @@ the agent under the owner's "dejo a tu criterio" of 2026-11-16.
 - **Shown as `2026-11-17 14:05`**: a first column in `dir` and `ls -l`, and
   in the File manager's status bar for the chosen file. `date` prints the
   day and time. Left for later: a Details view in the File manager.
+
+### Chosen for the quick-launch icons (2026-11-17, to confirm)
+
+Backlog item 30. Journal: `docs/journal/2026-11-17-quick-launch.md`. Chosen
+by the agent under the owner's "dejo a tu criterio" of 2026-11-16.
+
+- **Three icons by the Start button: File manager, Editor, Terminal.** One
+  click starts the program, as from the Start menu. Rejected for now: "show
+  the desktop" (there is no minimise-all), and a list the user edits (needs
+  shortcuts as files).
+- **They behave like the other taskbar buttons**: flat, pressed in while
+  held, acting on release. No raised edge under the pointer, no tooltip.
+- **The window manager draws them; the desktop says what they are**
+  (`Wm::set_quick_launch`, four at most). The window buttons start after
+  the last one.
 
 ### Chosen for background jobs (2026-11-17, to confirm)
 

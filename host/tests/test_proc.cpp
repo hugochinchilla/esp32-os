@@ -930,6 +930,35 @@ void test_shell()
     shell::open_network();
     CHECK(process("Network") != nullptr && desktop.active()->owner() == process("Network")->pid);
     close_all();
+
+    // The quick-launch icons by the Start button: File manager, Editor,
+    // Terminal. One click starts the program, as a child of the desktop,
+    // like the Start menu does. The Editor and the Terminal open another
+    // copy each time; the File manager comes to the front.
+    CHECK(desktop.quick_launch_count() == 3 && t.count() == 1);
+    const auto quick = [&](int i) {
+        const wm::Rect r = desktop.quick_launch_rect(i);
+        desktop.mouse({true, static_cast<int16_t>(r.x + 8), static_cast<int16_t>(r.y + 8), 0, 0});
+        desktop.mouse({true, static_cast<int16_t>(r.x + 8), static_cast<int16_t>(r.y + 8), 1, 0});
+        desktop.mouse({true, static_cast<int16_t>(r.x + 8), static_cast<int16_t>(r.y + 8), 0, 0});
+        wait(500000); // never a double click
+    };
+    quick(0);
+    CHECK(process("File manager") != nullptr && process("File manager")->parent == desk_pid &&
+          strcmp(title(), "My Board") == 0);
+    quick(1);
+    CHECK(process("Editor") != nullptr && process("Editor")->parent == desk_pid && t.count() == 3);
+    quick(1);
+    CHECK(t.count() == 4 && desktop.window_count() == 3);
+    quick(0);
+    CHECK(t.count() == 4 && strcmp(title(), "My Board") == 0);
+    quick(2);
+    CHECK(process("Terminal") != nullptr && process("Terminal")->parent == desk_pid &&
+          desktop.active()->owner() == process("Terminal")->pid);
+    close_all();
+    wait(10000);
+    CHECK(t.count() == 1);
+
     key(wm::key::Escape, kCtrl);
     key(wm::key::Up);
     key(wm::key::Enter);

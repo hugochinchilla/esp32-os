@@ -35,7 +35,12 @@ const char *const kArrowGlyph[] = {"X   ", "XX  ", "XXX ", "XXXX", "XXX ", "XX  
 
 // Taskbar layout (tools/mockup/desktop.py).
 constexpr int kStartW = 58;
-constexpr int kButtonsX = 72; // first window button, after a groove
+constexpr int kButtonsX = 72; // first window button, after a groove (further right with quick-launch icons)
+constexpr int kQuickW = 22;   // a quick-launch icon: 16x16 in a 22x22 button with no edge
+// What taskbar_index_at() and the capture call the quick-launch icons, so
+// they are held and let go like the other buttons of the taskbar: -10, -11...
+constexpr int kQuickIndex = -10;
+constexpr int kNothing = -2;
 constexpr int kButtonW = 150, kButtonGap = 3;
 constexpr int kClockW = 60;
 constexpr int kTrayW = 20; // a tray icon, left of the clock
@@ -762,19 +767,43 @@ Window *Wm::taskbar_window(int index) const
     return nullptr;
 }
 
+int Wm::buttons_x() const { return kButtonsX + (quick_count_ > 0 ? quick_count_ * kQuickW + 6 : 0); }
+
+Rect Wm::quick_launch_rect(int index) const
+{
+    if (index < 0 || index >= quick_count_) {
+        return {};
+    }
+    return {kButtonsX + index * kQuickW, height_ - kTaskbarHeight + 4, kQuickW, 22};
+}
+
+void Wm::set_quick_launch(const QuickLaunch *items, int count)
+{
+    quick_count_ = 0;
+    for (int i = 0; i < count && quick_count_ < kMaxQuick; i++) {
+        if (items[i].icon != nullptr && items[i].click != nullptr) {
+            quick_[quick_count_++] = items[i];
+        }
+    }
+    invalidate(taskbar());
+}
+
 Rect Wm::taskbar_button(int index) const
 {
     const int ty = height_ - kTaskbarHeight;
+    if (index <= kQuickIndex) {
+        return quick_launch_rect(kQuickIndex - index);
+    }
     if (index < 0) {
         return {2, ty + 4, kStartW, 22};
     }
-    const int room = width_ - kClockW - 6 - kButtonsX - (tray_icon_ != nullptr ? kTrayW : 0);
+    const int room = width_ - kClockW - 6 - buttons_x() - (tray_icon_ != nullptr ? kTrayW : 0);
     const int shown = taskbar_count();
     int w = kButtonW;
     if (shown > 0 && shown * (kButtonW + kButtonGap) > room) {
         w = room / shown - kButtonGap;
     }
-    return {kButtonsX + index * (w + kButtonGap), ty + 4, w, 22};
+    return {buttons_x() + index * (w + kButtonGap), ty + 4, w, 22};
 }
 
 int Wm::taskbar_index_at(int x, int y) const
@@ -782,12 +811,17 @@ int Wm::taskbar_index_at(int x, int y) const
     if (taskbar_button(-1).contains(x, y)) {
         return -1;
     }
+    for (int i = 0; i < quick_count_; i++) {
+        if (quick_launch_rect(i).contains(x, y)) {
+            return kQuickIndex - i;
+        }
+    }
     for (int i = 0; i < taskbar_count(); i++) {
         if (taskbar_button(i).contains(x, y)) {
             return i;
         }
     }
-    return -2; // nothing
+    return kNothing;
 }
 
 Rect Wm::desktop_icon_rect(int index) const
@@ -1133,7 +1167,7 @@ void Wm::on_press()
         if (index == -1 && start_menu_ != nullptr) {
             open_start_menu();
             capture_ = Capture::Menu;
-        } else if (index >= -1) {
+        } else if (index != kNothing) {
             capture_ = Capture::Taskbar;
             captured_index_ = index;
             captured_inside_ = true;
@@ -1617,6 +1651,16 @@ void Wm::lock_changed(Window &w)
 
 void Wm::taskbar_click(int index)
 {
+    if (index <= kQuickIndex) {
+        // A quick-launch icon: the desktop starts something, as itself.
+        const int which = kQuickIndex - index;
+        if (which < quick_count_) {
+            const QuickLaunch item = quick_[which];
+            const proc::Scope as(procs_, desktop_pid_);
+            item.click(item.context);
+        }
+        return;
+    }
     Window *tw = index >= 0 ? taskbar_window(index) : nullptr;
     if (tw == nullptr) {
         return;
@@ -2295,10 +2339,22 @@ void Wm::paint_taskbar(const RectList &clip)
     c.blit(gfx::mascot_16(), 5 + sd, ty + 7 + sd);
     c.text(25 + sd, ty + 9 + sd, "Start", gfx::kBlack, true);
 
-    // A groove, then the window buttons. The quick-launch icons that stood
-    // here did nothing and were taken out; they come back when they work.
+    // A groove, then the quick-launch icons if the desktop has set any
+    // (flat, pressed in while held), another groove, then the window buttons.
     c.vline(kButtonsX - 4, ty + 5, 20, gfx::kDarkGrey);
     c.vline(kButtonsX - 3, ty + 5, 20, gfx::kWhite);
+    for (int i = 0; i < quick_count_; i++) {
+        const Rect r = quick_launch_rect(i);
+        const bool held = capture_ == Capture::Taskbar && captured_index_ == kQuickIndex - i && captured_inside_;
+        if (held) {
+            c.edge(r, gfx::kDarkGrey, gfx::kWhite);
+        }
+        c.blit(*quick_[i].icon, r.x + 3 + (held ? 1 : 0), r.y + 3 + (held ? 1 : 0));
+    }
+    if (quick_count_ > 0) {
+        c.vline(buttons_x() - 4, ty + 5, 20, gfx::kDarkGrey);
+        c.vline(buttons_x() - 3, ty + 5, 20, gfx::kWhite);
+    }
 
     // One button per window, in the order they were opened. A window whose
     // dialog is open shows pressed while the dialog has the focus.
