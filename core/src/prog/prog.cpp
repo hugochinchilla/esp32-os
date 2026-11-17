@@ -5,6 +5,7 @@
 namespace prog {
 
 thread_local void *t_slot = nullptr;
+thread_local int t_depth = 0;
 
 Runner::Runner(proc::Table &procs) : procs_(procs)
 {
@@ -195,8 +196,9 @@ bool Runner::call(proc::Pid pid, proc::CallFn fn, void *context, size_t size)
         owner_.store(before);
         if (!in_time) {
             wait_out_of_calls(*s);
-            // Whatever it is doing, it does with the time nobody else wants.
-            tasks_->set_priority(s->task, ports::Priority::Low);
+            // Whatever it is doing, it does with the time nobody else
+            // wants, taking turns with the kernel's idle tasks.
+            tasks_->set_priority(s->task, ports::Priority::Idle);
         }
     }
     if (!in_time) {
@@ -267,16 +269,17 @@ void Runner::serve()
     }
 }
 
+// The outermost OS call of a program's task (InCall counts the ones inside).
+// Store, then look: the caller that gives up stores the owner, then looks
+// at in_call, so one of the two always sees the other.
 void Runner::enter(void *slot)
 {
     Slot *s = static_cast<Slot *>(slot);
-    if (s->in_call.fetch_add(1) > 0) {
-        return; // a call inside a call
-    }
     Runner &r = *s->runner;
+    s->in_call.store(1);
     while (r.owner_.load() != s) {
         // Late, and the desktop has gone on: not now.
-        s->in_call.fetch_sub(1);
+        s->in_call.store(0);
         if (s->quit.load()) {
             // Its process was ended while it hung, on a machine that cannot
             // take a task away: it never gets in again.
@@ -288,12 +291,12 @@ void Runner::enter(void *slot)
             }
             s->kit.go->wait(5);
         }
-        s->in_call.fetch_add(1);
+        s->in_call.store(1);
     }
     s->wants.store(false);
 }
 
-void Runner::leave(void *slot) { static_cast<Slot *>(slot)->in_call.fetch_sub(1); }
+void Runner::leave(void *slot) { static_cast<Slot *>(slot)->in_call.store(0); }
 
 // The task of a process that is not in the middle of anything: told to
 // leave, waited for, given back.

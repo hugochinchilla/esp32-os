@@ -55,8 +55,10 @@ using TaskFn = void (*)(void *context);
 // Low: only when the desktop and the Normal tasks are waiting. Normal: just
 // under the desktop, which is never kept from an event. High: level with the
 // desktop, taking turns with it. All three are below the video, Wi-Fi and
-// the network stack.
-enum class Priority : uint8_t { Low, Normal, High };
+// the network stack. Idle: level with the kernel's own idle tasks, for a
+// program that has stopped answering: it may spin for ever, and the idle
+// tasks must still get their turn (on the board they feed a watchdog).
+enum class Priority : uint8_t { Low, Normal, High, Idle };
 // What names a started task to the adapter that started it.
 using TaskId = void *;
 class Tasks {

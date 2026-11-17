@@ -130,7 +130,7 @@ private:
         std::atomic<bool> quit{false}; // the process has ended: the task goes at the next safe point
         std::atomic<bool> gone{false}; // its task has left its loop for good
         std::atomic<int> state{Idle};
-        std::atomic<int> in_call{0};    // OS calls its task is inside (nested ones counted)
+        std::atomic<int> in_call{0};    // 1 while its task is inside an OS call
         std::atomic<bool> wants{false}; // late, and waiting in enter()
         alignas(std::max_align_t) unsigned char room[proc::kCallRoom];
     };
@@ -166,6 +166,9 @@ Runner &runner();
 // every other task. Thread-local, so that asking costs next to nothing:
 // every OS call asks, twice.
 extern thread_local void *t_slot;
+// OS calls the task is inside, one in another: only the outermost one
+// goes through enter() and leave().
+extern thread_local int t_depth;
 
 // For the first line of an OS call: enter() now, leave() at the end. On
 // any task but a program's own it is one test of a thread-local pointer.
@@ -173,13 +176,13 @@ class InCall {
 public:
     InCall() : slot_(t_slot)
     {
-        if (slot_ != nullptr) {
+        if (slot_ != nullptr && t_depth++ == 0) {
             Runner::enter(slot_);
         }
     }
     ~InCall()
     {
-        if (slot_ != nullptr) {
+        if (slot_ != nullptr && --t_depth == 0) {
             Runner::leave(slot_);
         }
     }

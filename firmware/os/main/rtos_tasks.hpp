@@ -17,6 +17,8 @@
 inline UBaseType_t rtos_priority(ports::Priority p)
 {
     switch (p) {
+    case ports::Priority::Idle:
+        return tskIDLE_PRIORITY;
     case ports::Priority::Low:
         return 3;
     case ports::Priority::High:

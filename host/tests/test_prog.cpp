@@ -93,7 +93,7 @@ void test_late()
         CHECK(!proc::call_as(&procs, a, slow));
         CHECK(slow.out == 0); // nothing is copied back from a call that did not finish
         CHECK(runner.late(a) && news.stopped == 1 && news.last == a && procs.current() == proc::kNone);
-        CHECK(tasks.last_priority == ports::Priority::Low); // it has the time nobody else wants
+        CHECK(tasks.last_priority == ports::Priority::Idle); // it has the time nobody else wants
         CHECK(!runner.waiting());
     }
     // While it is late no call is made for it: not there, and not here.

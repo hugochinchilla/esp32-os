@@ -255,3 +255,40 @@ stack: about 2.7 KB used in every path. What failed:
 PC tests could not have shown any of the three: none exists without
 FreeRTOS, two cores and a real paint's worth of calls. A loop of 400
 launches and closes of Culebra on threads leaked nothing.
+
+## On the board again: the leak fixed, the refills not (2026-11-17)
+
+fa0e885 on the board. The leak is gone (15 rounds, nothing left; the
+guess about the delete was right). The three ways of ending a hung
+Culebra work; a 300 KB Editor save while Culebra plays is right; at
+4 KB the stack keeps 1.4 to 1.5 KB unused. Play costs 91 ms per 10 s
+over an idle desktop, against 246 before the fix, 70 with the first
+step and about 61 on `main`; a repaint with Culebra open 27.0 ms
+against 25.9 and 25.2.
+
+Still failing: a refill missed about every 5 s while Culebra hangs,
+though its task had dropped to priority 3. The board thread's reading:
+the misses come from the hung state, not from the spinner's time.
+
+The cause now believed (from the firmware's configuration; to be
+confirmed on the board): ESP-IDF's own task watchdog watches the idle
+task of each core with a timeout of **5 s**
+(`CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0/1`, `TIMEOUT_S=5`, no
+panic). A task that spins at any priority above idle keeps one core's
+idle task from ever running; every 5 s the watchdog fires and prints
+its report from an interrupt, and that is the refill. Priority 3 could
+not help. A late program now goes to the idle priority itself
+(`ports::Priority::Idle`), where the kernel gives it and the idle task
+turns, so the idle task is fed. A program that is only slow still gets
+about half of an idle core.
+
+The same would happen to a job that keeps a core busy for more than
+5 s at Low priority (none does today; the longest save takes 4 s and
+sleeps on the disk). Noted, not changed.
+
+The cost again: an OS call made inside another (a draw call that asks
+for a text's width) no longer goes through `enter()` and `leave()`:
+the task counts its depth in a thread-local, and only the outermost
+call stores the flag the UI task looks at. Whether what is left over
+the first step (it was 21 ms per 10 s of play) is acceptable is the
+owner's to say once measured.

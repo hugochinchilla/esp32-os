@@ -2256,6 +2256,9 @@ The rest is the agent's, to confirm:
   Rejected: a mutex held by the UI task whenever it runs.
 - What goes to a program goes by copy, never as a pointer into the
   caller's stack.
+- A late program's task runs at the idle priority until it answers: it
+  may spin for ever, and the kernel's idle tasks must still get their
+  turn (ESP-IDF's task watchdog watches them, 5 s).
 - A late program's task is taken away when it is ended; it is outside
   every OS call by then, so it holds no lock.
 - Not yet: the queue of events (what a late program missed is lost),
