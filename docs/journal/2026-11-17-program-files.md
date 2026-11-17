@@ -326,3 +326,28 @@ Tested: the gate passes on the PC; the firmware compiles and links (three
 program files, no name missing). **Not run on the board**: neither the
 games with this fix nor a program reading a variable of the system have
 run there.
+
+## On the board (2026-11-17, 74fef5e)
+
+App-flashed on the BIOS layout. Passed:
+
+- Build: 322 names exported, three program files checked, none missing;
+  `C:\Programs` held `hello.app`, `culebra.app` and `cactus_patch.app` and
+  Start > Programs listed all three with their pictures.
+- Culebra loads and plays (arrows, pause), a second open from the menu brings
+  the one window forward (one process), the Best score read from its settings
+  file; Cactus Patch plays on Small, Medium and Large, Help > About Chinchilla
+  opens About as a process of its own, How to play shows its text; Hello
+  counts and two copies run side by side.
+- With Midnight chosen while Culebra was open its frame, labels and message
+  follow the theme; the board keeps its own colours.
+- Stack never used: Culebra 1,336 bytes, Cactus Patch 1,224, Hello 2,440 to
+  2,760.
+- Memory after closing each program: internal back to the exact figure
+  before; external lower by 3.9 KB only the first time (the taskbar's Start
+  menu), steady after.
+- Folders: `m80` opened in 1.01 s and `m200` in 2.63 s with no memory lost.
+- Boot to desktop on a fast start: 340, 341, 341 ms against 341, 346, 341 ms
+  for `main` on the same board. `dbg.py misses`: none.
+- Not checked: that a Culebra score above the Best is kept after a close
+  and reopen.
