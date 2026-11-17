@@ -328,22 +328,27 @@ private:
     int pattern_ = 0;
 };
 
-// Other...: any of the board's 256 colours. Four squares of 8 by 8, one for
-// each level of blue (the board has four); in a square, red grows to the
-// right and green downwards. Modal to the Display dialog, which gets the
-// colour when OK is pressed.
+// Other...: any of the board's 256 colours, as one sheet of 16 by 16. The
+// board keeps a colour as red and green in eight levels and blue in four,
+// so there are four squares of 8 by 8, one for each level of blue. The
+// upper two: red to the right in the first and back to the left in the
+// second, green downwards. The lower two are the same upside down, so the
+// brightest greens meet across the middle: dark at the top, light in the
+// middle, the deep blues at the bottom (the owner's fold, 2026-11-17).
+// Modal to the Display dialog, which gets the colour when OK is pressed.
 class ColourDialog : public wm::Window {
 public:
     using Picked = void (*)(Rgb colour, void *context);
-    static constexpr int kCellW = 18, kCellH = 14;
+    static constexpr int kColumns = 16, kRows = 16, kCellW = 18, kCellH = 14;
+    static constexpr int kGridW = kColumns * kCellW, kBelow = 8 + kRows * kCellH;
 
     ColourDialog(wm::Window *owner, Rgb start, Picked picked, void *context)
-        : Window("Colour", {0, 0, 16 * kCellW + 16 + 2 * kBorder, 16 * kCellH + 82 + kClientTop + kBorder}, nullptr),
-          grid_({8, 8, 16 * kCellW, 16 * kCellH}, 16, 256, kCellW, kCellH, &ColourDialog::paint_cell,
-                &ColourDialog::changed, this, 1),
-          levels_({8, 16 * kCellH + 14, 16 * kCellW, 14}, text_),
-          ok_({16 * kCellW + 8 - 156, 16 * kCellH + 40, 75, 23}, "OK", &ColourDialog::ok, this),
-          cancel_({16 * kCellW + 8 - 75, 16 * kCellH + 40, 75, 23}, "Cancel", &ColourDialog::cancel, this),
+        : Window("Colour", {0, 0, kGridW + 16 + 2 * kBorder, kBelow + 68 + kClientTop + kBorder}, nullptr),
+          grid_({8, 8, kGridW, kRows * kCellH}, kColumns, kColumns * kRows, kCellW, kCellH,
+                &ColourDialog::paint_cell, &ColourDialog::changed, this, 1),
+          levels_({8, kBelow + 6, kGridW, 14}, text_),
+          ok_({8 + kGridW - 156, kBelow + 30, 75, 23}, "OK", &ColourDialog::ok, this),
+          cancel_({8 + kGridW - 75, kBelow + 30, 75, 23}, "Cancel", &ColourDialog::cancel, this),
           picked_(picked), context_(context)
     {
         set_dialog(true);
@@ -372,14 +377,14 @@ public:
     // The board colour in a cell, and the cell of a board colour.
     static gfx::Colour colour_of(int cell)
     {
-        const int x = cell % 16, y = cell / 16;
-        return gfx::rgb(static_cast<unsigned>(x % 8), static_cast<unsigned>(y % 8),
-                        static_cast<unsigned>(x / 8 + 2 * (y / 8)));
+        const int x = cell % kColumns, y = cell / kColumns;
+        const int r = x < 8 ? x : 15 - x, g = y < 8 ? y : 15 - y, b = x / 8 + 2 * (y / 8);
+        return gfx::rgb(static_cast<unsigned>(r), static_cast<unsigned>(g), static_cast<unsigned>(b));
     }
     static int cell_of(gfx::Colour c)
     {
         const int r = c >> 5, g = (c >> 2) & 7, b = c & 3;
-        return (g + 8 * (b / 2)) * 16 + r + 8 * (b % 2);
+        return (b < 2 ? g : 15 - g) * kColumns + (b % 2 == 0 ? r : 15 - r);
     }
 
 private:

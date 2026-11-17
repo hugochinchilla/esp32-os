@@ -2035,9 +2035,30 @@ Backlog item 40, asked by the owner. Journal:
   blue (dithered)", still the default. Whether the default becomes solid is
   open, the owner's. "Lilac" is gone from the list.
 - "Other..." opens a grid of the board's 256 colours, not a 24-bit picker
-  and not sliders: everything it offers is undithered. A colour without a
+  and not sliders: everything it offers is undithered. The grid is one
+  sheet of 16 by 16: a square of 8 by 8 for each level of blue, red
+  running back in the right-hand squares and green running back in the
+  lower ones, so the squares join: dark at the top, light across the
+  middle, blue at the bottom. The owner's fold, after a hue-sorted grid
+  and a 32 by 8 sheet were shown to him and set aside. A colour without a
   name is kept in `desktop.ini` as `#RRGGBB`. The chooser is a window of
   Display's program, not a program of its own.
 - The Terminal's grid follows its window (20x4 to 104x36, opening at
   80x25) rather than staying 80x25 or scaling the font. Lines already
   written are not wrapped again. It has a scroll bar over its history.
+
+### Chosen for the icons' places (2026-11-17, the agent's, to confirm)
+
+Backlog item 41, asked by the owner. Journal:
+`docs/journal/2026-11-17-icon-places.md`.
+
+- The desktop keeps the places and gives them to the icons panel; they are
+  in `C:\.config\icons.ini`, a file of its own written whole, not in
+  `desktop.ini`.
+- Every icon can be dragged, the system's four too. One that is no file is
+  dragged under a name no file has and is offered to no window
+  (`Wm::begin_drag(path, desktop_only)`).
+- Snap is off by default and, turned on, moves nothing (the owner's rule).
+- Realign keeps the order on the screen (by column, then down), not the
+  first order.
+- Icons may lie on one another when placed freely.

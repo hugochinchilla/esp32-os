@@ -312,7 +312,9 @@ public:
     // pointer until the button is let go over a window or the desktop panel
     // whose drag_over() takes it, or anywhere else (nothing happens).
     static constexpr int kDragPath = 160;
-    void begin_drag(const char *path);
+    // `desktop_only`: no window is offered it (a desktop icon that stands
+    // for no file, on its way to another place on the desktop).
+    void begin_drag(const char *path, bool desktop_only = false);
     bool item_dragging() const { return capture_ == Capture::Item; }
     uint32_t last_update_us() const { return last_update_us_; }
     // Time to handle the last input event, painting included.
@@ -434,6 +436,7 @@ private:
     void update_drop_target();
     void leave_desktop_target();
     char drag_path_[kDragPath] = "";
+    bool drag_desktop_only_ = false;
     Window *drop_window_ = nullptr;
     bool desktop_over_ = false;   // the desktop panel has been shown the drag
     bool desktop_target_ = false; // and it would take the file

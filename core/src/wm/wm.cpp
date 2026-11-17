@@ -1363,11 +1363,12 @@ void Wm::on_move()
     }
 }
 
-void Wm::begin_drag(const char *path)
+void Wm::begin_drag(const char *path, bool desktop_only)
 {
     if (path == nullptr || path[0] == 0 || buttons_ == 0) {
         return;
     }
+    drag_desktop_only_ = desktop_only;
     snprintf(drag_path_, sizeof(drag_path_), "%s", path);
     capture_ = Capture::Item;
     captured_ = nullptr;
@@ -1398,7 +1399,7 @@ void Wm::update_drop_target()
         Window *w = window_under(x, y);
         Window *sys = system_modal();
         if (w != nullptr) {
-            if ((sys == nullptr || sys == w) && blocker(*w) == nullptr && !w->locked_ &&
+            if (!drag_desktop_only_ && (sys == nullptr || sys == w) && blocker(*w) == nullptr && !w->locked_ &&
                 part_at(*w, x, y) == Part::Client) {
                 const Rect c = w->client();
                 const proc::Scope as(procs_, w->owner_);

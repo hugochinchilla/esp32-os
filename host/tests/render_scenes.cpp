@@ -596,7 +596,7 @@ int main(int argc, char **argv)
         mouse(400, 300, 0);
         check(desktop.menu_open(), "a right click on the desktop opens its menu");
         save("37p-desktop-menu");
-        centre_of(desktop.popup_item(0, 0), x, y);
+        centre_of(desktop.popup_item(0, 3), x, y);
         click(x, y);
         check(desktop.active() != nullptr && strcmp(desktop.active()->title(), "Display") == 0, "the dialog opens");
         save("37q-display-dialog");
@@ -653,7 +653,7 @@ int main(int argc, char **argv)
         key(0x12, true);
         for (int i = 0; i < 3; i++) {
             key(wm::key::Right);
-            key(wm::key::Up);
+            key(wm::key::Down);
         }
         save("37v-colour-picked");
         key(wm::key::Enter);
@@ -853,6 +853,66 @@ int main(int argc, char **argv)
     }
     while (desktop.active() != nullptr) {
         desktop.close(*desktop.active());
+    }
+
+    // The icons stay where they are dragged to (backlog item 41): My Board
+    // let go in the open; with "Snap icons to grid" on, Documents let go
+    // near a cell takes it; Realign puts them all back in columns. The
+    // places are in icons.ini.
+    {
+        const auto check = [&](bool ok, const char *what) {
+            if (!ok) {
+                printf("Icons: %s\n", what);
+                failures++;
+            }
+        };
+        const auto drag = [&](int icon, int to_x, int to_y) {
+            int ix, iy;
+            centre_of(shell::desktop_icons()->icon_rect(icon), ix, iy);
+            mouse(ix, iy, 0);
+            mouse(ix, iy, 1);
+            mouse(ix + 8, iy + 8, 1);
+            mouse(to_x, to_y, 1);
+        };
+        const auto desktop_menu_item = [&](int item) {
+            mouse(300, 400, 0);
+            mouse(300, 400, 2);
+            mouse(300, 400, 0);
+            centre_of(desktop.popup_item(0, item), x, y);
+        };
+        drag(0, 250, 140);
+        save("39a-icon-dragged");
+        mouse(250, 140, 0);
+        check(shell::desktop_icons()->icon_rect(0).x == 250 - 36 && shell::desktop_icons()->icon_rect(0).y == 140 - 16,
+              "My Board stays where it was let go");
+        save("39b-icon-placed");
+        fs::Ini ini;
+        char value[32] = "";
+        check(shell::load_settings("icons", ini) && ini.get("system", "My Board", value, sizeof(value)) &&
+                  strcmp(value, "214,124") == 0,
+              "its place is in icons.ini");
+        desktop_menu_item(0);
+        click(x, y); // Snap icons to grid
+        check(shell::desktop_icons()->snap() && shell::desktop_icons()->icon_rect(0).x == 214,
+              "snapping on moves nothing");
+        check(shell::load_settings("desktop", ini) && ini.get_bool("icons", "snap", false), "snap is in desktop.ini");
+        drag(1, 2 + 4 * 76 + 50, 8 + 3 * 70 + 30);
+        mouse(2 + 4 * 76 + 50, 8 + 3 * 70 + 30, 0);
+        check(shell::desktop_icons()->icon_rect(1).x == 2 + 4 * 76 && shell::desktop_icons()->icon_rect(1).y == 8 + 3 * 70,
+              "Documents snaps to the grid");
+        desktop_menu_item(0);
+        save("39c-icons-menu-snap");
+        key(wm::key::Escape);
+        desktop_menu_item(1);
+        click(x, y); // Realign icons
+        save("39d-icons-realigned");
+        for (int i = 0; !shell::desktop_icons()->icon_rect(i).empty(); i++) {
+            const gfx::Rect r = shell::desktop_icons()->icon_rect(i);
+            check((r.x - 2) % 76 == 0 && (r.y - 8) % 70 == 0, "Realign puts every icon in the grid");
+        }
+        desktop_menu_item(0);
+        click(x, y); // snapping off again
+        check(!shell::desktop_icons()->snap(), "and off again");
     }
 
     // Shut Down from the Start menu: Enter picks Shut Down, and the screen

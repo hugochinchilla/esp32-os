@@ -73,9 +73,23 @@ has). Two makes the sides equal, which is what was asked for.
 - **Start: two pixels** (`kStartW` 58 to 60). The owner said "maybe just
   1px"; with one the right would still be a pixel tighter than the left.
   Told to him with the picture.
-- **Colours: A**, a "Colour" dialog with the 256 in four squares of 8 by 8,
-  one for each level of blue, red growing to the right and green downwards.
-  Under them the levels and the `#RRGGBB` the board really shows. It is
+- **Colours: A**, a "Colour" dialog with the 256. First built as four
+  squares of 8 by 8, one for each level of blue, red growing to the right
+  and green downwards. The owner on seeing it: "whats the logic behind the
+  color chooser alignment of colors? I've never seen one like this". Shown
+  a grid sorted by hue, he asked for the neutral greys on a strip; the
+  board has only four (black, 73, 182, white: blue has four levels and a
+  grey needs the three channels equal), and the hue grid stayed patchy.
+  Then: "the original palette shows 4 nice gradients to the eye [...] If we
+  could get the same perfect gradient but once and for all colors at once I
+  would be delighted". A sheet of 32 by 8 came next, the four squares in a row
+  with red running back in every other one; he answered "If you split this
+  horizontally in half and invert the right part (bottom to top) I think it
+  would look like a choherent gradient". Built so: 16 by 16, the first two
+  squares on top, the other two under them upside down, so the bright
+  greens meet across the middle. Dark at the top, light in the middle, the
+  deep blues at the bottom. Under it the levels and the `#RRGGBB`
+  the board really shows. It is
   modal to Display and is a window made when opened and destroyed when
   closed. It is part of Display's program (as a file dialog is part of the
   Editor's), not a row of its own: it has no life without it.

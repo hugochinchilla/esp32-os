@@ -43,6 +43,8 @@ Files so far:
 | `desktop.ini` | `[welcome]` | `created`: true once welcome.txt has been put in C:\Documents\Desktop, so a deleted copy does not come back; set it to false to get it again |
 | `desktop.ini` | `[documents]` | `moved`: true once an old C:\docs has been moved into C:\Documents (done by itself at start-up) |
 | `desktop.ini` | `[background]` | `colour`: chinchilla-blue (default, the only dithered one), steel-blue, teal, sea-green, forest, navy, purple, plum, brick, olive, sand, sky, rose, silver, slate, black; or `#RRGGBB` for any other (Display > Other... writes one of the board's 256). `pattern`: none (default), dots, diagonal, grid, bricks, weave, diamonds, waves, zigzag, crosses. Set in the Display dialog |
+| `desktop.ini` | `[icons]` | `snap`: true makes an icon let go on the desktop take the nearest free cell of the grid. Default false. Set from the desktop's menu (right click) |
+| `icons.ini` | `[system]`, `[files]` | Where each desktop icon is: `My Board = 214,124`, the corner of its place in pixels. `[system]` by the icon's label, `[files]` by the file's name in C:\Documents\Desktop. Written whole by the desktop when an icon is moved or the icons are realigned; without it the icons are in columns from the top left |
 | `culebra.ini` | `[game]` | `best`: the best score. `speed`: slow, normal (default) or fast. Written when Culebra closes, if either changed |
 | `cactus.ini` | `[game]` | `size`: small (default), medium or large, the patch the next game starts with. Written when Cactus Patch closes, if it changed |
 | `network.ini` | `[wifi]` | `tx_power_dbm`: the radio's top transmit power, 2 to 20, default 2 (higher values put lines on the picture while connecting). `enabled`: false leaves the radio off, default true |

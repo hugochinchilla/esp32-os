@@ -190,11 +190,16 @@ void network_panel(void *) { open_network(); }
 void open_display(void *) { display_dialog(); }
 void open_run(void *) { run_dialog(); }
 // A right click on the desktop: a menu with what can be done to it.
+void toggle_snap(void *);
+void realign_icons(void *);
 wm::MenuItem g_desktop_items[] = {
+    {"&Snap icons to grid", &toggle_snap, nullptr, nullptr, nullptr, 0},
+    {"&Realign icons", &realign_icons, nullptr, nullptr, nullptr, 0},
+    {nullptr, nullptr, nullptr, nullptr, nullptr, wm::kMenuSeparator},
     {"&Display...", &open_display, nullptr, nullptr, nullptr, 0},
 };
-wm::Menu g_desktop_menu = {g_desktop_items, 1};
-void desktop_menu(int x, int y, void *) { manager().open_menu(g_desktop_menu, x, y); }
+wm::Menu g_desktop_menu = {g_desktop_items, 4};
+void desktop_menu(int x, int y, void *);
 wm::MenuItem g_settings_items[] = {
     {"&Control Panel", nullptr, nullptr, nullptr, nullptr, wm::kMenuDisabled},
     {"&Taskbar...", nullptr, nullptr, nullptr, nullptr, wm::kMenuDisabled},
@@ -256,6 +261,75 @@ const gfx::Bitmap *g_tray_icon = nullptr;
 void (*g_tray_click)(void *context) = nullptr;
 void *g_tray_context = nullptr;
 
+// Where the icons are (backlog item 41). The desktop keeps the places in
+// C:\.config\icons.ini: [system] by label, [files] by the file's name, each
+// "x,y", the corner of the icon's place. Nothing is written until an icon is
+// first moved; from then on every icon has its place there. The file is
+// written whole each time, so files that are gone leave it.
+bool read_place(const fs::Ini &ini, const char *section, const char *key, int &x, int &y)
+{
+    char value[16];
+    int px = 0, py = 0;
+    if (!ini.get(section, key, value, sizeof(value)) || sscanf(value, "%d,%d", &px, &py) != 2 || px < 0 || py < 0) {
+        return false;
+    }
+    x = px;
+    y = py;
+    return true;
+}
+
+void write_place(fs::Ini &ini, const char *section, const char *key, int x, int y)
+{
+    char value[16];
+    snprintf(value, sizeof(value), "%d,%d", x, y);
+    ini.set(section, key, value); // a full file: that icon is not remembered
+}
+
+// The icons panel moved some: all the places are written down.
+void icons_moved(void *)
+{
+    fs::Ini ini;
+    for (int i = 0; i < desk::Icons::kMax; i++) {
+        const gfx::Rect r = g_desk->icon_rect(i);
+        if (r.empty()) {
+            break;
+        }
+        g_icons[i].x = r.x;
+        g_icons[i].y = r.y;
+        if (g_icons[i].path != nullptr) {
+            write_place(ini, "files", fs::path::name(g_icons[i].path), r.x, r.y);
+        } else {
+            write_place(ini, "system", g_icons[i].label, r.x, r.y);
+        }
+    }
+    save_settings("icons", ini);
+}
+
+void toggle_snap(void *)
+{
+    if (g_desk == nullptr) {
+        return;
+    }
+    g_desk->set_snap(!g_desk->snap());
+    fs::Ini ini;
+    load_settings("desktop", ini);
+    ini.set_bool("icons", "snap", g_desk->snap());
+    save_settings("desktop", ini);
+}
+
+void realign_icons(void *)
+{
+    if (g_desk != nullptr) {
+        g_desk->realign();
+    }
+}
+
+void desktop_menu(int x, int y, void *)
+{
+    g_desktop_items[0].flags = g_desk != nullptr && g_desk->snap() ? wm::kMenuChecked : 0;
+    manager().open_menu(g_desktop_menu, x, y);
+}
+
 void open_desktop_file(void *context)
 {
     const DesktopFile &f = *static_cast<const DesktopFile *>(context);
@@ -268,8 +342,9 @@ void open_desktop_file(void *context)
 }
 
 // A file let go on the desktop itself goes into C:\Documents\Desktop
-// (nothing happens if it is there already).
-void drop_on_desktop(const char *path, void *)
+// (the icons panel moves its own; these come from somewhere else). Its icon
+// goes where the file was let go.
+void drop_on_desktop(const char *path, int x, int y, void *)
 {
     char parent[fs::kMaxPath];
     fs::path::parent(path, parent, sizeof(parent));
@@ -279,6 +354,12 @@ void drop_on_desktop(const char *path, void *)
     storage().make_folder("C:\\Documents");
     storage().make_folder(kDesktopFolder);
     const ports::FsError e = move_to_folder(path, kDesktopFolder);
+    if (e == ports::FsError::Ok) {
+        fs::Ini ini;
+        load_settings("icons", ini);
+        write_place(ini, "files", fs::path::name(path), x, y);
+        save_settings("icons", ini);
+    }
     files_changed();
     if (e != ports::FsError::Ok) {
         static char text[fs::kMaxPath + 60];
@@ -368,6 +449,8 @@ void refresh_desktop_files(bool force)
         }
         return strcasecmp(a.name, b.name) < 0;
     });
+    fs::Ini places;
+    load_settings("icons", places);
     for (int i = 0; i < n; i++) {
         DesktopFile &f = g_files[i];
         if (snprintf(f.path, sizeof(f.path), "%s\\%s", kDesktopFolder, found[i].name) >= static_cast<int>(sizeof(f.path))) {
@@ -381,6 +464,7 @@ void refresh_desktop_files(bool force)
         }
         g_icons[kSystemIcons + i] = {f.label, file_picture(found[i].name, found[i].folder), &open_desktop_file, &f,
                                      f.path, found[i].folder ? &drop_on_folder : nullptr};
+        read_place(places, "files", found[i].name, g_icons[kSystemIcons + i].x, g_icons[kSystemIcons + i].y);
     }
     g_desk->set_icons(g_icons, kSystemIcons + n);
 }
@@ -633,8 +717,18 @@ void start_taskbar(void *)
         g_settings_items[2].flags = 0;
     }
     g_bar->set_tray_icon(g_tray_icon, g_tray_click, g_tray_context);
+    {
+        fs::Ini ini;
+        load_settings("icons", ini);
+        for (int i = 0; i < kSystemIcons; i++) {
+            read_place(ini, "system", g_icons[i].label, g_icons[i].x, g_icons[i].y);
+        }
+        load_settings("desktop", ini);
+        g_desk->set_snap(ini.get_bool("icons", "snap", false));
+    }
     g_desk->set_icons(g_icons, kSystemIcons);
     g_desk->set_drop(&drop_on_desktop, nullptr);
+    g_desk->set_moved(&icons_moved, nullptr);
     g_desk->set_menu(&desktop_menu, nullptr);
     g_taskbar_up = true;
     refresh_desktop_files(true);
