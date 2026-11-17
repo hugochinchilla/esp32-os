@@ -241,6 +241,35 @@ public:
     void menu(wm::Menu &menu) const { os::ui::menu_under(window_, number_, menu); }
 };
 
+// The text editor: a whole text file, with its own memory for the text
+// and for undo. made(): false when there was no memory for it.
+class TextEdit : public Control {
+public:
+    using Control::Control;
+    bool made() const { return number_ != os::ui::kNoControl; }
+    void clear() const { os::ui::edit(window_, number_, os::ui::Edit::Clear); }
+    void undo() const { os::ui::edit(window_, number_, os::ui::Edit::Undo); }
+    void cut() const { os::ui::edit(window_, number_, os::ui::Edit::Cut); }
+    void copy() const { os::ui::edit(window_, number_, os::ui::Edit::Copy); }
+    void paste() const { os::ui::edit(window_, number_, os::ui::Edit::Paste); }
+    void delete_selection() const { os::ui::edit(window_, number_, os::ui::Edit::Delete); }
+    void select_all() const { os::ui::edit(window_, number_, os::ui::Edit::SelectAll); }
+    bool modified() const { return (os::ui::edit_state(window_, number_) & os::ui::kModified) != 0; }
+    bool can_undo() const { return (os::ui::edit_state(window_, number_) & os::ui::kCanUndo) != 0; }
+    bool has_selection() const { return (os::ui::edit_state(window_, number_) & os::ui::kHasSelection) != 0; }
+    void set_modified(bool on) const { os::ui::set_modified(window_, number_, on); }
+    // A file's bytes into the text, in pieces.
+    void load_begin() const { os::ui::load_begin(window_, number_); }
+    bool load_append(const uint8_t *bytes, size_t size) const
+    {
+        return os::ui::load_append(window_, number_, bytes, size);
+    }
+    void load_finish() const { os::ui::load_finish(window_, number_); }
+    // For a job that writes the text out while the window is locked
+    // (os::ui::read_text).
+    os::ui::TextReader reader() const { return os::ui::text_reader(window_, number_); }
+};
+
 // A bar that fills from the left in blocks: progress, or how full.
 class Meter : public Control {
 public:
@@ -269,6 +298,9 @@ public:
     void resize(int client_width, int client_height) { os::ui::resize(number_, client_width, client_height); }
     bool in_front() const { return os::ui::in_front(number_); } // it is the window in use
     bool has_keys() const { return os::ui::has_keys(number_); } // the keys go to it, and it is not minimised
+    // Locked: it takes no keys, no clicks and no request to close.
+    void set_locked(bool on) { os::ui::set_locked(number_, on); }
+    bool locked() const { return os::ui::locked(number_); }
     bool caret_lit() const { return os::ui::caret_lit(number_); } // the lit half of the text cursor's blink
     // Asks for a part of the client area to be painted again.
     void redraw(const gfx::Rect &part) { os::ui::redraw(number_, part); }
@@ -302,6 +334,9 @@ public:
     virtual void right_click(Control /*which*/, int /*x*/, int /*y*/) {}
     // The client area has another size: the controls go where they belong now.
     virtual void resized(int /*width*/, int /*height*/) {}
+    // The close button, Alt+F4, a TERM signal. True: the program deals
+    // with it (asks about unsaved work, and closes itself later).
+    virtual bool closing() { return false; }
     // A menu of the menu bar is about to open: a chance to grey items out.
     virtual void menu_opening(int /*which*/) {}
     // The window has closed; the object is destroyed after this.
@@ -343,6 +378,10 @@ protected:
     DropDown drop_down(const gfx::Bitmap *icon, const gfx::Rect &place)
     {
         return {number_, os::ui::drop_down(number_, icon, place)};
+    }
+    TextEdit text_edit(const gfx::Rect &place, size_t text_bytes, size_t undo_bytes)
+    {
+        return {number_, os::ui::text_edit(number_, place, text_bytes, undo_bytes)};
     }
     Meter meter(const gfx::Rect &place, gfx::Colour colour = gfx::rgb(0, 0, 2))
     {
@@ -433,6 +472,7 @@ private:
         case os::ui::What::Resized:
             window->resized(event.x, event.y);
             return true;
+        case os::ui::What::Closing: return window->closing();
         case os::ui::What::Menu:
             window->menu_opening(event.index);
             return true;

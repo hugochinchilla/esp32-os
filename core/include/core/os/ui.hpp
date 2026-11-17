@@ -54,6 +54,8 @@ enum class What : uint8_t {
     RightClick, // the right button went down in a picture that asked for the mouse: `control`, `x`, `y`
     Resized, // the client area has another size (the user pulled an edge, or maximised): `x`, `y` are
              // its width and height. The program puts its controls where they go now
+    Closing, // the close button, Alt+F4, a TERM signal. True: the program deals with it (asks about
+             // unsaved work, closes itself later); otherwise the window closes
     Menu,    // a menu of the menu bar is about to open: `index`, which. A chance to grey items out
     Closed,  // the window has closed, or never opened; once, and it and its numbers are dead after this
 };
@@ -169,6 +171,41 @@ Control drop_down(Window window, const gfx::Bitmap *icon, const gfx::Rect &place
 // A menu of the program's just under a control. The menu and its items
 // are the program's and must stay valid while it is open.
 void menu_under(Window window, Control control, wm::Menu &menu);
+
+/* ---- The text editor: a control that holds a whole text file ----
+ *
+ * The text and the undo memory are the control's, asked for when it is
+ * made (kNoControl if there is none) and given back with it. Changed
+ * tells of the first change after set_modified(false), and of the text
+ * going back to unchanged.
+ */
+Control text_edit(Window window, const gfx::Rect &place, size_t text_bytes, size_t undo_bytes);
+enum class Edit : uint8_t { Clear, Undo, Cut, Copy, Paste, Delete, SelectAll };
+void edit(Window window, Control text_edit, Edit what);
+enum EditState : uint8_t { kModified = 1, kCanUndo = 2, kHasSelection = 4 };
+uint8_t edit_state(Window window, Control text_edit);
+void set_modified(Window window, Control text_edit, bool modified);
+// A file's bytes into the text, in pieces (CRLF becomes a line end):
+// begin, append each piece (false when it does not fit), finish.
+void load_begin(Window window, Control text_edit);
+bool load_append(Window window, Control text_edit, const uint8_t *bytes, size_t size);
+void load_finish(Window window, Control text_edit);
+// The file's bytes again, for a job of the program that writes them out
+// on another task. The reader is taken on the UI task and is good while
+// the window stays locked (set_locked), which is what keeps the text and
+// the window as they are; read_text may then be called from the job.
+using TextReader = const void *;
+TextReader text_reader(Window window, Control text_edit);
+size_t read_text(TextReader reader, size_t offset, uint8_t *out, size_t room);
+
+// How many bytes of text the clipboard holds (0: Paste has nothing).
+size_t clipboard_size();
+
+// Locked: the window is shown and can be moved, but takes no keys, no
+// clicks and no request to close, and the pointer is an hourglass over
+// it. For a program whose job is using what the window holds.
+void set_locked(Window window, bool locked);
+bool locked(Window window);
 
 // A bar that fills from the left in blocks, in a sunken box: progress, or
 // how full something is.

@@ -3,11 +3,11 @@
 #include <cstring>
 #include <strings.h>
 
+#include "core/app/app.hpp"
 #include "core/gfx/art.hpp"
 #include "core/job/job.hpp"
 #include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
-#include "core/wm/text_edit.hpp"
 #include "core/wm/wm.hpp"
 #include "internal.hpp"
 
@@ -24,15 +24,13 @@ enum class Then : uint8_t { Nothing, New, Open, OpenPath, Exit };
 // own window and text. ponytail: at most four, since each takes 576 KB of
 // external RAM for its text and undo.
 constexpr int kMaxEditors = 4;
-class EditorWindow;
-EditorWindow *g_editors[kMaxEditors] = {};
+app::Number g_editors[kMaxEditors] = {}; // their windows' numbers: dead once closed
 
-class EditorWindow : public wm::Window {
+class EditorWindow : public app::Window {
 public:
-    // `place`: which of the editors it is, for where its window goes.
-    explicit EditorWindow(int place)
-        : Window("Untitled - Editor", {150 + place * 24, 60 + place * 24, 440, 330}, &gfx::editor_icon_16()),
-          edit_({0, 0, 100, 100})
+    // The text and its undo memory are the text editor's own, and go back
+    // with the window.
+    EditorWindow() : edit_(text_edit({0, 0, 100, 100}, kTextCapacity, kUndoCapacity))
     {
         file_items_[0] = {"&New", &EditorWindow::menu_new, this, nullptr, nullptr, 0};
         file_items_[1] = {"&Open...", &EditorWindow::menu_open, this, nullptr, nullptr, 0};
@@ -49,37 +47,19 @@ public:
         edit_items_[6] = {nullptr, nullptr, nullptr, nullptr, nullptr, wm::kMenuSeparator};
         edit_items_[7] = {"Select &All", &EditorWindow::menu_select_all, this, nullptr, nullptr, 0};
         set_menu_bar(&bar_);
-        add(edit_);
-        edit_.set_on_change(&EditorWindow::changed, this);
-        resized();
-    }
-
-    // The text and undo memory go back with the window.
-    ~EditorWindow()
-    {
-        free_program_memory(text_);
-        free_program_memory(undo_);
-        for (EditorWindow *&e : g_editors) {
-            if (e == this) {
-                e = nullptr;
-            }
-        }
+        const gfx::Rect c = client_size();
+        resized(c.w, c.h);
     }
 
     // The file it has open ("" for none).
     const char *path() const { return path_; }
 
-    // The text memory, asked for when the Editor opens.
+    // Whether there was memory for the text when the Editor was made.
     bool ready()
     {
-        if (!edit_.attached()) {
-            text_ = static_cast<uint8_t *>(program_memory(kTextCapacity));
-            undo_ = static_cast<uint8_t *>(program_memory(kUndoCapacity));
-            if (text_ == nullptr || undo_ == nullptr) {
-                message_box("Editor", "There is not enough memory for the Editor.");
-                return false;
-            }
-            edit_.attach(text_, kTextCapacity, undo_, kUndoCapacity);
+        if (!edit_.made()) {
+            message_box("Editor", "There is not enough memory for the Editor.");
+            return false;
         }
         return true;
     }
@@ -97,18 +77,16 @@ public:
         then(Then::OpenPath);
     }
 
-    void resized() override
-    {
-        const gfx::Rect c = client();
-        edit_.rect = {0, 0, c.w, c.h};
-        edit_.layout();
-    }
+    void resized(int w, int h) override { edit_.place({0, 0, w, h}); }
 
-    bool close_requested() override
+    bool closing() override
     {
         then(Then::Exit);
-        return false; // then() closes it once any changes are dealt with
+        return true; // then() closes it once any changes are dealt with
     }
+
+    // The text went from unchanged to changed, or back: the star in the title.
+    void changed(app::Control) override { retitle(); }
 
     void menu_opening(int entry) override
     {
@@ -119,7 +97,7 @@ public:
         edit_items_[0].flags = edit_.can_undo() ? 0 : wm::kMenuDisabled;
         edit_items_[2].flags = sel ? 0 : wm::kMenuDisabled;
         edit_items_[3].flags = sel ? 0 : wm::kMenuDisabled;
-        edit_items_[4].flags = wm::clipboard::size() > 0 ? 0 : wm::kMenuDisabled;
+        edit_items_[4].flags = os::ui::clipboard_size() > 0 ? 0 : wm::kMenuDisabled;
         edit_items_[5].flags = sel ? 0 : wm::kMenuDisabled;
     }
 
@@ -127,7 +105,7 @@ private:
     // Does `what` once any unsaved changes have been saved or let go.
     void then(Then what)
     {
-        if (edit_.modified() && open()) {
+        if (edit_.modified() && on_screen()) {
             next_ = what;
             static const char *const buttons[] = {"&Yes", "&No", "Cancel"};
             char text[160];
@@ -158,10 +136,10 @@ private:
             edit_.clear();
             path_[0] = 0;
             retitle();
-            show(*this);
+            app::show(number());
             break;
         case Then::Open:
-            open_file_dialog(id(), folder(), &EditorWindow::chosen_to_open, this);
+            open_file_dialog(number(), folder(), &EditorWindow::chosen_to_open, this);
             break;
         case Then::OpenPath:
             load(pending_path_);
@@ -204,8 +182,8 @@ private:
         }
         snprintf(path_, sizeof(path_), "%s", path);
         retitle();
-        show(*this);
-        set_focus(&edit_);
+        app::show(number());
+        set_focus(edit_);
     }
 
     void save(bool continue_after)
@@ -230,6 +208,7 @@ private:
         spec.work = &EditorWindow::write_out;
         spec.done = &EditorWindow::saved;
         spec.context = this;
+        reader_ = edit_.reader(); // for the job: good while the window is locked
         spec.stack_bytes = 8192; // the file system's calls, a 1 KB piece and the paths
         // Where the caller does the work, the whole desktop waits as it used to.
         const os::Busy hourglass;
@@ -254,7 +233,7 @@ private:
         uint8_t piece[1024];
         size_t at = 0;
         while (e == ports::FsError::Ok) {
-            const size_t n = w->edit_.save_bytes(at, piece, sizeof(piece));
+            const size_t n = os::ui::read_text(w->reader_, at, piece, sizeof(piece));
             if (n == 0) {
                 break;
             }
@@ -289,7 +268,7 @@ private:
     void save_as(bool continue_after)
     {
         continue_after_save_as_ = continue_after;
-        save_file_dialog(id(), folder(), path_[0] ? fs::path::name(path_) : "untitled.txt",
+        save_file_dialog(number(), folder(), path_[0] ? fs::path::name(path_) : "untitled.txt",
                          &EditorWindow::chosen_to_save, this);
     }
 
@@ -326,21 +305,8 @@ private:
     // "notes.txt - Editor", with a * after the name while there are changes.
     void retitle()
     {
-        // Remembered here too, so the star comes back on the first change
-        // after a save.
-        shown_modified_ = edit_.modified();
         snprintf(title_, sizeof(title_), "%s%s - Editor", name(), edit_.modified() ? "*" : "");
         set_title(title_);
-    }
-
-    static void changed(wm::TextEdit &edit, void *context)
-    {
-        auto *w = static_cast<EditorWindow *>(context);
-        // Only the first change alters the title.
-        if (edit.modified() != w->shown_modified_) {
-            w->shown_modified_ = edit.modified();
-            w->retitle();
-        }
     }
 
     static void menu_new(void *c) { static_cast<EditorWindow *>(c)->then(Then::New); }
@@ -363,9 +329,8 @@ private:
     Then next_ = Then::Nothing;
     bool continue_after_save_as_ = false;
     bool continue_after_save_ = false;
-    bool shown_modified_ = false;
-    uint8_t *text_ = nullptr, *undo_ = nullptr;
-    wm::TextEdit edit_;
+    os::ui::TextReader reader_ = nullptr; // the text, for the save job
+    app::TextEdit edit_;
     wm::MenuItem file_items_[6];
     wm::MenuItem edit_items_[8];
     wm::Menu file_ = {file_items_, 6};
@@ -382,11 +347,11 @@ void open_in_editor(const char *path)
 {
     int place = -1;
     for (int i = kMaxEditors - 1; i >= 0; i--) {
-        EditorWindow *e = g_editors[i];
-        if (e == nullptr || !e->open()) {
-            place = i; // free, or closed and about to go
+        const EditorWindow *e = app::program<EditorWindow>(g_editors[i]);
+        if (e == nullptr) {
+            place = i; // free
         } else if (path != nullptr && strcasecmp(e->path(), path) == 0) {
-            os::activate(*e);
+            app::bring_forward(g_editors[i]);
             return;
         }
     }
@@ -397,14 +362,25 @@ void open_in_editor(const char *path)
     const proc::Pid pid = os::spawn("Editor");
     // With no room in the table it is the caller's window, as elsewhere.
     const os::As as(pid != proc::kNone ? pid : os::self());
-    EditorWindow *w = make_window<EditorWindow>(place);
-    if (w == nullptr) {
+    app::Look look;
+    look.title = "Untitled - Editor";
+    look.x = 150 + place * 24;
+    look.y = 60 + place * 24;
+    look.width = 440;
+    look.height = 330;
+    look.icon = &gfx::editor_icon_16();
+    look.flags = app::kMenuBar;
+    // Shown once it has its text: a new one, or the file's.
+    const app::Number number = app::make<EditorWindow>(look);
+    if (number == app::kNone) {
         no_memory_for("Editor");
         return;
     }
-    g_editors[place] = w;
-    w->open_path(path);
-    discard(w); // not opened: no memory for the text, the file would not load, or no room
+    g_editors[place] = number;
+    app::program<EditorWindow>(number)->open_path(path);
+    if (!os::ui::on_screen(number)) {
+        os::ui::close(number); // no memory for the text, the file would not load, or no room
+    }
 }
 
 } // namespace shell

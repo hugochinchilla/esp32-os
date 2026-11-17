@@ -9,6 +9,7 @@
 #include <new>
 
 #include "core/os/os.hpp"
+#include "core/wm/text_edit.hpp"
 #include "core/wm/widgets.hpp"
 #include "core/wm/wm.hpp"
 
@@ -75,6 +76,7 @@ enum class Kind : uint8_t {
     Grid,
     DropDown,
     Meter,
+    TextEdit,
 };
 
 // A line of text exactly as given, kept by the control.
@@ -336,6 +338,27 @@ private:
     int lit_ = 0;
 };
 
+// The text editor with its own memory for the text and for undo.
+class OwnedTextEdit : public wm::TextEdit {
+public:
+    OwnedTextEdit(const gfx::Rect &r, size_t text_bytes, size_t undo_bytes) : TextEdit(r)
+    {
+        text_ = static_cast<uint8_t *>(os::allocate(text_bytes));
+        undo_ = static_cast<uint8_t *>(os::allocate(undo_bytes));
+        if (text_ != nullptr && undo_ != nullptr) {
+            attach(text_, text_bytes, undo_, undo_bytes);
+        }
+    }
+    ~OwnedTextEdit()
+    {
+        os::release(text_);
+        os::release(undo_);
+    }
+
+private:
+    uint8_t *text_ = nullptr, *undo_ = nullptr;
+};
+
 // The frame for a client area of this size.
 gfx::Rect frame_for(const Look &look)
 {
@@ -388,6 +411,7 @@ public:
             case Kind::Grid: static_cast<Grid *>(controls_[i])->~Grid(); break;
             case Kind::DropDown: static_cast<DropDown *>(controls_[i])->~DropDown(); break;
             case Kind::Meter: static_cast<Meter *>(controls_[i])->~Meter(); break;
+            case Kind::TextEdit: static_cast<OwnedTextEdit *>(controls_[i])->~OwnedTextEdit(); break;
             }
             os::release(controls_[i]);
         }
@@ -576,6 +600,26 @@ public:
         e.y = client().h;
         tell(e);
     }
+    bool close_requested() override { return !tell(Event{What::Closing}); }
+    // The editor's text changed between modified and not.
+    static void edited(wm::TextEdit &edit, void *context)
+    {
+        auto *w = static_cast<Behind *>(context);
+        if (edit.modified() != w->edit_modified_) {
+            w->edit_modified_ = edit.modified();
+            w->from(edit, What::Changed);
+        }
+    }
+    void note_modified(bool modified) { edit_modified_ = modified; }
+    // The last control made, taken back (it could not get what it needs).
+    template <class T> void unmake()
+    {
+        count_--;
+        remove_last();
+        static_cast<T *>(controls_[count_])->~T();
+        os::release(controls_[count_]);
+        controls_[count_] = nullptr;
+    }
     void menu_opening(int entry) override
     {
         Event e{What::Menu};
@@ -601,6 +645,7 @@ private:
     void *state_;
     uint8_t flags_;
     bool centred_;
+    bool edit_modified_ = false; // as the program was last told (one editor a window)
     bool told_closed_ = false;
     bool gone_ = false; // the program has heard Closed: its object is destroyed
     const gfx::Bitmap *const *row_icons_ = nullptr;
@@ -755,6 +800,108 @@ Control picture(Window window, const gfx::Rect &place, uint8_t how)
                         : kNoControl;
 }
 
+Control text_edit(Window window, const gfx::Rect &place, size_t text_bytes, size_t undo_bytes)
+{
+    Behind *w = behind(window);
+    const Control c = w != nullptr ? w->make<OwnedTextEdit>(Kind::TextEdit, place, text_bytes, undo_bytes) : kNoControl;
+    if (c == kNoControl) {
+        return kNoControl;
+    }
+    auto *e = w->as<OwnedTextEdit>(c, Kind::TextEdit);
+    if (!e->attached()) {
+        w->unmake<OwnedTextEdit>(); // no memory for the text
+        return kNoControl;
+    }
+    e->set_on_change(&Behind::edited, w);
+    e->layout();
+    return c;
+}
+
+void edit(Window window, Control control, Edit what)
+{
+    Behind *w = behind(window);
+    auto *e = w != nullptr ? w->as<OwnedTextEdit>(control, Kind::TextEdit) : nullptr;
+    if (e == nullptr) {
+        return;
+    }
+    switch (what) {
+    case Edit::Clear:
+        e->clear();
+        w->note_modified(e->modified()); // a new text: the program is not told of that as a change
+        break;
+    case Edit::Undo: e->undo(); break;
+    case Edit::Cut: e->cut(); break;
+    case Edit::Copy: e->copy(); break;
+    case Edit::Paste: e->paste(); break;
+    case Edit::Delete: e->delete_selection(); break;
+    case Edit::SelectAll: e->select_all(); break;
+    }
+}
+
+uint8_t edit_state(Window window, Control control)
+{
+    auto *e = control_of<OwnedTextEdit>(window, control, Kind::TextEdit);
+    return e == nullptr ? 0
+                        : static_cast<uint8_t>((e->modified() ? kModified : 0) | (e->can_undo() ? kCanUndo : 0) |
+                                               (e->has_selection() ? kHasSelection : 0));
+}
+
+void set_modified(Window window, Control control, bool modified)
+{
+    Behind *w = behind(window);
+    if (auto *e = w != nullptr ? w->as<OwnedTextEdit>(control, Kind::TextEdit) : nullptr) {
+        e->set_modified(modified);
+        w->note_modified(modified);
+    }
+}
+
+void load_begin(Window window, Control control)
+{
+    if (auto *e = control_of<OwnedTextEdit>(window, control, Kind::TextEdit)) {
+        e->load_begin();
+    }
+}
+
+bool load_append(Window window, Control control, const uint8_t *bytes, size_t size)
+{
+    auto *e = control_of<OwnedTextEdit>(window, control, Kind::TextEdit);
+    return e != nullptr && e->load_append(bytes, size);
+}
+
+void load_finish(Window window, Control control)
+{
+    Behind *w = behind(window);
+    if (auto *e = w != nullptr ? w->as<OwnedTextEdit>(control, Kind::TextEdit) : nullptr) {
+        e->load_finish();
+        w->note_modified(e->modified());
+    }
+}
+
+TextReader text_reader(Window window, Control control)
+{
+    return control_of<OwnedTextEdit>(window, control, Kind::TextEdit);
+}
+
+size_t read_text(TextReader reader, size_t offset, uint8_t *out, size_t room)
+{
+    return reader != nullptr ? static_cast<const OwnedTextEdit *>(reader)->save_bytes(offset, out, room) : 0;
+}
+
+size_t clipboard_size() { return wm::clipboard::size(); }
+
+void set_locked(Window window, bool locked)
+{
+    if (Behind *w = behind(window)) {
+        w->set_locked(locked);
+    }
+}
+
+bool locked(Window window)
+{
+    Behind *w = behind(window);
+    return w != nullptr && w->locked();
+}
+
 void set_caret(Window window, Control control, const gfx::Rect &caret)
 {
     if (auto *p = control_of<Picture>(window, control, Kind::Picture)) {
@@ -781,6 +928,9 @@ void place_control(Window window, Control control, const gfx::Rect &place)
     if (wm::Widget *c = w != nullptr ? w->any(control) : nullptr) {
         c->invalidate(); // where it was
         c->rect = place;
+        if (w->kind(control) == Kind::TextEdit) {
+            static_cast<OwnedTextEdit *>(c)->layout();
+        }
         c->invalidate();
     }
 }

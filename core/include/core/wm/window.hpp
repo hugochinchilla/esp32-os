@@ -217,6 +217,8 @@ public:
     bool locked() const { return locked_; }
 
     void add(Widget &w);
+    // Takes the widget added last out again (it could not be finished).
+    void remove_last();
     // Keyboard focus inside the window.
     void set_focus(Widget *w);
     Widget *focus() const { return focus_; }

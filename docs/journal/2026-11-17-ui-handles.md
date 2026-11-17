@@ -404,3 +404,29 @@ lock is the program's business and the system knows nothing of it.
 PC tests pass (41 of 41), the pictures match. A Terminal is four blocks
 of memory now (its window, the grid's picture, the scroll bar and the
 session) where it was two. Firmware not compiled since, and not run.
+
+## The same day: the Editor
+
+Program fifteen. The text editor (`wm::TextEdit`) was an object inside
+the Editor's window, with memory the Editor asked for and handed to it.
+By number it is a control of the system's:
+
+- `text_edit`: made with the sizes of its text and undo memory, which
+  are the control's own, counted as the program's, and go back with it.
+  No control if there is no memory.
+- What the menus do is one call with a name (`edit`: undo, cut, copy,
+  paste, delete, select all, clear); what the menus need to know is one
+  answer (`edit_state`: changed, can undo, has a selection). The file
+  goes in by pieces as before.
+- Saving runs on a job of the Editor's, on another task. The job cannot
+  look a number up in the system's table while the UI task may be
+  changing it, so the Editor takes a reader for the text on the UI task
+  before it starts the job (`text_reader`), and the job reads through it
+  (`read_text`). It is good while the window is locked, which the Editor
+  already did for the length of the save. The agent's, to confirm: it is
+  the one place where a program holds something that is not a number.
+- The Closing event (the Editor asks about unsaved changes), `set_locked`
+  and `clipboard_size`.
+
+PC tests pass (41 of 41), the pictures match. Firmware not compiled
+since, and not run.

@@ -136,7 +136,8 @@ void test_terminal()
     shell::launch(*app);
     desktop.update();
     CHECK(strcmp(title(), "Terminal") == 0 && count("Terminal") == 1);
-    // Two processes and two blocks: the window with its grid (the emulator),
+    // Two processes and four blocks: the window with its grid (the emulator),
+    // the grid's picture and the scroll bar,
     // and the session it is the terminal of, with the TTY and the shell.
     CHECK(memory.in_use() == blocks + 4 && count("sh") == 1);
     {
