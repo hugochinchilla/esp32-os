@@ -147,3 +147,48 @@ middle of `cat` of a large file, three at once and a fourth, `kill` of
 The exception was a sign. "Windows are destroyed when they close, except
 the Terminal, which waits for its task" read as a detail of jobs. It was
 the window holding something that was not a window.
+
+
+## On the board (added by the board thread, 2026-11-17)
+
+PR 33 at af95813 with main 7bafc56 (the noVNC removal) merged in; only the
+journal index conflicted. PC tests 42 of 42, firmware 0x164ea0, flashed by
+cable, the app only.
+
+1. A Terminal opened and typed in: `ps` shows `Terminal` (PID 6, parent 3,
+   the taskbar) and `sh` (PID 7, parent 6).
+2. `sh` carries the time of the command: 0.3, 1.8, 3.1, 4.4 s in four
+   readings a second apart while `type big.txt | grep 0 | wc` ran (300 KB).
+   `top` in a maximised Terminal lists Terminal (22K) and sh (17K) as two
+   rows.
+3. Alt+F4 in the middle of `cat` of a 300 KB file: the window had gone by
+   the next look, and neither the Terminal nor the sh row was there (telnet
+   `ps` straight after, and 2 s later). No crash. Internal RAM back to the
+   byte.
+4. Three Terminals (three Terminal and three sh rows) and a fourth refused
+   with the box.
+5. `kill` on the sh PID from telnet closed the window and both rows went.
+   `kill` on the Terminal PID (what End Task does) did the same. `exit` and
+   Ctrl+D close it.
+6. Memory: internal back to the byte after every close, after ten and after
+   thirty open/close rounds. External moved by a few KB either way between
+   readings (-2.6 KB once, +1.5 to +2.4 KB in another run), not steadily in
+   one direction; the telnet connections used to read `ps` come and go in the
+   same heap. One Terminal open: internal -12,656 bytes, external -27,144, as
+   on main.
+7. Maximised: `top` and `ted` fill the width (pictures checked).
+8. A pipe with a redirection (`type big.txt | wc > wc.txt`: 4200 63000
+   306600) and Ctrl+C on `cat` followed by a command that ran.
+9. Telnet answered `ver`. The serial console (`console:once`, a restart):
+   `dir` and `ps` answered through `dbg.py console` and Ctrl+] left; the
+   new-form start-up file was put back and the console is off again.
+10. The start-up file that gave "taskbar goes before taskbar" (`start
+    desktop`, `taskbar:respawn`, `inetd:once`): the log now has only "desktop
+    goes before taskbar".
+11. `dbg.py misses`: none. Repaint 13.9 ms (main 13.7 to 14.1 ms). Free RAM
+    on the idle desktop: internal 206,059 bytes, external 6,479,784.
+
+A note from the checks, not this change: deleting a file that a running
+`cat` still has open fails ("Failed to unlink ... Has open FD" in the log,
+"the disk could not be read or written" to `dbg.py rm`); once the command
+had ended the delete worked. LittleFS does not delete an open file.
