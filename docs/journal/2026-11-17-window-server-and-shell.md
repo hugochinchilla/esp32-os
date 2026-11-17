@@ -152,3 +152,45 @@ own: 1 KB in `ps`), and destroys them when it ends.
   20's list.
 - Whether a visible pause is added before the taskbar is restarted is
   still the owner's to say.
+
+
+## On the board (added by the board thread, 2026-11-17)
+
+Checked together with the OS calls' second part at 657a022, with main ebe84b0 (the missed-refill
+log) merged in; only the journal index conflicted. PC tests 41 of 41
+(`serial_console` passed), the firmware built at 0x161600 and was flashed by
+cable, the app only. A Firefox tab on the owner's laptop had the web page
+viewer open during part of the turn.
+
+1. The Start menu opens with a click, with Ctrl+Esc and with the Windows
+   key.
+2. A taskbar button pressed and slid off onto the desktop before release:
+   nothing happens. A click on the button minimises its window, a second
+   click brings it back.
+3. Quick launch: File manager (My Board), Editor and Terminal open with one
+   click each.
+4. The tray icon shows the signal, and a click opens the Network panel. The
+   clock moved from 10:56 to 10:57 on the minute.
+5. Desktop icons: a file put in C:\Documents\Desktop appeared; a click
+   selects it (highlighted name), a double click opens it in the Editor, and a
+   drag onto the Trash moves it to C:\.trash (the Trash icon shows it is not
+   empty). A file dragged from the File manager onto the desktop moved into
+   C:\Documents\Desktop. A right click on the desktop gives "Display...".
+6. Task Manager with all processes: taskbar shows 1K. End Task on it: it
+   came back (PID 19, parent 2), and its quick launch, the desktop icons and
+   the Start menu worked.
+7. Repaint of the whole screen: 13.3 to 14.7 ms, against 13.5 to 14.0 ms on
+   main right after. Free RAM on the idle desktop: internal 206,171 bytes
+   against 206,027 on main, external 6,472,080 against 6,470,292.
+8. The idle desktop (no pointer) after the merge, against main: see the end
+   of this section.
+9. `dbg.py misses`: no missed refill not caused by the debug link. VNC
+   took a full screen; telnet answered.
+
+A note on the clock: on the first start after the flash, a hard reset that
+clears the clock, the bar showed 12:00 AM for about a minute and a half
+before the network set the time. Measured again after two more hard resets
+the time came in 3 and 4 s. The code that sets it is unchanged, so this was
+the time server being slow that once.
+
+The idle desktop without the pointer, main ebe84b0 against this build after the merge: 31 pixels differ, all in the clock's minute digits (x 602 to 612, y 462 to 469); everything else is identical to the pixel.

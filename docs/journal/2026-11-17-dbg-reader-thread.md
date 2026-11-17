@@ -62,3 +62,31 @@ to be proven on the board.
   port is a pseudo-terminal, which makes the sender wait. The proof is the
   board thread's own case: `type` of the 300 KB file with three
   screenshots and a 100 KB put and get, and a count of the lines.
+
+
+## On the board (added by the board thread, 2026-11-17)
+
+Branch commit 555de73 with main ca93091 merged in (only the journal index
+conflicted). Against main it changes only `tools/dbg.py`, its new test and
+`host/CMakeLists.txt`; the board ran main's firmware throughout. PC tests 42
+of 42 (`dbg_reader` new). `start console` was put in the start-up file for the
+console checks and taken out again at the end (the file is byte for byte the
+default).
+
+1. The case of backlog 14b: `type` of a 300 KB file on the serial console
+   while three screenshots and then a 100 KB put and get run. With this
+   tool, three runs: 4,200 of 4,200 lines each time, no gap. With main's
+   tool, the same run right after: 3,928 of 4,200, the lines 84 to 354 lost.
+2. Every path through the reader, with the console on: ping, info, stats,
+   memory, tasks, windows, screenshot, key, text and mouse, ls, a 300 KB put
+   and get compared byte for byte, time, Wi-Fi status and list, a boot
+   screen with repaint, `dmesg`, `misses` (exit 0), `--reset` through the
+   control lines (answered 92 ms after), `reboot` and `reboot --fast` (the
+   port going and coming back), `monitor` over a restart (147 lines, the
+   "boot to desktop" line among them), and `console` on a pseudo-terminal
+   (`dir`, `ps`, Ctrl+] left with status 0). `tools/ota.py` does not use
+   `dbg.py`'s code, so it was not part of this.
+3. Timing against main's tool: ping median 0.50 ms both (most 0.67 against
+   0.61 ms), a screenshot 0.164 s against 0.167 s, a 300 KB put 28.9 s both
+   and the get 6.2 s against 11.8 s in that run (main's get has varied from
+   5.3 to 11.8 s in earlier runs).
