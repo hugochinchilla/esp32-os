@@ -45,6 +45,16 @@ const uart_port_t kSerial = UART_NUM_0;
 {
     const uint32_t word = CHINCHILLA_START_OS;
     memcpy(bootloader_common_get_rtc_retain_mem()->custom, &word, sizeof(word));
+    // A missed refill breaks the picture's timing and can make a monitor
+    // search for it again: said on serial when it happened.
+    uint32_t missed = 0, worst_us = 0, line = 0;
+    vga_missed_total(&missed, &worst_us, &line);
+    if (missed != 0) {
+        char text[96];
+        const int n = snprintf(text, sizeof(text), "\r\nVideo: %u refills missed, the worst by %u us\r\n",
+                               static_cast<unsigned>(missed), static_cast<unsigned>(worst_us));
+        uart_write_bytes(kSerial, text, n);
+    }
     uart_wait_tx_done(kSerial, pdMS_TO_TICKS(200));
     esp_restart();
     while (true) {

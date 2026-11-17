@@ -285,3 +285,73 @@ BIOS write a checksum, use RTC slow memory). Not taken: the first would
 read rubbish after a power-on unless guarded by the reset reason; the
 second puts Espressif's checksum rule into our BIOS; the third uses memory
 nothing reserves for us.
+
+## Fourth try: the handover works; two things it showed
+
+With 6ff2dde the board did what was meant. On serial, word for word:
+"chinchilla: reset reason 12, boot block valid: 00000000 00000000 00000001
+534f4843 00000000 4743989a", "BIOS done: starting the OS", "started by the
+BIOS: its self-test is not repeated", "init: started desktop". A byte on
+serial skips the countdown and the desktop is there 8.2 s after the reset;
+`dbg.py reboot --fast` goes straight to the OS (desktop 3.2 s after the
+request); a restart from the Start menu passes the BIOS; a reset by the
+board's EN pin gives the BIOS and then the OS; an update over Wi-Fi goes
+through the BIOS, "on trial for 10 s", then "confirmed", so the pass
+through the BIOS does not count against the trial. Wi-Fi, telnet, the web
+viewer and VNC work, memory is as on `main`, no missed refills. Not merged,
+for the first of these two:
+
+**1. The error report was lost.** After `dbg.py fault abort` the OS's error
+screen said only "The machine restarted by itself: a panic that left no
+record", where `main` names the program, the task, the place and the chain
+of calls. Two things were found by reading:
+
+- Why "a panic": the BIOS does not use ESP-IDF's reset-reason code, so the
+  linker leaves it out, and with it the start-up step that clears the
+  "it was a panic" mark. The mark was still there when the OS started.
+- Why "no record": not found. The record lives at the start of RTC slow
+  memory (0x50000000, 188 bytes). The BIOS's link map puts nothing there,
+  the heap does not include it, and the third try showed the end of that
+  memory surviving a restart. Something between the panic and the OS's
+  start spoils it all the same.
+
+Options for the error report:
+
+- A. After an error the OS restarts straight into the OS, not through the
+  BIOS, and starts exactly as on `main`: its own self-test, the error
+  screen with the whole record. A reset by a watchdog or a brownout does
+  the same, so the OS still learns the cause from the chip (a pass through
+  the BIOS would turn it into "restarted by software").
+- B. Find what spoils the record first, and keep the BIOS in the path.
+- C. Move the error screen into the BIOS now (step 3's plan).
+
+Chosen: A, to confirm with the owner, because it is the behaviour of
+`main` unchanged, it does not depend on the unknown, and step 3 replaces
+it anyway. Not B alone: an unknown cause could take several board turns.
+Not C: step 3 has not been put to the owner yet, and it would meet the
+same unknown. B is still wanted for step 3, so the bootloader's line now
+also prints the first six words of RTC slow memory: a restart from the
+Start menu after an error shows them before and after the BIOS ran.
+
+Built: a third word, `CHINCHILLA_SKIP_BIOS`, written by the OS's panic
+handler and by its watchdog when they stop the machine; the bootloader
+starts the OS and clears the word. The bootloader treats the chip's own
+watchdog and brownout reset reasons the same way. Both rules are in
+`firmware/common/boot_flag.h` and run in the PC tests.
+
+**2. The self-test is not seen after a restart on this monitor.** From the
+webcam, for `dbg.py reboot`: picture gone at about 2.0 s, the monitor's "no
+signal" box at 5.5 s, the BIOS visible only at about 8.5 s and already at
+"Booting in 5"; BIOS until 13.5 s; blank from 14.0 to 17.0 s; desktop at
+17.5 s. So the first blank is about 6.5 s, the second 3 s as measured
+before, and the monitor took about 5.7 s to show the BIOS after its signal
+returned, against 2.4 s on a cold start and about 2.2 s at the second
+handover. The BIOS waits 2.5 s for the monitor, as the OS does, so the
+whole self-test passed unseen. Not explained yet. One thing that could do
+it is a missed video refill during the BIOS's memory test, which breaks
+the signal's timing and makes a monitor search again; the BIOS now says on
+serial how many refills were missed, if any. This is the owner's to
+decide once the cause is known: a longer wait costs time at every start.
+
+Both firmwares compile (bootloader 22,176 bytes, BIOS 301,280, OS
+1,488,288); the PC tests pass. Not run on the board.

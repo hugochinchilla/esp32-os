@@ -6,6 +6,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#include "bootloader_common.h"
 #include "driver/uart.h"
 #include "esp_attr.h"
 #include "esp_cpu_utils.h"
@@ -17,6 +18,7 @@
 #include "esp_timer.h"
 #include "xtensa_context.h"
 
+#include "boot_flag.h"
 #include "core/proc/table.hpp"
 #include "core/sys/watchdog.hpp"
 
@@ -50,6 +52,17 @@ TaskHandle_t s_task = nullptr; // the watched task
 esp_timer_handle_t s_timer = nullptr;
 
 uint32_t now_ms() { return static_cast<uint32_t>(esp_timer_get_time() / 1000); }
+
+// The restart that follows an error goes straight back to this firmware,
+// not through the BIOS (firmware/common/boot_flag.h): the record above was
+// found spoiled after a pass through the BIOS on the board, and until the
+// BIOS shows the error screen itself (step 3) this is where it is shown.
+// A few bytes copied: safe in the panic handler.
+void skip_bios_once()
+{
+    const uint32_t word = CHINCHILLA_SKIP_BIOS;
+    memcpy(bootloader_common_get_rtc_retain_mem()->custom, &word, sizeof(word));
+}
 
 // The process the UI task is working for, if `task` is the UI task. Read
 // from another task or from the panic handler without a lock: the UI task is
@@ -92,6 +105,7 @@ void supervise(void *)
     fill_process(r, s_task);
     sys::crash_seal(r);
     s_written = true;
+    skip_bios_once();
 
     char line[160];
     sys::crash_headline(r, line, sizeof(line));
@@ -233,5 +247,6 @@ extern "C" void __wrap_esp_panic_handler(void *arg)
         sys::crash_seal(r);
         s_written = true;
     }
+    skip_bios_once();
     __real_esp_panic_handler(arg);
 }

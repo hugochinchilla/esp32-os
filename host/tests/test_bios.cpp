@@ -382,6 +382,19 @@ void test_boot_word()
     CHECK(!chinchilla_start_bios(&word, false) && word == 0);
     word = CHINCHILLA_FROM_BIOS;
     CHECK(!chinchilla_start_bios(&word, false) && word == 0);
+    // The OS stopped on an error: straight back to the OS, which starts as
+    // with no BIOS; the restart after that goes through the BIOS again.
+    word = CHINCHILLA_SKIP_BIOS;
+    CHECK(!chinchilla_start_bios(&word, true) && word == 0);
+    CHECK(chinchilla_start_bios(&word, true) && word == 0);
+    // Watchdogs and a brownout are failures; power-on, a restart by
+    // software and the USB port are not.
+    for (int reason : {7, 8, 9, 11, 13, 15, 16, 17, 18}) {
+        CHECK(chinchilla_reset_is_failure(reason));
+    }
+    for (int reason : {1, 3, 5, 12, 21, 22}) {
+        CHECK(!chinchilla_reset_is_failure(reason));
+    }
 }
 
 } // namespace

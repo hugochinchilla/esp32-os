@@ -87,11 +87,17 @@ static int selected_boot_partition(const bootloader_state_t *bs)
     // that is read as "not valid". That lost the word on the board
     // (docs/journal/2026-11-17-bios-second-stage.md, "Third try").
     const bool valid = bootloader_common_get_rtc_retain_mem_partition() != NULL;
+    const int reason = (int)esp_rom_get_reset_reason(0);
     {
+        // One line that would have shown each fault met on the board. The
+        // last six words are the start of RTC slow memory, where the OS
+        // keeps its crash record.
         const uint32_t *raw = (const uint32_t *)bootloader_common_get_rtc_retain_mem();
-        esp_rom_printf("chinchilla: reset reason %d, boot block %s: %08x %08x %08x %08x %08x %08x\n",
-                       (int)esp_rom_get_reset_reason(0), valid ? "valid" : "not valid",
-                       raw[0], raw[1], raw[2], raw[3], raw[4], raw[5]);
+        const volatile uint32_t *slow = (const volatile uint32_t *)0x50000000;
+        esp_rom_printf("chinchilla: reset reason %d, boot block %s: %08x %08x %08x %08x %08x %08x, "
+                       "slow %08x %08x %08x %08x %08x %08x\n",
+                       reason, valid ? "valid" : "not valid", raw[0], raw[1], raw[2], raw[3], raw[4], raw[5],
+                       slow[0], slow[1], slow[2], slow[3], slow[4], slow[5]);
     }
     if (!valid) {
         bootloader_common_update_rtc_retain_mem(NULL, true);
@@ -99,10 +105,15 @@ static int selected_boot_partition(const bootloader_state_t *bs)
     uint32_t word;
     uint8_t *custom = bootloader_common_get_rtc_retain_mem()->custom;
     memcpy(&word, custom, sizeof(word));
+    const uint32_t found = word;
+    if (word != CHINCHILLA_START_OS && chinchilla_reset_is_failure(reason)) {
+        word = CHINCHILLA_SKIP_BIOS;
+    }
 
     // The image is only read when the BIOS is wanted.
     esp_image_metadata_t data;
-    const bool wanted = word != CHINCHILLA_START_OS;
+    const bool wanted = word != CHINCHILLA_START_OS && word != CHINCHILLA_SKIP_BIOS;
+    const bool skipped = word == CHINCHILLA_SKIP_BIOS;
     const bool present = wanted && bs->test.offset != 0 &&
                          esp_image_verify(ESP_IMAGE_VERIFY_SILENT, &bs->test, &data) == ESP_OK;
     const bool bios = chinchilla_start_bios(&word, present);
@@ -111,7 +122,10 @@ static int selected_boot_partition(const bootloader_state_t *bs)
         ESP_LOGI(TAG, "starting the BIOS");
         return TEST_APP_INDEX;
     }
-    if (wanted) {
+    if (skipped) {
+        ESP_LOGW(TAG, "%s: starting the OS without the BIOS",
+                 found == CHINCHILLA_SKIP_BIOS ? "the OS stopped on an error" : "reset by a watchdog or a brownout");
+    } else if (wanted) {
         ESP_LOGW(TAG, "no BIOS in the flash: starting the OS");
     } else {
         ESP_LOGI(TAG, "BIOS done: starting the OS");
