@@ -216,6 +216,21 @@ else()
     message(STATUS "SDL2 not found: the desktop program (chinchilla) is not built")
 endif()
 
+# The browser's portable parts: addresses, HTML, layout, HTTP.
+add_executable(test_www tests/test_www.cpp)
+target_link_libraries(test_www PRIVATE core)
+add_test(NAME www COMMAND test_www)
+add_executable(test_dialer tests/test_dialer.cpp)
+target_link_libraries(test_dialer PRIVATE core Threads::Threads)
+add_test(NAME dialer COMMAND test_dialer)
+
+# The browser on the desktop, against a web kept in the test: its screens
+# compared with the reference pictures.
+add_executable(render_browser_scenes tests/render_browser_scenes.cpp)
+target_link_libraries(render_browser_scenes PRIVATE core)
+add_test(NAME browser_pictures
+         COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/check_pictures.py $<TARGET_FILE:render_browser_scenes>)
+
 # Memory-port buffers live as long as the program, as on the board, so the
 # leak checker would report them; applied after every add_test above.
 get_property(all_tests DIRECTORY PROPERTY TESTS)

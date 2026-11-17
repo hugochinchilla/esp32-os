@@ -865,7 +865,8 @@ void open_folder(const char *path)
     app::show(g_windows[n]);
 }
 
-// What opens what, by extension: 1 the Editor, 2 the Picture viewer, 0 nothing.
+// What opens what, by extension: 1 the Editor, 2 the Picture viewer, 3 the
+// web browser, 0 nothing.
 static int program_kind(const char *path)
 {
     static const char *const kText[] = {"txt", "log", "ini", "md"};
@@ -882,6 +883,9 @@ static int program_kind(const char *path)
             return 2;
         }
     }
+    if (strcmp(ext, "htm") == 0 || strcmp(ext, "html") == 0) {
+        return 3;
+    }
     return 0;
 }
 
@@ -895,6 +899,9 @@ bool open_file(const char *path)
         return true;
     case 2:
         open_picture(path);
+        return true;
+    case 3:
+        open_browser(path);
         return true;
     default:
         break;

@@ -144,6 +144,9 @@ void start_network();
 // Centres a window of the given size in the work area.
 gfx::Rect centred(const wm::Wm &wm, int w, int h);
 
+// The web browser (browser.cpp): its Start menu entry.
+void open_browser_home();
+
 // Cactus Patch (cactus_patch.cpp): its Start menu entry.
 void open_cactus_patch();
 

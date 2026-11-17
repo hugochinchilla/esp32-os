@@ -301,6 +301,8 @@ void pattern(Drawing on, int x, int y, const char *const *rows, int count, gfx::
 void pattern_opaque(Drawing on, int x, int y, const char *const *rows, int count, gfx::Colour fg, gfx::Colour bg);
 // The text calls answer the x after the last character, as the canvas does.
 int text(Drawing on, int x, int y, const char *s, gfx::Colour c, bool bold);
+// The font `scale` times as large, leaning if `slanted` (a web page's headings and italics).
+int text_scaled(Drawing on, int x, int y, const char *s, gfx::Colour c, bool bold, bool slanted, int scale);
 int text_opaque(Drawing on, int x, int y, const char *s, gfx::Colour fg, gfx::Colour bg, int caret_x);
 int text_opaque_rgb(Drawing on, int x, int y, const char *s, gfx::Colour fg, gfx::Rgb bg, int caret_x);
 void text_up(Drawing on, int x, int y, const char *s, gfx::Colour c, bool bold);

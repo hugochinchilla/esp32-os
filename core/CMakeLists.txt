@@ -38,8 +38,12 @@ set(CORE_SRCS
     src/net/viewer_page.cpp
     src/net/web.cpp
     src/net/wifi.cpp
+    src/www/html.cpp
+    src/www/http.cpp
+    src/www/url.cpp
     src/init/init.cpp
     src/os/os.cpp
+    src/os/tcp.cpp
     src/os/ui.cpp
     src/desk/icons.cpp
     src/desk/taskbar.cpp
@@ -60,6 +64,7 @@ set(CORE_SRCS
     src/sys/missed_refills.cpp
     src/shell/apps.cpp
     src/shell/boot.cpp
+    src/shell/browser.cpp
     src/shell/cactus_patch.cpp
     src/shell/culebra.cpp
     src/shell/defrag.cpp

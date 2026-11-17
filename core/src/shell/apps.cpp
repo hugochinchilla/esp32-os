@@ -268,6 +268,7 @@ const Entry kApps[] = {
     {{"Picture viewer", nullptr, &open_viewer}, &gfx::viewer_icon_16},
     {{"Task Manager", nullptr, &open_task_manager}, &gfx::tasks_icon_16},
     {{"Terminal", nullptr, &open_terminal, true}, &gfx::terminal_icon_16},
+    {{"Vizcacha", nullptr, &open_browser_home}, &gfx::browser_icon_16},
     {{"Welcome", nullptr, &open_welcome}, &gfx::welcome_icon_16},
     {{"Widget gallery", nullptr, &open_gallery}, &gfx::gallery_icon_16},
 };

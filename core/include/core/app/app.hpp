@@ -89,6 +89,10 @@ public:
     {
         return os::ui::draw::text(number_, x, y, s, c, bold);
     }
+    int text_scaled(int x, int y, const char *s, gfx::Colour c, bool bold, bool slanted, int scale)
+    {
+        return os::ui::draw::text_scaled(number_, x, y, s, c, bold, slanted, scale);
+    }
     int text_opaque(int x, int y, const char *s, gfx::Colour fg, gfx::Colour bg, int caret_x = -1)
     {
         return os::ui::draw::text_opaque(number_, x, y, s, fg, bg, caret_x);

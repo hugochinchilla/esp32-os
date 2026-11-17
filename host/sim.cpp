@@ -24,7 +24,9 @@
 #include "core/shell/boot.hpp"
 #include "core/sys/log.hpp"
 #include "core/shell/shell.hpp"
+#include "core/net/posix_dialer.hpp"
 #include "core/net/posix_tcp.hpp"
+#include "core/os/tcp.hpp"
 #include "core/net/rfb.hpp"
 #include "core/net/services.hpp"
 #include "core/net/telnet.hpp"
@@ -283,6 +285,9 @@ int main(int argc, char **argv)
     first.add(
         "desktop",
         [](void *) {
+            // Outgoing connections (os::tcp): the PC's own sockets.
+            static net::PosixDialer dialer;
+            os::install_dialer(&dialer);
             shell::start(screen, *parts.system, storage, memory);
             shell::open_demo_windows(); // what the debug-tool tests drive
             parts.protocol->set_counters(shell::picture_timings(), shell::kPictureTimings);

@@ -1581,6 +1581,12 @@ int text(Drawing on, int x, int y, const char *s, gfx::Colour col, bool bold)
     gfx::Canvas *c = g_drawings.at(on);
     return c != nullptr ? c->text(x, y, s, col, bold) : x + gfx::Canvas::text_width(s, bold);
 }
+int text_scaled(Drawing on, int x, int y, const char *s, gfx::Colour col, bool bold, bool slanted, int scale)
+{
+    gfx::Canvas *c = g_drawings.at(on);
+    return c != nullptr ? c->text_scaled(x, y, s, col, bold, slanted, scale)
+                        : x + gfx::Canvas::text_width(s, bold) * scale;
+}
 int text_opaque(Drawing on, int x, int y, const char *s, gfx::Colour fg, gfx::Colour bg, int caret_x)
 {
     gfx::Canvas *c = g_drawings.at(on);
