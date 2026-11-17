@@ -2,7 +2,6 @@
 // answers two things on one port:
 //
 //   GET /            one page (the viewer), given with set_page()
-//   GET /<path>      a second page, given with set_second_page()
 //   a WebSocket      the bytes of a VNC connection inside WebSocket frames
 //
 // The WebSocket comes out as an ordinary net::Stream, so the VNC server
@@ -38,13 +37,6 @@ public:
         page_ = html;
         page_size_ = size;
     }
-    // One more page, at a path of its own such as "/novnc".
-    void set_second_page(const char *path, const char *html, size_t size)
-    {
-        second_path_ = path;
-        second_ = html;
-        second_size_ = size;
-    }
 
     // Serves the page to whoever asks, and returns the stream of a new
     // WebSocket connection (always this same object) or nullptr.
@@ -72,7 +64,7 @@ private:
         char line[200];      // the header line being read
         uint8_t line_size;
         bool line_cut;       // the line was longer than the buffer
-        bool first_line_seen, is_get, root, second, upgrade, binary;
+        bool first_line_seen, is_get, root, upgrade, binary;
         char key[64];        // Sec-WebSocket-Key
         // The answer being sent.
         char head[192];
@@ -99,9 +91,6 @@ private:
     Listener *port_ = nullptr;
     const char *page_ = nullptr;
     size_t page_size_ = 0;
-    const char *second_path_ = nullptr;
-    const char *second_ = nullptr;
-    size_t second_size_ = 0;
     Request requests_[kConnections] = {};
     uint32_t next_age_ = 1;
     uint32_t pages_served_ = 0;
@@ -125,8 +114,5 @@ private:
 // The viewer page the board serves (core/src/net/viewer_page.cpp).
 const char *viewer_page();
 size_t viewer_page_size();
-// A page that shows the same screen with noVNC, loaded from a CDN.
-const char *novnc_page();
-size_t novnc_page_size();
 
 } // namespace net

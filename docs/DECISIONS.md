@@ -975,8 +975,15 @@ tested on the PC only (not yet compiled for or run on the board).
   `core/src/shell/cactus_patch.cpp`. Its tests and reference pictures are
   `host/tests/test_cactus.cpp` (pictures 50 to 54).
 
-### noVNC from a CDN (asked 2026-11-16, to confirm)
+### noVNC from a CDN: dropped (the owner, 2026-11-17)
 
+- **Dropped** (the owner, 2026-11-17: "drop the novnc"). Our own viewer at
+  `/` works without the internet and is enough. The `/novnc` page and its
+  file hashes cost about 9.4 KB and 10.9 KB of firmware; removing them,
+  `tools/novnc_integrity.py` and the web server's support for a second page
+  (it had no other user) made the firmware 11,056 bytes smaller.
+  `/novnc` now answers 404. The notes below are what was built and why, kept
+  as the record. Journal: `docs/journal/2026-11-17-drop-novnc.md`.
 - The owner asked whether noVNC could be used from a trusted CDN at a pinned
   version. It can, and is added as a second page, `http://<address>/novnc`,
   beside the built-in viewer at `/` so the two can be compared; which one
