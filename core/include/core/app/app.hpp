@@ -108,6 +108,8 @@ public:
     static int text_width(const char *s, bool bold = false) { return os::ui::draw::text_width(s, bold); }
     static int text_height() { return os::ui::draw::text_height(); }
     os::ui::Drawing number() const { return number_; }
+    // What of it may be drawn now: a program can skip what lies outside.
+    gfx::Rect limit() const { return os::ui::draw::bounds(number_); }
 
 private:
     os::ui::Drawing number_;
@@ -118,6 +120,8 @@ using Number = os::ui::Window; // a window's number: dead once it has closed
 constexpr Number kNone = os::ui::kNoWindow;
 using os::ui::kClientSize;
 using os::ui::kDialog;
+using os::ui::kFixedSize;
+using os::ui::kMenuBar;
 using os::ui::kPicture;
 using os::ui::kWholeDesktop;
 
@@ -252,6 +256,7 @@ public:
     void close() { os::ui::close(number_); }
     bool on_screen() const { return os::ui::on_screen(number_); }
     bool in_front() const { return os::ui::in_front(number_); } // it is the window in use
+    bool has_keys() const { return os::ui::has_keys(number_); } // the keys go to it, and it is not minimised
     // Asks for a part of the client area to be painted again.
     void redraw(const gfx::Rect &part) { os::ui::redraw(number_, part); }
 
@@ -273,6 +278,8 @@ public:
     virtual void paint_in(Control /*which*/, Canvas &) {}
     // A cell of a grid is to be painted.
     virtual void paint_cell(Control /*which*/, int /*index*/, const gfx::Rect & /*cell*/, Canvas &) {}
+    // A menu of the menu bar is about to open: a chance to grey items out.
+    virtual void menu_opening(int /*which*/) {}
     // The window has closed; the object is destroyed after this.
     virtual void closed() {}
 
@@ -317,7 +324,11 @@ protected:
     {
         return {number_, os::ui::meter(number_, place, colour)};
     }
-    Picture picture(const gfx::Rect &place) { return {number_, os::ui::picture(number_, place)}; }
+    // `once`: every pixel of it is written exactly once when it is painted.
+    Picture picture(const gfx::Rect &place, bool once = false)
+    {
+        return {number_, os::ui::picture(number_, place, once)};
+    }
     Grid grid(const gfx::Rect &place, int columns, int count, int cell_w, int cell_h, int margin = 3)
     {
         return {number_, os::ui::grid(number_, place, columns, count, cell_w, cell_h, margin)};
@@ -334,6 +345,8 @@ protected:
     void set_focus(const Control &control) { os::ui::set_focus(number_, control.number()); }
     Control focus() const { return {number_, os::ui::focus(number_)}; }
     void set_title(const char *title) { os::ui::set_title(number_, title); } // must stay valid
+    // The window was opened with kMenuBar; the table must stay valid.
+    void set_menu_bar(const wm::MenuBar *bar) { os::ui::set_menu_bar(number_, bar); }
     int radio_value(int group) const { return os::ui::radio_value(number_, group); }
     void set_radio_value(int group, int value) { os::ui::set_radio_value(number_, group, value); }
 
@@ -379,6 +392,9 @@ private:
                 Canvas canvas(event.drawing);
                 window->paint_cell(Control(window->number_, event.control), event.index, event.part, canvas);
             }
+            return true;
+        case os::ui::What::Menu:
+            window->menu_opening(event.index);
             return true;
         case os::ui::What::Closed:
             window->closed();

@@ -316,3 +316,27 @@ the tests went on to the commit when it should have stopped, the same
 kind of slip as with the Screen Saver. Fixed in the next commit, and the
 checks before a commit are one script now, `tools/gate.sh`, which fails
 unless the build, every test, the pictures and the OS-call check pass.
+
+## The same day: Culebra, the first program with a menu bar
+
+Program eleven, and the first that is not a dialog. New in the system:
+
+- A window can say where it goes (`Look::x`, `y`), that its size is
+  fixed (`kFixedSize`) and that it has a menu bar (`kMenuBar`,
+  `set_menu_bar`). The menus are still the program's tables of texts and
+  functions; the Menu event comes before one opens, to grey items out.
+- A `picture` can say that it writes every pixel once when it paints
+  (the board), so the system does not paint it through a buffer; and the
+  drawing tells what part of it may be drawn (`Canvas::limit`), so the
+  board paints only the cells that changed.
+- `has_keys`: the snake stops while another window has the keys.
+
+Two slips on the way, both caught by `test_snake`: the tests asked for
+the game before opening the window, which used to make one and no longer
+does (the tests open it first now); and a function added to the system's
+window class had the name of one of the window manager's and hid it, so
+the game believed it never had the keys.
+
+PC tests pass (41 of 41), the pictures match: each step still paints
+only the four cells that changed, each pixel once. Firmware not compiled
+since, and not run.

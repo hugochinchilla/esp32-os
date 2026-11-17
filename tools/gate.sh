@@ -13,7 +13,9 @@ out=$(timeout 550 ctest --test-dir build/host -j3 2>&1 || true)
 echo "$out" | grep -E "Failed|tests passed" || true
 echo "$out" | grep -q "100% tests passed" || { echo "gate: tests failed"; exit 1; }
 for scenes in render_scenes render_net_scenes test_cactus; do
-    python3 tools/check_pictures.py "build/host/$scenes" | tail -1
+    python3 tools/check_pictures.py "build/host/$scenes" >build/host/gate-pictures.log 2>&1 ||
+        { tail -5 build/host/gate-pictures.log; echo "gate: $scenes does not match"; exit 1; }
 done
-python3 tools/check_os_calls.py | tail -1
+python3 tools/check_os_calls.py >build/host/gate-calls.log 2>&1 ||
+    { tail -5 build/host/gate-calls.log; echo "gate: the OS-call check failed"; exit 1; }
 echo "gate: all passed"

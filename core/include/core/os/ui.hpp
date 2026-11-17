@@ -47,6 +47,7 @@ enum class What : uint8_t {
     Paint,   // the client area, after the face and the controls are painted: `drawing`. With a
              // `control`, that picture alone, its corner as (0, 0)
     Cell,    // a cell of a grid is to be painted: `control`, `index`, `part` (the cell), `drawing`
+    Menu,    // a menu of the menu bar is about to open: `index`, which. A chance to grey items out
     Closed,  // the window has closed, or never opened; once, and it and its numbers are dead after this
 };
 
@@ -66,11 +67,14 @@ enum Flag : uint8_t {
     kWholeDesktop = 2, // nothing else can be used while it is open
     kPicture = 4,      // the program paints too (What::Paint)
     kClientSize = 8,   // `width` and `height` are of the client area, not of the frame
+    kFixedSize = 16,   // cannot be made bigger or smaller (a dialog never can)
+    kMenuBar = 32,     // it will have a menu bar (set_menu_bar): with kClientSize, room for it
 };
 
 struct Look {
     const char *title = "";
     int width = 200, height = 100; // of the whole frame; centred on the screen
+    int x = -1, y = -1;            // where the frame goes; -1: centred
     const gfx::Bitmap *icon = nullptr;
     uint8_t flags = 0;
     // A dialog over this window, which cannot be used while the dialog is
@@ -88,6 +92,11 @@ bool alive(Window window);
 bool on_screen(Window window); // shown, and not closed
 void set_title(Window window, const char *title); // the text must stay valid
 bool in_front(Window window);                     // it is the window in use
+bool has_keys(Window window);                     // the keys go to it, and it is not minimised
+// The menu bar: the program's own table, which must stay valid; the
+// window must have been made with kMenuBar. What::Menu comes before one
+// of its menus opens.
+void set_menu_bar(Window window, const wm::MenuBar *bar);
 // Asks for a part of the client area to be painted again.
 void redraw(Window window, const gfx::Rect &part);
 
@@ -110,7 +119,10 @@ Control group(Window window, const gfx::Rect &place, const char *caption); // a 
 Control text_area(Window window, const gfx::Rect &place, const char *text); // several lines, read only
 
 // A rectangle the program paints (What::Paint with this control).
-Control picture(Window window, const gfx::Rect &place);
+// `once`: the program writes every pixel of it exactly once when it paints
+// (a game's board, a picture), so the system need not paint it through a
+// buffer.
+Control picture(Window window, const gfx::Rect &place, bool once = false);
 // Asks for a control to be painted again.
 void redraw_control(Window window, Control control);
 void redraw_control_part(Window window, Control control, const gfx::Rect &part); // in the control's coordinates
@@ -210,6 +222,10 @@ int text_opaque(Drawing on, int x, int y, const char *s, gfx::Colour fg, gfx::Co
 int text_opaque_rgb(Drawing on, int x, int y, const char *s, gfx::Colour fg, gfx::Rgb bg, int caret_x);
 void text_up(Drawing on, int x, int y, const char *s, gfx::Colour c, bool bold);
 void fill_around(Drawing on, const gfx::Rect &area, const gfx::Rect &hole, gfx::Colour c);
+
+// What of the drawing may be drawn now, in its coordinates: a program can
+// skip what lies outside.
+gfx::Rect bounds(Drawing on);
 
 // Needs no drawing: the size of a text in the system's font.
 int text_width(const char *s, bool bold);

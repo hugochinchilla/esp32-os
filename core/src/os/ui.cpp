@@ -104,11 +104,16 @@ private:
 class Picture : public wm::Widget {
 public:
     using PaintFn = void (*)(Picture &picture, gfx::Canvas &c, void *context);
-    Picture(const gfx::Rect &r, PaintFn paint, void *context) : Widget(r), paint_(paint), context_(context) {}
+    Picture(const gfx::Rect &r, bool once, PaintFn paint, void *context)
+        : Widget(r), once_(once), paint_(paint), context_(context)
+    {
+    }
     void paint(gfx::Canvas &c) override { paint_(*this, c, context_); }
+    bool layered() const override { return !once_; }
     ~Picture() = default;
 
 private:
+    bool once_;
     PaintFn paint_;
     void *context_;
 };
@@ -316,8 +321,10 @@ private:
 gfx::Rect frame_for(const Look &look)
 {
     const bool client = (look.flags & kClientSize) != 0;
-    return os::centred(look.width + (client ? 2 * wm::Window::kBorder : 0),
-                       look.height + (client ? wm::Window::kClientTop + wm::Window::kBorder : 0));
+    const int bar = (look.flags & kMenuBar) != 0 ? wm::Window::kMenuBarHeight : 0;
+    const int w = look.width + (client ? 2 * wm::Window::kBorder : 0);
+    const int h = look.height + (client ? wm::Window::kClientTop + bar + wm::Window::kBorder : 0);
+    return look.x >= 0 && look.y >= 0 ? gfx::Rect{look.x, look.y, w, h} : os::centred(w, h);
 }
 
 class Behind : public wm::Window {
@@ -328,6 +335,8 @@ public:
     {
         if ((flags_ & kDialog) != 0) {
             set_dialog(true);
+        } else if ((flags_ & kFixedSize) != 0) {
+            set_resizable(false);
         }
         set_id(installed_kit().wm->new_id());
         if ((flags_ & kWholeDesktop) != 0) {
@@ -458,7 +467,7 @@ public:
     }
     static void arrow_pressed(DropDown &d, void *context) { static_cast<Behind *>(context)->from(d, What::Command); }
     // The number of the control the keys go to.
-    Control focused() const
+    Control focus_number() const
     {
         for (int i = 0; i < count_; i++) {
             if (controls_[i] == focus()) {
@@ -487,6 +496,13 @@ public:
         e.key = &k;
         return tell(e) || Window::key(k);
     }
+    void menu_opening(int entry) override
+    {
+        Event e{What::Menu};
+        e.index = entry;
+        tell(e);
+    }
+    bool has_menu_room() const { return (flags_ & kMenuBar) != 0; }
     void closed() override
     {
         if (!told_closed_) {
@@ -642,10 +658,10 @@ Control text_area(Window window, const gfx::Rect &place, const char *text)
     return w != nullptr ? w->make<wm::TextArea>(Kind::TextArea, place, text) : kNoControl;
 }
 
-Control picture(Window window, const gfx::Rect &place)
+Control picture(Window window, const gfx::Rect &place, bool once)
 {
     Behind *w = behind(window);
-    return w != nullptr ? w->make<Picture>(Kind::Picture, place, &Behind::paint_picture, w) : kNoControl;
+    return w != nullptr ? w->make<Picture>(Kind::Picture, place, once, &Behind::paint_picture, w) : kNoControl;
 }
 
 void redraw_control(Window window, Control control)
@@ -707,6 +723,20 @@ bool in_front(Window window)
     return w != nullptr && os::in_front(*w);
 }
 
+bool has_keys(Window window)
+{
+    Behind *w = behind(window);
+    return w != nullptr && w->wm::Window::focused() && w->wm::Window::state() != wm::WindowState::Minimized;
+}
+
+void set_menu_bar(Window window, const wm::MenuBar *bar)
+{
+    Behind *w = behind(window);
+    if (w != nullptr && w->has_menu_room()) {
+        w->set_menu_bar(bar);
+    }
+}
+
 void set_title(Window window, const char *title)
 {
     if (Behind *w = behind(window)) {
@@ -717,7 +747,7 @@ void set_title(Window window, const char *title)
 Control focus(Window window)
 {
     Behind *w = behind(window);
-    return w != nullptr ? w->focused() : kNoControl;
+    return w != nullptr ? w->focus_number() : kNoControl;
 }
 
 void set_text(Window window, Control control, const char *text)
@@ -973,6 +1003,12 @@ int text_opaque_rgb(Drawing on, int x, int y, const char *s, gfx::Colour fg, gfx
 {
     gfx::Canvas *c = g_drawings.at(on);
     return c != nullptr ? c->text_opaque(x, y, s, fg, bg, caret_x) : x + gfx::Canvas::text_width(s);
+}
+
+gfx::Rect bounds(Drawing on)
+{
+    gfx::Canvas *c = g_drawings.at(on);
+    return c != nullptr ? c->limit().offset(-c->origin_x(), -c->origin_y()) : gfx::Rect{0, 0, 0, 0};
 }
 
 int text_width(const char *s, bool bold) { return gfx::Canvas::text_width(s, bold); }
