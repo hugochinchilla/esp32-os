@@ -133,7 +133,7 @@ add_test(NAME console_program
 
 # The Terminal window (backlog item 15).
 add_executable(test_terminal tests/test_terminal.cpp)
-target_link_libraries(test_terminal PRIVATE core)
+target_link_libraries(test_terminal PRIVATE core Threads::Threads)
 add_test(NAME terminal COMMAND test_terminal)
 
 # Chinchilla as a desktop program (backlog item 32): the same core in an SDL2

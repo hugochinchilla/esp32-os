@@ -85,6 +85,9 @@ public:
     // start(). Tasks are used only while there is a message queue too
     // (msg::set_queue), since that is how the result comes back.
     void set_tasks(ports::Tasks *tasks) { tasks_ = tasks; }
+    // True if a job started now would get a task of its own. Work that
+    // never returns by itself (a shell session) must not be started without.
+    bool threaded() const { return tasks_ != nullptr && msg::queue() != nullptr; }
 
     // The UI task only. Starts a job for the current process. False if it
     // could not be started (too many jobs, no memory for the task, the

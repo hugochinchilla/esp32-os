@@ -102,6 +102,18 @@ constexpr int kPictureTimings = 3;
 // The Terminal: a command shell (core/sh) in a window. Every call opens
 // another one, up to three.
 void open_terminal();
+// What a Terminal's session needs to run on a task of its own, and the
+// portable code cannot make: a lock for its TTY and two things to sleep on.
+// The machine hands in a few (one per Terminal that may be open at once),
+// before any Terminal opens. With none, or without tasks (job::Jobs), a
+// Terminal's session runs on the UI task.
+struct SessionKit {
+    ports::Lock *lock = nullptr;
+    ports::Event *typed = nullptr;    // a line has been typed
+    ports::Event *answered = nullptr; // the UI task has done what was asked
+    bool in_use = false;
+};
+void set_session_kits(SessionKit *kits, int count);
 // Tests: the grid of the Terminal in front (nullptr: none is open).
 const tty::Screen *terminal_screen();
 

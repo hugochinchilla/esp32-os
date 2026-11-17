@@ -674,6 +674,17 @@ void ui_task(void *)
         ESP_LOGI(TAG, "answers to chinchilla.local (mDNS)");
     }
 
+    // What a Terminal's session needs to run on a task of its own: one set
+    // for each Terminal that can be open at once.
+    static RtosMutex session_locks[3];
+    static RtosEvent session_events[6];
+    static shell::SessionKit session_kits[3];
+    for (int i = 0; i < 3; i++) {
+        session_kits[i].lock = &session_locks[i];
+        session_kits[i].typed = &session_events[2 * i];
+        session_kits[i].answered = &session_events[2 * i + 1];
+    }
+    shell::set_session_kits(session_kits, 3);
     shell::start(desktop, system, storage, memory);
     protocol.set_counters(shell::picture_timings(), shell::kPictureTimings);
     desktop.start();

@@ -7,13 +7,19 @@
 #include <cstring>
 #include <string>
 
+#include <chrono>
+#include <thread>
+
 #include "core/fs/memory_volume.hpp"
+#include "core/job/job.hpp"
+#include "core/msg/queue.hpp"
 #include "core/proc/table.hpp"
 #include "core/shell/boot.hpp"
 #include "core/shell/shell.hpp"
 #include "core/tty/screen.hpp"
 #include "core/wm/wm.hpp"
 #include "../host_adapters.hpp"
+#include "../thread_queue.hpp"
 
 static int failures = 0;
 #define CHECK(condition)                                                   \
@@ -276,6 +282,193 @@ void test_terminal()
 
 } // namespace
 
+/* ---- The session on a task of its own ------------------------------------------ */
+
+host::ThreadQueue queue;
+host::ThreadTasks tasks;
+host::ThreadLock storage_lock;
+host::ThreadLock kit_locks[3];
+host::ThreadEvent kit_events[6];
+shell::SessionKit kits[3];
+
+// The grid is the session's task's too now: read under the Terminal's lock.
+// All three locks are taken, since the test does not know which kit the
+// Terminal in front was given.
+struct AllKits {
+    AllKits()
+    {
+        for (host::ThreadLock &l : kit_locks) {
+            l.lock();
+        }
+    }
+    ~AllKits()
+    {
+        for (host::ThreadLock &l : kit_locks) {
+            l.unlock();
+        }
+    }
+};
+
+std::string locked_row(int index)
+{
+    const AllKits hold;
+    return row(index);
+}
+
+bool on_screen(const char *text)
+{
+    const AllKits hold;
+    if (shell::terminal_screen() == nullptr) {
+        return false;
+    }
+    for (int i = 0; i < tty::Screen::kRows; i++) {
+        if (row(i).find(text) != std::string::npos) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// True when the last two lines on the screen are one ending in `answer` and
+// an empty prompt: the command has finished and the session is waiting again.
+bool answered(const char *answer)
+{
+    const AllKits hold;
+    int last = tty::Screen::kRows - 1;
+    while (last > 0 && row(last).empty()) {
+        last--;
+    }
+    const std::string above = last > 0 ? row(last - 1) : "";
+    const size_t size = strlen(answer);
+    // "ends with": after type-ahead the answer follows a prompt on its line.
+    return last > 0 && row(last) == "C:\\>" && above.size() >= size &&
+           above.compare(above.size() - size, size, answer) == 0;
+}
+
+// The UI task's loop, until `done` says yes: messages, timers, painting.
+template <typename Done> bool settle(Done done)
+{
+    msg::Inbox inbox(queue);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (std::chrono::steady_clock::now() < deadline) {
+        inbox.deliver();
+        clock_.now += 1000;
+        desktop.tick();
+        if (done()) {
+            return true;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    return false;
+}
+
+void test_terminal_on_a_task()
+{
+    msg::set_queue(&queue);
+    job::jobs().set_tasks(&tasks);
+    storage.set_lock(&storage_lock);
+    for (int i = 0; i < 3; i++) {
+        kits[i].lock = &kit_locks[i];
+        kits[i].typed = &kit_events[2 * i];
+        kits[i].answered = &kit_events[2 * i + 1];
+    }
+    shell::set_session_kits(kits, 3);
+    const shell::App *app = shell::find_app("Terminal");
+    const int blocks = memory.in_use();
+
+    // It opens at once; the greeting and the prompt come from the session's
+    // task a moment later.
+    shell::launch(*app);
+    CHECK(strcmp(title(), "Terminal") == 0 && count("Terminal") == 1);
+    const proc::Pid pid = desktop.active()->owner();
+    CHECK(tasks.started == 1 && job::jobs().running(pid) == 1 && kits[0].in_use);
+    CHECK(settle([] { return locked_row(3) == "C:\\>"; }));
+    CHECK(locked_row(0) == std::string("Chinchilla ") + shell::kVersion);
+
+    // A typed character is echoed by the UI task itself; the line is run by
+    // the session.
+    type("echo hi");
+    CHECK(locked_row(3) == "C:\\> echo hi");
+    key(wm::key::Enter);
+    CHECK(settle([] { return locked_row(4) == "hi" && locked_row(5) == "C:\\>"; }));
+    // The session is asleep at its prompt and its last message is in the
+    // queue: one more round of the loop and the screen must be right.
+    settle([] { return true; });
+    CHECK(no_stale_pixels());
+
+    // ps reads the process table, which is the UI task's: the session asks
+    // and sleeps until the UI task has answered.
+    enter("ps");
+    CHECK(settle([] { return on_screen("Terminal") && on_screen("desktop"); }));
+
+    // A command that prints a lot does not hold the desktop, and Ctrl+C
+    // ends it. What is typed before the prompt is back is kept for the next
+    // line, as on any terminal.
+    {
+        const std::string big(300000, 'z');
+        storage.write_file("C:\\big.txt", big.data(), big.size());
+    }
+    enter("cat big.txt");
+    desktop.text("x"); // the UI task is free to take keys meanwhile
+    key(static_cast<uint16_t>(wm::key::A + 2), wm::key::LeftCtrl); // Ctrl+C
+    enter("echo back");
+    CHECK(settle([] { return on_screen("^C") && answered("back"); }));
+    CHECK(!on_screen("zzzz\\>")); // it did not run to the end of its 300 KB
+    enter("echo once more");
+    CHECK(settle([] { return answered("once more"); }));
+    // The session is asleep at its prompt and its last message is in the
+    // queue: one more round of the loop and the screen must be right.
+    settle([] { return true; });
+    CHECK(no_stale_pixels());
+
+    // exit: the session ends, its task returns, the window goes and the
+    // process with it; the kit and the memory are back.
+    enter("exit");
+    CHECK(settle([&] { return count("Terminal") == 0; }));
+    CHECK(desktop.window_count() == 0 && job::jobs().running() == 0 && !kits[0].in_use);
+    CHECK(memory.in_use() == blocks);
+
+    // The close button while the session waits for a line: the window is
+    // gone at once, the rest when the session has noticed.
+    shell::launch(*app);
+    CHECK(settle([] { return locked_row(3) == "C:\\>"; }));
+    key(wm::key::F4, wm::key::LeftAlt);
+    CHECK(desktop.window_count() == 0);
+    CHECK(settle([&] { return count("Terminal") == 0; }));
+    CHECK(job::jobs().running() == 0 && memory.in_use() == blocks);
+
+    // End Task with force, in the middle of a command.
+    shell::launch(*app);
+    CHECK(settle([] { return locked_row(3) == "C:\\>"; }));
+    const proc::Pid second = desktop.active()->owner();
+    enter("cat big.txt");
+    CHECK(proc::table().signal(second, proc::Signal::Kill) == proc::Sent::Ok);
+    CHECK(settle([&] { return count("Terminal") == 0; }));
+    CHECK(desktop.window_count() == 0 && job::jobs().running() == 0 && memory.in_use() == blocks);
+
+    // Three at once, each with its own session; a fourth is refused.
+    for (int i = 0; i < 3; i++) {
+        shell::launch(*app);
+    }
+    CHECK(count("Terminal") == 3 && job::jobs().running() == 3);
+    CHECK(settle([] { return locked_row(3) == "C:\\>"; }));
+    enter("echo third");
+    CHECK(settle([] { return locked_row(4) == "third"; }));
+    shell::launch(*app);
+    CHECK(strcmp(title(), "Terminal") == 0 && desktop.active()->modal()); // the message
+    key(wm::key::Enter);
+    while (desktop.active() != nullptr) {
+        desktop.close(*desktop.active());
+    }
+    CHECK(settle([&] { return count("Terminal") == 0; }));
+    CHECK(job::jobs().running() == 0 && memory.in_use() == blocks);
+
+    tasks.join();
+    shell::set_session_kits(nullptr, 0);
+    job::jobs().set_tasks(nullptr);
+    msg::set_queue(nullptr);
+}
+
 int main()
 {
     static fs::MemoryVolume ram_disk(memory.allocate(1 << 20), 1 << 20, "RAM disk");
@@ -287,6 +480,7 @@ int main()
         desktop.close(*desktop.active());
     }
     test_terminal();
+    test_terminal_on_a_task();
     if (failures != 0) {
         printf("%d checks failed\n", failures);
         return 1;

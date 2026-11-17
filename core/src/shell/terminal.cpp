@@ -5,13 +5,27 @@
 // paints. The session (sh::Session) is the same one the serial console and
 // telnet will run.
 //
-// The session runs on the UI task, a line at a time: when Enter completes a
-// line it is run there and then, and the desktop waits for it, as it does
-// for a save in the Editor. Nothing here is a task of its own.
+// Where the machine has tasks, the session is a job of the Terminal's
+// process, on a task of its own (docs/journal/2026-11-17-terminal-task.md):
+// it sleeps until a line is typed, the desktop goes on while a command
+// works, and Ctrl+C stops the command. Two tasks then use the grid, the
+// session writing and the UI task painting, so both hold the TTY's lock for
+// it; the session's task tells the UI task that the grid has changed with a
+// message. The lock and the two events a session sleeps on come from a small
+// pool the machine hands in (shell::set_session_kits), since the portable
+// code cannot make them.
+//
+// Where it has none (the browser, the PC desktop program), the session runs
+// on the UI task, a line at a time: when Enter completes a line it is run
+// there and then, and the desktop waits for it.
+#include <atomic>
 #include <cstdio>
 #include <cstring>
+#include <new>
 
 #include "core/gfx/art.hpp"
+#include "core/job/job.hpp"
+#include "core/msg/queue.hpp"
 #include "core/sh/sh.hpp"
 #include "core/shell/shell.hpp"
 #include "core/tty/screen.hpp"
@@ -33,13 +47,50 @@ constexpr gfx::Colour kInk = gfx::rgb(5, 5, 2); // light grey, as on a DOS scree
 
 class TerminalWindow;
 
+SessionKit *g_kits = nullptr;
+int g_kit_count = 0;
+
+// Holds a lock, if there is one, until the end of the block.
+class Hold {
+public:
+    explicit Hold(ports::Lock *lock) : lock_(lock)
+    {
+        if (lock_ != nullptr) {
+            lock_->lock();
+        }
+    }
+    ~Hold()
+    {
+        if (lock_ != nullptr) {
+            lock_->unlock();
+        }
+    }
+    Hold(const Hold &) = delete;
+    Hold &operator=(const Hold &) = delete;
+
+private:
+    ports::Lock *lock_;
+};
+
 // The grid of characters, and the keyboard.
 class TerminalView : public wm::Widget {
 public:
     static constexpr int kWidth = Screen::kColumns * kCellW + 2 * kPad;
     static constexpr int kHeight = Screen::kRows * kCellH + 2 * kPad;
 
-    TerminalView(const gfx::Rect &r, TerminalWindow &owner, Screen &screen) : Widget(r), owner_(owner), screen_(screen) {}
+    TerminalView(const gfx::Rect &r, TerminalWindow &owner, Screen &screen, ports::Lock *lock)
+        : Widget(r), owner_(owner), screen_(screen), lock_(lock)
+    {
+    }
+
+    // The UI task's own note of where the cursor is, taken under the lock
+    // (TerminalWindow::show_changes): the window manager asks for the caret
+    // at times of its own.
+    void set_cursor(int row, int column)
+    {
+        cursor_row_ = row;
+        cursor_column_ = column;
+    }
 
     static gfx::Rect rows_rect(int first, int last)
     {
@@ -50,11 +101,10 @@ public:
     bool layered() const override { return false; } // every pixel is written once below
     gfx::Rect caret_rect() const override
     {
-        const int row = screen_.cursor_row();
-        if (row < 0) {
+        if (cursor_row_ < 0) {
             return {0, 0, 0, 0};
         }
-        return {kPad + screen_.cursor_column() * kCellW, kPad + row * kCellH, kCellW, kCellH};
+        return {kPad + cursor_column_ * kCellW, kPad + cursor_row_ * kCellH, kCellW, kCellH};
     }
 
     void paint(gfx::Canvas &c) override
@@ -62,7 +112,14 @@ public:
         const gfx::Rect whole = {0, 0, rect.w, rect.h};
         c.fill_around(whole, rows_rect(0, Screen::kRows - 1), kPaper);
         const gfx::Rect limit = c.limit().offset(-c.origin_x(), -c.origin_y());
-        const gfx::Rect caret = caret_rect();
+        // The session's task may be writing: the grid is read under the
+        // TTY's lock, and the cursor is where the grid says it is now.
+        const Hold hold(lock_);
+        const int cursor_row = screen_.cursor_row();
+        const gfx::Rect caret = cursor_row < 0
+                                    ? gfx::Rect{0, 0, 0, 0}
+                                    : gfx::Rect{kPad + screen_.cursor_column() * kCellW, kPad + cursor_row * kCellH,
+                                                kCellW, kCellH};
         for (int row = 0; row < Screen::kRows; row++) {
             const gfx::Rect r = rows_rect(row, row);
             if (!r.overlaps(limit)) {
@@ -131,6 +188,42 @@ private:
 
     TerminalWindow &owner_;
     Screen &screen_;
+    ports::Lock *lock_;
+    int cursor_row_ = 0, cursor_column_ = 0;
+};
+
+// What the TTY shows goes into the grid, and, when the session has a task of
+// its own, the UI task is told that there is something new to paint: one
+// message until it has looked, however much is written meanwhile. Called
+// with the TTY's lock held, so the message is posted without waiting; if the
+// queue is full the next write tries again, and the window looks once a
+// second in any case.
+class Shown : public ports::ByteSink {
+public:
+    explicit Shown(Screen &screen) : screen_(screen) {}
+    void tell(proc::Pid pid, msg::Handler changed, void *window)
+    {
+        pid_ = pid;
+        changed_ = changed;
+        window_ = window;
+    }
+    void write(const uint8_t *data, size_t size) override
+    {
+        screen_.write(data, size);
+        if (changed_ != nullptr && !told_.exchange(true)) {
+            if (!msg::post(pid_, changed_, window_)) {
+                told_ = false;
+            }
+        }
+    }
+    void looked() { told_ = false; }
+
+private:
+    Screen &screen_;
+    proc::Pid pid_ = proc::kNone;
+    msg::Handler changed_ = nullptr;
+    void *window_ = nullptr;
+    std::atomic<bool> told_{false};
 };
 
 constexpr int kMaxTerminals = 3;
@@ -138,24 +231,28 @@ TerminalWindow *g_terminals[kMaxTerminals] = {};
 
 class TerminalWindow : public wm::Window {
 public:
-    explicit TerminalWindow(int place)
+    // `kit`: the lock and events for a session on a task of its own;
+    // nullptr for a session on the UI task.
+    TerminalWindow(int place, SessionKit *kit)
         : Window("Terminal",
                  {40 + place * 22, 30 + place * 22, TerminalView::kWidth + 2 * kBorder,
                   TerminalView::kHeight + kClientTop + kBorder},
                  &gfx::terminal_icon_16()),
-          view_({0, 0, TerminalView::kWidth, TerminalView::kHeight}, *this, screen_), tty_(screen_),
-          session_(tty_, environment())
+          kit_(kit), shown_(screen_),
+          view_({0, 0, TerminalView::kWidth, TerminalView::kHeight}, *this, screen_, lock()),
+          tty_(shown_, lock(), kit != nullptr ? kit->typed : nullptr), session_(tty_, environment())
     {
         set_resizable(false);
         add(view_);
         set_focus(&view_);
         tty_.set_size(Screen::kColumns, Screen::kRows);
-        session_.greet();
-        pump();
     }
 
     ~TerminalWindow()
     {
+        if (kit_ != nullptr) {
+            kit_->in_use = false;
+        }
         for (TerminalWindow *&t : g_terminals) {
             if (t == this) {
                 t = nullptr;
@@ -163,10 +260,34 @@ public:
         }
     }
 
+    // Starts the session. False if its task could not be started.
+    bool begin()
+    {
+        if (kit_ == nullptr) {
+            session_.greet();
+            pump();
+            return true;
+        }
+        shown_.tell(proc::table().current(), &TerminalWindow::grid_changed, this);
+        job::Spec spec;
+        spec.name = "terminal";
+        spec.work = &TerminalWindow::run_session;
+        spec.done = &TerminalWindow::session_over;
+        spec.stop = &TerminalWindow::leave_now;
+        spec.context = this;
+        spec.stack_bytes = kSessionStack;
+        running_ = job::jobs().start(spec);
+        return running_;
+    }
+
     // Keys from the window, as the bytes a terminal sends for them.
     void typed(const char *bytes, size_t size)
     {
         tty_.input(reinterpret_cast<const uint8_t *>(bytes), size);
+        if (kit_ != nullptr) {
+            show_changes(); // the echo; what the session answers comes with a message
+            return;
+        }
         pump();
         if (session_.ended()) {
             close(); // exit, or Ctrl+D
@@ -175,25 +296,78 @@ public:
 
     void look_back(int lines)
     {
-        screen_.scroll_view(lines);
+        {
+            const Hold hold(lock());
+            screen_.scroll_view(lines);
+        }
         show_changes();
     }
+
+    // However the window went (its close button, End Task): the session is
+    // told that its terminal is gone. A command that is running is stopped
+    // as Ctrl+C would stop it. The window is off the screen at once; the
+    // object and the process stay until the session's task has returned
+    // (job::Jobs), which is a moment.
+    void closed() override { leave(); }
 
     const Screen &screen() const { return screen_; }
 
 private:
-    static sh::Env environment()
+    // ponytail: the stack of a session's task. The commands keep their large
+    // buffers in the session, not on the stack; the deepest is a copy or a
+    // removal of nested folders. To be measured on the board.
+    static constexpr uint32_t kSessionStack = 12288;
+
+    ports::Lock *lock() const { return kit_ != nullptr ? kit_->lock : nullptr; }
+
+    sh::Env environment()
     {
         sh::Env env;
         env.storage = &storage();
         env.procs = &proc::table();
         env.system = &system_port();
-        // No UiCall: this is the UI task, the session calls straight in.
+        // On the UI task the session calls straight in. From a task of its
+        // own it asks the UI task, through the queue, for what belongs to it
+        // (the process table).
+        if (kit_ != nullptr) {
+            env.ui = new (call_) sh::QueueCall(*msg::queue(), *kit_->answered);
+        }
         return env;
     }
 
+    void leave()
+    {
+        if (kit_ != nullptr && running_) {
+            tty_.input("\x03");
+            tty_.hang_up();
+        }
+    }
+
+    // The session's task.
+    static uint32_t run_session(const job::Job &, void *context)
+    {
+        static_cast<TerminalWindow *>(context)->session_.run();
+        return 0;
+    }
+    // The UI task: the session has ended (exit, Ctrl+D, or its terminal went).
+    static void session_over(void *context, uint32_t, bool)
+    {
+        auto *w = static_cast<TerminalWindow *>(context);
+        w->running_ = false;
+        w->close();
+    }
+    static void leave_now(void *context) { static_cast<TerminalWindow *>(context)->leave(); }
+    // The UI task: the session's task has written to the grid.
+    static void grid_changed(const msg::Message &m)
+    {
+        auto *w = static_cast<TerminalWindow *>(m.context);
+        w->shown_.looked();
+        w->show_changes();
+    }
+    static void look(void *context) { static_cast<TerminalWindow *>(context)->show_changes(); }
+
     // Runs what has been typed: every finished line, then the prompt for
-    // the next one.
+    // the next one. Only for a session on the UI task.
     void pump()
     {
         for (int guard = 0; guard < 64 && !session_.ended() && (tty_.readable() || !session_.waiting()); guard++) {
@@ -204,17 +378,33 @@ private:
 
     void show_changes()
     {
-        int first, last;
-        if (screen_.take_changes(first, last)) {
+        int first = 0, last = 0;
+        bool changed;
+        {
+            const Hold hold(lock());
+            changed = screen_.take_changes(first, last);
+            screen_.take_bells(); // no sound yet
+            view_.set_cursor(screen_.cursor_row(), screen_.cursor_column());
+        }
+        wm::Wm *m = manager();
+        if (m == nullptr) {
+            return; // closed, and waiting for its session
+        }
+        if (kit_ != nullptr && safety_ == 0) {
+            safety_ = m->start_timer(1000000, 1000000, &TerminalWindow::look, this);
+        }
+        if (changed) {
             view_.invalidate_part(TerminalView::rows_rect(first, last));
         }
-        screen_.take_bells(); // no sound yet
-        if (wm::Wm *m = manager()) {
-            m->caret_moved(); // the cursor is shown at once where it now is
-        }
+        m->caret_moved(); // the cursor is shown at once where it now is
     }
 
+    SessionKit *kit_;
+    bool running_ = false; // the session's task has been started and has not returned
+    int safety_ = 0;
+    alignas(sh::QueueCall) unsigned char call_[sizeof(sh::QueueCall)];
     Screen screen_;
+    Shown shown_;
     TerminalView view_;
     tty::Tty tty_;
     sh::Session session_;
@@ -259,6 +449,12 @@ void TerminalView::text(const char *utf8) { owner_.typed(utf8, strlen(utf8)); }
 
 } // namespace
 
+void set_session_kits(SessionKit *kits, int count)
+{
+    g_kits = kits;
+    g_kit_count = count;
+}
+
 // Every call opens another Terminal, as a process of its own.
 void open_terminal()
 {
@@ -272,13 +468,37 @@ void open_terminal()
         message_box("Terminal", "Three Terminals are open already.\nClose one of them first.");
         return;
     }
+    // A session on a task of its own where the machine can give one.
+    SessionKit *kit = nullptr;
+    if (g_kit_count > 0 && job::jobs().threaded()) {
+        for (int i = 0; i < g_kit_count && kit == nullptr; i++) {
+            kit = !g_kits[i].in_use ? &g_kits[i] : nullptr;
+        }
+        if (kit == nullptr) {
+            // Every kit is held, some by Terminals that have closed and are
+            // waiting for a command to stop.
+            message_box("Terminal", "A Terminal is still closing.\nTry again in a moment.");
+            return;
+        }
+    }
     proc::Table &t = proc::table();
     const proc::Pid pid = t.spawn("Terminal", t.current(), proc::kWindowed);
     // With no room in the table it is the caller's window, as elsewhere.
     const proc::Scope as(&t, pid != proc::kNone ? pid : t.current());
-    TerminalWindow *w = make_window<TerminalWindow>(place);
+    if (kit != nullptr) {
+        kit->in_use = true; // given back by the window's destructor
+    }
+    TerminalWindow *w = make_window<TerminalWindow>(place, kit);
     if (w == nullptr) {
+        if (kit != nullptr) {
+            kit->in_use = false;
+        }
         no_memory_for("Terminal");
+        return;
+    }
+    if (!w->begin()) {
+        discard(w);
+        message_box("Terminal", "The Terminal could not start:\nthe system is too busy.");
         return;
     }
     g_terminals[place] = w;

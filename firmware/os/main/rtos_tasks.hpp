@@ -5,6 +5,7 @@
 #pragma once
 
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 
 #include "core/ports.hpp"
@@ -59,4 +60,39 @@ private:
     }
 
     Start starting_[kStarting];
+};
+
+// Something a task sleeps on (ports::Event): a binary semaphore. A set()
+// before the wait() is kept, and several are one.
+class RtosEvent : public ports::Event {
+public:
+    RtosEvent() : semaphore_(xSemaphoreCreateBinary()) {}
+    void set() override { xSemaphoreGive(semaphore_); }
+    bool wait(uint32_t max_ms) override
+    {
+        const TickType_t ticks = max_ms == 0xFFFFFFFF ? portMAX_DELAY : pdMS_TO_TICKS(max_ms);
+        return xSemaphoreTake(semaphore_, ticks) == pdTRUE;
+    }
+
+private:
+    SemaphoreHandle_t semaphore_;
+};
+
+// A plain lock (ports::Lock) for what two tasks share for a moment: a
+// Terminal's TTY and grid.
+class RtosMutex : public ports::Lock {
+public:
+    RtosMutex() : mutex_(xSemaphoreCreateMutex()) {}
+    void lock() override { xSemaphoreTake(mutex_, portMAX_DELAY); }
+    bool try_lock() override
+    {
+        if (xSemaphoreGetMutexHolder(mutex_) == xTaskGetCurrentTaskHandle()) {
+            return false;
+        }
+        return xSemaphoreTake(mutex_, pdMS_TO_TICKS(100)) == pdTRUE;
+    }
+    void unlock() override { xSemaphoreGive(mutex_); }
+
+private:
+    SemaphoreHandle_t mutex_;
 };
