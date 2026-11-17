@@ -355,9 +355,12 @@ and reasons are in `docs/journal/2026-11-17-program-lifecycle.md`.
   window for it; the shell's `make_window`, `one` and `open_one`
   (`core/src/shell/internal.hpp`) are how programs use it. A new window or
   dialog is written this way; it is no longer possible to "owe" the memory.
-- **The Editor can run several times** (four at most), each a process with
+- **The Editor can run several times**, each a process with
   its own window, text and dialogs; a file already open in one comes to the
-  front. The File manager keeps its one process with up to three windows.
+  front. The File manager keeps its one process, with a window for every
+  folder opened. (Until 2026-11-17 there were four Editors and three folder
+  windows at most; the owner had both caps removed: "No window limit of
+  the system's" below.)
   Every other program runs once at a time (`shell::App::many` switches it).
 - **Open, Save As and the text question are made per asker**; two programs
   can each have one up. The message box stays one at a time.
@@ -2299,10 +2302,14 @@ fallar por falta de memoria dado el caso. Me parece un caso divertido y de
   that is accepted. A window that finds no memory does not open and
   nothing of it is left ("There is not enough memory to open ...", when
   there is memory for the message).
-- Left as they were, to confirm: the caps a program sets for itself for
-  what each copy costs (four Editors at 576 KB each, three File manager
-  windows), the 32 rows of the process table and the 8 program tasks
-  (a ninth program runs on the UI task). They are not limits on windows.
+- **The caps programs set for themselves are gone too** (the owner,
+  asked: "Quítalos"): any number of Editors, at 576 KB each, where there
+  were four and a message for the fifth; a File manager window for every
+  folder opened, where there were three and the first was reused for a
+  fourth folder. The one that finds no memory says so.
+- Left as they were: the 32 rows of the process table and the 8 program
+  tasks (a ninth program runs on the UI task). They are not limits on
+  windows.
 - With very many windows the taskbar's buttons shrink to four pixels and
   the last ones are off the bar. To confirm; nothing is drawn for it.
 

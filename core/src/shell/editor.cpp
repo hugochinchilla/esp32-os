@@ -21,17 +21,32 @@ constexpr size_t kUndoCapacity = 64 * 1024;
 enum class Then : uint8_t { Nothing, New, Open, OpenPath, Exit };
 
 // More than one Editor can run at once, each a process of its own with its
-// own window and text. ponytail: at most four, since each takes 576 KB of
-// external RAM for its text and undo.
-constexpr int kMaxEditors = 4;
-app::Number g_editors[kMaxEditors] = {}; // their windows' numbers: dead once closed
+// own window and text. As many as there is memory for (the owner's
+// decision, 2026-11-17): each takes 576 KB of external RAM for its text and
+// undo, and the one that finds none says so. The Editors that exist are a
+// chain through the windows themselves: each joins it when it is made and
+// leaves it when it is destroyed.
+class EditorWindow;
+EditorWindow *g_editors = nullptr;
 
 class EditorWindow : public app::Window {
 public:
+    EditorWindow *after_ = nullptr;
+    ~EditorWindow() override
+    {
+        for (EditorWindow **at = &g_editors; *at != nullptr; at = &(*at)->after_) {
+            if (*at == this) {
+                *at = after_;
+                break;
+            }
+        }
+    }
     // The text and its undo memory are the text editor's own, and go back
     // with the window.
     EditorWindow() : edit_(text_edit({0, 0, 100, 100}, kTextCapacity, kUndoCapacity))
     {
+        after_ = g_editors;
+        g_editors = this;
         file_items_[0] = {"&New", &EditorWindow::menu_new, this, nullptr, nullptr, 0};
         file_items_[1] = {"&Open...", &EditorWindow::menu_open, this, nullptr, nullptr, 0};
         file_items_[2] = {"&Save", &EditorWindow::menu_save, this, nullptr, nullptr, 0};
@@ -345,20 +360,15 @@ private:
 // Editor already has open comes to the front instead.
 void open_in_editor(const char *path)
 {
-    int place = -1;
-    for (int i = kMaxEditors - 1; i >= 0; i--) {
-        const EditorWindow *e = app::program<EditorWindow>(g_editors[i]);
-        if (e == nullptr) {
-            place = i; // free
-        } else if (path != nullptr && strcasecmp(e->path(), path) == 0) {
-            app::bring_forward(g_editors[i]);
+    int place = 0; // how many there are: each new one a step down and to the right
+    for (const EditorWindow *e = g_editors; e != nullptr; e = e->after_) {
+        if (path != nullptr && strcasecmp(e->path(), path) == 0) {
+            app::bring_forward(e->number());
             return;
         }
+        place++;
     }
-    if (place < 0) {
-        message_box("Editor", "Four Editors are open already.\nClose one of them first.");
-        return;
-    }
+    place %= 8;
     const proc::Pid pid = os::spawn("Editor");
     const PathArg p(path);
     const auto open = [place, p] {
@@ -376,7 +386,6 @@ void open_in_editor(const char *path)
             no_memory_for("Editor");
             return;
         }
-        g_editors[place] = number;
         app::program<EditorWindow>(number)->open_path(p.get());
         if (!os::ui::on_screen(number)) {
             os::ui::close(number); // no memory for the text, the file would not load, or no room

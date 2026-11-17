@@ -237,9 +237,34 @@ the job's result. Building the recommended option "while waiting" cost
 an hour of work that was then removed, and a push that had to be
 followed by another.
 
+## The caps of the programs go too (2026-11-17, later)
+
+Asked whether the caps that programs set for themselves should go the
+way of the system's limit, the owner answered in the project chat:
+
+> Quítalos.
+
+- **The Editor**: there were four at most, kept in a table of four
+  numbers, and the fifth got "Four Editors are open already". Now any
+  number: the Editors that exist are a chain through their own windows
+  (each joins it in its constructor and leaves it in its destructor),
+  walked to find a file that is already open. Each still takes 576 KB of
+  external RAM, so the board has room for about ten; the one that finds
+  none says "There is not enough memory to open Editor".
+- **The File manager**: three folder windows at most, and a fourth folder
+  took over the first window. Now every folder opened gets a window of
+  its own, chained the same way; a folder already shown still comes to
+  the front.
+- New windows of either still step down and to the right, eight places,
+  then from the start again.
+
+`test_lifecycle`: a fifth Editor opens and gives everything back when it
+closes; a fourth folder window opens among twenty-three windows. Gate: all
+passed (44 tests, pictures unchanged); the firmware compiles and links; not
+run on the board.
+
 ## What is left
 
-- The owner's word on the per-program caps.
 - The board turn.
 - The debug link's window list still answers "too many windows" at about
   ten windows: its reply buffer, not a limit on windows.

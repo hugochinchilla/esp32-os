@@ -349,15 +349,17 @@ void test_editors()
     shell::open_in_editor("C:\\Documents\\notes.txt");
     CHECK(processes_named("Editor") == 3 && desktop.active() == notes);
 
-    // Four at most; the fifth says so and starts nothing.
+    // No limit of the Editor's own (the owner's decision): a fifth opens,
+    // as long as there is memory, and gives it all back when it closes.
     shell::launch(app);
     CHECK(processes_named("Editor") == 4);
     const int four = memory.in_use();
     shell::launch(app);
-    CHECK(processes_named("Editor") == 4 && strcmp(title(), "Editor") == 0); // the message
-    key(wm::key::Enter);
+    CHECK(processes_named("Editor") == 5 && strcmp(title(), "Untitled - Editor") == 0);
+    key(wm::key::F4, kAlt);
     wait(10000);
-    CHECK(memory.in_use() == four);
+    wait(10000);
+    CHECK(processes_named("Editor") == 4 && memory.in_use() == four);
 
     // Each has its own dialogs at the same time: Open in one, Save As in
     // another, the question about unsaved text in a third.
@@ -564,10 +566,11 @@ void test_no_memory()
     CHECK(many > wm::Wm::kFirstWindows);
     wait(10000);
     const int rows = t.count();
-    shell::launch(*shell::find_app("Editor")); // the fourth
+    shell::launch(*shell::find_app("Editor"));
+    shell::open_folder("C:\\Documents\\Desktop"); // a fourth folder window
     shell::message_box("Note", "There is room for this.");
     wait(10000);
-    CHECK(desktop.window_count() == many + 2 && t.count() == rows + 1);
+    CHECK(desktop.window_count() == many + 3 && t.count() == rows + 1);
     close_all();
     for (int i = 0; i < 4 && desktop.window_count() != 0; i++) {
         key(wm::key::Enter); // anything that asked
