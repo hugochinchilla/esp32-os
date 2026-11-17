@@ -49,7 +49,7 @@ resistor values and build notes.
 | `core/` | The portable part of the OS (C++). Depends on no hardware; builds for the board and for a PC |
 | `firmware/os/` | The OS firmware: ESP-IDF project with the ESP32 adapters for `core/` |
 | `firmware/vga-test/` | ESP-IDF test program for the VGA wiring |
-| `host/` | PC build: unit tests and picture tests for `core/`, and a simulated board |
+| `host/` | PC build: unit tests and picture tests for `core/`, a simulated board, and `desktop/`, Chinchilla as a desktop program for Linux |
 | `third_party/` | Freely licensed files from elsewhere: the Spleen font |
 | `ci/` | GitHub Actions workflow to copy into `.github/workflows/` |
 | `tools/` | `dbg.py`, the debug tool; `check_pictures.py`, the picture tests; `gen_font.py`, the font table generator; `mockup/`, the script that drew the target look; the setup script for Arch-based systems; the script that regenerates the board diagram |
@@ -78,6 +78,62 @@ python3 tools/check_pictures.py build/host/render_scenes --update
 
 The font table `core/src/gfx/font_spleen6x12.cpp` is generated:
 `python3 tools/gen_font.py third_party/fonts/spleen/spleen-6x12.bdf core/src/gfx/font_spleen6x12.cpp`.
+
+## Chinchilla as a desktop program (Linux)
+
+The same `core/` in a window on a PC: the window is the monitor, the PC's
+mouse and keyboard are the board's, and a folder of the PC is drive C:. For
+trying programs without flashing, and for showing Chinchilla to someone with
+no board. It is not an emulator of the ESP32: no memory limits, no real
+Wi-Fi, and far faster than the board, so it says nothing about speed, RAM or
+the colours on a real monitor.
+
+![Chinchilla in a window](docs/look/desktop-program/window-2x.png)
+
+Needs CMake, a C++ compiler and SDL2 with its headers:
+
+| System | Install |
+| --- | --- |
+| Arch, Omarchy | `sudo pacman -S --needed cmake gcc make sdl2` (on a current Arch this installs `sdl2-compat`) |
+| Debian, Ubuntu | `sudo apt install cmake g++ make libsdl2-dev` |
+| Fedora | `sudo dnf install cmake gcc-c++ make SDL2-devel` |
+
+```sh
+cmake -S host -B build/desktop -DHOST_SANITIZE=OFF -DCMAKE_BUILD_TYPE=Release
+cmake --build build/desktop --target chinchilla
+build/desktop/chinchilla
+```
+
+The result is one file of about 1 MB, `build/desktop/chinchilla`. It runs on
+another Linux PC with the same kind of processor that has SDL2 installed
+(most desktops do).
+
+| Option | What it does |
+| --- | --- |
+| `--drive FOLDER` | The folder that is drive C:. Default `~/.local/share/chinchilla/C`. A new, empty folder gets the sample files. They are ordinary files: copy a picture in from Linux and the File manager shows it |
+| `--fast` | No start-up screens (a key or a click also skips them) |
+| `--scale N` | Open the window at N times 640x480. Default: the largest of 1, 2, 3 that fits the desktop |
+| `--fullscreen` | Start on the whole screen |
+
+In the window:
+
+- The window can be any size. The picture keeps its 4:3 shape, with black
+  bars where it does not fill the window.
+- F11 switches between the window and the whole screen. F12 saves a picture
+  of the window as `chinchilla-001.bmp`, `-002` and so on in the folder the
+  program was started from.
+- Ctrl+Alt+End is Chinchilla's Ctrl+Alt+Del (Linux keeps the real one), and
+  Ctrl+Esc opens the Start menu if the desktop keeps the Super key.
+- Keys type what a US keyboard would: the core has no other layouts yet,
+  the same as on the board.
+- Closing the window shuts Chinchilla down: programs are asked to close, so
+  the Editor still asks about unsaved text. Closing it again within three
+  seconds leaves at once.
+- There is no sound: the system does not make any yet, on the board either.
+
+`build/host/chinchilla`, built along with the tests when SDL2 is installed,
+is the same program with the memory checks on: some ten times larger, and
+slower.
 
 ## Building the VGA test
 

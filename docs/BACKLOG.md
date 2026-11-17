@@ -67,5 +67,5 @@ at the same time.
 | | **Memory** | | | | |
 | 35 | Our static objects in external RAM: the core's and the firmware's big ones, about 121 KB out of internal RAM | S | | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-statics-in-psram.md) |
 | | **Chinchilla off the board** | | | | |
-| 32 | Chinchilla as a desktop program for Linux: a window (SDL2) on the same `core/`, the real mouse and keyboard, sound, a folder of the PC as C:. Not an emulator of the ESP32: no real Wi-Fi, no memory limits, much faster than the board | M | | | todo. [Journal](journal/2026-11-17-chinchilla-on-a-pc.md) |
+| 32 | Chinchilla as a desktop program for Linux: a window (SDL2) on the same `core/`, the real mouse and keyboard, sound, a folder of the PC as C:. Not an emulator of the ESP32: no real Wi-Fi, no memory limits, much faster than the board | M | | | done on the PC (2026-11-17): built, tested with a real mouse and keyboard on a virtual screen; not yet run on the owner's desktop. No sound: the core makes none yet. [The idea](journal/2026-11-17-chinchilla-on-a-pc.md), [the program](journal/2026-11-17-desktop-program.md) |
 | 33 | Chinchilla in a web browser (WebAssembly): a link anyone can open, C: kept in the browser, the page published somewhere (GitHub Pages?) | M | 32 | | todo |

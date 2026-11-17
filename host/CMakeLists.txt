@@ -113,6 +113,32 @@ add_executable(test_crash tests/test_crash.cpp)
 target_link_libraries(test_crash PRIVATE core)
 add_test(NAME crash COMMAND test_crash)
 
+# Chinchilla as a desktop program (backlog item 32): the same core in an SDL2
+# window. Its parts that need no window are tested everywhere; the program
+# itself is built only where SDL2 is installed, so the tests above need
+# nothing new. To hand to others, build without the checks:
+#   cmake -S host -B build/desktop -DHOST_SANITIZE=OFF -DCMAKE_BUILD_TYPE=Release
+#   cmake --build build/desktop --target chinchilla
+add_executable(test_desktop tests/test_desktop.cpp)
+target_link_libraries(test_desktop PRIVATE core)
+add_test(NAME desktop COMMAND test_desktop)
+find_package(SDL2 QUIET)
+if(SDL2_FOUND)
+    add_executable(chinchilla desktop/main.cpp)
+    if(TARGET SDL2::SDL2)
+        target_link_libraries(chinchilla PRIVATE core SDL2::SDL2)
+    else()
+        target_include_directories(chinchilla PRIVATE ${SDL2_INCLUDE_DIRS})
+        target_link_libraries(chinchilla PRIVATE core ${SDL2_LIBRARIES})
+    endif()
+    # It starts with no screen at all (SDL's "dummy" video), runs for a
+    # moment on a new, empty C: and saves what its window shows.
+    add_test(NAME desktop_program
+             COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/test_desktop_program.py $<TARGET_FILE:chinchilla>)
+else()
+    message(STATUS "SDL2 not found: the desktop program (chinchilla) is not built")
+endif()
+
 # Memory-port buffers live as long as the program, as on the board, so the
 # leak checker would report them; applied after every add_test above.
 get_property(all_tests DIRECTORY PROPERTY TESTS)
