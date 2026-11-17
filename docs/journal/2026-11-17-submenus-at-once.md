@@ -97,4 +97,4 @@ arriving. Direction can.
 
 ## What is left
 
-The owner's answer on the triangle; a turn on the board (backlog item 39).
+The owner's answer on the triangle; a turn on the board (backlog item 40).
