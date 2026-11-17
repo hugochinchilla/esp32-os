@@ -26,6 +26,7 @@
 #include "core/gfx/art.hpp"
 #include "core/job/job.hpp"
 #include "core/msg/queue.hpp"
+#include "core/net/wifi.hpp"
 #include "core/sh/sh.hpp"
 #include "core/shell/shell.hpp"
 #include "core/tty/screen.hpp"
@@ -229,6 +230,20 @@ private:
 constexpr int kMaxTerminals = 3;
 TerminalWindow *g_terminals[kMaxTerminals] = {};
 
+// Large memory for a command of the session (ted's text): program memory,
+// counted as the Terminal's own. Called on the UI task (Session::on_ui),
+// where no process is current, so it says whose it is.
+class SessionMemory : public ports::Memory {
+public:
+    void *allocate(size_t bytes) override
+    {
+        const proc::Scope as(&proc::table(), owner);
+        return program_memory(bytes);
+    }
+    void release(void *block) override { free_program_memory(block); }
+    proc::Pid owner = proc::kNone;
+};
+
 class TerminalWindow : public wm::Window {
 public:
     // `kit`: the lock and events for a session on a task of its own;
@@ -246,6 +261,7 @@ public:
         add(view_);
         set_focus(&view_);
         tty_.set_size(Screen::kColumns, Screen::kRows);
+        memory_.owner = proc::table().current(); // the Terminal being opened
     }
 
     ~TerminalWindow()
@@ -294,6 +310,10 @@ public:
         }
     }
 
+    // A program has taken the keys for itself (ted, top): Page Up and
+    // Page Down are its own then, not the history's.
+    bool program_has_keys() const { return tty_.raw(); }
+
     void look_back(int lines)
     {
         {
@@ -327,6 +347,8 @@ private:
         env.procs = &proc::table();
         env.system = &system_port();
         env.desktop = &desktop_for_sessions(); // open, run, edit
+        env.zone = network() != nullptr ? &network()->zone() : nullptr;
+        env.memory = &memory_; // whose it is, is set in the constructor
         // On the UI task the session calls straight in. From a task of its
         // own it asks the UI task, through the queue, for what belongs to it
         // (the process table).
@@ -404,6 +426,7 @@ private:
     bool running_ = false; // the session's task has been started and has not returned
     int safety_ = 0;
     alignas(sh::QueueCall) unsigned char call_[sizeof(sh::QueueCall)];
+    SessionMemory memory_;
     Screen screen_;
     Shown shown_;
     TerminalView view_;
@@ -440,8 +463,18 @@ bool TerminalView::key(const wm::KeyMsg &k)
     case wm::key::End: return send("\x1b[F");
     case wm::key::Delete: return send("\x1b[3~");
     // What has scrolled off the top, a screen at a time.
-    case wm::key::PageUp: owner_.look_back(Screen::kRows - 1); return true;
-    case wm::key::PageDown: owner_.look_back(-(Screen::kRows - 1)); return true;
+    case wm::key::PageUp:
+        if (owner_.program_has_keys()) {
+            return send("\x1b[5~");
+        }
+        owner_.look_back(Screen::kRows - 1);
+        return true;
+    case wm::key::PageDown:
+        if (owner_.program_has_keys()) {
+            return send("\x1b[6~");
+        }
+        owner_.look_back(-(Screen::kRows - 1));
+        return true;
     default: return false; // a character: it comes back through text()
     }
 }
@@ -505,6 +538,21 @@ void open_terminal()
     g_terminals[place] = w;
     show(*w);
     discard(w); // not opened: the window manager was full
+}
+
+sh::Env session_environment(sh::UiCall *ui, proc::Pid owner)
+{
+    static SessionMemory memory;
+    memory.owner = owner;
+    sh::Env env;
+    env.storage = &storage();
+    env.procs = &proc::table();
+    env.system = &system_port();
+    env.ui = ui;
+    env.desktop = &desktop_for_sessions();
+    env.zone = network() != nullptr ? &network()->zone() : nullptr;
+    env.memory = &memory;
+    return env;
 }
 
 const tty::Screen *terminal_screen()

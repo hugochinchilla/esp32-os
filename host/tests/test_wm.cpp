@@ -837,6 +837,70 @@ private:
 };
 constexpr const char *WidgetWindow::kItems[20];
 
+// Quick launch: icons by the Start button that do something when clicked.
+static void test_quick_launch()
+{
+    Rig rig;
+    TestWindow a("A", {300, 100, 200, 150}, 0x1C);
+    rig.wm.add(a);
+    rig.wm.start();
+    memset(g_runs, 0, sizeof(g_runs));
+
+    // None by default: the window buttons start where they always did.
+    CHECK(rig.wm.quick_launch_count() == 0 && rig.wm.quick_launch_rect(0).w == 0);
+    const Rect before = rig.wm.taskbar_button(0);
+    CHECK(before.x == 72);
+
+    // Three: side by side after the Start button, and the window buttons
+    // move right to make room. One without an icon or without something to
+    // do is left out, and there is room for four at most.
+    static uint8_t pixels[16 * 16] = {};
+    const gfx::Bitmap icon = {16, 16, pixels, -1};
+    const wm::Wm::QuickLaunch items[6] = {{&icon, &run0, nullptr}, {nullptr, &run1, nullptr}, {&icon, nullptr, nullptr},
+                                          {&icon, &run1, nullptr}, {&icon, &run2, nullptr}, {&icon, &run0, nullptr}};
+    rig.wm.set_quick_launch(items, 4);
+    CHECK(rig.wm.quick_launch_count() == 2);
+    rig.wm.set_quick_launch(items, 5);
+    CHECK(rig.wm.quick_launch_count() == 3);
+    rig.wait(1000);
+    const Rect start = rig.wm.taskbar_button(-1);
+    const Rect q0 = rig.wm.quick_launch_rect(0), q1 = rig.wm.quick_launch_rect(1), q2 = rig.wm.quick_launch_rect(2);
+    CHECK(q0.x > start.right() && q1.x == q0.right() && q2.x == q1.right() && q0.y == start.y && q0.h == start.h);
+    const Rect after = rig.wm.taskbar_button(0);
+    CHECK(after.x > q2.right() && after.x > before.x && after.w == before.w);
+    CHECK(rig.no_stale_pixels());
+
+    // It acts when the button is let go over it, like the other buttons of
+    // the taskbar, and shows pressed in while it is held.
+    rig.move(q1.x + 8, q1.y + 8, 0);
+    const auto shot = [&rig] { return Bytes(rig.display.pixels(), rig.display.pixels() + 640 * 480); };
+    const Bytes up = shot();
+    rig.move(q1.x + 8, q1.y + 8, 1);
+    CHECK(g_runs[1] == 0 && shot() != up && rig.no_stale_pixels());
+    rig.move(q1.x + 8, q1.y + 8, 0);
+    CHECK(g_runs[1] == 1 && g_runs[0] == 0 && g_runs[2] == 0);
+    CHECK(shot() == up && rig.no_stale_pixels());
+    // Let go somewhere else: nothing happens.
+    rig.move(q2.x + 8, q2.y + 8, 1);
+    rig.move(q2.x + 8, q2.y - 100, 1);
+    rig.move(q2.x + 8, q2.y - 100, 0);
+    CHECK(g_runs[2] == 0);
+    rig.click(q0.x + 2, q0.y + 2);
+    rig.click(q2.x + 20, q2.y + 20);
+    CHECK(g_runs[0] == 1 && g_runs[1] == 1 && g_runs[2] == 1);
+    // The window's button still works beside them.
+    rig.click(after.x + 10, after.y + 10);
+    CHECK(a.state() == wm::WindowState::Minimized);
+    // The gap between the last icon and the first window button is nobody's.
+    rig.click(after.x - 3, after.y + 10);
+    CHECK(g_runs[2] == 1 && a.state() == wm::WindowState::Minimized);
+
+    // Taken away again: as before.
+    rig.wm.set_quick_launch(nullptr, 0);
+    rig.wait(1000);
+    CHECK(rig.wm.quick_launch_count() == 0 && rig.wm.taskbar_button(0).x == before.x && rig.no_stale_pixels());
+}
+
 static void test_widgets()
 {
     Rig rig;
@@ -1072,6 +1136,7 @@ int main()
     test_slow_submenu();
     test_slow_key_does_not_repeat();
     test_start_menu_and_icons();
+    test_quick_launch();
     test_widgets();
     test_timers_and_clock();
     test_modal();

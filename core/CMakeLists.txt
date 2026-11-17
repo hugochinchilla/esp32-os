@@ -31,6 +31,7 @@ set(CORE_SRCS
     src/net/deflate.cpp
     src/net/rfb.cpp
     src/net/services.cpp
+    src/net/telnet.cpp
     src/net/viewer_page.cpp
     src/net/web.cpp
     src/net/wifi.cpp
@@ -43,6 +44,7 @@ set(CORE_SRCS
     src/sh/path.cpp
     src/sh/sh.cpp
     src/sh/system.cpp
+    src/sh/ted.cpp
     src/sys/crash.cpp
     src/shell/apps.cpp
     src/shell/boot.cpp

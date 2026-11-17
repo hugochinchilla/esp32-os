@@ -92,6 +92,10 @@ struct Env {
     UiCall *ui = nullptr;            // null: the session is on the UI task and calls straight in
     Desktop *desktop = nullptr;      // open, run, edit; null where there is no desktop (a serial console on a PC)
     const net::TimeZone *zone = nullptr; // for dates as text; null: the default zone
+    // Large memory for a command that needs more than the session's own
+    // working room (ted's text). Asked for and given back on the UI task
+    // (Session::on_ui), like everything of the Memory port. Null: none.
+    ports::Memory *memory = nullptr;
 };
 
 // A date as it is shown everywhere, in local time: "2026-11-17 14:05", or ""

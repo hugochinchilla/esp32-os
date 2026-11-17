@@ -150,6 +150,9 @@ add_test(NAME terminal COMMAND test_terminal)
 add_executable(test_services tests/test_services.cpp)
 target_link_libraries(test_services PRIVATE core Threads::Threads)
 add_test(NAME services COMMAND test_services)
+add_executable(test_telnet tests/test_telnet.cpp)
+target_link_libraries(test_telnet PRIVATE core Threads::Threads)
+add_test(NAME telnet COMMAND test_telnet)
 
 # The watchdog's bookkeeping, the crash record and the error screen.
 add_executable(test_crash tests/test_crash.cpp)

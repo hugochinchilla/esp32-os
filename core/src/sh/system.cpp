@@ -424,6 +424,11 @@ int cmd_run(Session &s, int argc, char **argv)
 
 int cmd_edit(Session &s, int argc, char **argv)
 {
+    // On a console with no desktop to open the Editor on, the console's own
+    // editor does the job.
+    if (s.env().desktop == nullptr && s.terminal().can_wait() && argc <= 2) {
+        return cmd_ted(s, argc, argv);
+    }
     if (no_desktop(s, argv[0])) {
         return 1;
     }

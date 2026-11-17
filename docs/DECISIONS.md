@@ -655,6 +655,8 @@ practical. Each is easy to change.
   2026-11-16 at the owner's request: the taskbar shows only what works
   (Start, the window buttons, the Wi-Fi signal icon, the clock). They come
   back when they launch something. The window buttons start at x = 72.
+  They are back with item 30 ("Chosen for the quick-launch icons"), and the
+  window buttons start after them.
 - ~~The About window's OK button has no extra dark "default button"
   frame~~: replaced in the shell milestone, default buttons now have it.
 
@@ -1714,6 +1716,60 @@ the agent under the owner's "dejo a tu criterio" of 2026-11-16.
 - **Shown as `2026-11-17 14:05`**: a first column in `dir` and `ls -l`, and
   in the File manager's status bar for the chosen file. `date` prints the
   day and time. Left for later: a Details view in the File manager.
+
+### Chosen for the quick-launch icons (2026-11-17, to confirm)
+
+Backlog item 30. Journal: `docs/journal/2026-11-17-quick-launch.md`. Chosen
+by the agent under the owner's "dejo a tu criterio" of 2026-11-16.
+
+- **Three icons by the Start button: File manager, Editor, Terminal.** One
+  click starts the program, as from the Start menu. Rejected for now: "show
+  the desktop" (there is no minimise-all), and a list the user edits (needs
+  shortcuts as files).
+- **They behave like the other taskbar buttons**: flat, pressed in while
+  held, acting on release. No raised edge under the pointer, no tooltip.
+- **The window manager draws them; the desktop says what they are**
+  (`Wm::set_quick_launch`, four at most). The window buttons start after
+  the last one.
+
+### Chosen for the console editor (2026-11-17, to confirm)
+
+Backlog item 22. Journal: `docs/journal/2026-11-17-console-editor.md`.
+Chosen by the agent under the owner's "dejo a tu criterio" of 2026-11-16.
+
+- **`ted`: a full-screen editor with no modes.** `edit` opens the desktop's
+  Editor where there is a desktop and `ted` where there is none. Rejected:
+  a line editor; modes as in vi; the name of an existing editor.
+- **Keys**: Ctrl+S (or Ctrl+O) saves, Ctrl+Q (or Ctrl+X) leaves and asks
+  first if there are changes, Ctrl+F and Ctrl+G find, Ctrl+K cuts the line
+  out. Ctrl+C does not close it. No undo, copy or replace yet.
+- **It sends only the rows that changed**, with three escape sequences
+  (erase the screen, place the cursor, erase to the end of the line).
+- **The text is one block of 128 KB** from the Memory port, taken while ted
+  is open and counted as the Terminal's; that is the largest file it opens.
+- In the Terminal window, Page Up and Page Down go to a program that has
+  taken the keys (ted), and to the history otherwise.
+
+### Chosen for telnet (2026-11-17, to confirm)
+
+Backlog item 17. Journal: `docs/journal/2026-11-17-telnet.md`. Chosen by the
+agent under the owner's "dejo a tu criterio" of 2026-11-16; the default was
+put to the owner as a question and is his to turn round.
+
+- **Off until a settings file says otherwise**: `[telnet] enabled = true` in
+  `C:\.config\network.ini`, read at start-up. Port 23, no password (the
+  owner's rule: no users). Rejected for now: on by default, because a shell
+  that deletes files would appear on any network the board joins.
+- **One session at a time**; a second caller waits. Rejected: several, until
+  someone wants them.
+- **The socket work is on the services task and never waits; the session
+  runs on a task of its own**, started at connect and given back at leave.
+  Rejected: a task blocked on the socket.
+- **A program that writes faster than the network takes waits** (the TTY
+  asks for room before each 256-byte piece, `Tty::on_room`); typed bytes
+  keep arriving meanwhile, so Ctrl+C works. Rejected: dropping output.
+- The client is asked for character mode with our echo and for its window
+  size; nothing else.
 
 ### Chosen for background jobs (2026-11-17, to confirm)
 

@@ -656,6 +656,22 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
     wm.set_start_menu(&g_start, "Chinchilla");
     wm.set_attention_key(&attention_key, nullptr);
 
+    // Quick launch, by the Start button: one click opens the program
+    // (backlog item 30; which three is in docs/DECISIONS.md).
+    {
+        static const char *const kQuick[] = {"File manager", "Editor", "Terminal"};
+        wm::Wm::QuickLaunch quick[wm::Wm::kMaxQuick];
+        int count = 0;
+        for (const char *name : kQuick) {
+            if (const App *program = find_app(name)) {
+                quick[count++] = {program->icon,
+                                  [](void *context) { launch(*static_cast<const App *>(context)); },
+                                  const_cast<App *>(program)};
+            }
+        }
+        wm.set_quick_launch(quick, count);
+    }
+
     g_icons[0] = {"My Board", &gfx::board_icon_32(), &open_my_board, nullptr};
     g_icons[1] = {"Documents", &gfx::folder_icon_32(), &open_documents, nullptr};
     g_icons[2] = {"Network", &gfx::network_icon_32(), &not_yet, const_cast<NotYet *>(&kNetwork)};
