@@ -67,14 +67,19 @@ bool options(Session &s, int &argc, char **argv, const char *allowed, char *foun
 
 const char *grouped(uint64_t value, char *out, int capacity)
 {
+    // By hand: the board's small printf may not know 64-bit numbers.
     char digits[24];
-    const int count = snprintf(digits, sizeof digits, "%llu", static_cast<unsigned long long>(value));
+    int count = 0;
+    do {
+        digits[count++] = static_cast<char>('0' + value % 10);
+        value /= 10;
+    } while (value != 0);
     int at = 0;
-    for (int i = 0; i < count && at < capacity - 2; i++) {
-        if (i > 0 && (count - i) % 3 == 0) {
+    for (int i = count - 1; i >= 0 && at < capacity - 2; i--) {
+        out[at++] = digits[i];
+        if (i > 0 && i % 3 == 0) {
             out[at++] = ',';
         }
-        out[at++] = digits[i];
     }
     out[at] = 0;
     return out;
