@@ -39,7 +39,7 @@ public:
         }
     }
 
-    void paint(gfx::Canvas &c) override { c.blit(gfx::mascot_32(), 12, 12); } // the picture over the face
+    void paint(app::Canvas &c) override { c.blit(gfx::mascot_32(), 12, 12); } // the picture over the face
 
     bool key(const wm::KeyMsg &k) override
     {

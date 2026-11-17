@@ -33,6 +33,10 @@ using Window = int;  // 0: none
 using Control = int; // 0: none
 constexpr Window kNoWindow = 0;
 constexpr Control kNoControl = 0;
+// What a program draws on while it paints: a number good until the Paint
+// event it came with returns (namespace draw, below).
+using Drawing = int; // 0: none
+constexpr Drawing kNoDrawing = 0;
 
 enum class What : uint8_t {
     Command, // a button was pressed: `control`
@@ -40,7 +44,7 @@ enum class What : uint8_t {
     Chosen,  // a row of a list was double-clicked, or Enter on it: `control`. False: press the default button
     Key,     // a key the controls did not use: `key`. True: the program used it
     Painting, // the window is about to be painted: the last moment to change what the controls show
-    Paint,   // the client area, after the face and the controls are painted: `canvas`
+    Paint,   // the client area, after the face and the controls are painted: `drawing`
     Closed,  // the window has closed, or never opened; once, and it and its numbers are dead after this
 };
 
@@ -48,7 +52,7 @@ struct Event {
     What what;
     Control control = kNoControl;
     const wm::KeyMsg *key = nullptr;
-    gfx::Canvas *canvas = nullptr;
+    Drawing drawing = kNoDrawing;
 };
 
 using Events = bool (*)(Window window, const Event &event, void *state);
@@ -131,6 +135,54 @@ void press(Window window, Control button);
 // manager is full, and the window is gone.
 bool show(Window window);
 void close(Window window);
+
+/* ---- Drawing, while a Paint event is being answered ----
+ *
+ * The owner's choice (2026-11-17): a program draws by calls on a number,
+ * as it makes its controls, and does not hold the system's canvas object.
+ * The calls are the canvas's own (core/gfx/canvas.hpp), one for one, in
+ * the window's client coordinates and cut to what may be drawn. A number
+ * that is not a drawing in progress draws nothing.
+ */
+namespace draw {
+
+// A part of a drawing, with its own corner as (0, 0) and cut to `part`.
+// Good until the same Paint event returns; kNoDrawing when there are too
+// many at once (kMaxParts).
+constexpr int kMaxParts = 8;
+Drawing part(Drawing on, const gfx::Rect &part);
+
+void fill(Drawing on, const gfx::Rect &r, gfx::Colour c);
+void hline(Drawing on, int x, int y, int w, gfx::Colour c);
+void vline(Drawing on, int x, int y, int h, gfx::Colour c);
+void fill_rgb(Drawing on, const gfx::Rect &r, gfx::Rgb c);
+void fill_pattern(Drawing on, const gfx::Rect &r, gfx::Rgb paper, gfx::Rgb ink, const uint8_t rows[8]);
+void fill_fade(Drawing on, const gfx::Rect &r, gfx::Rgb from, gfx::Rgb to, bool vertical, const gfx::Rect *span);
+void focus_rect(Drawing on, const gfx::Rect &r);
+void checker(Drawing on, const gfx::Rect &r);
+void edge(Drawing on, const gfx::Rect &r, gfx::Colour tl, gfx::Colour br);
+void raised(Drawing on, const gfx::Rect &r);
+void sunken(Drawing on, const gfx::Rect &r);
+void button(Drawing on, const gfx::Rect &r, gfx::ButtonLook look);
+void button_frame(Drawing on, const gfx::Rect &r, gfx::ButtonLook look);
+void blit(Drawing on, const gfx::Bitmap &b, int x, int y);
+void blit_selected(Drawing on, const gfx::Bitmap &b, int x, int y, gfx::Colour tint);
+void blit2x(Drawing on, const gfx::Bitmap &b, int x, int y);
+void blit_opaque(Drawing on, const gfx::Bitmap &b, int x, int y, gfx::Colour bg);
+void pattern(Drawing on, int x, int y, const char *const *rows, int count, gfx::Colour c);
+void pattern_opaque(Drawing on, int x, int y, const char *const *rows, int count, gfx::Colour fg, gfx::Colour bg);
+// The text calls answer the x after the last character, as the canvas does.
+int text(Drawing on, int x, int y, const char *s, gfx::Colour c, bool bold);
+int text_opaque(Drawing on, int x, int y, const char *s, gfx::Colour fg, gfx::Colour bg, int caret_x);
+int text_opaque_rgb(Drawing on, int x, int y, const char *s, gfx::Colour fg, gfx::Rgb bg, int caret_x);
+void text_up(Drawing on, int x, int y, const char *s, gfx::Colour c, bool bold);
+void fill_around(Drawing on, const gfx::Rect &area, const gfx::Rect &hole, gfx::Colour c);
+
+// Needs no drawing: the size of a text in the system's font.
+int text_width(const char *s, bool bold);
+int text_height();
+
+} // namespace draw
 
 } // namespace ui
 } // namespace os

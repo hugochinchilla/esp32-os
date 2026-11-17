@@ -132,7 +132,7 @@ public:
         field_.select_all();
     }
 
-    void paint(gfx::Canvas &c) override { c.blit(gfx::run_icon_32(), 10, 12); } // the picture over the face
+    void paint(app::Canvas &c) override { c.blit(gfx::run_icon_32(), 10, 12); } // the picture over the face
 
     bool key(const wm::KeyMsg &k) override
     {

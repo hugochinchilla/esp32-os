@@ -168,7 +168,7 @@ public:
     }
     ~NetworkWindow() override { os::stop_timer(timer_); }
 
-    void paint(gfx::Canvas &c) override { c.blit2x(gfx::signal_icon_16(shown_bars_), 18, 26); } // over the face
+    void paint(app::Canvas &c) override { c.blit2x(gfx::signal_icon_16(shown_bars_), 18, 26); } // over the face
 
     bool key(const wm::KeyMsg &k) override
     {

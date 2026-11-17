@@ -409,6 +409,20 @@ public:
         chosen_rows += which == rows_;
         return true;
     }
+    // Draws by number: a square, a corner of it through a part, and as
+    // many parts as the system gives.
+    void paint(app::Canvas &c) override
+    {
+        paints++;
+        c.fill({2, 152, 6, 6}, 5);
+        c.sub({2, 152, 6, 6}).fill({0, 0, 2, 2}, 6);
+        parts = 1;
+        while (os::ui::draw::part(drawing_of(c), {0, 0, 4, 4}) != os::ui::kNoDrawing) {
+            parts++;
+        }
+        kept = drawing_of(c);
+    }
+    static os::ui::Drawing drawing_of(const app::Canvas &c) { return c.number(); }
 
     app::CheckBox tick_;
     app::RadioButton a_, b_;
@@ -418,7 +432,8 @@ public:
     app::GroupFrame frame_;
     app::TextArea area_;
     app::Button ok_;
-    int commands = 0, ticks = 0, moves = 0, picks = 0, chosen_rows = 0;
+    int commands = 0, ticks = 0, moves = 0, picks = 0, chosen_rows = 0, paints = 0, parts = 0;
+    os::ui::Drawing kept = os::ui::kNoDrawing;
 };
 
 void press(uint8_t usage)
@@ -438,6 +453,7 @@ void test_ui()
         look.title = "Sample";
         look.width = 240;
         look.height = 190;
+        look.flags = app::kPicture;
         number = app::open<Sample>(look);
     }
     CHECK(number != app::kNone && os::ui::alive(number) && sample_made == 1 && sample_gone == 0);
@@ -447,6 +463,17 @@ void test_ui()
     CHECK(desktop.active() != nullptr && strcmp(desktop.active()->title(), "Sample") == 0);
     CHECK(desktop.active()->owner() == pid && os::main_window(pid) == desktop.active()->id());
     auto &s = *static_cast<Sample *>(os::ui::state(number));
+
+    // The program painted by number, through a part too; the parts run out,
+    // and a number kept past its event draws nothing.
+    wait(10000);
+    const gfx::Rect client = desktop.active()->client();
+    const auto pixel = [&](int x, int y) { return display.pixels()[(client.y + y) * 640 + client.x + x]; };
+    CHECK(s.paints > 0 && s.parts == os::ui::draw::kMaxParts);
+    CHECK(pixel(2, 152) == 6 && pixel(3, 153) == 6 && pixel(4, 154) == 5 && pixel(7, 157) == 5 && pixel(8, 158) != 5);
+    os::ui::draw::fill(s.kept, {2, 152, 6, 6}, 9);
+    CHECK(pixel(4, 154) == 5 && os::ui::draw::part(s.kept, {0, 0, 4, 4}) == os::ui::kNoDrawing);
+    CHECK(os::ui::draw::text(s.kept, 10, 0, "ab", 0, false) == 10 + os::ui::draw::text_width("ab", false));
 
     // What the controls hold, read and set by number.
     char text[32];

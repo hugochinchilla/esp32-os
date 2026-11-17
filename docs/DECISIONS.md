@@ -2103,7 +2103,13 @@ option of a card the owner has not answered yet.
   option): `core/app/app.hpp`, one header compiled into each program.
   `app::Button` is a number and the functions that call the system with
   it. Programs are written with these, never with `core/wm`'s classes.
-- Not yet asked: drawing by calls instead of a canvas object.
+- **Drawing by calls on a number** (the owner's choice on a card,
+  2026-11-17; keeping the system's canvas object for now was the other
+  option). `os::ui::draw`: the canvas's own calls, one for one, on a
+  number good only while the Paint event is answered. Programs write
+  `app::Canvas`, a thin class of the same shape, so a paint reads as
+  before. Bitmaps and texts are still handed over as pointers into the
+  program's memory, as Win16 did.
 - Events through a queue: with item 26.
 
 ### Chosen for background jobs (2026-11-17, to confirm)

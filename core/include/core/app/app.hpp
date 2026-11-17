@@ -37,6 +37,82 @@
 
 namespace app {
 
+// What a program draws on while it paints: the system's canvas by its
+// number, with the canvas's own calls (core/gfx/canvas.hpp). Good only
+// inside the paint() it was handed to.
+class Canvas {
+public:
+    explicit Canvas(os::ui::Drawing number) : number_(number) {}
+
+    // A part of this one, with its own corner as (0, 0).
+    Canvas sub(const gfx::Rect &r) const { return Canvas(os::ui::draw::part(number_, r)); }
+
+    void fill(const gfx::Rect &r, gfx::Colour c) { os::ui::draw::fill(number_, r, c); }
+    void hline(int x, int y, int w, gfx::Colour c) { os::ui::draw::hline(number_, x, y, w, c); }
+    void vline(int x, int y, int h, gfx::Colour c) { os::ui::draw::vline(number_, x, y, h, c); }
+    void fill_rgb(const gfx::Rect &r, gfx::Rgb c) { os::ui::draw::fill_rgb(number_, r, c); }
+    void fill_pattern(const gfx::Rect &r, gfx::Rgb paper, gfx::Rgb ink, const uint8_t rows[8])
+    {
+        os::ui::draw::fill_pattern(number_, r, paper, ink, rows);
+    }
+    void fill_fade(const gfx::Rect &r, gfx::Rgb from, gfx::Rgb to, bool vertical = false,
+                   const gfx::Rect *span = nullptr)
+    {
+        os::ui::draw::fill_fade(number_, r, from, to, vertical, span);
+    }
+    void focus_rect(const gfx::Rect &r) { os::ui::draw::focus_rect(number_, r); }
+    void checker(const gfx::Rect &r) { os::ui::draw::checker(number_, r); }
+    void edge(const gfx::Rect &r, gfx::Colour tl, gfx::Colour br) { os::ui::draw::edge(number_, r, tl, br); }
+    void raised(const gfx::Rect &r) { os::ui::draw::raised(number_, r); }
+    void sunken(const gfx::Rect &r) { os::ui::draw::sunken(number_, r); }
+    void button(const gfx::Rect &r, gfx::ButtonLook look) { os::ui::draw::button(number_, r, look); }
+    void button_frame(const gfx::Rect &r, gfx::ButtonLook look) { os::ui::draw::button_frame(number_, r, look); }
+    void blit(const gfx::Bitmap &b, int x, int y) { os::ui::draw::blit(number_, b, x, y); }
+    void blit_selected(const gfx::Bitmap &b, int x, int y, gfx::Colour tint)
+    {
+        os::ui::draw::blit_selected(number_, b, x, y, tint);
+    }
+    void blit2x(const gfx::Bitmap &b, int x, int y) { os::ui::draw::blit2x(number_, b, x, y); }
+    void blit_opaque(const gfx::Bitmap &b, int x, int y, gfx::Colour bg)
+    {
+        os::ui::draw::blit_opaque(number_, b, x, y, bg);
+    }
+    void pattern(int x, int y, const char *const *rows, int count, gfx::Colour c)
+    {
+        os::ui::draw::pattern(number_, x, y, rows, count, c);
+    }
+    void pattern_opaque(int x, int y, const char *const *rows, int count, gfx::Colour fg, gfx::Colour bg)
+    {
+        os::ui::draw::pattern_opaque(number_, x, y, rows, count, fg, bg);
+    }
+    int text(int x, int y, const char *s, gfx::Colour c, bool bold = false)
+    {
+        return os::ui::draw::text(number_, x, y, s, c, bold);
+    }
+    int text_opaque(int x, int y, const char *s, gfx::Colour fg, gfx::Colour bg, int caret_x = -1)
+    {
+        return os::ui::draw::text_opaque(number_, x, y, s, fg, bg, caret_x);
+    }
+    int text_opaque(int x, int y, const char *s, gfx::Colour fg, gfx::Rgb bg, int caret_x = -1)
+    {
+        return os::ui::draw::text_opaque_rgb(number_, x, y, s, fg, bg, caret_x);
+    }
+    void text_up(int x, int y, const char *s, gfx::Colour c, bool bold = false)
+    {
+        os::ui::draw::text_up(number_, x, y, s, c, bold);
+    }
+    void fill_around(const gfx::Rect &area, const gfx::Rect &hole, gfx::Colour c)
+    {
+        os::ui::draw::fill_around(number_, area, hole, c);
+    }
+    static int text_width(const char *s, bool bold = false) { return os::ui::draw::text_width(s, bold); }
+    static int text_height() { return os::ui::draw::text_height(); }
+    os::ui::Drawing number() const { return number_; }
+
+private:
+    os::ui::Drawing number_;
+};
+
 using Look = os::ui::Look;
 using Number = os::ui::Window; // a window's number: dead once it has closed
 constexpr Number kNone = os::ui::kNoWindow;
@@ -154,7 +230,7 @@ public:
     // the controls show. Not for changing anything else.
     virtual void painting() {}
     // Only with kPicture: after the face and the controls are painted.
-    virtual void paint(gfx::Canvas &) {}
+    virtual void paint(Canvas &) {}
     // The window has closed; the object is destroyed after this.
     virtual void closed() {}
 
@@ -232,7 +308,10 @@ private:
             window->painting();
             return true;
         case os::ui::What::Paint:
-            window->paint(*event.canvas);
+            {
+                Canvas canvas(event.drawing);
+                window->paint(canvas);
+            }
             return true;
         case os::ui::What::Closed:
             window->closed();

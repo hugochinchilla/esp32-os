@@ -194,3 +194,41 @@ The owner chose how programs that paint will draw: by numbered calls,
 with a thin `app::Canvas` in the shape of today's `gfx::Canvas`, rather
 than keeping the system's canvas object for now. It comes next, before
 the programs that draw (the Terminal, the games, the viewer).
+
+## The same day: drawing by calls
+
+The owner's answer on the card: programs that paint draw by numbered
+calls now, not through the system's canvas object.
+
+Options that were on the card:
+
+- **Calls by number now** (chosen, the recommended one): the Paint event
+  carries a number; `os::ui::draw` has the canvas's calls one for one
+  (fill, lines, edges, bitmaps, texts, patterns, a part of the drawing).
+  A program built apart from the system (item 27) can paint with nothing
+  but the table of calls.
+- Keep the `gfx::Canvas` object for now: no work today, but every program
+  that paints would hold a system object, and item 27 would have to come
+  back to all of them.
+
+What was built:
+
+- The system keeps the drawings in progress in a small table: the event's
+  canvas and up to eight parts of it (`draw::part`, what `Canvas::sub`
+  was). They end when the event returns, and the next event's numbers are
+  new, so a number kept too long draws nothing.
+- `app::Canvas` in the thin classes: the number and the same method names
+  as `gfx::Canvas`, so `paint(app::Canvas &c)` reads as the old paint did.
+- Shut Down, Run and the Network panel paint through it. Pixel-identical.
+- Not carried over: `Canvas::layered` (no program uses it; the window
+  itself is painted in bands when it has a picture). The programs that
+  write every pixel once (Terminal, Culebra, the viewer) will need a flag
+  to say so when they move.
+
+Cost: one more call per drawing operation and a table lookup. To be
+measured on the board with the Terminal, which draws the most.
+
+Tested on the PC: a program paints a square and a corner of it through a
+part, the parts run out at eight, and the number does nothing after the
+event (`test_os`). 41 of 41 pass, the pictures match. Firmware not
+compiled since this change, and not run.

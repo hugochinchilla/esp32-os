@@ -17,6 +17,40 @@ namespace ui {
 
 namespace {
 
+// The drawings in progress: the canvas of the Paint event being answered
+// and the parts the program has asked of it. Numbers are given afresh for
+// each event, never the same twice running, so one kept past its event
+// draws nothing.
+struct Drawings {
+    static constexpr int kMax = 1 + draw::kMaxParts;
+    alignas(gfx::Canvas) unsigned char room[kMax][sizeof(gfx::Canvas)];
+    int count = 0;
+    int base = 0; // the number of the first is base + 1
+
+    gfx::Canvas *at(Drawing d)
+    {
+        const int i = d - base - 1;
+        return i >= 0 && i < count ? reinterpret_cast<gfx::Canvas *>(room[i]) : nullptr;
+    }
+    Drawing add(const gfx::Canvas &c)
+    {
+        if (count >= kMax) {
+            return kNoDrawing;
+        }
+        new (room[count]) gfx::Canvas(c);
+        return base + ++count;
+    }
+    void end()
+    {
+        for (int i = 0; i < count; i++) {
+            reinterpret_cast<gfx::Canvas *>(room[i])->~Canvas();
+        }
+        base += kMax; // the next event's numbers are all new
+        count = 0;
+    }
+};
+Drawings g_drawings;
+
 constexpr int kMaxWindows = 16; // ponytail: as many as the window manager shows
 
 // Every window made here, open or not yet. A window's number is the one
@@ -166,8 +200,9 @@ public:
         Window::paint(c);
         if ((flags_ & kPicture) != 0) {
             Event e{What::Paint};
-            e.canvas = &c;
+            e.drawing = g_drawings.add(c);
             tell(e);
+            g_drawings.end();
         }
     }
     bool key(const wm::KeyMsg &k) override
@@ -499,6 +534,85 @@ void close(Window window)
         w->close();
     }
 }
+
+/* ---- Drawing ---- */
+
+namespace draw {
+
+Drawing part(Drawing on, const gfx::Rect &part)
+{
+    gfx::Canvas *c = g_drawings.at(on);
+    return c != nullptr ? g_drawings.add(c->sub(part)) : kNoDrawing;
+}
+
+#define DRAW(call)                                                                                                     \
+    if (gfx::Canvas *c = g_drawings.at(on)) {                                                                          \
+        c->call;                                                                                                       \
+    }
+
+void fill(Drawing on, const gfx::Rect &r, gfx::Colour col) { DRAW(fill(r, col)) }
+void hline(Drawing on, int x, int y, int w, gfx::Colour col) { DRAW(hline(x, y, w, col)) }
+void vline(Drawing on, int x, int y, int h, gfx::Colour col) { DRAW(vline(x, y, h, col)) }
+void fill_rgb(Drawing on, const gfx::Rect &r, gfx::Rgb col) { DRAW(fill_rgb(r, col)) }
+void fill_pattern(Drawing on, const gfx::Rect &r, gfx::Rgb paper, gfx::Rgb ink, const uint8_t rows[8])
+{
+    DRAW(fill_pattern(r, paper, ink, rows))
+}
+void fill_fade(Drawing on, const gfx::Rect &r, gfx::Rgb from, gfx::Rgb to, bool vertical, const gfx::Rect *span)
+{
+    DRAW(fill_fade(r, from, to, vertical, span))
+}
+void focus_rect(Drawing on, const gfx::Rect &r) { DRAW(focus_rect(r)) }
+void checker(Drawing on, const gfx::Rect &r) { DRAW(checker(r)) }
+void edge(Drawing on, const gfx::Rect &r, gfx::Colour tl, gfx::Colour br) { DRAW(edge(r, tl, br)) }
+void raised(Drawing on, const gfx::Rect &r) { DRAW(raised(r)) }
+void sunken(Drawing on, const gfx::Rect &r) { DRAW(sunken(r)) }
+void button(Drawing on, const gfx::Rect &r, gfx::ButtonLook look) { DRAW(button(r, look)) }
+void button_frame(Drawing on, const gfx::Rect &r, gfx::ButtonLook look) { DRAW(button_frame(r, look)) }
+void blit(Drawing on, const gfx::Bitmap &b, int x, int y) { DRAW(blit(b, x, y)) }
+void blit_selected(Drawing on, const gfx::Bitmap &b, int x, int y, gfx::Colour tint)
+{
+    DRAW(blit_selected(b, x, y, tint))
+}
+void blit2x(Drawing on, const gfx::Bitmap &b, int x, int y) { DRAW(blit2x(b, x, y)) }
+void blit_opaque(Drawing on, const gfx::Bitmap &b, int x, int y, gfx::Colour bg) { DRAW(blit_opaque(b, x, y, bg)) }
+void pattern(Drawing on, int x, int y, const char *const *rows, int count, gfx::Colour col)
+{
+    DRAW(pattern(x, y, rows, count, col))
+}
+void pattern_opaque(Drawing on, int x, int y, const char *const *rows, int count, gfx::Colour fg, gfx::Colour bg)
+{
+    DRAW(pattern_opaque(x, y, rows, count, fg, bg))
+}
+void text_up(Drawing on, int x, int y, const char *s, gfx::Colour col, bool bold) { DRAW(text_up(x, y, s, col, bold)) }
+void fill_around(Drawing on, const gfx::Rect &area, const gfx::Rect &hole, gfx::Colour col)
+{
+    DRAW(fill_around(area, hole, col))
+}
+
+#undef DRAW
+
+// Drawing nothing, a text still ends where it would have.
+int text(Drawing on, int x, int y, const char *s, gfx::Colour col, bool bold)
+{
+    gfx::Canvas *c = g_drawings.at(on);
+    return c != nullptr ? c->text(x, y, s, col, bold) : x + gfx::Canvas::text_width(s, bold);
+}
+int text_opaque(Drawing on, int x, int y, const char *s, gfx::Colour fg, gfx::Colour bg, int caret_x)
+{
+    gfx::Canvas *c = g_drawings.at(on);
+    return c != nullptr ? c->text_opaque(x, y, s, fg, bg, caret_x) : x + gfx::Canvas::text_width(s);
+}
+int text_opaque_rgb(Drawing on, int x, int y, const char *s, gfx::Colour fg, gfx::Rgb bg, int caret_x)
+{
+    gfx::Canvas *c = g_drawings.at(on);
+    return c != nullptr ? c->text_opaque(x, y, s, fg, bg, caret_x) : x + gfx::Canvas::text_width(s);
+}
+
+int text_width(const char *s, bool bold) { return gfx::Canvas::text_width(s, bold); }
+int text_height() { return gfx::Canvas::text_height(); }
+
+} // namespace draw
 
 } // namespace ui
 } // namespace os
