@@ -537,7 +537,7 @@ void Machine::start()
     // No Wi-Fi: the Network panel says it is not available. The clock is
     // the PC's.
     // init is PID 1 and starts the desktop from C:\.config\startup.txt, as
-    // on the board. There are no network services here.
+    // on the board.
     static init::Init init_process(proc::table());
     init_process.set_run(
         [](const char *what, char *why, size_t capacity, void *) { return shell::run_text(what, "C:\\", why, capacity); },
@@ -550,6 +550,22 @@ void Machine::start()
             return true;
         },
         this, true);
+    // The start-up file is the board's, and it starts inetd, the network
+    // services. There is no network here, so this inetd serves nothing
+    // (the owner's choice, 2026-11-17): the line succeeds, and the process
+    // list shows an inetd that End Task or kill ends at once.
+    init_process.add(
+        "inetd",
+        [](void *) {
+            const proc::Pid pid = proc::table().spawn_service("inetd");
+            if (pid == proc::kNone) {
+                return false;
+            }
+            proc::table().set_stop(
+                pid, [](proc::Pid row, proc::Signal, void *) { proc::table().exit(row); }, nullptr);
+            return true;
+        },
+        nullptr);
     shell::startup_trouble(init_process.boot(storage_));
     screen_.set_damage_listener([](const gfx::Rect &, void *self) { static_cast<Machine *>(self)->dirty_ = true; },
                                 this);

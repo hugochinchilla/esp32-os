@@ -135,3 +135,31 @@ board (the cloud machine had no ESP-IDF installed for this step).
   thread wants to be told in advance.
 - Step 3: settings to NVS, the crash screen in the BIOS, the old self-test
   removed from the OS.
+
+## On the board (step 1, c811a63; the board thread, 2026-11-17)
+
+Only c811a63 was built and flashed, not the branch's head (which by then
+carried uncompiled step 2 work). The partition table and the bootloader
+are main's; the app alone was flashed. In this step the new text screen
+and its self-test are not yet in the firmware: the app is 16 bytes larger
+than main's (0x1697b0 against 0x1697a0), from moving three helpers out of
+`boot.cpp`'s private part.
+
+- A normal start, screenshotted every second for 16 s on main and on this
+  build: the same screens to the pixel. The only differences are a line
+  appearing about 0.1 s later in one shot ("Detecting drive C:", 7089 ms
+  against 6969 ms in the log) and the desktop clock.
+- The self-test: all ten lines OK; 11,839 ms against 11,775 ms on main;
+  the debug link answered in 8 ms (median; 9 on main) all through the
+  screens; no task watchdog warning.
+- A fast start skips the screens (desktop 253 ms after the video
+  started). The splash, the self-test and the error screen shown again
+  from the debug link, each back to the desktop after. `dbg.py fault
+  abort`: the error screen ("the desktop made an error ... abort()"), the
+  report added to C:\crash.txt, the desktop back by itself.
+- The desktop as main: a full repaint 13.9 ms (13.9 on main); free
+  internal RAM 206,027 against 205,999, external 6,475,368 against
+  6,475,412.
+- `dbg.py misses`: none.
+
+PC gate 43 of 43 after merging main. Merged.

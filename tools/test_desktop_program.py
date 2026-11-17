@@ -64,6 +64,12 @@ def main():
         # And not at the top (the desktop's own colour is there).
         assert sum(p == GREY for p in rows[2]) < 64, "the desktop is not painted"
 
+        # No window is open on a first start. The start-up file is the
+        # board's and starts inetd; here that is an inetd that serves
+        # nothing, so no "Start-up" box says a line could not be done.
+        for y in (200, 220, 240):
+            assert sum(p == GREY for p in rows[y]) < 16, "a window is open after start-up (row %d)" % y
+
         # Twice the size: each screen pixel is a sharp 2x2 square.
         _, (width2, height2, rows2) = run(program, folder, 2)
         assert (width2, height2) == (1280, 960), (width2, height2)
