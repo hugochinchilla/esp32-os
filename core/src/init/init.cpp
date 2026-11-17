@@ -35,28 +35,30 @@ const char *Init::default_text()
            "# machine starts. Without this file the lines below are used and\r\n"
            "# the file is written again.\r\n"
            "#\r\n"
-           "#   start NAME    a part of the system: desktop, taskbar, inetd,\r\n"
-           "#                 console\r\n"
-           "#   respawn NAME  the same, and started again whenever it ends\r\n"
-           "#                 (the taskbar can be)\r\n"
-           "#   run WHAT      a program or a file, as Start > Run... takes it\r\n"
-           "#   # ...         a comment\r\n"
+           "#   WHAT:ACTION, as in a Unix /etc/inittab.\r\n"
+           "#\r\n"
+           "#   WHAT    a part of the system (desktop, taskbar, inetd, console),\r\n"
+           "#           or a program or a file, as Start > Run... takes it\r\n"
+           "#   ACTION  once     started\r\n"
+           "#           respawn  started, and started again whenever it ends\r\n"
+           "#                    (the taskbar can be)\r\n"
+           "#           off      not started\r\n"
+           "#   # ...   a comment\r\n"
            "#\r\n"
            "# inetd is the network services: the remote screen, its web page,\r\n"
            "# and telnet and updates if network.ini switches them on. The\r\n"
-           "# desktop and its taskbar are started even if no line asks for\r\n"
-           "# them. With start, a taskbar that is ended stays away until\r\n"
-           "# run taskbar.\r\n"
+           "# desktop and its taskbar are started even if no line names them.\r\n"
+           "# With once, a taskbar that is ended stays away until run taskbar.\r\n"
            "\r\n"
-           "start desktop\r\n"
-           "respawn taskbar\r\n"
-           "start inetd\r\n"
+           "desktop:once\r\n"
+           "taskbar:respawn\r\n"
+           "inetd:once\r\n"
            "\r\n"
            "# The command shell on the serial port, on the same wire as the\r\n"
            "# debug link (tools/dbg.py console, or any serial terminal):\r\n"
-           "# start console\r\n"
+           "console:off\r\n"
            "\r\n"
-           "# run terminal\r\n";
+           "# terminal:once\r\n";
 }
 
 Init::Init(proc::Table &procs) : procs_(procs)
@@ -235,21 +237,105 @@ bool Init::start(Unit &unit)
 
 // What is needed goes before anything else, wherever the file has its line
 // or if it has none: a service or a program may count on the desktop being
-// there. False if something needed did not start.
-bool Init::needed_first(const char *before)
+// there. False if something needed did not start. `off`: a thing the line
+// being done says is not to be started, which may only now come to exist
+// (the desktop adds its taskbar).
+bool Init::needed_first(const char *before, const char *off)
 {
     bool all = true;
     for (int i = 0; i < count_; i++) {
-        if (units_[i].needed && !units_[i].started) {
-            log("init: %s goes before %s", units_[i].name, before);
-            if (start(units_[i])) {
-                units_[i].early = true;
+        Unit &u = units_[i];
+        if (off != nullptr && same(u.name, off) && !u.started) {
+            u.off = true;
+        }
+        if (u.needed && !u.started && !u.off) {
+            log("init: %s goes before %s", u.name, before);
+            if (start(u)) {
+                u.early = true;
             } else {
                 all = false;
             }
         }
     }
     return all;
+}
+
+// A part of the system, by its name: started once, started and started
+// again, or left alone.
+bool Init::part(const char *name, Action action)
+{
+    Unit *u = unit(name);
+    if (u == nullptr) {
+        // What is needed may bring it: the desktop adds its taskbar.
+        if (!needed_first(name, action == Action::Off ? name : nullptr)) {
+            return false;
+        }
+        u = unit(name);
+    }
+    if (u == nullptr) {
+        log("init: nothing here is called %s", name);
+        return false;
+    }
+    if (action == Action::Off) {
+        if (u->needed && u->again == Again::No) {
+            log("init: %s cannot be off", name);
+            return false;
+        }
+        if (u->started) {
+            log("init: %s is already started; its off line goes higher up", name);
+            return false;
+        }
+        u->off = true;
+        log("init: %s is off", name);
+        return true;
+    }
+    const bool respawn = action == Action::Respawn;
+    if (respawn && u->again == Again::No) {
+        log("init: %s cannot be started again when it ends; started once", name);
+    }
+    const bool comes_back = respawn && u->again != Again::No;
+    if (u->early) {
+        u->early = false; // its own line, a little late
+        if (u->respawn != comes_back) {
+            // Started already, the other way: its process is told.
+            u->respawn = comes_back;
+            if (const proc::Process *p = procs_.find(u->pid)) {
+                procs_.set_flags(p->pid, comes_back ? p->flags | proc::kRespawn
+                                                    : p->flags & static_cast<uint8_t>(~proc::kRespawn));
+            }
+        }
+        return true;
+    }
+    u->respawn = comes_back;
+    u->off = false;
+    if (!u->needed && !needed_first(name)) {
+        return false;
+    }
+    return start(*u);
+}
+
+// A program or a file, as Start > Run... takes it.
+bool Init::program(const char *what)
+{
+    if (run_ == nullptr) {
+        log("init: nothing to run %s with", what);
+        return false;
+    }
+    if (!needed_first(what)) {
+        return false;
+    }
+    char why[80] = "";
+    bool opened;
+    {
+        const proc::Scope as(&procs_, pid_);
+        opened = run_(what, why, sizeof(why), run_context_);
+    }
+    if (!opened) {
+        log("init: run %s: %s", what, why);
+        return false;
+    }
+    log("init: ran %s", what);
+    return true;
 }
 
 // One line, already without its end. True if there was nothing to do or it
@@ -262,84 +348,75 @@ bool Init::line(const char *text)
     if (*text == 0 || *text == '#') {
         return true;
     }
+    // The form from before the fields: "start NAME" and "run WHAT". Still
+    // understood, so a file written then goes on working.
     char verb[8];
     size_t n = 0;
-    while (text[n] != 0 && !is_space(text[n]) && n < sizeof(verb) - 1) {
+    while (text[n] != 0 && !is_space(text[n]) && text[n] != ':' && n < sizeof(verb) - 1) {
         verb[n] = text[n];
         n++;
     }
     verb[n] = 0;
-    const char *rest = text + n;
-    if (*rest != 0 && !is_space(*rest)) {
+    const bool old_start = same(verb, "start"), old_run = same(verb, "run");
+    if ((old_start || old_run) && (text[n] == 0 || is_space(text[n]))) {
+        const char *rest = text + n;
+        while (is_space(*rest)) {
+            rest++;
+        }
+        if (*rest == 0) {
+            log("init: %s what? (%s)", verb, text);
+            return false;
+        }
+        return old_start ? part(rest, Action::Once) : program(rest);
+    }
+    // WHAT:ACTION. The action is after the last colon: a path has its own.
+    const char *colon = strrchr(text, ':');
+    if (colon == nullptr) {
         log("init: not understood: %s", text);
         return false;
     }
-    while (is_space(*rest)) {
-        rest++;
+    const char *word = colon + 1;
+    while (is_space(*word)) {
+        word++;
     }
-    if (*rest == 0) {
-        log("init: %s what? (%s)", verb, text);
+    Action action;
+    if (same(word, "once")) {
+        action = Action::Once;
+    } else if (same(word, "respawn")) {
+        action = Action::Respawn;
+    } else if (same(word, "off")) {
+        action = Action::Off;
+    } else {
+        log("init: not understood: %s (once, respawn or off after the colon)", text);
         return false;
     }
-    const bool respawn = same(verb, "respawn");
-    if (respawn || same(verb, "start")) {
-        Unit *u = unit(rest);
-        if (u == nullptr) {
-            // What is needed may bring it: the desktop adds its taskbar.
-            if (!needed_first(rest)) {
-                return false;
-            }
-            u = unit(rest);
-        }
-        if (u == nullptr) {
-            log("init: nothing here is called %s", rest);
-            return false;
-        }
-        if (respawn && u->again == Again::No) {
-            log("init: %s cannot be started again when it ends; started once", rest);
-        }
-        const bool comes_back = respawn && u->again != Again::No;
-        if (u->early) {
-            u->early = false; // its own line, a little late
-            if (u->respawn != comes_back) {
-                // Started already, the other way: its process is told.
-                u->respawn = comes_back;
-                if (const proc::Process *p = procs_.find(u->pid)) {
-                    procs_.set_flags(p->pid, comes_back ? p->flags | proc::kRespawn
-                                                        : p->flags & static_cast<uint8_t>(~proc::kRespawn));
-                }
-            }
-            return true;
-        }
-        u->respawn = comes_back;
-        if (!u->needed && !needed_first(rest)) {
-            return false;
-        }
-        return start(*u);
+    char what[kMaxLine];
+    size_t length = static_cast<size_t>(colon - text);
+    while (length > 0 && is_space(text[length - 1])) {
+        length--;
     }
-    if (same(verb, "run")) {
-        if (run_ == nullptr) {
-            log("init: nothing to run %s with", rest);
-            return false;
-        }
-        if (!needed_first(rest)) {
-            return false;
-        }
-        char why[80] = "";
-        bool opened;
-        {
-            const proc::Scope as(&procs_, pid_);
-            opened = run_(rest, why, sizeof(why), run_context_);
-        }
-        if (!opened) {
-            log("init: run %s: %s", rest, why);
-            return false;
-        }
-        log("init: ran %s", rest);
-        return true;
+    memcpy(what, text, length);
+    what[length] = 0;
+    if (length == 0) {
+        log("init: %s what? (%s)", word, text);
+        return false;
     }
-    log("init: not understood: %s", text);
-    return false;
+    // A part of the system if there is one of that name (or the desktop
+    // brings one); anything else is a program or a file.
+    if (unit(what) == nullptr && !needed_first(what, action == Action::Off ? what : nullptr)) {
+        return false; // the desktop may bring it (its taskbar); off is marked before it starts
+    }
+    if (unit(what) != nullptr) {
+        return part(what, action);
+    }
+    if (action == Action::Off) {
+        return true; // a program that is off: nothing to do
+    }
+    if (action == Action::Respawn) {
+        log("init: only a part of the system can be started again: %s", what);
+        return false;
+    }
+    return program(what);
 }
 
 // Text as it comes, in pieces of any size: each whole line is done as soon
@@ -382,7 +459,7 @@ int Init::finish()
         end_line();
     }
     for (int i = 0; i < count_; i++) {
-        if (units_[i].needed && !units_[i].started) {
+        if (units_[i].needed && !units_[i].started && !units_[i].off) {
             log("init: no line starts %s; started anyway", units_[i].name);
             if (!start(units_[i])) {
                 failed_++;

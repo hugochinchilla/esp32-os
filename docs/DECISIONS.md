@@ -1788,7 +1788,9 @@ agent under the owner's "dejo a tu criterio" of 2026-11-16.
   part of the system (`desktop`, `inetd`), `run WHAT` for a program or a
   file as Start > Run... takes it, `#` for a comment, done from the top
   down. Rejected: an .ini file (order is the point); a shell script (maybe
-  later); names without verbs.
+  later); names without verbs. *Changed 2026-11-17 (the owner's choice): the
+  lines are fields, `WHAT:ACTION`, as in inittab; see "init starts again
+  what ends". The verbs are still understood.*
 - **Without a file the usual lines are used and the file is written.** A
   wrong line is logged and skipped. The desktop is started even if no line
   asks, until there is a console to fall back on (item 14).
@@ -1972,14 +1974,23 @@ process table into `init`, as `respawn` in a Unix `/etc/inittab`.
 - The process table starts nothing again. It tells a supervisor
   (`proc::Supervisor`, which is init) of every ending. The brake (ended
   within 2 s, 5 times in a row: not started again) is init's.
-- `startup.txt` says what comes back. Built as a verb, `respawn NAME`,
-  beside `start` and `run`; the form (a verb, a verb that also takes
-  programs, or inittab's fields) is with the owner on a card, to confirm.
+- `startup.txt` says what comes back, in inittab's fields (the owner's
+  choice, over a new verb `respawn NAME` and over a verb that also takes
+  programs): `WHAT:ACTION`, the action `once`, `respawn` or `off`, after
+  the last colon so a path keeps its own. `desktop:once`,
+  `taskbar:respawn`, `inetd:once`, `console:off`. A WHAT that is not a
+  part of the system is a program or a file. The lines of the first form
+  (`start NAME`, `run WHAT`) are still understood, so the file on the
+  board goes on working (the agent's, to confirm).
+- The agent's, to confirm: two fields and not inittab's four (there are
+  no runlevels, and an id beside the name would say the same thing
+  twice); `off` is new with the fields; the desktop cannot be `off`; a
+  program cannot be `respawn` yet.
 - The agent's, to confirm: a thing that comes back is watched by its
   process, which has the thing's name; the taskbar is needed and comes
-  back unless the file says `start taskbar`, so a file from before still
-  works; the taskbar is init's child; `respawn` on the network services or
-  the console starts them once and says so in the log.
+  back unless the file says `taskbar:once` (or `taskbar:off`), so a file
+  from before still works; the taskbar is init's child; `respawn` on the
+  network services or the console starts them once and says so in the log.
 - Not done: init on a task of its own that waits for endings. That is
   item 26.
 
