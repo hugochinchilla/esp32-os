@@ -149,3 +149,48 @@ after the window closes. PC tests pass (41), pictures match, firmware
 compiles and links (0x167080 of 0x1f0000), not run. For the board: Task
 Manager lists titles and icons, Switch To brings a program forward, and
 its dialog if it has one open.
+
+
+## On the board (added by the board thread, 2026-11-17)
+
+Branch commit 8474364 (file handles, the Picture viewer through a handle,
+another program's window as a number) with main 781cf99 merged in; only the
+journal index conflicted. 41929bc was never flashed on its own: this turn
+covers all three steps. PC tests 42 of 42, firmware 0x165300, flashed by
+cable, the app only.
+
+1. Free RAM on the idle desktop: internal 206,035 bytes against 206,059 on
+   main (24 less), external 6,478,056 against 6,479,768 (1,712 less: the
+   handle table).
+2. The Editor: a file opened (`edit` over telnet), a line added, saved,
+   closed and opened again: the line is there. Save As to a new name wrote
+   the new file and the title followed.
+3. A 400 KB file saved from the Editor: 4.1 s, the Start menu opened and
+   closed meanwhile, the file byte for byte right afterwards.
+4. `kill -9` on the Editor 0.6 s into a 400 KB save, three times: the
+   window went, and the file was each time whole and new: by design the save
+   job finishes and closes its file before the process ends, so no handle was
+   left for the system to close and no "os: closed" line was written. Ten
+   more open, edit, save and close rounds afterwards all worked (the table
+   does not fill up).
+5. The Picture viewer closed 0.3 s into loading earthrise.jpg and another
+   viewer opened with mascot.bmp at once, three times: no crash, mascot.bmp
+   shown each time, internal RAM back to the byte (external +424). No "os:
+   closed" line here either. A case that makes the system close a handle
+   for a process that ended was not found from outside.
+6. Normal use: `type` with `>`, `cp`, `mv`, a pipe and `rm` over telnet, a
+   30 KB put and get, the Editor's Open and Save, `ted`, the File manager
+   moving a file into a folder (crash.txt into Documents, by a slip of mine;
+   put back byte for byte, its date is now today's) and a file onto the
+   Trash: no "os: closed" line in the log.
+7. The Picture viewer, timed by the board (decode / total): mascot.bmp
+   454 / 662 ms (main 449 / 641), test card.png 389 / 622 (389 / 598), blue
+   marble.png 652 / 1,190 (645 / 1,156), earthrise.jpg 896 / 1,484 (892 /
+   1,440). Memory back to the byte after the four.
+8. The Task Manager: titles and icons as before. Switch To on the Editor
+   while its Save As box is open brings the Save As box forward; on a
+   minimised Picture viewer it restores it; on Culebra it brings it forward.
+   End Task works. A stale row: Culebra's row selected, Culebra killed from
+   telnet; the Task Manager dropped the row and its selection at once, and
+   Switch To and End Task then did nothing and nothing crashed.
+9. `dbg.py misses`: none. Repaint 14.0 ms. VNC and telnet answered.
