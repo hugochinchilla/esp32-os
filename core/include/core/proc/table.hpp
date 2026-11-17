@@ -40,7 +40,7 @@ enum class State : uint8_t {
 enum Flag : uint8_t {
     kSystem = 1,    // part of the OS: hidden in Task Manager's default view
     kProtected = 2, // cannot be signalled: signal() answers NotPermitted
-    kRespawn = 4,   // started again if it ends, whatever ended it (set_restart)
+    kRespawn = 4,   // started again if it ends, whatever ended it: init marks what it looks after
     kWindowed = 8,  // a window program: it ends when its last window closes
 };
 
@@ -64,12 +64,24 @@ using StopJobsFn = void (*)(Pid pid, void *context);
 // Ends a service: a process without windows (see Table::set_stop).
 using StopFn = void (*)(Pid pid, Signal signal, void *context);
 
-// Starts a program again (see Table::set_restart).
-using StartFn = void (*)(void *context);
+struct Process;
 
-// Told the name of a program that is no longer started again (see
-// Table::set_gave_up).
-using GaveUpFn = void (*)(const char *name, void *context);
+// Whoever looks after what ends (see Table::set_supervisor): init. The
+// table only says that a process has gone; whether it is started again, how
+// often and by whom is the supervisor's business.
+class Supervisor {
+public:
+    // A process is ending: its row, still whole. Called from inside exit(),
+    // so nothing is started here; it is noted for restart_due().
+    virtual void ended(const Process &process) = 0;
+    // Something noted is waiting to be started again.
+    virtual bool restarts_waiting() const = 0;
+    // Starts what is waiting. Returns how many were started.
+    virtual int restart_due() = 0;
+
+protected:
+    ~Supervisor() = default;
+};
 
 struct Process {
     static constexpr int kNameSize = 24;
@@ -85,12 +97,10 @@ struct Process {
                           // current process, and its finished jobs' tasks
     uint32_t memory = 0;  // bytes it holds now: what its windows asked the
                           // Memory port for, and the stacks of its jobs
-    uint32_t born = 0;    // the table's clock when it was made (the brake on restarts)
+    uint32_t born = 0;    // the table's clock when it was made (init's brake on restarts)
     char name[kNameSize] = "";
     StopFn stop = nullptr;     // a service that can be ended (set_stop)
     void *stop_context = nullptr;
-    StartFn restart = nullptr; // for kRespawn
-    void *restart_context = nullptr;
 
     bool is(Flag f) const { return (flags & f) != 0; }
 };
@@ -164,29 +174,24 @@ public:
         stop_jobs_context_ = context;
     }
 
-    // Respawn: sets the flag and remembers how to start the program again.
-    // When the process ends, by a signal or by itself, `start` is put on a
-    // list, and restart_due() runs the list with the root as the current process
-    // (so what it starts is the root's child). It is called at safe points, not
-    // from inside exit(). `start` must make the new process itself, and call
-    // set_restart() on it if that one is to come back too.
-    void set_restart(Pid pid, StartFn start, void *context);
-    int restart_due(); // how many were started
-    bool restarts_waiting() const { return due_count_ > 0; }
-    // The brake. A program that ends less than kQuickUs after it was made,
-    // kQuickLimit times one after the other, is not started again: something
-    // is wrong with it, and starting it for ever would take the machine
-    // along. One that lasts longer starts the count again. A program is
-    // known by its start function and context. It needs the clock
-    // (set_clock); without one nothing is braked. init says so in the log.
-    static constexpr uint32_t kQuickUs = 2000000;
-    static constexpr int kQuickLimit = 5;
-    void set_gave_up(GaveUpFn fn, void *context)
+    // Starting again what ends is not the table's work: it tells the
+    // supervisor (init, core/init) of every ending, and passes on the two
+    // questions the window manager asks at its safe points. With no
+    // supervisor nothing comes back.
+    void set_supervisor(Supervisor *supervisor) { supervisor_ = supervisor; }
+    Supervisor *supervisor() const { return supervisor_; }
+    bool restarts_waiting() const { return supervisor_ != nullptr && supervisor_->restarts_waiting(); }
+    int restart_due() { return supervisor_ != nullptr ? supervisor_->restart_due() : 0; }
+    // The table's clock (set_clock), for whoever counts how long a process
+    // lived. False: there is no clock.
+    bool now(uint32_t &micros) const
     {
-        gave_up_ = fn;
-        gave_up_context_ = context;
+        if (micros_ == nullptr) {
+            return false;
+        }
+        micros = micros_(micros_context_);
+        return true;
     }
-    int given_up() const { return given_up_; } // how many programs, since the start
 
     // Live processes in order of creation (lowest PID first, until the
     // numbers have gone round).
@@ -238,25 +243,7 @@ private:
     StopJobsFn stop_jobs_ = nullptr;
     void *stop_jobs_context_ = nullptr;
 
-    struct Restart {
-        StartFn start;
-        void *context;
-    };
-    static constexpr int kMaxDue = 8;
-    Restart due_[kMaxDue] = {};
-    int due_count_ = 0;
-
-    // Programs that ended quickly the last time, and how many times in a row.
-    struct Quick {
-        StartFn start = nullptr;
-        void *context = nullptr;
-        int count = 0;
-    };
-    bool may_restart(const Process &p);
-    Quick quick_[kMaxDue] = {};
-    GaveUpFn gave_up_ = nullptr;
-    void *gave_up_context_ = nullptr;
-    int given_up_ = 0;
+    Supervisor *supervisor_ = nullptr;
 };
 
 // Makes `pid` the current process until the end of the block, then puts the

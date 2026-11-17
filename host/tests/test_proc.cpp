@@ -7,6 +7,7 @@
 #include <string>
 
 #include "core/fs/memory_volume.hpp"
+#include "core/init/init.hpp"
 #include "core/net/wifi.hpp"
 #include "core/proc/table.hpp"
 #include "core/desk/desk.hpp"
@@ -207,17 +208,36 @@ void test_table()
 
 /* ---- Signals and restarts, in the table alone ------------------------------------- */
 
-proc::Table *restart_table = nullptr;
-int restarts = 0;
-Pid restarted_as = proc::kNone, restarted_by = proc::kNone;
+// Who is told of endings: counts them and "starts again" what was called
+// Taskbar, as init would.
+struct Watcher : proc::Supervisor {
+    proc::Table *table = nullptr;
+    int endings = 0, waiting = 0, restarts = 0;
+    Pid last = proc::kNone, restarted_as = proc::kNone, restarted_by = proc::kNone;
+    bool row_whole = false;
 
-void start_again(void *context)
-{
-    restarts++;
-    restarted_by = restart_table->current();
-    restarted_as = restart_table->spawn(static_cast<const char *>(context), restart_table->current(), proc::kWindowed);
-    restart_table->set_restart(restarted_as, &start_again, context);
-}
+    void ended(const proc::Process &p) override
+    {
+        endings++;
+        last = p.pid;
+        row_whole = p.state != proc::State::Free && table->alive(p.pid);
+        if (strcmp(p.name, "Taskbar") == 0) {
+            waiting++;
+        }
+    }
+    bool restarts_waiting() const override { return waiting > 0; }
+    int restart_due() override
+    {
+        const int n = waiting;
+        waiting = 0;
+        for (int i = 0; i < n; i++) {
+            restarts++;
+            restarted_by = table->current();
+            restarted_as = table->spawn("Taskbar", proc::kRoot, proc::kWindowed);
+        }
+        return n;
+    }
+};
 
 void test_signals_in_the_table()
 {
@@ -292,43 +312,36 @@ void test_signals_in_the_table()
     t.exit(program);
     CHECK(!t.signals_waiting() && t.signal(program, proc::Signal::Term) == proc::Sent::NoSuchProcess);
 
-    // Respawn: ending the process does not start it at once. The start
-    // function waits for restart_due(), and runs with the root as the current
-    // process, so the new one is the root's child under a new number.
-    restart_table = &t;
-    static const char name[] = "Taskbar";
-    const Pid first = t.spawn(name, guarded, proc::kWindowed);
-    t.set_restart(first, &start_again, const_cast<char *>(name));
-    CHECK(t.find(first)->is(proc::kRespawn) && t.find(first)->is(proc::kWindowed));
-    CHECK(t.restart_due() == 0 && restarts == 0); // nothing has ended
+    // What ends and comes back is not the table's business: it tells its
+    // supervisor (init) of every ending, with the row still whole, and
+    // passes on the two questions asked at the safe points. Nothing is
+    // started from inside exit().
+    CHECK(!t.restarts_waiting() && t.restart_due() == 0); // nobody to ask
+    Watcher watcher;
+    watcher.table = &t;
+    t.set_supervisor(&watcher);
+    const Pid first = t.spawn("Taskbar", guarded, proc::kWindowed);
+    CHECK(!t.restarts_waiting() && t.restart_due() == 0); // nothing has ended
     t.exit(first);
-    CHECK(restarts == 0 && t.find_by_name(name) == proc::kNone);
+    CHECK(watcher.endings == 1 && watcher.last == first && watcher.row_whole);
+    CHECK(t.restarts_waiting() && watcher.restarts == 0 && t.find_by_name("Taskbar") == proc::kNone);
     {
         const proc::Scope as(&t, guarded);
         CHECK(t.restart_due() == 1 && t.current() == guarded);
     }
-    CHECK(restarts == 1 && restarted_by == proc::kRoot && restarted_as == first + 1);
-    CHECK(t.find(restarted_as)->parent == proc::kRoot && t.find(restarted_as)->is(proc::kRespawn));
-    CHECK(t.restart_due() == 0 && restarts == 1); // once per ending
-    // It comes back every time it ends.
-    t.exit(restarted_as);
-    CHECK(t.restart_due() == 1 && restarts == 2 && restarted_as == first + 2 && t.alive(restarted_as));
-    // The flag without a start function does nothing; the root is never one.
-    const Pid flag_only = t.spawn("flag only", guarded, proc::kRespawn);
-    t.exit(flag_only);
-    t.set_restart(proc::kRoot, &start_again, const_cast<char *>(name));
-    CHECK(t.restart_due() == 0 && restarts == 2 && !t.find(proc::kRoot)->is(proc::kRespawn));
-    // More endings than the list holds (8) between two safe points: the
-    // extra ones are not started again, and nothing is overrun.
-    Pid many[10];
-    for (Pid &pid : many) {
-        pid = t.spawn("many", guarded);
-        t.set_restart(pid, &start_again, const_cast<char *>(name));
-    }
-    for (const Pid pid : many) {
-        t.exit(pid);
-    }
-    CHECK(t.restart_due() == 8 && restarts == 10);
+    CHECK(watcher.restarts == 1 && watcher.restarted_as == first + 1 && t.alive(watcher.restarted_as));
+    CHECK(!t.restarts_waiting() && t.restart_due() == 0); // once per ending
+    // Any process that ends is told of, not only what comes back; the root
+    // cannot end.
+    const Pid other = t.spawn("other", guarded);
+    t.exit(other);
+    CHECK(watcher.endings == 2 && watcher.last == other && !t.restarts_waiting());
+    CHECK(!t.exit(proc::kRoot) && watcher.endings == 2);
+    // Without a supervisor nothing comes back.
+    t.set_supervisor(nullptr);
+    t.exit(watcher.restarted_as);
+    CHECK(watcher.endings == 2 && !t.restarts_waiting() && t.restart_due() == 0);
+    t.set_supervisor(&watcher);
     t.reset();
     CHECK(!t.signals_waiting() && t.restart_due() == 0);
 }
@@ -698,42 +711,44 @@ void test_owners()
     }
 
     // Respawn: killed, the process is back after the same safe point, as
-    // the root's child with a new number, with its window open again.
+    // init's child with a new number, with its window open again. It is
+    // init that starts it, as something it was told comes back.
     struct Again {
         wm::Wm *m;
         OwnedWindow *w;
         Pid pid;
         int starts;
-        static void start(void *context)
+        static bool start(void *context)
         {
             auto *self = static_cast<Again *>(context);
             self->starts++;
             self->pid = procs.spawn("Taskbar", procs.current(), proc::kWindowed);
-            procs.set_restart(self->pid, &Again::start, self);
             const proc::Scope as(&procs, self->pid);
             self->m->add(*self->w);
+            return true;
         }
     };
     static Again again = {&m, &a, proc::kNone, 0};
     fresh(a);
     {
-        const proc::Scope as(&procs, desktop);
-        Again::start(&again);
+        init::Init first(procs); // the table has its root: init is that row
+        first.add("Taskbar", &Again::start, &again, false, init::Again::Does);
+        CHECK(first.start_again("Taskbar") && !first.start_again("Taskbar"));
+        const Pid bar1 = again.pid;
+        CHECK(a.open() && a.owner() == bar1 && procs.find(bar1)->parent == proc::kRoot);
+        CHECK(procs.find(bar1)->is(proc::kRespawn) && procs.find(bar1)->is(proc::kWindowed));
+        procs.signal(bar1, proc::Signal::Kill);
+        wait(10);
+        CHECK(!procs.alive(bar1) && again.starts == 2 && again.pid != bar1 && procs.alive(again.pid));
+        CHECK(a.open() && a.owner() == again.pid && procs.find(again.pid)->parent == proc::kRoot);
+        CHECK(procs.current() == proc::kNone);
+        // Closed politely, by its own close button, it comes back all the same.
+        const Pid bar2 = again.pid;
+        m.activate(a);
+        key(wm::key::F4, kAltBit);
+        CHECK(!procs.alive(bar2) && again.starts == 3 && a.open() && a.owner() == again.pid);
     }
-    const Pid bar1 = again.pid;
-    CHECK(a.open() && a.owner() == bar1 && procs.find(bar1)->parent == desktop);
-    procs.signal(bar1, proc::Signal::Kill);
-    wait(10);
-    CHECK(!procs.alive(bar1) && again.starts == 2 && again.pid != bar1 && procs.alive(again.pid));
-    CHECK(a.open() && a.owner() == again.pid && procs.find(again.pid)->parent == proc::kRoot);
-    CHECK(procs.current() == proc::kNone);
-    // Closed politely, by its own close button, it comes back all the same.
-    const Pid bar2 = again.pid;
-    m.activate(a);
-    key(wm::key::F4, kAltBit);
-    CHECK(!procs.alive(bar2) && again.starts == 3 && a.open() && a.owner() == again.pid);
-    // Without the flag it stays away.
-    procs.set_flags(again.pid, proc::kWindowed);
+    // With nobody looking after it, it stays away.
     procs.signal(again.pid, proc::Signal::Kill);
     wait(10);
     CHECK(!a.open() && again.starts == 3 && !procs.alive(again.pid));
@@ -828,7 +843,7 @@ void test_shell()
     const Pid desk_pid = desk->pid;
     const proc::Process *bar = process("taskbar");
     CHECK(bar != nullptr && bar->parent == desk_pid && bar->is(proc::kSystem) && !bar->is(proc::kProtected) &&
-          bar->is(proc::kRespawn) && desktop.panel_owner(wm::PanelPlace::Bar) == bar->pid);
+          !bar->is(proc::kRespawn) && desktop.panel_owner(wm::PanelPlace::Bar) == bar->pid);
     const Pid bar_pid = bar != nullptr ? bar->pid : proc::kNone;
     // Timers: the caret and the clock, the screensaver's and the Wi-Fi
     // manager's are the desktop's; the look at the desktop's folder is the
@@ -1052,9 +1067,23 @@ void test_taskbar()
 {
     proc::Table &t = proc::table();
     close_all();
-    wait(3000000); // well past a quick ending
     const Pid desk_pid = t.find_by_name("desktop");
+    // With no init, as the tests above ran, nobody starts it again: ended,
+    // it stays away.
+    const Pid alone = t.find_by_name("taskbar");
+    CHECK(alone != proc::kNone && !t.find(alone)->is(proc::kRespawn));
+    t.signal(alone, proc::Signal::Kill);
+    wait(100000);
+    CHECK(t.find_by_name("taskbar") == proc::kNone && shell::taskbar() == nullptr);
+    // init arrives (the root of this table is the desktop's row, so that is
+    // init here) and `run taskbar` hands it the taskbar: started, and from
+    // now on started again.
+    static init::Init init_process(t);
+    char how[80] = "";
+    CHECK(shell::run_text("taskbar", "C:\\", how, sizeof(how)) && init_process.has("taskbar"));
+    wait(3000000); // well past a quick ending
     const Pid first = t.find_by_name("taskbar");
+    CHECK(first != proc::kNone && t.find(first)->is(proc::kRespawn) && t.find(first)->parent == init_process.pid());
     CHECK(first != proc::kNone && desktop.panel_owner(wm::PanelPlace::Bar) == first && desktop.panel(wm::PanelPlace::Bar) != nullptr);
     const std::string with_bar = screen();
 

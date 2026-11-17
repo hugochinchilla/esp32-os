@@ -23,7 +23,11 @@ bool same(const char *a, const char *b)
     return *a == *b;
 }
 
+Init *g_the = nullptr;
+
 } // namespace
+
+Init *the() { return g_the; }
 
 const char *Init::default_text()
 {
@@ -31,15 +35,21 @@ const char *Init::default_text()
            "# machine starts. Without this file the lines below are used and\r\n"
            "# the file is written again.\r\n"
            "#\r\n"
-           "#   start NAME   a part of the system: desktop, inetd, console\r\n"
-           "#   run WHAT     a program or a file, as Start > Run... takes it\r\n"
-           "#   # ...        a comment\r\n"
+           "#   start NAME    a part of the system: desktop, taskbar, inetd,\r\n"
+           "#                 console\r\n"
+           "#   respawn NAME  the same, and started again whenever it ends\r\n"
+           "#                 (the taskbar can be)\r\n"
+           "#   run WHAT      a program or a file, as Start > Run... takes it\r\n"
+           "#   # ...         a comment\r\n"
            "#\r\n"
            "# inetd is the network services: the remote screen, its web page,\r\n"
            "# and telnet and updates if network.ini switches them on. The\r\n"
-           "# desktop is started even if no line asks for it.\r\n"
+           "# desktop and its taskbar are started even if no line asks for\r\n"
+           "# them. With start, a taskbar that is ended stays away until\r\n"
+           "# run taskbar.\r\n"
            "\r\n"
            "start desktop\r\n"
+           "respawn taskbar\r\n"
            "start inetd\r\n"
            "\r\n"
            "# The command shell on the serial port, on the same wire as the\r\n"
@@ -56,12 +66,35 @@ Init::Init(proc::Table &procs) : procs_(procs)
     } else {
         pid_ = proc::kRoot;
     }
-    procs_.set_gave_up(&Init::gave_up, this);
+    procs_.set_supervisor(this);
+    g_the = this;
 }
 
-bool Init::add(const char *name, StartFn start, void *context, bool needed)
+Init::~Init()
 {
-    if (count_ == kMaxUnits || name == nullptr || start == nullptr) {
+    if (procs_.supervisor() == this) {
+        procs_.set_supervisor(nullptr);
+    }
+    if (g_the == this) {
+        g_the = nullptr;
+    }
+}
+
+Init::Unit *Init::unit(const char *name)
+{
+    for (int i = 0; i < count_; i++) {
+        if (same(units_[i].name, name)) {
+            return &units_[i];
+        }
+    }
+    return nullptr;
+}
+
+bool Init::has(const char *name) const { return const_cast<Init *>(this)->unit(name) != nullptr; }
+
+bool Init::add(const char *name, StartFn start, void *context, bool needed, Again again)
+{
+    if (count_ == kMaxUnits || name == nullptr || start == nullptr || has(name)) {
         return false;
     }
     Unit &u = units_[count_++];
@@ -70,6 +103,8 @@ bool Init::add(const char *name, StartFn start, void *context, bool needed)
     u.context = context;
     u.needed = needed;
     u.started = false;
+    u.again = again;
+    u.respawn = again == Again::Does;
     return true;
 }
 
@@ -96,9 +131,79 @@ void Init::log(const char *format, ...)
     log_(text, log_context_);
 }
 
-void Init::gave_up(const char *name, void *context)
+/* ---- What comes back ------------------------------------------------------- */
+
+// The brake: false when this thing has just ended quickly once too often.
+bool Init::may_restart(Unit &unit, const proc::Process &process)
 {
-    static_cast<Init *>(context)->log("init: %s keeps ending as soon as it starts; not started again", name);
+    uint32_t now = 0;
+    if (!procs_.now(now)) {
+        return true;
+    }
+    const uint32_t lived = now - process.born; // the clock wraps; the difference does not
+    if (lived >= kQuickUs) {
+        unit.quick = 0;
+        return true;
+    }
+    if (++unit.quick < kQuickLimit) {
+        return true;
+    }
+    unit.quick = 0;
+    given_up_++;
+    log("init: %s keeps ending as soon as it starts; not started again", unit.name);
+    return false;
+}
+
+// From inside the table's exit(): nothing is started here, only noted.
+void Init::ended(const proc::Process &process)
+{
+    for (int i = 0; i < count_; i++) {
+        Unit &u = units_[i];
+        if (u.pid != process.pid) {
+            continue;
+        }
+        u.pid = proc::kNone;
+        u.started = false;
+        if (u.respawn && may_restart(u, process) && due_count_ < kMaxUnits) {
+            due_[due_count_++] = &u;
+        }
+        return;
+    }
+}
+
+int Init::restart_due()
+{
+    // The list is emptied first: a start function may end a process too.
+    Unit *now[kMaxUnits];
+    const int n = due_count_;
+    for (int i = 0; i < n; i++) {
+        now[i] = due_[i];
+    }
+    due_count_ = 0;
+    int started = 0;
+    for (int i = 0; i < n; i++) {
+        if (!now[i]->started) {
+            log("init: %s ended; starting it again", now[i]->name);
+            started += start(*now[i]) ? 1 : 0;
+        }
+    }
+    return started;
+}
+
+bool Init::start_again(const char *name)
+{
+    Unit *u = unit(name);
+    if (u == nullptr || u->started) {
+        return false;
+    }
+    u->quick = 0;
+    if (!start(*u)) {
+        return false;
+    }
+    // Before the file has been done at all: its line, when it comes, finds
+    // it started and is not a line gone wrong.
+    u->early = !done_;
+    return true;
 }
 
 bool Init::start(Unit &unit)
@@ -115,6 +220,16 @@ bool Init::start(Unit &unit)
     }
     unit.started = true;
     log("init: started %s", unit.name);
+    // What can come back is watched by its process, which has its name:
+    // init is told when it ends, to start it again or to know it has gone.
+    unit.pid = unit.again != Again::No ? procs_.find_by_name(unit.name) : proc::kNone;
+    if (unit.respawn) {
+        if (const proc::Process *p = procs_.find(unit.pid)) {
+            procs_.set_flags(unit.pid, p->flags | proc::kRespawn);
+        } else {
+            log("init: %s has no process to watch; it will not come back", unit.name);
+        }
+    }
     return true;
 }
 
@@ -166,21 +281,41 @@ bool Init::line(const char *text)
         log("init: %s what? (%s)", verb, text);
         return false;
     }
-    if (same(verb, "start")) {
-        for (int i = 0; i < count_; i++) {
-            if (same(units_[i].name, rest)) {
-                if (units_[i].early) {
-                    units_[i].early = false; // its own line, a little late
-                    return true;
-                }
-                if (!units_[i].needed && !needed_first(rest)) {
-                    return false;
-                }
-                return start(units_[i]);
+    const bool respawn = same(verb, "respawn");
+    if (respawn || same(verb, "start")) {
+        Unit *u = unit(rest);
+        if (u == nullptr) {
+            // What is needed may bring it: the desktop adds its taskbar.
+            if (!needed_first(rest)) {
+                return false;
             }
+            u = unit(rest);
         }
-        log("init: nothing here is called %s", rest);
-        return false;
+        if (u == nullptr) {
+            log("init: nothing here is called %s", rest);
+            return false;
+        }
+        if (respawn && u->again == Again::No) {
+            log("init: %s cannot be started again when it ends; started once", rest);
+        }
+        const bool comes_back = respawn && u->again != Again::No;
+        if (u->early) {
+            u->early = false; // its own line, a little late
+            if (u->respawn != comes_back) {
+                // Started already, the other way: its process is told.
+                u->respawn = comes_back;
+                if (const proc::Process *p = procs_.find(u->pid)) {
+                    procs_.set_flags(p->pid, comes_back ? p->flags | proc::kRespawn
+                                                        : p->flags & static_cast<uint8_t>(~proc::kRespawn));
+                }
+            }
+            return true;
+        }
+        u->respawn = comes_back;
+        if (!u->needed && !needed_first(rest)) {
+            return false;
+        }
+        return start(*u);
     }
     if (same(verb, "run")) {
         if (run_ == nullptr) {
@@ -254,6 +389,7 @@ int Init::finish()
             }
         }
     }
+    done_ = true;
     const int failed = failed_;
     failed_ = 0;
     return failed;
@@ -261,8 +397,11 @@ int Init::finish()
 
 int Init::run_text(const char *text, size_t length)
 {
+    booting_ = true;
     take(text, length);
-    return finish();
+    const int failed = finish();
+    booting_ = false;
+    return failed;
 }
 
 int Init::boot(const fs::Storage &storage, const char *path)
@@ -275,6 +414,7 @@ int Init::boot(const fs::Storage &storage, const char *path)
     const ports::FsError opened = storage.open(path, ports::OpenMode::Read, file);
     if (opened == ports::FsError::Ok) {
         had_file_ = true;
+        booting_ = true;
         size_t total = 0;
         while (total < kMaxFile) {
             char piece[64];
@@ -286,7 +426,9 @@ int Init::boot(const fs::Storage &storage, const char *path)
             total += got;
         }
         storage.close(file);
-        return finish();
+        const int failed = finish();
+        booting_ = false;
+        return failed;
     }
     const char *usual = default_text();
     const int failed = run_text(usual, strlen(usual));

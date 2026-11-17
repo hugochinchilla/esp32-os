@@ -113,54 +113,12 @@ bool Table::exit(Pid pid)
     if (p->pending != 0) {
         waiting_--;
     }
-    if (p->is(kRespawn) && p->restart != nullptr && may_restart(*p) && due_count_ < kMaxDue) {
-        due_[due_count_++] = {p->restart, p->restart_context};
+    if (supervisor_ != nullptr) {
+        supervisor_->ended(*p);
     }
     *p = Process();
     changes_++;
     return true;
-}
-
-// The brake on restarts: false when this program has just ended quickly
-// once too often.
-bool Table::may_restart(const Process &p)
-{
-    if (micros_ == nullptr) {
-        return true;
-    }
-    const uint32_t lived = micros_(micros_context_) - p.born; // the clock wraps; the difference does not
-    Quick *mine = nullptr;
-    Quick *empty = nullptr;
-    for (Quick &q : quick_) {
-        if (q.start == p.restart && q.context == p.restart_context) {
-            mine = &q;
-        } else if (q.start == nullptr && empty == nullptr) {
-            empty = &q;
-        }
-    }
-    if (lived >= kQuickUs) {
-        if (mine != nullptr) {
-            *mine = Quick();
-        }
-        return true;
-    }
-    if (mine == nullptr) {
-        if (empty == nullptr) {
-            return true; // nowhere to count it
-        }
-        mine = empty;
-        mine->start = p.restart;
-        mine->context = p.restart_context;
-    }
-    if (++mine->count < kQuickLimit) {
-        return true;
-    }
-    *mine = Quick();
-    given_up_++;
-    if (gave_up_ != nullptr) {
-        gave_up_(p.name, gave_up_context_);
-    }
-    return false;
 }
 
 Sent Table::signal(Pid pid, Signal signal)
@@ -247,33 +205,6 @@ bool Table::stop_service(Pid pid, Signal signal)
     return true;
 }
 
-void Table::set_restart(Pid pid, StartFn start, void *context)
-{
-    Process *p = row(pid);
-    if (p != nullptr && pid != kRoot) {
-        p->flags |= kRespawn;
-        p->restart = start;
-        p->restart_context = context;
-        changes_++;
-    }
-}
-
-int Table::restart_due()
-{
-    // The list is emptied first: a start function may end a process too.
-    Restart now[kMaxDue];
-    const int n = due_count_;
-    for (int i = 0; i < n; i++) {
-        now[i] = due_[i];
-    }
-    due_count_ = 0;
-    for (int i = 0; i < n; i++) {
-        const Scope as_root(this, kRoot);
-        now[i].start(now[i].context);
-    }
-    return n;
-}
-
 void Table::set_state(Pid pid, State state)
 {
     Process *p = row(pid);
@@ -356,11 +287,7 @@ void Table::reset()
     next_ = kRoot;
     current_ = kNone;
     waiting_ = 0;
-    due_count_ = 0;
-    given_up_ = 0;
-    for (Quick &q : quick_) {
-        q = Quick();
-    }
+    supervisor_ = nullptr;
     changes_++;
 }
 

@@ -59,6 +59,13 @@ struct Machine {
         m->inetd = m->procs.spawn_service("inetd");
         return true;
     }
+    // The taskbar of the usual file: something that comes back.
+    static bool start_taskbar(void *context)
+    {
+        auto *m = static_cast<Machine *>(context);
+        m->procs.spawn("taskbar", m->procs.current(), proc::kSystem);
+        return true;
+    }
     static bool start_console(void *context)
     {
         static_cast<Machine *>(context)->order += "console ";
@@ -83,6 +90,7 @@ struct Machine {
     {
         i.add("desktop", &start_desktop, this, true);
         i.add("inetd", &start_inetd, this);
+        i.add("taskbar", &start_taskbar, this, false, init::Again::Does);
         i.add("console", &start_console, this);
         i.set_run(&run, this);
         i.set_log(&keep, nullptr);
@@ -205,8 +213,10 @@ void test_lines()
     {
         proc::Table procs;
         init::Init i(procs);
+        static const char *const names[init::Init::kMaxUnits] = {"a", "b", "c", "d", "e", "f", "g", "h"};
         for (int n = 0; n < init::Init::kMaxUnits; n++) {
-            CHECK(i.add("x", &Machine::start_console, nullptr));
+            CHECK(i.add(names[n], &Machine::start_console, nullptr));
+            CHECK(!i.add(names[n], &Machine::start_console, nullptr)); // the name is taken
         }
         CHECK(!i.add("y", &Machine::start_console, nullptr) && !i.add(nullptr, &Machine::start_console, nullptr) &&
               !i.add("z", nullptr, nullptr));
@@ -277,22 +287,140 @@ void test_file()
 
 /* ---- The brake ---------------------------------------------------------------------- */
 
+// Something init can start again: each start makes a process with the
+// thing's name.
 struct Comes {
     proc::Table *procs;
     const char *name;
     Pid pid = proc::kNone;
     int starts = 0;
 
-    static void start(void *context)
+    static bool start(void *context)
     {
         auto *c = static_cast<Comes *>(context);
-        c->pid = c->procs->spawn(c->name, proc::kNone);
-        c->procs->set_restart(c->pid, &start, c);
+        c->pid = c->procs->spawn(c->name, c->procs->current());
         c->starts++;
+        return true;
     }
 };
 
 uint32_t now_us = 0;
+
+void test_respawn()
+{
+    Machine m;
+    init::Init i(m.procs);
+    m.set_up(i);
+    Comes bar{&m.procs, "bar"}, clock{&m.procs, "clock"}, once{&m.procs, "once"};
+    i.add("bar", &Comes::start, &bar, false, init::Again::Does);
+    i.add("clock", &Comes::start, &clock, false, init::Again::Can);
+    i.add("once", &Comes::start, &once, false, init::Again::No);
+    CHECK(!i.add("bar", &Comes::start, &bar)); // the name is taken
+    CHECK(init::the() == &i && m.procs.supervisor() == &i);
+
+    // respawn: started, init's child, marked; ended, it is back at the next
+    // safe point and not before.
+    run(i, "start desktop\nrespawn bar\nrespawn clock\nrespawn once\nrespawn inetd\n", 0);
+    CHECK(bar.starts == 1 && clock.starts == 1 && once.starts == 1);
+    CHECK(m.procs.find(bar.pid)->parent == proc::kRoot && m.procs.find(bar.pid)->is(proc::kRespawn));
+    CHECK(m.procs.find(clock.pid)->is(proc::kRespawn) && !m.procs.find(once.pid)->is(proc::kRespawn));
+    CHECK(has("init: once cannot be started again when it ends; started once"));
+    CHECK(has("init: inetd cannot be started again when it ends; started once"));
+    const Pid bar1 = bar.pid;
+    m.procs.exit(bar1);
+    CHECK(bar.starts == 1 && m.procs.restarts_waiting() && !i.started("bar"));
+    {
+        const proc::Scope as(&m.procs, m.desktop);
+        CHECK(m.procs.restart_due() == 1 && m.procs.current() == m.desktop);
+    }
+    CHECK(bar.starts == 2 && bar.pid != bar1 && m.procs.find(bar.pid)->parent == proc::kRoot);
+    CHECK(i.started("bar") && has("init: bar ended; starting it again"));
+    CHECK(!m.procs.restarts_waiting() && m.procs.restart_due() == 0);
+    // What cannot come back, and what nobody watches, stay away.
+    m.procs.exit(once.pid);
+    m.procs.exit(m.inetd);
+    CHECK(m.procs.restart_due() == 0 && once.starts == 1);
+
+    // start: once. Ended, it stays away, and init knows it is not running:
+    // it can be started by hand.
+    {
+        Machine m2;
+        init::Init i2(m2.procs);
+        m2.set_up(i2);
+        Comes bar2{&m2.procs, "bar"};
+        i2.add("bar", &Comes::start, &bar2, false, init::Again::Does);
+        run(i2, "start desktop\nstart bar\n", 0);
+        CHECK(bar2.starts == 1 && !m2.procs.find(bar2.pid)->is(proc::kRespawn));
+        m2.procs.exit(bar2.pid);
+        CHECK(m2.procs.restart_due() == 0 && bar2.starts == 1 && !i2.started("bar"));
+        CHECK(i2.start_again("bar") && bar2.starts == 2 && !i2.start_again("bar"));
+        CHECK(!i2.start_again("nothing"));
+    }
+    CHECK(init::the() == nullptr); // the one made last has gone
+}
+
+void test_needed_and_late()
+{
+    // Something needed that comes back, with no line of its own (a file
+    // from before there was `respawn`): started anyway, and it comes back.
+    {
+        Machine m;
+        init::Init i(m.procs);
+        m.set_up(i);
+        Comes bar{&m.procs, "bar"};
+        i.add("bar", &Comes::start, &bar, true, init::Again::Does);
+        run(i, "start desktop\nstart inetd\n", 0);
+        CHECK(bar.starts == 1 && m.order == "desktop inetd ");
+        CHECK(has("init: bar goes before inetd"));
+        m.procs.exit(bar.pid);
+        CHECK(m.procs.restart_due() == 1 && bar.starts == 2);
+    }
+    // Added while the file is being done, by what the file starts (the
+    // desktop adds its taskbar): its line finds it, wherever it is.
+    {
+        struct Late {
+            init::Init *i;
+            Machine *m;
+            Comes bar;
+            static bool start_desktop(void *context)
+            {
+                auto *l = static_cast<Late *>(context);
+                Machine::start_desktop(l->m);
+                l->i->add("taskbar", &Comes::start, &l->bar, true, init::Again::Does);
+                CHECK(l->i->booting());
+                return true;
+            }
+        };
+        for (const char *text : {"start desktop\nrespawn taskbar\n", "respawn taskbar\nstart desktop\n",
+                                 "start taskbar\n", "# nothing\n"}) {
+            Machine m;
+            init::Init i(m.procs);
+            Late late{&i, &m, {&m.procs, "taskbar"}};
+            i.add("desktop", &Late::start_desktop, &late, true);
+            i.set_log(&keep, nullptr);
+            said.clear();
+            run(i, text, 0);
+            CHECK(!i.booting() && late.bar.starts == 1 && i.started("taskbar"));
+            const bool once = strcmp(text, "start taskbar\n") == 0;
+            CHECK(m.procs.find(late.bar.pid)->is(proc::kRespawn) == !once);
+            m.procs.exit(late.bar.pid);
+            CHECK(m.procs.restart_due() == (once ? 0 : 1));
+        }
+    }
+    // Started by hand before the file is done (a machine that starts its
+    // desktop first): its line is not a line gone wrong.
+    {
+        Machine m;
+        init::Init i(m.procs);
+        m.set_up(i);
+        Comes bar{&m.procs, "bar"};
+        i.add("bar", &Comes::start, &bar, true, init::Again::Does);
+        CHECK(i.start_again("bar"));
+        run(i, "start desktop\nrespawn bar\n", 0);
+        CHECK(bar.starts == 1);
+        run(i, "respawn bar\n", 1); // a second time it is
+    }
+}
 
 void test_brake()
 {
@@ -302,8 +430,9 @@ void test_brake()
     now_us = 4000000000u; // the clock goes round during the test
     m.procs.set_clock([](void *) { return now_us; }, nullptr);
 
-    Comes bar{&m.procs, "Taskbar"};
-    Comes::start(&bar);
+    Comes bar{&m.procs, "Panel"};
+    i.add("Panel", &Comes::start, &bar, false, init::Again::Does);
+    CHECK(i.start_again("Panel"));
     CHECK(bar.starts == 1 && m.procs.find(bar.pid)->is(proc::kRespawn));
 
     // Ended after a good while, any number of times: it comes back each time.
@@ -312,21 +441,22 @@ void test_brake()
         m.procs.exit(bar.pid);
         CHECK(m.procs.restart_due() == 1 && m.procs.alive(bar.pid));
     }
-    CHECK(bar.starts == 9 && m.procs.given_up() == 0);
+    CHECK(bar.starts == 9 && i.given_up() == 0);
 
     // Ending as soon as it starts: four times it is started again, the fifth
-    // it is not, and init says so. Another program is not touched by that.
+    // it is not, and init says so. Another thing is not touched by that.
     Comes other{&m.procs, "Clock"};
-    Comes::start(&other);
-    for (int n = 1; n <= proc::Table::kQuickLimit; n++) {
+    i.add("Clock", &Comes::start, &other, false, init::Again::Does);
+    CHECK(i.start_again("Clock"));
+    for (int n = 1; n <= init::Init::kQuickLimit; n++) {
         now_us += 100000;
         m.procs.exit(bar.pid);
         const int due = m.procs.restart_due();
-        CHECK(due == (n < proc::Table::kQuickLimit ? 1 : 0));
+        CHECK(due == (n < init::Init::kQuickLimit ? 1 : 0));
     }
-    CHECK(bar.starts == 9 + proc::Table::kQuickLimit - 1 && !m.procs.alive(bar.pid));
-    CHECK(m.procs.find_by_name("Taskbar") == proc::kNone && m.procs.given_up() == 1);
-    CHECK(has("init: Taskbar keeps ending as soon as it starts; not started again"));
+    CHECK(bar.starts == 9 + init::Init::kQuickLimit - 1 && !m.procs.alive(bar.pid));
+    CHECK(m.procs.find_by_name("Panel") == proc::kNone && i.given_up() == 1 && !i.started("Panel"));
+    CHECK(has("init: Panel keeps ending as soon as it starts; not started again"));
     now_us += 100000;
     m.procs.exit(other.pid);
     CHECK(m.procs.restart_due() == 1 && m.procs.alive(other.pid) && other.starts == 2);
@@ -334,35 +464,39 @@ void test_brake()
     // Quick endings that are not one after the other do not add up: one
     // that lasts starts the count again.
     Comes shaky{&m.procs, "Shaky"};
-    Comes::start(&shaky);
+    i.add("Shaky", &Comes::start, &shaky, false, init::Again::Does);
+    CHECK(i.start_again("Shaky"));
     for (int round = 0; round < 3; round++) {
-        for (int n = 0; n < proc::Table::kQuickLimit - 1; n++) {
-            now_us += proc::Table::kQuickUs - 1;
+        for (int n = 0; n < init::Init::kQuickLimit - 1; n++) {
+            now_us += init::Init::kQuickUs - 1;
             m.procs.exit(shaky.pid);
             CHECK(m.procs.restart_due() == 1);
         }
-        now_us += proc::Table::kQuickUs;
+        now_us += init::Init::kQuickUs;
         m.procs.exit(shaky.pid);
         CHECK(m.procs.restart_due() == 1);
     }
-    CHECK(m.procs.alive(shaky.pid) && m.procs.given_up() == 1);
+    CHECK(m.procs.alive(shaky.pid) && i.given_up() == 1);
 
     // Started by hand after init gave up, it has its five tries again.
-    Comes::start(&bar);
-    now_us += 1000;
-    m.procs.exit(bar.pid);
-    CHECK(m.procs.restart_due() == 1 && m.procs.alive(bar.pid));
+    CHECK(i.start_again("Panel"));
+    for (int n = 1; n < init::Init::kQuickLimit; n++) {
+        now_us += 1000;
+        m.procs.exit(bar.pid);
+        CHECK(m.procs.restart_due() == 1 && m.procs.alive(bar.pid));
+    }
 
     // Without a clock there is no brake.
     proc::Table plain;
-    plain.spawn_service("init");
+    init::Init plain_init(plain);
     Comes free_one{&plain, "Free"};
-    Comes::start(&free_one);
+    plain_init.add("Free", &Comes::start, &free_one, false, init::Again::Does);
+    CHECK(plain_init.start_again("Free"));
     for (int n = 0; n < 20; n++) {
         plain.exit(free_one.pid);
         CHECK(plain.restart_due() == 1);
     }
-    CHECK(plain.given_up() == 0);
+    CHECK(plain_init.given_up() == 0);
 }
 
 /* ---- The real desktop under init ---------------------------------------------------- */
@@ -465,6 +599,8 @@ int main()
 {
     test_lines();
     test_file();
+    test_respawn();
+    test_needed_and_late();
     test_brake();
     test_desktop();
     if (failures == 0) {
