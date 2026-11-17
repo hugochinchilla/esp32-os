@@ -342,6 +342,14 @@ public:
     void mouse(const ports::MouseEvent &) override {}
 };
 
+// What the server watches does not matter here: these listeners and this
+// stream are not sockets, so it can only ask for the clock.
+class NoWatch : public net::Watch {
+public:
+    void add(int, bool, bool) override { added++; }
+    int added = 0;
+};
+
 void test_network_pace()
 {
     static host::MemoryDisplay display(640, 480);
@@ -350,22 +358,24 @@ void test_network_pace()
     static host::HostMemory memory;
     static NoInput input;
     static rfb::Server server(display, pointer, input, clock, memory);
+    NoWatch watch;
     // No port open (no radio): the network never needs the loop.
-    CHECK(server.poll_interval_us() == rfb::Server::kNever);
-    // Waiting for a viewer: now and then.
+    CHECK(server.watch(watch) == rfb::Server::kNever);
+    // Waiting for a viewer on something that cannot be slept on: now and then.
     static Door vnc, web;
     server.set_listener(&vnc);
     server.set_listener(&web, 1);
-    CHECK(server.poll_interval_us() == rfb::Server::kListenPollUs);
+    CHECK(server.watch(watch) == rfb::Server::kListenPollUs);
     // The web server is sending a page: often.
     web.busy_now = true;
-    CHECK(server.poll_interval_us() == rfb::Server::kBusyPollUs);
+    CHECK(server.watch(watch) == rfb::Server::kBusyPollUs);
     web.busy_now = false;
-    CHECK(server.poll_interval_us() == rfb::Server::kListenPollUs);
+    CHECK(server.watch(watch) == rfb::Server::kListenPollUs);
     // A viewer is connected: often.
     vnc.knocking = true;
     server.poll();
-    CHECK(server.stats().connected && server.poll_interval_us() == rfb::Server::kBusyPollUs);
+    CHECK(server.stats().connected && server.watch(watch) == rfb::Server::kBusyPollUs);
+    CHECK(watch.added == 0);
 }
 
 } // namespace

@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
+#include <thread>
 
 #include <fcntl.h>
 #include <poll.h>
@@ -15,10 +16,13 @@
 
 #include "core/dbg/protocol.hpp"
 #include "core/fs/memory_volume.hpp"
+#include "core/msg/input.hpp"
+#include "core/msg/queue.hpp"
 #include "core/shell/boot.hpp"
 #include "core/shell/shell.hpp"
 #include "core/net/posix_tcp.hpp"
 #include "core/net/rfb.hpp"
+#include "core/net/services.hpp"
 #include "core/net/web.hpp"
 #include "core/net/wifi.hpp"
 #include "core/proc/table.hpp"
@@ -26,8 +30,53 @@
 #include "folder_volume.hpp"
 #include "core/wm/wm.hpp"
 #include "host_adapters.hpp"
+#include "thread_queue.hpp"
 
 namespace {
+
+// The message queue of the simulated board. Its loop sleeps in poll() on the
+// serial line, so a post also writes a byte to a pipe that the same poll()
+// watches: that is this loop's "wake the UI task".
+class PipeQueue : public host::ThreadQueue {
+public:
+    PipeQueue()
+    {
+        if (pipe(ends_) != 0) {
+            ends_[0] = ends_[1] = -1;
+        }
+        for (int end : ends_) {
+            fcntl(end, F_SETFL, fcntl(end, F_GETFL) | O_NONBLOCK);
+        }
+    }
+    bool post(const msg::Message &m, uint32_t wait_ms = msg::kNoWait) override
+    {
+        const bool posted = host::ThreadQueue::post(m, wait_ms);
+        ring();
+        return posted;
+    }
+    void wake() override
+    {
+        host::ThreadQueue::wake();
+        ring();
+    }
+    int wake_fd() const { return ends_[0]; }
+    void quiet()
+    {
+        char bytes[64];
+        while (read(ends_[0], bytes, sizeof(bytes)) > 0) {
+        }
+    }
+
+private:
+    void ring()
+    {
+        const char byte = 1;
+        if (write(ends_[1], &byte, 1) < 0) {
+            // The pipe is full: the loop has plenty to wake it already.
+        }
+    }
+    int ends_[2];
+};
 
 class FdSink : public ports::ByteSink {
 public:
@@ -139,8 +188,16 @@ int main(int argc, char **argv)
     protocol.set_counters(shell::picture_timings(), shell::kPictureTimings);
     screen.start();
 
-    // The remote screen, for a VNC viewer on this computer.
-    static rfb::Server remote(display, pointer, screen, clock, memory);
+    // The remote screen, for a VNC viewer on this computer. As on the board
+    // it runs on a task of its own, the services loop: the viewer's keys and
+    // mouse come to the desktop as messages.
+    static PipeQueue queue;
+    msg::set_queue(&queue);
+    static msg::Inbox inbox(queue);
+    static msg::PostedInput remote_input(screen);
+    static rfb::Server remote(display, pointer, remote_input, clock, memory);
+    static host::ThreadLock damage_lock;
+    remote.set_lock(&damage_lock);
     static net::PosixTcpListener vnc_port;
     screen.set_damage_listener([](const gfx::Rect &r, void *) { remote.damage(r); }, nullptr);
     if (argc > 2) {
@@ -170,33 +227,49 @@ int main(int argc, char **argv)
     protocol.send_hello();
     protocol.send_log("simulated board ready\n", 22);
 
+    // The services loop, as on the board: a thread asleep in select() on
+    // the remote screen's sockets. Only when a port was asked for.
+    static net::PosixWait sockets;
+    static net::Services services(sockets, clock);
+    services.add(remote);
+    if (vnc_port.listening() || web_port.listening()) {
+        proc::table().spawn_service("inetd");
+        std::thread([] {
+            while (true) {
+                services.round();
+            }
+        }).detach();
+    }
+
     // The loop, as on the board (firmware/os/main/main.cpp): take what has
-    // arrived, let the desktop and the remote screen work, then sleep until
-    // serial bytes come, the desktop's next timer is due or it is the
-    // network's turn. Nothing here posts messages (one thread), so the
-    // sleep is a poll() on the serial line instead of on the queue.
+    // arrived (serial bytes, messages from the services thread), let the
+    // desktop work, then sleep until serial bytes or a message come or the
+    // desktop's next timer is due.
     uint8_t buffer[512];
     while (!system.reboot_requested) {
         const ssize_t got = read(fd, buffer, sizeof(buffer));
         if (got > 0) {
             protocol.feed(buffer, static_cast<size_t>(got));
         }
+        queue.quiet();
+        const bool more = inbox.deliver();
         screen.tick();
-        remote.poll();
-        if (got == static_cast<ssize_t>(sizeof(buffer))) {
+        if (more || got == static_cast<ssize_t>(sizeof(buffer))) {
             continue; // there may be more
         }
         uint32_t sleep_us = screen.idle_us();
-        const uint32_t network_us = remote.poll_interval_us();
-        sleep_us = network_us < sleep_us ? network_us : sleep_us;
         sleep_us = sleep_us > 1000000 ? 1000000 : sleep_us;
         sleep_us = sleep_us < 1000 ? 1000 : sleep_us;
-        pollfd line = {fd, POLLIN, 0};
-        if (poll(&line, 1, static_cast<int>((sleep_us + 999) / 1000)) > 0 && (line.revents & POLLIN) == 0) {
+        pollfd waits[2] = {{fd, POLLIN, 0}, {queue.wake_fd(), POLLIN, 0}};
+        if (poll(waits, 2, static_cast<int>((sleep_us + 999) / 1000)) > 0 && waits[1].revents == 0 &&
+            (waits[0].revents & POLLIN) == 0) {
             // Nobody has the other end open yet (or any more): poll() says
             // so at once, every time.
             usleep(sleep_us < 10000 ? sleep_us : 10000);
         }
     }
-    return 0;
+    // The services thread is still running, on objects of this function:
+    // leave without taking them apart under it.
+    fflush(nullptr);
+    _exit(0);
 }
