@@ -16,6 +16,7 @@
 
 #include "core/dbg/protocol.hpp"
 #include "core/fs/memory_volume.hpp"
+#include "core/init/init.hpp"
 #include "core/msg/input.hpp"
 #include "core/msg/queue.hpp"
 #include "core/shell/boot.hpp"
@@ -190,10 +191,6 @@ int main(int argc, char **argv)
     static net::Manager wifi(radio, settings);
     shell::set_network(&wifi);
     protocol.set_network(&wifi);
-    shell::start(screen, system, storage, memory);
-    shell::open_demo_windows(); // what the debug-tool tests drive
-    protocol.set_counters(shell::picture_timings(), shell::kPictureTimings);
-    screen.start();
 
     // The remote screen, for a VNC viewer on this computer. As on the board
     // it runs on a task of its own, the services loop: the viewer's keys and
@@ -242,33 +239,74 @@ int main(int argc, char **argv)
     // The command shell for `telnet localhost telnet-port`, as the board
     // offers on port 23 when its settings file says so.
     static net::PosixTcpListener telnet_port;
-    if (argc > 4) {
-        if (telnet_port.listen(atoi(argv[4]), true)) {
-            static host::ThreadLock telnet_lock;
-            static host::ThreadEvent telnet_typed, telnet_room, telnet_answered;
-            static host::ThreadTasks telnet_tasks;
-            static sh::QueueCall telnet_ui(queue, telnet_answered);
-            static net::TelnetKit kit;
-            kit.lock = &telnet_lock;
-            kit.typed = &telnet_typed;
-            kit.room = &telnet_room;
-            kit.tasks = &telnet_tasks;
-            const proc::Pid telnetd = proc::table().spawn_service("telnetd");
-            static net::Telnet telnet(shell::session_environment(&telnet_ui, telnetd), kit);
-            telnet.set_listener(&telnet_port);
-            services.add(telnet);
-        } else {
-            fprintf(stderr, "cannot listen on port %s\n", argv[4]);
-        }
+    if (argc > 4 && !telnet_port.listen(atoi(argv[4]), true)) {
+        fprintf(stderr, "cannot listen on port %s\n", argv[4]);
     }
-    if (vnc_port.listening() || web_port.listening() || telnet_port.listening()) {
-        proc::table().spawn_service("inetd");
-        std::thread([] {
-            while (true) {
-                services.round();
+
+    // init, as on the board: PID 1, which starts the desktop and the network
+    // services from C:\.config\startup.txt (the RAM disk is new at every
+    // run, so the file is the usual one unless D: has put another there).
+    struct Parts {
+        ports::System *system;
+        dbg::Protocol *protocol;
+        bool any_port;
+    };
+    static Parts parts = {&system, &protocol,
+                          vnc_port.listening() || web_port.listening() || telnet_port.listening()};
+    static init::Init first(proc::table());
+    first.set_log(
+        [](const char *line, void *) {
+            char text[200];
+            const int n = snprintf(text, sizeof(text), "%s\n", line);
+            parts.protocol->send_log(text, static_cast<size_t>(n < static_cast<int>(sizeof(text)) ? n : sizeof(text) - 1));
+        },
+        nullptr);
+    first.set_run(
+        [](const char *what, char *why, size_t capacity, void *) { return shell::run_text(what, "C:\\", why, capacity); },
+        nullptr);
+    first.add(
+        "desktop",
+        [](void *) {
+            shell::start(screen, *parts.system, storage, memory);
+            shell::open_demo_windows(); // what the debug-tool tests drive
+            parts.protocol->set_counters(shell::picture_timings(), shell::kPictureTimings);
+            screen.start();
+            return true;
+        },
+        nullptr, true);
+    // The services loop is a thread asleep in select() on the sockets. Only
+    // when a port was asked for.
+    first.add(
+        "inetd",
+        [](void *) {
+            if (!parts.any_port) {
+                return false;
             }
-        }).detach();
-    }
+            if (telnet_port.listening() && first.started("desktop")) {
+                static host::ThreadLock telnet_lock;
+                static host::ThreadEvent telnet_typed, telnet_room, telnet_answered;
+                static host::ThreadTasks telnet_tasks;
+                static sh::QueueCall telnet_ui(queue, telnet_answered);
+                static net::TelnetKit kit;
+                kit.lock = &telnet_lock;
+                kit.typed = &telnet_typed;
+                kit.room = &telnet_room;
+                kit.tasks = &telnet_tasks;
+                const proc::Pid telnetd = proc::table().spawn_service("telnetd");
+                static net::Telnet telnet(shell::session_environment(&telnet_ui, telnetd), kit);
+                telnet.set_listener(&telnet_port);
+                services.add(telnet);
+            }
+            proc::table().spawn_service("inetd");
+            std::thread([] {
+                while (true) {
+                    services.round();
+                }
+            }).detach();
+            return true;
+        },
+        nullptr);
+    first.boot(storage);
 
     // The loop, as on the board (firmware/os/main/main.cpp): take what has
     // arrived (serial bytes, messages from the services thread), let the

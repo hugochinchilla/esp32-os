@@ -179,7 +179,7 @@ private:
         // this dialog: the dialog is gone a moment later.
         bool opened;
         {
-            const proc::Scope as_desktop(&proc::table(), proc::kRoot);
+            const proc::Scope as_desktop(&proc::table(), proc::table().find_by_name("desktop"));
             opened = run_text(typed, "C:\\", why, sizeof(why));
         }
         if (!opened) {
