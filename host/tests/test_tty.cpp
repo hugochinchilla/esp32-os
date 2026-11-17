@@ -10,6 +10,7 @@
 #include <thread>
 #include <vector>
 
+#include "core/tty/screen.hpp"
 #include "core/tty/tty.hpp"
 #include "../host_adapters.hpp"
 
@@ -550,6 +551,131 @@ void test_session_on_a_thread()
     CHECK(answer == tty::kEnd);
 }
 
+/* ---- The grid a terminal window shows ------------------------------------------------ */
+
+std::string grid_row(const tty::Screen &s, int row)
+{
+    std::string text(reinterpret_cast<const char *>(s.row(row)), tty::Screen::kColumns);
+    while (!text.empty() && text.back() == ' ') {
+        text.pop_back();
+    }
+    return text;
+}
+
+void test_grid()
+{
+    using tty::Screen;
+    static Screen s; // 16 KB: not on the stack
+    int first = -1, last = -1;
+    // A new screen is empty and wants painting, once.
+    CHECK(s.take_changes(first, last) && first == 0 && last == Screen::kRows - 1 && !s.take_changes(first, last));
+    CHECK(grid_row(s, 0) == "" && s.cursor_row() == 0 && s.cursor_column() == 0);
+
+    // Text, line ends, and only the rows touched are reported.
+    s.write("one\r\ntwo");
+    CHECK(grid_row(s, 0) == "one" && grid_row(s, 1) == "two" && s.cursor_row() == 1 && s.cursor_column() == 3);
+    CHECK(s.take_changes(first, last) && first == 0 && last == 1);
+    s.write("!");
+    CHECK(s.take_changes(first, last) && first == 1 && last == 1);
+    // A LF alone goes down and keeps the column; CR alone goes back.
+    s.write("\nx\ry");
+    CHECK(grid_row(s, 2) == "y   x" && s.cursor_column() == 1);
+    // Backspace moves and erases nothing; tab stops are every 8.
+    s.write("\r\nabc\b\bX\tT");
+    CHECK(grid_row(s, 3) == "aXc     T");
+    // UTF-8 is one cell; what Latin-1 lacks is '?'; a bell is counted.
+    s.write("\r\na\xC3\xB1o \xE2\x82\xAC\a\a");
+    CHECK(grid_row(s, 4) == "a\xF1o ?" && s.take_bells() == 2 && s.take_bells() == 0);
+
+    // The right edge: the 80th character stays on its line, the 81st starts
+    // the next; a backspace walks back over the join.
+    s.clear();
+    const std::string eighty(80, 'w');
+    s.write(eighty.c_str());
+    CHECK(grid_row(s, 0) == eighty && grid_row(s, 1) == "" && s.cursor_row() == 0 && s.cursor_column() == 79);
+    s.write("12");
+    CHECK(grid_row(s, 1) == "12" && s.cursor_row() == 1 && s.cursor_column() == 2);
+    s.write("\b\b\b#");
+    CHECK(grid_row(s, 0) == std::string(79, 'w') + "#" && s.cursor_row() == 0);
+    s.write("\b\b=");
+    CHECK(grid_row(s, 0) == std::string(78, 'w') + "=#");
+
+    // The TTY's own line editing on a line longer than the screen is wide:
+    // a letter put in near the start pushes the rest along, over the join.
+    s.clear();
+    {
+        tty::Tty t(s);
+        const std::string start(100, 'a');
+        t.input(start.c_str());
+        t.input("\x1b[H" "Z");
+        CHECK(grid_row(s, 0) == "Z" + std::string(79, 'a') && grid_row(s, 1) == std::string(21, 'a'));
+        CHECK(s.cursor_row() == 0 && s.cursor_column() == 1);
+        t.input("\x7f");
+        CHECK(grid_row(s, 0) == std::string(80, 'a') && grid_row(s, 1) == std::string(20, 'a'));
+        t.input("\x1b[F" "!");
+        CHECK(grid_row(s, 1) == std::string(20, 'a') + "!" && s.cursor_row() == 1 && s.cursor_column() == 21);
+    }
+
+    // Escape sequences: erase the screen, place the cursor, erase to the
+    // end of the line, move; the ones not understood show nothing.
+    s.clear();
+    s.write("junk\r\nmore junk\x1b[2J\x1b[H" "top");
+    CHECK(grid_row(s, 0) == "top" && grid_row(s, 1) == "");
+    s.write("\x1b[5;10Hhere\x1b[3D\x1b[K");
+    CHECK(grid_row(s, 4) == "         h" && s.cursor_row() == 4 && s.cursor_column() == 10);
+    s.write("\x1b[2A\x1b[5C" "up\x1b[B\x1b[10D" "down");
+    CHECK(grid_row(s, 2) == "               up" && grid_row(s, 3) == "       down");
+    s.write("\x1b[99;99H@\x1b[;5H5\x1b[1;31mred\x1b[0m\x1b[?25l");
+    CHECK(grid_row(s, 24) == std::string(79, ' ') + "@" && grid_row(s, 0) == "top 5red");
+    s.write("\x1b[2;1Hsecond\x1b[1;1H\x1b[J");
+    CHECK(grid_row(s, 0) == "" && grid_row(s, 1) == "" && grid_row(s, 24) == "");
+    // A sequence cut in two by the wire.
+    s.write("\x1b[3;");
+    s.write("4Hx");
+    CHECK(grid_row(s, 2) == "   x");
+
+    // Scrolling: the top line goes into the history, which holds 175.
+    s.clear();
+    for (int i = 0; i < 30; i++) {
+        char line[24];
+        snprintf(line, sizeof line, "line %d\r\n", i);
+        s.write(line);
+    }
+    CHECK(grid_row(s, 0) == "line 6" && grid_row(s, 23) == "line 29" && grid_row(s, 24) == "");
+    CHECK(s.history() == 6 && s.scrolled() == 0 && s.cursor_row() == 24);
+    s.take_changes(first, last);
+    // Looking back, as far as there is, and forward again.
+    s.scroll_view(4);
+    CHECK(s.scrolled() == 4 && grid_row(s, 0) == "line 2" && s.cursor_row() == -1);
+    CHECK(s.take_changes(first, last) && first == 0 && last == 24);
+    s.scroll_view(100);
+    CHECK(s.scrolled() == 6 && grid_row(s, 0) == "line 0" && grid_row(s, 24) == "line 24");
+    s.scroll_view(-1);
+    CHECK(s.scrolled() == 5 && s.cursor_row() == -1);
+    s.scroll_view(-100);
+    CHECK(s.scrolled() == 0 && grid_row(s, 0) == "line 6" && s.cursor_row() == 24);
+    CHECK(s.take_changes(first, last));
+    s.scroll_view(-1); // already at the end: nothing to paint
+    CHECK(!s.take_changes(first, last));
+    // Anything written brings the view back.
+    s.scroll_view(3);
+    s.write("x");
+    CHECK(s.scrolled() == 0 && grid_row(s, 24) == "x");
+    for (int i = 30; i < 400; i++) {
+        char line[24];
+        snprintf(line, sizeof line, "\r\nline %d", i);
+        s.write(line);
+    }
+    CHECK(s.history() == Screen::kHistory && grid_row(s, 24) == "line 399");
+    s.scroll_view(1000);
+    CHECK(s.scrolled() == 175 && grid_row(s, 0) == "line 200" && grid_row(s, 24) == "line 224");
+    // Erasing the screen keeps the history.
+    s.write("\x1b[2J\x1b[H");
+    CHECK(grid_row(s, 0) == "" && s.history() == Screen::kHistory);
+    s.clear();
+    CHECK(s.history() == 0);
+}
+
 } // namespace
 
 int main()
@@ -561,6 +687,7 @@ int main()
     test_history();
     test_raw();
     test_full_queue();
+    test_grid();
     test_session_on_a_thread();
     if (failures != 0) {
         printf("%d checks failed\n", failures);

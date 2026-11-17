@@ -127,6 +127,11 @@ target_link_libraries(chinchilla-console PRIVATE core Threads::Threads)
 add_test(NAME console_program
          COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/test_console_program.py $<TARGET_FILE:chinchilla-console>)
 
+# The Terminal window (backlog item 15).
+add_executable(test_terminal tests/test_terminal.cpp)
+target_link_libraries(test_terminal PRIVATE core)
+add_test(NAME terminal COMMAND test_terminal)
+
 # Chinchilla as a desktop program (backlog item 32): the same core in an SDL2
 # window. Its parts that need no window are tested everywhere; the program
 # itself is built only where SDL2 is installed, so the tests above need

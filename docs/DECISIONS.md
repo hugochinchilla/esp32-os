@@ -1475,3 +1475,30 @@ by the agent under the owner's "dejo a tu criterio" of 2026-11-16.
   `dmesg`, `edit`, `open`, `run` are item 16.
 - `build/host/chinchilla-console [FOLDER]` is the shell in a terminal of the
   PC, for trying it without a board.
+
+### Chosen for the Terminal window (2026-11-17, to confirm)
+
+Backlog item 15. Journal: `docs/journal/2026-11-17-terminal-window.md`.
+Chosen by the agent under the owner's "dejo a tu criterio" of 2026-11-16.
+
+- "Terminal" in Start > Programs (`core/src/shell/terminal.cpp`): a window
+  that is the device of a TTY, with a `sh::Session` behind it. Up to three at
+  once, each a process.
+- **Its session runs on the UI task, a line at a time** (`Session::step()`),
+  not on a task of its own. This is a step short of "one session is one
+  task" under "OS architecture": the core has no way to start a task yet and
+  the browser has no threads. The cost: the desktop waits while a command
+  works, and Ctrl+C cannot stop a command that is running in the window (it
+  still gives up a half-typed line). To be moved to a task with the port
+  that items 10 or 26 bring.
+- The grid is `tty::Screen`: 80 by 25, fixed, 6x12 font. It knows CR, LF,
+  backspace, tab, bell, and the ANSI sequences to erase (`J`, `K`) and to
+  place and move the cursor (`H`, `A` to `D`); others are ignored. A line
+  wraps at the right edge and a backspace goes back over the wrap. The other
+  options were a glass teletype and a full VT100.
+- 175 lines above the screen are kept (16 KB with the screen, in the
+  window's own memory). Page Up and Page Down look back. No scroll bar.
+- Light grey on black, a blinking block cursor, a line under the character
+  when another window has the keyboard. The icon was drawn by the agent.
+  Both are for the owner to overrule.
+- Escape is not sent to the session.

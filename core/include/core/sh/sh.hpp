@@ -98,6 +98,8 @@ public:
     void greet();
     bool step(uint32_t wait_ms = 0);
     bool ended() const { return ended_; }
+    // The prompt is on the screen and the session waits for a line.
+    bool waiting() const { return prompted_ && !ended_; }
 
     // Runs one line as if typed. Returns the command's result: 0 for done.
     int execute(const char *line);
@@ -109,6 +111,7 @@ public:
     const Env &env() const { return env_; }
     tty::Tty &terminal() { return tty_; }
     void print(const char *text);
+    void clear_screen();
     void printf(const char *format, ...) __attribute__((format(printf, 2, 3)));
     void write(const char *data, size_t size);
     // What is in a text file: Latin-1, as the Editor keeps it. The terminal

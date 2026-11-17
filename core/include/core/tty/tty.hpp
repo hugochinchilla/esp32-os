@@ -91,6 +91,9 @@ public:
     // top): no echo, no line editing, bytes are handed over as they come and
     // written as they are. Ctrl+C still interrupts. Leaving raw mode throws
     // away what was not read.
+    // Whether a read() would answer something other than kNothing now.
+    bool readable();
+
     void set_raw(bool raw);
     bool raw() const { return raw_; }
     // Echo off, for typing that must not be shown. Cooked mode only.

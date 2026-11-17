@@ -100,7 +100,7 @@ int cmd_echo(Session &s, int argc, char **argv)
 
 int cmd_cls(Session &s, int, char **)
 {
-    s.print("\x1b[2J\x1b[H"); // erase the screen, cursor to the top left
+    s.clear_screen();
     return 0;
 }
 
@@ -240,6 +240,12 @@ void Session::write_latin1(const char *data, size_t size)
 }
 
 void Session::print(const char *text) { write(text, strlen(text)); }
+
+void Session::clear_screen()
+{
+    print("\x1b[2J\x1b[H"); // erase the screen, cursor to the top left
+    at_line_start_ = true;
+}
 
 void Session::printf(const char *format, ...)
 {

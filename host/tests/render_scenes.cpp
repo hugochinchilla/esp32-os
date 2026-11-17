@@ -450,6 +450,29 @@ int main(int argc, char **argv)
     save("43-culebra-game-over");
     key(wm::key::F4, true);
 
+    // The Terminal: as it opens, after a few commands, and the list of
+    // commands.
+    while (desktop.active() != nullptr) {
+        desktop.close(*desktop.active());
+    }
+    shell::launch(*shell::find_app("Terminal"));
+    save("44-terminal");
+    desktop.text("dir");
+    key(wm::key::Enter);
+    desktop.text("cd Documents");
+    key(wm::key::Enter);
+    desktop.text("type notes.txt");
+    key(wm::key::Enter);
+    desktop.text("ps");
+    key(wm::key::Enter);
+    desktop.text("echo \xC2\xA1hola, se\xC3\xB1or!");
+    save("45-terminal-commands");
+    key(wm::key::Enter);
+    desktop.text("help");
+    key(wm::key::Enter);
+    save("46-terminal-help");
+    key(wm::key::F4, true);
+
     // The Defragmenter: its made-up disk, part of the way, and tidy.
     while (desktop.active() != nullptr) {
         desktop.close(*desktop.active());

@@ -483,6 +483,12 @@ int Tty::read(char *out, size_t capacity, uint32_t wait_ms)
     }
 }
 
+bool Tty::readable()
+{
+    const Hold hold(lock_);
+    return queued_ > 0 || ends_ > 0 || interrupted_ || hung_up_;
+}
+
 void Tty::set_raw(bool raw)
 {
     const Hold hold(lock_);

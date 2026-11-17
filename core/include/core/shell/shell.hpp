@@ -13,6 +13,10 @@
 #include "core/ports.hpp"
 #include "core/wm/wm.hpp"
 
+namespace tty {
+class Screen;
+}
+
 namespace net {
 class Manager;
 }
@@ -95,6 +99,12 @@ void open_picture(const char *path);
 void finish_picture();
 const uint32_t *picture_timings();
 constexpr int kPictureTimings = 3;
+// The Terminal: a command shell (core/sh) in a window. Every call opens
+// another one, up to three.
+void open_terminal();
+// Tests: the grid of the Terminal in front (nullptr: none is open).
+const tty::Screen *terminal_screen();
+
 // Culebra, the snake game. Tests: the game in its window.
 void open_culebra();
 const games::Snake &culebra_game();
