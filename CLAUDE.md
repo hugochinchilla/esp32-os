@@ -43,6 +43,11 @@ in the same change whenever a decision is made or reversed.
 - A new dialog or settings tool is a program of its own, not a part of the
   desktop (the owner's rule, 2026-11-17; `docs/DECISIONS.md`, "Dialogs and
   settings tools are programs"): its own process row, its own file, no reach
-  into the desktop's private variables, and no memory kept while it is closed
-  once backlog item 19 makes that possible. Do not add new permanent `static`
-  window objects without saying in the journal entry that this is owed.
+  into the desktop's private variables, and no memory kept while it is closed.
+- Windows are made when they open and destroyed when they close (backlog
+  items 19 and 34, `docs/journal/2026-11-17-program-lifecycle.md`). Do not add
+  a `static` window object: use `make_window`, `one` or `open_one` from
+  `core/src/shell/internal.hpp`, give back in the destructor what the window
+  asked the Memory port for, and keep what must outlive a close in the
+  program's settings file. Do not keep a pointer or reference to a window
+  across an event unless something clears it when the window is destroyed.

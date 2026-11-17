@@ -151,43 +151,48 @@ void test_defragmenter_window()
 
     shell::open_defragmenter();
     CHECK(strcmp(title(), "Defragmenter") == 0);
-    const shell::DefragModel &disk = shell::defragmenter_disk();
-    CHECK(disk.placed() == 0 && disk.moves() == 0);
+    // The window, and the pretend disk in it, exist only while it is open.
+    const auto disk = []() -> const shell::DefragModel & { return shell::defragmenter_disk(); };
+    CHECK(disk().placed() == 0 && disk().moves() == 0);
     wait(10 * shell::kDefragStepUs);
-    CHECK(disk.moves() == 0); // nothing moves until Start
+    CHECK(disk().moves() == 0); // nothing moves until Start
     key(wm::key::Enter);      // Start
     for (int i = 0; i < 40; i++) {
         wait(shell::kDefragStepUs);
     }
-    CHECK(disk.moves() == 10);
+    CHECK(disk().moves() == 10);
     CHECK(no_stale_pixels());
     // Pause (the same button) holds it; Resume goes on.
     letter('p', kAlt);
-    const uint32_t held = disk.moves();
+    const uint32_t held = disk().moves();
     wait(20 * shell::kDefragStepUs);
-    CHECK(disk.moves() == held);
+    CHECK(disk().moves() == held);
     letter('r', kAlt);
     for (int i = 0; i < 8; i++) {
         wait(shell::kDefragStepUs);
     }
-    CHECK(disk.moves() == held + 2);
-    // Closing pauses too, and keeps the map.
+    CHECK(disk().moves() == held + 2);
+    // Closing ends the program: its memory goes back, and nothing runs.
+    const int blocks = memory.in_use();
     key(wm::key::Escape);
     CHECK(find("Defragmenter") == nullptr);
-    const uint32_t closed_at = disk.moves();
+    CHECK(memory.in_use() == blocks - 1);
+    CHECK(proc::table().find_by_name("Defragmenter") == proc::kNone);
     wait(20 * shell::kDefragStepUs);
-    CHECK(disk.moves() == closed_at);
+    CHECK(memory.in_use() == blocks - 1);
+    // Opened again it starts from the scrambled disk.
     shell::open_defragmenter();
-    letter('r', kAlt);
-    for (int i = 0; i < 100000 && !disk.done(); i++) {
+    CHECK(disk().moves() == 0 && !disk().done());
+    key(wm::key::Enter); // Start
+    for (int i = 0; i < 100000 && !disk().done(); i++) {
         wait(shell::kDefragStepUs);
     }
     wait(shell::kDefragStepUs);
-    CHECK(disk.done() && disk.tidy());
+    CHECK(disk().done() && disk().tidy());
     CHECK(no_stale_pixels());
     // Scramble makes a new mess; Start after the end does as well.
     letter('c', kAlt);
-    CHECK(!disk.done() && disk.moves() == 0);
+    CHECK(!disk().done() && disk().moves() == 0);
     key(wm::key::Escape);
 
     // The show never touched the drive.

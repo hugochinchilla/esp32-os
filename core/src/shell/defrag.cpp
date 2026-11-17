@@ -47,12 +47,7 @@ void DefragModel::scramble(uint32_t seed)
     }
     // Files of 2 to 29 blocks until the disk is about 60 % full.
     constexpr int kTarget = kCells * 60 / 100;
-    struct Piece {
-        uint8_t file; // 0: free blocks
-        uint8_t length;
-        uint16_t first;
-    };
-    static Piece pieces[kCells]; // ponytail: one UI task, one list
+    Piece *const pieces = pieces_; // the model's own, gone with its window
     int count = 0;
     files_ = 0;
     used_ = 0;
@@ -333,6 +328,7 @@ public:
         start_.set_default(true);
         set_default(&start_);
         show_state();
+        set_frame(centred(shell::manager(), frame().w, frame().h));
     }
 
     const DefragModel &disk() const { return disk_; }
@@ -346,12 +342,9 @@ public:
         return Window::key(k);
     }
 
-    // Closing pauses; the map is kept.
-    void closed() override
-    {
-        pause();
-        show_state();
-    }
+    // Closing ends the program: the timer stops, and the next opening
+    // starts from the scrambled disk again.
+    void closed() override { pause(); }
 
 private:
     static void start_pressed(wm::Button &, void *context)
@@ -470,24 +463,14 @@ private:
     wm::Button start_, scramble_, close_;
 };
 
-DefragWindow &defrag_window()
-{
-    static DefragWindow window;
-    return window;
-}
-
 } // namespace
 
 void open_defragmenter()
 {
     const AsProgram as("Defragmenter");
-    DefragWindow &w = defrag_window();
-    if (!w.open()) {
-        w.set_frame(centred(manager(), w.frame().w, w.frame().h));
-    }
-    show(w);
+    open_one<DefragWindow>("Defragmenter");
 }
 
-const DefragModel &defragmenter_disk() { return defrag_window().disk(); }
+const DefragModel &defragmenter_disk() { return one<DefragWindow>("Defragmenter")->disk(); }
 
 } // namespace shell

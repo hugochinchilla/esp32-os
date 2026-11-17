@@ -43,6 +43,8 @@ public:
 
     // Its working memory (sums and error rows), once; false if none.
     bool ready(ports::Memory &memory);
+    // Gives that memory back.
+    void release(ports::Memory &memory);
     // dst_w x dst_h colours into `out`, from a src_w x src_h picture.
     void begin(int src_w, int src_h, int dst_w, int dst_h, uint8_t *out, Dither dither);
     void row(int y, const uint8_t *rgb) override;
