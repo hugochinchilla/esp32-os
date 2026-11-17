@@ -180,11 +180,8 @@ any touch of a destroyed window):
   (Shut Down now takes a number) or by 1 KB less free on the test disk (the
   new settings files).
 
-All of `core/` was also compiled for the ESP32-S3 with the board's compiler
-and `-Wall -Wextra -Werror` (objects only, to measure section 6). The whole
-firmware was not built or linked here: installing ESP-IDF's Python packages
-in the cloud container did not finish. `firmware/os/main/` is not touched by
-this change, and the board's Memory port already frees in `release()`.
+The whole firmware was built and linked in the cloud container with ESP-IDF
+v5.5 (`idf.py build`, no errors). That says it compiles; it has not run.
 
 **Not tested: anything on the board.** Asked of the board thread: free
 internal and external RAM and the largest free internal block, on `main` and
