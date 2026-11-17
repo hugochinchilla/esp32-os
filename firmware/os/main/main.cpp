@@ -44,6 +44,7 @@
 #include "core/net/telnet.hpp"
 #include "core/init/init.hpp"
 #include "core/sh/console.hpp"
+#include "core/sys/log.hpp"
 #include "core/net/web.hpp"
 #include "core/net/wifi.hpp"
 #include "core/proc/table.hpp"
@@ -644,6 +645,10 @@ void ui_task(void *)
     // A service gets a row when it is a task of its own (the owner's rule,
     // 2026-11-16), as the network services have now: `inetd`, further down.
     // The debug link answers from here on, also during the start-up screens.
+    // The log lines are also kept, the last 16 KB of them, for `dmesg`.
+    static EXT_RAM_BSS_ATTR char log_room[16 * 1024];
+    static RtosLock log_lock;
+    sys::log().set_room(log_room, sizeof(log_room), &log_lock);
     s_protocol = &protocol;
     esp_log_set_vprintf(log_to_debug_link);
     protocol.send_hello();

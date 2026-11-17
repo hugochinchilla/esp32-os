@@ -22,6 +22,7 @@
 #include "core/msg/queue.hpp"
 #include "core/sh/console.hpp"
 #include "core/shell/boot.hpp"
+#include "core/sys/log.hpp"
 #include "core/shell/shell.hpp"
 #include "core/net/posix_tcp.hpp"
 #include "core/net/rfb.hpp"
@@ -135,6 +136,10 @@ int main(int argc, char **argv)
     FdSink sink(fd);
     dbg::Protocol protocol(sink, lock, display, pointer, screen, system, "sim");
     protocol.set_desktop(&screen);
+    // The log is kept for `dmesg`, as on the board.
+    static char log_room[16 * 1024];
+    static host::ThreadLock log_lock;
+    sys::log().set_room(log_room, sizeof(log_room), &log_lock);
 
     // C: a RAM disk, as on the board. D: a folder of the PC, if given.
     static host::HostMemory memory;

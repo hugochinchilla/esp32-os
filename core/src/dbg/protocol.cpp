@@ -1,4 +1,5 @@
 #include "core/dbg/protocol.hpp"
+#include "core/sys/log.hpp"
 #include "core/proc/table.hpp"
 #include "core/net/wifi.hpp"
 
@@ -603,6 +604,7 @@ void Protocol::send_hello()
 
 void Protocol::send_log(const char *text, size_t size)
 {
+    sys::log().write(text, size); // kept for `dmesg`, whether or not the link is listening
     if (size == 0 || !lock_.try_lock()) {
         return;
     }

@@ -10,6 +10,7 @@
 #include <thread>
 #include <vector>
 
+#include "core/sys/log.hpp"
 #include "core/fs/fs.hpp"
 #include "core/fs/memory_volume.hpp"
 #include "core/msg/queue.hpp"
@@ -689,6 +690,66 @@ void test_dates()
 
 /* ---- Processes and the machine ------------------------------------------------------ */
 
+// The system log and dmesg.
+void test_log()
+{
+    // The ring by itself: nothing kept without room; then the newest text
+    // pushes the oldest out, and reading starts at a whole line.
+    sys::Log ring;
+    ring.write("lost\n", 5);
+    uint64_t at = ring.oldest();
+    char out[64];
+    CHECK(!ring.kept() && ring.read(at, out, sizeof(out)) == 0);
+    char room[16];
+    ring.set_room(room, sizeof(room));
+    ring.write("one\n", 4);
+    ring.write("two\n", 4);
+    at = ring.oldest();
+    CHECK(at == 0 && ring.read(at, out, 3) == 3 && std::string(out, 3) == "one");
+    CHECK(ring.read(at, out, sizeof(out)) == 5 && std::string(out, 5) == "\ntwo\n" && ring.read(at, out, 8) == 0);
+    ring.write("three\n", 6);
+    ring.write("four\n", 5); // 19 bytes in all: "one" and its end are gone
+    at = ring.oldest();
+    size_t n = ring.read(at, out, sizeof(out));
+    CHECK(std::string(out, n) == "two\nthree\nfour\n" && ring.written() == 19);
+    // A reader that was overtaken goes on from what is still there.
+    at = 0;
+    n = ring.read(at, out, sizeof(out));
+    CHECK(n == 16 && at == 19);
+    // More than fits at once: its end is kept.
+    ring.write("0123456789abcdefghij\n", 21);
+    at = ring.oldest();
+    n = ring.read(at, out, sizeof(out));
+    CHECK(n == 0 && ring.written() == 40); // one line as long as the room: no whole line to begin at
+    ring.write("k\n", 2);
+    at = ring.oldest();
+    n = ring.read(at, out, sizeof(out));
+    CHECK(std::string(out, n) == "k\n");
+    // Busy: the text is dropped, and counted.
+    host::ThreadLock busy;
+    ring.set_room(room, sizeof(room), &busy);
+    busy.lock();
+    std::thread([&] { ring.write("x\n", 2); }).join();
+    busy.unlock();
+    CHECK(ring.dropped() == 1 && ring.written() == 0);
+
+    // dmesg: what the machine logged, colour codes left out, a missing last
+    // line end added; and through a pipe.
+    Machine m;
+    sh::Session s(m.terminal, m.env);
+    static char log_room[256];
+    sys::log().set_room(nullptr, 0);
+    CHECK_TEXT(run(m, s, "dmesg", 1), "dmesg: this machine keeps no log\n");
+    sys::log().set_room(log_room, sizeof(log_room));
+    CHECK_TEXT(run(m, s, "dmesg"), "");
+    const char lines[] = "I (12) main: started\r\n\x1b[0;33mW (40) wifi: weak\x1b[0m\ninit: started desktop";
+    sys::log().write(lines, sizeof(lines) - 1);
+    CHECK_TEXT(run(m, s, "dmesg"), "I (12) main: started\nW (40) wifi: weak\ninit: started desktop\n");
+    CHECK_TEXT(run(m, s, "dmesg | grep init"), "init: started desktop\n");
+    CHECK(run(m, s, "help").find("dmesg") != std::string::npos);
+    sys::log().set_room(nullptr, 0);
+}
+
 void test_processes()
 {
     Machine m;
@@ -1127,6 +1188,7 @@ int main()
     test_pipes();
     test_desktop_commands();
     test_dates();
+    test_log();
     test_processes();
     test_typed_session();
     test_session_on_a_thread();
