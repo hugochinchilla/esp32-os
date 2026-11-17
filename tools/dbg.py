@@ -335,7 +335,8 @@ class Board:
         self.request(ANIMATIONS, b"\x01" if on else b"\x00")
 
     def memory_report(self):
-        """Where the board's memory goes: heaps and task stacks, as text."""
+        """Where the board's memory goes: heaps and video timing, as text
+        (task stacks are in tasks())."""
         return self.request(MEMORY_REPORT).decode("utf-8", "replace")
 
     TASK_STATES = ("running", "ready", "blocked", "suspended", "deleted", "unknown")
@@ -769,7 +770,7 @@ def main(argv=None):
     p = sub.add_parser("animations", help="caret blinking on or off (off for stable screenshots)")
     p.add_argument("state", choices=["on", "off"])
     sub.add_parser("repaint", help="paint the whole screen again and time it")
-    sub.add_parser("memory", help="where the memory goes: heaps and task stacks")
+    sub.add_parser("memory", help="where the memory goes: heaps and video timing (stacks: tasks)")
     p = sub.add_parser("tasks", help="the kernel's tasks: state, priority, core, processor time, unused stack")
     p.add_argument("--interval", type=float, default=1.0,
                    help="seconds between the two readings behind the %%NOW column (default 1; 0: one reading)")

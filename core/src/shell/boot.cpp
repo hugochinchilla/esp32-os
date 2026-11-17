@@ -28,8 +28,11 @@ struct Screen {
 // debug link meanwhile; false if a key or button skipped it.
 bool wait_until(BootIo &io, uint32_t until)
 {
-    while (static_cast<int32_t>(until - io.clock.micros()) > 0) {
-        if (io.idle != nullptr) {
+    int32_t left;
+    while ((left = static_cast<int32_t>(until - io.clock.micros())) > 0) {
+        if (io.nap != nullptr && left > static_cast<int32_t>(BootIo::kNapMarginUs)) {
+            io.nap(io.context);
+        } else if (io.idle != nullptr) {
             io.idle(io.context);
         }
         if (io.skip != nullptr && io.skip(io.context)) {
@@ -279,7 +282,7 @@ constexpr gfx::Colour kGreyC = gfx::rgb(5, 5, 2);
 constexpr gfx::Colour kDarkC = gfx::rgb(2, 2, 1);
 constexpr gfx::Colour kYellowC = gfx::rgb(7, 7, 0);
 constexpr gfx::Colour kRedC = gfx::rgb(7, 1, 0);
-constexpr int kLeft = 24, kFirstY = 24, kStepY = 18, kLines = 13;
+constexpr int kLeft = 24, kFirstY = 24, kStepY = 18;
 constexpr uint32_t kLineMs = 120;   // between lines at 100 % pace
 constexpr uint32_t kCountStepMs = 22; // between memory count updates at 100 %
 

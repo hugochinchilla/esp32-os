@@ -301,7 +301,10 @@ public:
     }
     // Every FreeRTOS task. The kernel adds up each task's processor time
     // at every task switch (the run-time statistics settings in
-    // sdkconfig.defaults); without them there is no list.
+    // sdkconfig.defaults); without them there is no list. Only the debug
+    // link asks. Each call holds the kernel's lock for about 0.8 ms (the
+    // stacks are counted inside it) and the video can miss a refill then;
+    // see docs/journal/2026-11-17-refills.md.
     int tasks(ports::TaskInfo *out, int capacity, ports::TaskTotals &totals) override
     {
         totals = {};
@@ -424,16 +427,12 @@ public:
         } else {
             add("services loop (inetd): not started (no radio, or no port could be opened)\n");
         }
-#if CONFIG_FREERTOS_USE_TRACE_FACILITY
-        static TaskStatus_t tasks[24];
-        const UBaseType_t count = uxTaskGetSystemState(tasks, 24, nullptr);
-        add("task stacks (unused bytes, where):\n");
-        for (UBaseType_t i = 0; i < count; i++) {
-            const bool in_psram = esp_ptr_external_ram(tasks[i].pxStackBase);
-            add("  %-14s %5u %s\n", tasks[i].pcTaskName, static_cast<unsigned>(tasks[i].usStackHighWaterMark),
-                in_psram ? "psram" : "internal");
-        }
-#endif
+        // No task stacks here (they are in `dbg.py tasks`): listing them takes
+        // uxTaskGetSystemState(), which holds the kernel's lock for about
+        // 0.8 ms while it counts every stack's unused bytes, and the video
+        // missed refills meanwhile. This report is read often, also to check
+        // the refill counters themselves (docs/journal/2026-11-17-refills.md).
+        add("task stacks: see tools/dbg.py tasks\n");
         return n;
     }
     bool fact(ports::Fact which, uint32_t &value, char *text, size_t capacity) override
@@ -617,6 +616,18 @@ void boot_idle(void *context)
     }
 }
 
+// The same, waiting up to one tick (10 ms) for bytes, so the task sleeps and
+// the idle tasks run: looking without a pause starved IDLE0 and made the task
+// watchdog warn during the start-up screens.
+void boot_nap(void *context)
+{
+    static uint8_t buffer[256];
+    const int got = uart_read_bytes(kDebugUart, buffer, sizeof(buffer), 1);
+    if (got > 0) {
+        static_cast<dbg::Protocol *>(context)->feed(buffer, static_cast<size_t>(got));
+    }
+}
+
 void boot_log(const char *line, void *) { ESP_LOGI(TAG, "%s", line); }
 
 // The debug link asks for a start-up screen again (dbg.py boot).
@@ -743,6 +754,7 @@ void ui_task(void *)
     boot_io.hold_s = boot.hold_s;
     boot_io.crash_hold_s = boot.crash_hold_s;
     boot_io.skip = [](void *) { return input.skip; };
+    boot_io.nap = &boot_nap;
     pointer.set_visible(false);
     // The last session ended in a crash: the report goes into C:\crash.txt
     // and on the screen, before anything else (also on a fast start). The

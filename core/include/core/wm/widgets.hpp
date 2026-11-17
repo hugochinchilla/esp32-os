@@ -115,7 +115,6 @@ private:
     const char *text_;
     int *group_;
     int value_;
-    bool held_ = false;
 };
 
 // One line of editable text. Latin-1 inside, UTF-8 in and out.
