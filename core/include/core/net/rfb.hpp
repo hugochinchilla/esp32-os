@@ -53,7 +53,9 @@ public:
         uint8_t bits_per_pixel;
     };
 
-    // `memory` gives the buffers (about 190 KB) at the first connection.
+    // `memory` gives the buffers (about 183 KB) when a viewer connects and
+    // has them back when the last one leaves: with nobody watching, the
+    // remote screen holds none of it.
     Server(ports::Display &display, ports::Pointer &pointer, ports::InputSink &input, ports::Clock &clock,
            ports::Memory &memory);
 
@@ -95,8 +97,10 @@ private:
         uint8_t shift[3];
     };
 
+    void turn(); // poll() without the tidying up
     void start(net::Stream *stream);
     void drop();
+    void free_buffers();
     bool flush();
     void put8(uint8_t v) { out_[out_size_++] = v; }
     void put16(uint16_t v);
@@ -169,12 +173,13 @@ private:
     };
     Held held_[8] = {};
 
-    // Buffers, from the Memory port at the first connection.
+    // Buffers, from the Memory port while there is a viewer.
     static constexpr size_t kTileMax = 1 + kBlock * kBlock * 4;
     static constexpr size_t kOutMax = 16 + net::Deflater::bound(kTileMax) + 64;
     uint8_t *out_ = nullptr;
     size_t out_size_ = 0, out_sent_ = 0;
     uint8_t *tile_ = nullptr;
+    void *work_ = nullptr; // the compressor's working memory
     // The pointer's shape as it was read for sending. The UI task may be
     // changing the shape meanwhile; what is remembered as sent is the stamp
     // of this copy, so a copy caught half changed is followed by a good one.
