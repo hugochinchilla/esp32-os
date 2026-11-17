@@ -73,16 +73,13 @@ using ExitFn = void (*)(Pid pid, void *context);
 // A call into a program's code, and whoever makes such calls on the
 // program's own task (see Table::call).
 using CallFn = void (*)(void *context);
-// What becomes of a call for a program that is not responding (backlog
-// items 26 and 37, the queue of events): dropped, as a paint is; kept for
-// it in order, as a key is; or kept as the latest of its kind, as where the
-// mouse is: latest(of) takes the place of a waiting call with the same
-// `of`, if that one is the newest waiting. Only a call handed over by copy
-// can be kept.
-using Keep = uint32_t;
-constexpr Keep kDropped = 0;
-constexpr Keep kKept = 1;
-constexpr Keep latest(uint32_t of) { return 2 + of; }
+// What becomes of a call for a program that is not responding: dropped,
+// as its keys and paints are (the owner's choice, 2026-11-17), or kept for
+// it until it answers again, as the result of a job is, which must not be
+// lost. Only a call handed over by copy can be kept.
+enum class Keep : uint8_t { Dropped, Kept };
+constexpr Keep kDropped = Keep::Dropped;
+constexpr Keep kKept = Keep::Kept;
 using CallerFn = bool (*)(Pid pid, CallFn fn, void *context, size_t size, Keep keep, void *self);
 // The most a call's context may be when it is handed over by copy.
 constexpr size_t kCallRoom = 384;

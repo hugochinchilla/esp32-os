@@ -2179,7 +2179,7 @@ option of a card the owner has not answered yet.
 - All 17 programs are written with the thin classes, and since item 26
   About, Welcome and the widget gallery too (20 files). What is left on
   `core/wm`'s classes is the desktop itself and the message box.
-- Events through a queue: with item 26 ("The queue of events" below).
+- Events through a queue: decided against ("No queue of events" below).
 
 ### Chosen for background jobs (2026-11-17, to confirm)
 
@@ -2279,8 +2279,8 @@ The rest is the agent's, to confirm:
   turn (ESP-IDF's task watchdog watches them, 5 s).
 - A late program's task is taken away when it is ended; it is outside
   every OS call by then, so it holds no lock.
-- The queue of events came after: "The queue of events" below. Still not
-  done: programs that call each other's code directly.
+- The queue of events was decided against: "No queue of events" below.
+  Still not done: programs that call each other's code directly.
 
 ### No window limit of the system's (the owner's decision, 2026-11-17)
 
@@ -2306,43 +2306,27 @@ fallar por falta de memoria dado el caso. Me parece un caso divertido y de
 - With very many windows the taskbar's buttons shrink to four pixels and
   the last ones are off the bar. To confirm; nothing is drawn for it.
 
-### The queue of events (2026-11-17, with the owner on a card)
+### No queue of events (the owner's decision, 2026-11-17)
 
 Backlog items 26 and 37, the last part of both.
-[Journal](journal/2026-11-17-event-queue.md). Put to the owner on a card
-(2026-11-17); **built on the recommended option while the answer is
-awaited**, to be changed if he chooses otherwise.
+[Journal](journal/2026-11-17-event-queue.md).
 
-- **A queue only while a program is not responding** (recommended). The
-  server still waits for the program on every call, as the owner chose for
-  item 26. What happens to a program while it is late is no longer lost:
-  it waits in the program's queue and is handed to it, in order, when it
-  answers again, before anything new. The other options on the card: every
-  program takes its events from a queue with a loop of its own, as Win16
-  programs did, and the desktop waits only to paint (all twenty programs
-  rewritten, and locks around the OS calls, which item 26 rejected); and
-  leaving it as it was, mending only the lost result of a job.
-- What is kept, what is not (`proc::Keep`, said by whoever makes the
-  call): **kept in order**: keys, typed text, button presses, choices in
-  a list, clicks, drops, the result of a job, the answer to a question, a
-  message from another task, another program asking it to open something.
-  **The last one only**: where the mouse is, a control's new value, the
-  window's new size, "files changed". **Dropped**: a paint (the window is
-  painted whole when the program is back), a menu about to open, whether
-  a file may be dropped here, a menu's action, Closing and Closed (closing
-  the window of a program that does not answer ends it, as before).
-- **A timer** of a late program is not queued: it stays due and fires
-  once when the program is back. It does not keep the UI loop awake.
-- The queue holds **32 calls a program** at most, in external RAM counted
-  as the program's memory, a block a call, given back as each is handed
-  out and all at once if the program is ended. Past 32 they are lost, as
-  keys were when a PC's keyboard buffer was full. The figure is the
-  agent's, to confirm.
-- A key kept for the program has by then been seen by the window's own
-  controls (a text field takes the letters while its program is away):
-  the program hears of it after the controls, not before. To confirm.
-- An event names its window by number, so one that waited for a window
-  that has gone meanwhile is not made.
+- **What happens to a program while it is not responding is lost**, as
+  it was: its keys, its clicks, its timer's ticks. The owner's choice on a
+  card ("Dejarlo como está"). Rejected: a queue that keeps them for the
+  program until it answers (built first, on the agent's recommendation,
+  and taken out again); and a message loop in every program, as Win16
+  programs had, with the desktop waiting only to paint (all twenty
+  programs rewritten, and locks around the OS calls).
+- **The one exception is the result of a background job**, which the card
+  named: a save that finishes while its program is away is kept
+  (`proc::kKept`, said by `job::Jobs::finish` alone) and handed to the
+  program when it answers again, before anything new. Before, it was lost
+  and the Editor's window stayed locked for good. It waits in external
+  RAM counted as the program's memory, and goes with the program if that
+  is ended. At most eight a program, as many as there can be jobs.
+- Events therefore still reach a program as calls that the server waits
+  for. Item 37's "events through a queue" is closed as not wanted.
 
 ### Programs loaded from files (2026-11-17)
 

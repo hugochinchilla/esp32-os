@@ -2474,9 +2474,6 @@ void Wm::tick()
         if (t.id == 0 || now < t.due) {
             continue;
         }
-        if (procs_ != nullptr && procs_->busy(t.owner)) {
-            continue; // not responding: its timer stays due and fires when it is back
-        }
         const TimerFn fn = t.fn;
         void *context = t.context;
         const proc::Scope as(procs_, t.owner);
@@ -2513,9 +2510,7 @@ uint32_t Wm::idle_us()
     const uint64_t now = now_us();
     uint64_t due = UINT64_MAX;
     for (const Timer &t : timers_) {
-        // The timer of a program that is not responding wakes nobody: the
-        // program does, when it is back.
-        if (t.id != 0 && t.due < due && !(procs_ != nullptr && procs_->busy(t.owner))) {
+        if (t.id != 0 && t.due < due) {
             due = t.due;
         }
     }

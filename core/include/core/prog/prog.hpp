@@ -13,14 +13,14 @@
 // enter() until the UI task, with nothing else under way (serve()), lets it
 // run for a moment.
 //
-// What happens to a late program meanwhile waits for it in its queue of
-// events (backlog items 26 and 37): the calls that say they are to be kept
-// (proc::Keep: a key, a click, the result of a job, the answer to a
-// question) are copied into memory counted as the program's, and made in
-// order once it answers again, before anything new reaches it. What only
-// made sense at the time (a paint, a menu about to open) is dropped, and
-// where only the last one matters (where the mouse is) the last one is
-// kept. Without a Memory port nothing is kept.
+// What happens to a late program meanwhile is lost: its keys, its clicks,
+// its timer's ticks (the owner's choice, 2026-11-17: no queue of events).
+// The one thing that is not is a call that says it must be kept
+// (proc::kKept), which only the result of a background job does: a save
+// that finished while its program was away must still be heard of, or the
+// window stays locked for good. Such a call is copied into memory counted
+// as the program's and made once it answers again, before anything new
+// reaches it. Without a Memory port nothing is kept.
 //
 // A machine without tasks (the browser build, the plain PC desktop, most
 // tests) has no ports::Tasks: no program gets a task, and every call is made
@@ -58,10 +58,9 @@ public:
     static constexpr uint32_t kLimitMs = 2000;
     // How long a late program is let run OS calls at a time (serve()).
     static constexpr uint32_t kSliceMs = 10;
-    // The most calls kept for one late program. Past it they are lost, as
-    // the keys were when a PC's keyboard buffer was full (the agent's
-    // figure, to confirm).
-    static constexpr int kMostKept = 32;
+    // The most calls kept for one late program: as many as there can be
+    // jobs (job::Jobs::kMaxJobs).
+    static constexpr int kMostKept = 8;
 
     explicit Runner(proc::Table &procs = proc::table());
     ~Runner();
@@ -118,14 +117,14 @@ public:
     // late program is not left with a pointer into its caller's stack.
     // False if the call was not made, or not finished in time: the process
     // is late. A call for a late process that says so (`keep`) and is
-    // handed over by copy waits in the process's queue and is made when it
-    // answers again; the answer here is false all the same.
+    // handed over by copy waits for it and is made when it answers again;
+    // the answer here is false all the same.
     //
     // A process whose task is already in the middle of a call (it asked for
     // something that calls back into it) is called here, so nothing waits
     // for itself.
     bool call(proc::Pid pid, proc::CallFn fn, void *context, size_t size = 0, proc::Keep keep = proc::kDropped);
-    // Calls waiting for the process in its queue.
+    // Calls kept for the process until it answers.
     int kept(proc::Pid pid) const;
 
     // The UI task, with nothing else under way (once a round of its loop):
@@ -149,7 +148,6 @@ private:
     struct Kept {
         Kept *next;
         proc::CallFn fn;
-        proc::Keep keep;
         uint32_t size;
         alignas(std::max_align_t) unsigned char bytes[1];
     };
@@ -162,11 +160,11 @@ private:
         void *context = nullptr;
         int depth = 0;     // calls of the process under way, here or nested
         bool used = false;
-        // Its queue, oldest first. The UI task's alone.
+        // The calls kept for it, oldest first. The UI task's alone.
         Kept *first = nullptr;
         Kept *last = nullptr;
         int kept = 0;
-        bool handing = false; // the queue is being handed out (hand_out)
+        bool handing = false; // they are being handed out (hand_out)
         std::atomic<bool> quit{false}; // the process has ended: the task goes at the next safe point
         std::atomic<bool> gone{false}; // its task has left its loop for good
         std::atomic<int> state{Idle};

@@ -160,9 +160,7 @@ private:
             const AnswerFn answer = answer_;
             void *context = context_;
             if (asker_ == proc::kNone || proc::table().alive(asker_)) {
-                // An asker that is not responding gets its answer when it is back.
-                proc::call_as(
-                    &proc::table(), asker_, [answer, choice, context] { answer(choice, context); }, proc::kKept);
+                proc::call_as(&proc::table(), asker_, [answer, choice, context] { answer(choice, context); });
             }
         }
     }
@@ -585,8 +583,7 @@ void files_changed()
     // The File manager's windows are the File manager's to touch.
     const proc::Pid files = proc::table().find_by_name("File manager");
     if (files != proc::kNone) {
-        // Once is enough for a File manager that was not responding.
-        in_process(files, nullptr, [] { refresh_folder_windows(); }, proc::latest(0));
+        enter_program(files, nullptr, [](void *) { refresh_folder_windows(); }, nullptr, 0);
     }
     refresh_desktop_files(false);
 }

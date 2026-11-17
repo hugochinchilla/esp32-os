@@ -154,9 +154,9 @@ void test_late()
     CHECK(procs.exit(b) && runner.tasks() == 0);
 }
 
-// The queue of events (backlog items 26 and 37): what happens to a program
-// while it is not responding waits for it, and reaches it in order when it
-// answers again.
+// What is kept for a program that is not responding (the result of a job,
+// in practice): it waits for the program and reaches it, in order, when it
+// answers again. Everything else is lost, as the owner chose.
 struct Note {
     char *out; // what the program has been handed, one letter a call
     char letter;
@@ -180,7 +180,7 @@ struct Hang {
     }
 };
 
-void test_queue()
+void test_kept()
 {
     using proc::Pid;
     proc::Table procs;
@@ -211,34 +211,29 @@ void test_queue()
     CHECK(proc::call_as(&procs, a, Note{got, 'a'}, proc::kKept) && runner.kept(a) == 0 && memory.in_use() == 0);
 
     // It hangs. What is to be kept waits, in memory counted as its own;
-    // what is not is dropped; of what only the last matters, the last
-    // stays, in the place of the first.
+    // what is not is dropped.
     runner.set_limit(30);
     CHECK(!proc::call_as(&procs, a, Hang{&gate, got, 'h'}, proc::kKept) && runner.late(a));
     CHECK(!proc::call_as(&procs, a, Note{got, 'b'}, proc::kKept));
     CHECK(!proc::call_as(&procs, a, Note{got, 'x'})); // dropped
-    CHECK(!proc::call_as(&procs, a, Note{got, 'm'}, proc::latest(7)));
-    CHECK(!proc::call_as(&procs, a, Note{got, 'n'}, proc::latest(7)));
     CHECK(!proc::call_as(&procs, a, Note{got, 'c'}, proc::kKept));
-    CHECK(!proc::call_as(&procs, a, Note{got, 'o'}, proc::latest(7))); // not the newest waiting: its own place
-    CHECK(!proc::call_as(&procs, a, Note{got, 'p'}, proc::latest(8))); // another kind
     {
         // By pointer: it cannot be kept.
         bool made = false;
         CHECK(!procs.call(a, [](void *flag) { *static_cast<bool *>(flag) = true; }, &made, 0, proc::kKept) && !made);
     }
-    CHECK(runner.kept(a) == 5 && memory.in_use() == 5 && procs.find(a)->memory > stack);
+    CHECK(runner.kept(a) == 2 && memory.in_use() == 2 && procs.find(a)->memory > stack);
     CHECK(strcmp(got, "a") == 0);
 
     // It answers again: all of it, in order, before anything new, and the
     // memory goes back.
     gate.set();
     CHECK(back());
-    CHECK(strcmp(got, "ahbncop") == 0);
+    CHECK(strcmp(got, "ahbc") == 0);
     CHECK(runner.kept(a) == 0 && memory.in_use() == 0 && procs.find(a)->memory == stack && news.back == 1);
     runner.set_limit(2000);
     gate.set();
-    CHECK(proc::call_as(&procs, a, Note{got, 'd'}, proc::kKept) && strcmp(got, "ahbncopd") == 0);
+    CHECK(proc::call_as(&procs, a, Note{got, 'd'}, proc::kKept) && strcmp(got, "ahbcd") == 0);
 
     // Late again in the middle of what waited: the rest goes on waiting,
     // and what comes now goes behind it.
@@ -259,7 +254,7 @@ void test_queue()
     CHECK(back());
     CHECK(strcmp(got, "1234") == 0 && runner.kept(a) == 0 && memory.in_use() == 0);
 
-    // The queue has an end: past it, calls are lost.
+    // No more than there can be jobs: past that, calls are lost.
     got[0] = 0;
     gate.wait(0);
     CHECK(!proc::call_as(&procs, a, Hang{&gate, got, 'h'}, proc::kKept));
@@ -399,7 +394,7 @@ int main()
     CHECK(procs.exit(c) && runner.tasks() == 0);
 
     test_late();
-    test_queue();
+    test_kept();
 
     if (failures == 0) {
         printf("all tests passed\n");

@@ -65,7 +65,6 @@ constexpr int kFirstWindows = 16;
 Behind *g_first_windows[kFirstWindows] = {};
 Behind **g_windows = g_first_windows;
 int g_window_room = kFirstWindows;
-Behind *behind(Window window);
 
 // A free place in the list, -1 if there is none and no memory for more.
 int free_window_slot()
@@ -981,11 +980,9 @@ private:
             return events_(handle(), e, state_);
         }
         // Handed over whole, by copy: a program that does not come back in
-        // time is not left with pointers into this task's stack. The window
-        // goes as its number: an event kept for a program that was not
-        // responding may be made after the window has gone.
+        // time is not left with pointers into this task's stack.
         Told told;
-        told.window = handle();
+        told.window = this;
         told.event = e;
         if (e.key != nullptr) {
             told.key = *e.key;
@@ -996,40 +993,11 @@ private:
         if (e.text != nullptr) {
             snprintf(told.text, sizeof told.text, "%s", e.text);
         }
-        return proc::call_as(&proc::table(), owner(), told, keep(e)) && told.used;
-    }
-
-    // What becomes of an event for a program that is not responding
-    // (proc::Keep): what the user did is kept for it; where only the last
-    // one matters (the mouse moving, a control's new value, the window's
-    // size) the last is kept; what was asked there and then (to paint, a
-    // menu about to open, whether a file may be dropped) is dropped, and so
-    // are Closing and Closed, since closing its window ends such a program.
-    proc::Keep keep(const Event &e) const
-    {
-        const uint32_t of = (static_cast<uint32_t>(handle()) << 12) + (static_cast<uint32_t>(e.control) << 2);
-        switch (e.what) {
-        case What::Command:
-        case What::Chosen:
-        case What::Key:
-        case What::Text:
-        case What::RightClick:
-        case What::Drag:
-        case What::Dropped:
-            return proc::kKept;
-        case What::Mouse:
-            return e.mouse != nullptr && e.mouse->kind == wm::MouseKind::Move ? proc::latest(of + 1) : proc::kKept;
-        case What::Changed:
-            return proc::latest(of + 2);
-        case What::Resized:
-            return proc::latest(of + 3);
-        default:
-            return proc::kDropped;
-        }
+        return proc::call_as(&proc::table(), owner(), told) && told.used;
     }
 
     struct Told {
-        int window; // its number
+        Behind *window;
         Event event;
         wm::KeyMsg key;
         wm::MouseMsg mouse;
@@ -1041,8 +1009,7 @@ private:
             e.key = event.key != nullptr ? &key : nullptr;
             e.mouse = event.mouse != nullptr ? &mouse : nullptr;
             e.text = event.text != nullptr ? text : nullptr;
-            Behind *w = behind(window);
-            used = w != nullptr && w->events_(window, e, w->state_);
+            used = window->events_(window->handle(), e, window->state_);
         }
     };
 

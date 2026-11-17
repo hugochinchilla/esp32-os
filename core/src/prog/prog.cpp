@@ -173,20 +173,15 @@ int Runner::kept(proc::Pid pid) const
     return s != nullptr ? s->kept : 0;
 }
 
-// A call that cannot be made now, put at the end of the program's queue if
-// it is one to keep.
+// A call that cannot be made now, put behind those already waiting for the
+// program if it is one to keep.
 void Runner::keep_for(Slot &s, proc::CallFn fn, const void *context, size_t size, proc::Keep keep)
 {
     if (keep == proc::kDropped || size == 0 || size > proc::kCallRoom || memory_ == nullptr) {
         return;
     }
-    if (keep != proc::kKept && s.last != nullptr && s.last->keep == keep && s.last->fn == fn &&
-        s.last->size == size) {
-        memcpy(s.last->bytes, context, size); // the latest of its kind
-        return;
-    }
     if (s.kept >= kMostKept) {
-        return; // the queue is full: lost
+        return; // more than can be: lost
     }
     const size_t bytes = offsetof(Kept, bytes) + size;
     Kept *k = static_cast<Kept *>(memory_->allocate(bytes));
@@ -195,7 +190,6 @@ void Runner::keep_for(Slot &s, proc::CallFn fn, const void *context, size_t size
     }
     k->next = nullptr;
     k->fn = fn;
-    k->keep = keep;
     k->size = static_cast<uint32_t>(size);
     memcpy(k->bytes, context, size);
     (s.last != nullptr ? s.last->next : s.first) = k;

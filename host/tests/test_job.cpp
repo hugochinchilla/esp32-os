@@ -346,8 +346,8 @@ struct Rig {
     }
 };
 
-// The owner of a job is not responding when the job finishes (the queue of
-// events, backlog items 26 and 37): the result waits for it. Before, it was
+// The owner of a job is not responding when the job finishes: the result
+// waits for it (the one thing kept for a late program). Before, it was
 // lost, and a save would never have been heard of again.
 void test_result_waits_for_a_late_owner()
 {

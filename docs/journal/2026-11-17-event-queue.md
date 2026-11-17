@@ -190,9 +190,56 @@ more windows on the real screen.
   program hung again the moment it woke: the test failed for the right
   reason.
 
+## The owner's answer: leave it (2026-11-17, half an hour later)
+
+The owner answered the card with the third option, "Dejarlo como está":
+what happens while a program does not respond is lost, and only the lost
+result of a background save is mended. Not the recommended one. The
+queue described above was pushed by then (d0d40be, c76e952) and is taken
+out again in the next commit; this entry is left as it was written, and
+this section says what stands.
+
+**What stands.**
+
+- The result of a job is kept for an owner that is not responding and
+  handed over when it answers again (`job::Jobs::finish` says
+  `proc::kKept`; nothing else does). The mechanism is the small part of
+  the queue that this needs: a chain of blocks in `prog::Runner`, counted
+  as the program's memory, handed out in `serve()`, given back if the
+  program is ended. Eight a program at most, as many as there can be
+  jobs.
+- No window limit, and `rm` confirmed, as above.
+
+**What was taken out.**
+
+- Keeping keys, text, button presses, clicks and drops; the "latest
+  only" rule (`proc::latest`) for mouse moves, values and sizes; keeping
+  messages from other tasks, the answer to a question, `in_program` and
+  "files changed". All of these are dropped for a late program, as they
+  were before.
+- The timer that stayed due: a late program's timer ticks are lost again,
+  a one-shot timer included.
+- Events naming their window by number: with nothing queued the pointer
+  is safe again, and the code is as it was.
+
+**Tests now.** `test_prog`: kept and dropped while a program hangs, the
+order when it is back, late again in the middle, full at eight, ended
+while it hangs, no Memory port. `test_job`: the result of a job waits for
+a late owner. `test_os` is as it was on PR 44: nothing reaches a program
+that hangs, and nothing waits for it. `test_wm` and `test_lifecycle` for
+the windows, as above. `tools/gate.sh`: all passed (44 tests, pictures
+unchanged). The firmware compiles and links in the cloud container
+(ESP-IDF v5.5); nothing has run on the board.
+
+**What was learned.** The card should have come before the code, or the
+code should have been only the part every option shared, which here was
+the job's result. Building the recommended option "while waiting" cost
+an hour of work that was then removed, and a push that had to be
+followed by another.
+
 ## What is left
 
-- The owner's answer to the card; the per-program caps.
+- The owner's word on the per-program caps.
 - The board turn.
 - The debug link's window list still answers "too many windows" at about
   ten windows: its reply buffer, not a limit on windows.
