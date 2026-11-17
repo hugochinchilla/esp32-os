@@ -1953,6 +1953,23 @@ screensaver's runner in `core/os`, `network_service.cpp`, `power.cpp`).
 
 Journal: `docs/journal/2026-11-17-os-calls-settings-tools.md`.
 
+### The PC tool reads the port on a thread (2026-11-17, the agent's, to confirm)
+
+Backlog item 14b: console text was lost while `tools/dbg.py` was busy. The
+tool now reads the port on a thread of its own, into a queue. Pacing on
+the board was not chosen first (it slows every listing to cure what looks
+like the PC tool's fault) and is the next step if the board shows the
+loss again. Flow control on the wire is not possible: the bridge's RTS and
+DTR lines reset the board. Journal:
+`docs/journal/2026-11-17-dbg-reader-thread.md`.
+
+### Restarting moves to init, later (the owner's request, 2026-11-17)
+
+Today the process table restarts a process marked "respawn" and counts
+quick deaths (5 in a row under 2 s: it gives up). The owner asked for a
+backlog item (39) to move that into `init`, as `respawn` in a Unix
+`/etc/inittab`, so `startup.txt` can say what comes back. Not started.
+
 ### Chosen for background jobs (2026-11-17, to confirm)
 
 Backlog item 10. Journal: `docs/journal/2026-11-17-jobs.md`. Chosen by the

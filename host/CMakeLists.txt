@@ -134,6 +134,8 @@ add_test(NAME ota_tool
          COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/test_ota_sim.py $<TARGET_FILE:sim>)
 add_test(NAME serial_console
          COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/test_serial_console.py $<TARGET_FILE:sim>)
+add_test(NAME dbg_reader
+         COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/test_dbg_reader.py)
 # Programs made when opened and destroyed when closed (backlog 19 and 34).
 add_executable(test_lifecycle tests/test_lifecycle.cpp)
 target_link_libraries(test_lifecycle PRIVATE core)

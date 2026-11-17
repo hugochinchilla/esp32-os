@@ -37,7 +37,7 @@ board or the merge), `done`.
 | 12 | TTY object: echo, line editing, Ctrl+C | M | 8 | | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-tty.md) |
 | 13 | Shell with the file and process commands (Linux names, DOS aliases, both slashes), tested on the PC | L | 2, 9, 12 | | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-command-shell.md) |
 | 14 | Serial console sharing the wire with the debug link | M | 12, 13 | Yes, with care | done (checked on the board 2026-11-17), off by default; a known limit is left as 14b. [Journal](journal/2026-11-17-serial-console.md) |
-| 14b | Serial console: text lost when the PC tool is busy (a listing streaming while screenshots and a put run; about 270 lines lost). Read the port on a thread in `dbg.py`, or pace on the board | S | 14 | | open, for the console thread. [Journal](journal/2026-11-17-serial-console.md) |
+| 14b | Serial console: text lost when the PC tool is busy (a listing streaming while screenshots and a put run; about 270 lines lost). Read the port on a thread in `dbg.py`, or pace on the board | S | 14 | | done (checked on the board 2026-11-17): `dbg.py` reads the port on a thread; the 300 KB listing arrived whole three times out of three. [Journal](journal/2026-11-17-dbg-reader-thread.md) |
 | 15 | Terminal window on the desktop | M | 12, 13 | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-terminal-window.md) |
 | 16 | `top`, `dmesg`, `edit`, `open`, `run`, and the Run... dialog | S | 3, 13 | | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-run.md), [dmesg](journal/2026-11-17-dmesg.md) |
 | 17 | Telnet server, no password. Ask the owner first: on by default, or switched on in a settings file | S | 13 | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-telnet.md) |
@@ -55,6 +55,7 @@ board or the merge), `done`.
 | 26 | Apps on their own tasks, one at a time | XL | 8, 20 | Yes | todo |
 | 27 | Loadable or sandboxed apps | XL | 19, 20 | Yes | todo |
 | 37 | The OS calls taken to numbered calls with handles (windows, files and timers as numbers, events through a queue, the system's tables of what is whose), as Win16 and Unix had them. To be looked at again at the end of the backlog (the owner's decision, 2026-11-17); it is what item 27 needs | L to XL | 20 | Yes | todo. [The comparison](journal/2026-11-17-os-calls.md) |
+| 39 | Restarting what ends moves to init, as `respawn` in a Unix `/etc/inittab`: the restart mark, the count of quick deaths and the give-up rule leave the process table (`proc::Table::set_restart`, `may_restart`) for `init`, and `startup.txt` can say which programs come back (the taskbar is the first) | M | 18, 21 | Yes | todo (the owner's request, 2026-11-17). Today: [the taskbar is a process](journal/2026-11-17-taskbar-process.md) |
 
 Item 14 is the only one that puts the agents' access to the board at risk
 while it is being built. It is tried on a branch with the old firmware ready
