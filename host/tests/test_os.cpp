@@ -651,6 +651,74 @@ void test_not_responding()
     runner.set_tasks(nullptr, nullptr, 0);
 }
 
+// The programs that have tasks of their own (backlog item 26), with real
+// threads: one program opening another, a question answered, files changing
+// under a File manager window. Whose task each piece of code runs on is
+// what is checked.
+void test_programs_on_tasks()
+{
+    static host::ThreadTasks tasks;
+    static host::ThreadEvent events[2 * prog::Runner::kMaxTasks];
+    static prog::Kit kits[prog::Runner::kMaxTasks];
+    for (int i = 0; i < prog::Runner::kMaxTasks; i++) {
+        kits[i] = {&events[2 * i], &events[2 * i + 1]};
+    }
+    prog::Runner &runner = prog::runner();
+    runner.set_tasks(&tasks, kits, prog::Runner::kMaxTasks);
+    proc::Table &t = proc::table();
+    const auto title = [] { return desktop.active() != nullptr ? desktop.active()->title() : ""; };
+
+    storage.make_folder("C:\\Work");
+    CHECK(storage.write_file("C:\\Work\\a.txt", "hello", 5) == ports::FsError::Ok);
+
+    // From the desktop: the File manager gets a process and a task, and its
+    // window is made on that task.
+    shell::open_folder("C:\\Work");
+    const proc::Pid files = t.find_by_name("File manager");
+    CHECK(files != proc::kNone && runner.has_task(files) && runner.tasks() == 1);
+    CHECK(desktop.active() != nullptr && desktop.active()->owner() == files);
+    CHECK(t.current() == t.find_by_name("desktop"));
+
+    // The File manager opens a file: the Editor is another process with
+    // another task, started from the File manager's.
+    press(wm::key::Down);
+    press(wm::key::Enter);
+    wait(10000);
+    const proc::Pid editor = t.find_by_name("Editor");
+    CHECK(editor != proc::kNone && runner.has_task(editor) && runner.tasks() == 2);
+    CHECK(strcmp(title(), "a.txt - Editor") == 0 && desktop.active()->owner() == editor);
+    CHECK(t.find(editor) != nullptr && t.find(editor)->parent == files);
+
+    // Delete in the File manager asks; the answer goes back to the File
+    // manager, which moves the file and has every folder window read again.
+    desktop.activate(*desktop.main_window_of(files));
+    press(wm::key::Delete);
+    wait(10000);
+    CHECK(strcmp(title(), "Confirm File Delete") == 0);
+    press(wm::key::Enter); // Yes
+    wait(10000);
+    ports::DirEntry e;
+    CHECK(storage.stat("C:\\Work\\a.txt", e) != ports::FsError::Ok);
+    CHECK(os::responding(files) && os::responding(editor));
+
+    // The viewer and the Task Manager, each on its own.
+    shell::open_picture(nullptr);
+    shell::open_task_manager();
+    wait(1100000); // the Task Manager's list fills on its timer
+    CHECK(runner.tasks() == 4 && strcmp(title(), "Task Manager") == 0);
+    CHECK(runner.has_task(t.find_by_name("Picture viewer")) && runner.has_task(t.find_by_name("Task Manager")));
+
+    // All closed: the processes end and every task is given back.
+    while (desktop.active() != nullptr) {
+        desktop.close(*desktop.active());
+        wait(10000);
+    }
+    CHECK(soon([&] { return runner.tasks() == 0; }));
+    CHECK(t.find_by_name("File manager") == proc::kNone && t.find_by_name("Editor") == proc::kNone);
+    CHECK(tasks.started == tasks.ended);
+    runner.set_tasks(nullptr, nullptr, 0);
+}
+
 int main()
 {
     static fs::MemoryVolume disk(memory.allocate(1 << 18), 1 << 18, "RAM disk");
@@ -667,6 +735,7 @@ int main()
     test_process_list();
     test_programs_give_back();
     test_ui();
+    test_programs_on_tasks();
     test_not_responding(); // before the last one, which ends with the screen taken by Shut Down
     test_desktop_calls();
 

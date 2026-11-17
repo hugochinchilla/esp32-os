@@ -2256,6 +2256,16 @@ The rest is the agent's, to confirm:
   Rejected: a mutex held by the UI task whenever it runs.
 - What goes to a program goes by copy, never as a pointer into the
   caller's stack.
+- A program's code is entered from outside only through `in_program`
+  (or `launch`): one program opening another, the desktop opening a
+  folder, files changing under a File manager window, the answer to a
+  question. Rejected for now: posting a message and returning (it comes
+  with the queue of events).
+- Stack per program in the program table. The first tranche with tasks
+  (2026-11-17, to confirm with the owner's card and the board): Cactus
+  Patch at 4 KB; Editor, File manager, Picture viewer, Task Manager and
+  Defragmenter at 8 KB. Not yet: Terminal, About, Welcome, Widget
+  gallery. The settings tools and dialogs stay on the UI task.
 - A late program's task runs at the idle priority until it answers: it
   may spin for ever, and the kernel's idle tasks must still get their
   turn (ESP-IDF's task watchdog watches them, 5 s).

@@ -54,6 +54,7 @@ public:
         snprintf(text_, sizeof(text_), "%s", text);
         answer_ = answer;
         context_ = context;
+        asker_ = proc::table().current(); // the answer goes back to who asked
         answered_ = false;
         count_ = count < 1 ? 1 : (count > kMaxButtons ? kMaxButtons : count);
         // Size to the text: the longest line and the number of lines.
@@ -154,7 +155,13 @@ private:
         const int choice = answered_by_button_ ? chosen_ : fallback;
         answered_by_button_ = false;
         if (answer_ != nullptr) {
-            answer_(choice, context_);
+            // On the asker's own task if it has one, and not at all if it
+            // has ended meanwhile or is not answering.
+            const AnswerFn answer = answer_;
+            void *context = context_;
+            if (asker_ == proc::kNone || proc::table().alive(asker_)) {
+                proc::call_as(&proc::table(), asker_, [answer, choice, context] { answer(choice, context); });
+            }
         }
     }
 
@@ -167,6 +174,7 @@ private:
     bool answered_ = true;
     bool answered_by_button_ = false;
     AnswerFn answer_ = nullptr;
+    proc::Pid asker_ = proc::kNone;
     void *context_ = nullptr;
 };
 
@@ -478,7 +486,11 @@ void desktop_files_tick(void *) { refresh_desktop_files(false); }
 void files_changed()
 {
     const prog::InCall in_call;
-    refresh_folder_windows();
+    // The File manager's windows are the File manager's to touch.
+    const proc::Pid files = proc::table().find_by_name("File manager");
+    if (files != proc::kNone) {
+        enter_program(files, nullptr, [](void *) { refresh_folder_windows(); }, nullptr, 0);
+    }
     refresh_desktop_files(false);
 }
 
@@ -635,6 +647,7 @@ void message_box(const char *title, const char *text)
 void ask(const char *title, const char *text, const char *const *buttons, int count, AnswerFn answer,
          void *context)
 {
+    const prog::InCall in_call;
     if (MessageBox *box = message_window()) {
         box->ask(title, text, buttons, count, answer, context);
     }

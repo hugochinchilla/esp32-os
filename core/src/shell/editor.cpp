@@ -360,26 +360,32 @@ void open_in_editor(const char *path)
         return;
     }
     const proc::Pid pid = os::spawn("Editor");
-    // With no room in the table it is the caller's window, as elsewhere.
-    const os::As as(pid != proc::kNone ? pid : os::self());
-    app::Look look;
-    look.title = "Untitled - Editor";
-    look.x = 150 + place * 24;
-    look.y = 60 + place * 24;
-    look.width = 440;
-    look.height = 330;
-    look.icon = &gfx::editor_icon_16();
-    look.flags = app::kMenuBar;
-    // Shown once it has its text: a new one, or the file's.
-    const app::Number number = app::make<EditorWindow>(look);
-    if (number == app::kNone) {
-        no_memory_for("Editor");
-        return;
-    }
-    g_editors[place] = number;
-    app::program<EditorWindow>(number)->open_path(path);
-    if (!os::ui::on_screen(number)) {
-        os::ui::close(number); // no memory for the text, the file would not load, or no room
+    const PathArg p(path);
+    const auto open = [place, p] {
+        app::Look look;
+        look.title = "Untitled - Editor";
+        look.x = 150 + place * 24;
+        look.y = 60 + place * 24;
+        look.width = 440;
+        look.height = 330;
+        look.icon = &gfx::editor_icon_16();
+        look.flags = app::kMenuBar;
+        // Shown once it has its text: a new one, or the file's.
+        const app::Number number = app::make<EditorWindow>(look);
+        if (number == app::kNone) {
+            no_memory_for("Editor");
+            return;
+        }
+        g_editors[place] = number;
+        app::program<EditorWindow>(number)->open_path(p.get());
+        if (!os::ui::on_screen(number)) {
+            os::ui::close(number); // no memory for the text, the file would not load, or no room
+        }
+    };
+    if (pid != proc::kNone) {
+        in_process(pid, "Editor", open);
+    } else {
+        open(); // no room in the table: it is the caller's window, as elsewhere
     }
 }
 

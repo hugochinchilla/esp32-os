@@ -259,15 +259,19 @@ struct Entry {
     App app;
     const gfx::Bitmap &(*icon)();
 };
+// The stack of a program that reads folders and files on its own task: the
+// file system's code runs on it too. A first figure, to be trimmed with what
+// the board measures (the UI task, which ran them all until now, has 16 KB).
+constexpr uint32_t kRoomy = 8 * 1024;
 const Entry kApps[] = {
     {{"About Chinchilla", nullptr, &open_about}, &gfx::mascot_16},
-    {{"Cactus Patch", nullptr, &open_cactus_patch}, &gfx::cactus_icon_16},
+    {{"Cactus Patch", nullptr, &open_cactus_patch, false, true}, &gfx::cactus_icon_16},
     {{"Culebra", nullptr, &open_culebra, false, true}, &gfx::snake_icon_16},
-    {{"Defragmenter", nullptr, &open_defragmenter}, &gfx::defrag_icon_16},
-    {{"Editor", nullptr, &open_editor, true}, &gfx::editor_icon_16},
-    {{"File manager", nullptr, &open_file_manager}, &gfx::files_icon_16},
-    {{"Picture viewer", nullptr, &open_viewer}, &gfx::viewer_icon_16},
-    {{"Task Manager", nullptr, &open_task_manager}, &gfx::tasks_icon_16},
+    {{"Defragmenter", nullptr, &open_defragmenter, false, true, kRoomy}, &gfx::defrag_icon_16},
+    {{"Editor", nullptr, &open_editor, true, true, kRoomy}, &gfx::editor_icon_16},
+    {{"File manager", nullptr, &open_file_manager, false, true, kRoomy}, &gfx::files_icon_16},
+    {{"Picture viewer", nullptr, &open_viewer, false, true, kRoomy}, &gfx::viewer_icon_16},
+    {{"Task Manager", nullptr, &open_task_manager, false, true, kRoomy}, &gfx::tasks_icon_16},
     {{"Terminal", nullptr, &open_terminal, true}, &gfx::terminal_icon_16},
     {{"Welcome", nullptr, &open_welcome}, &gfx::welcome_icon_16},
     {{"Widget gallery", nullptr, &open_gallery}, &gfx::gallery_icon_16},
@@ -317,12 +321,20 @@ void launch(const App &app)
         app.open(); // makes its own process, one for each copy
         return;
     }
-    const proc::Pid pid = process_for(app.name);
-    if (app.own_task) {
-        prog::runner().start(pid); // without one it runs here, as the others do
+    enter_program(
+        process_for(app.name), app.name, [](void *a) { static_cast<const App *>(a)->open(); },
+        const_cast<App *>(&app), 0);
+}
+
+bool enter_program(proc::Pid pid, const char *program, proc::CallFn fn, void *context, size_t size)
+{
+    const prog::InCall in_call;
+    const App *app = program != nullptr ? find_app(program) : nullptr;
+    if (app != nullptr && app->own_task) {
+        // Without a task (none here, none left) it runs on the caller's.
+        prog::runner().start(pid, app->stack);
     }
-    proc::table().call(
-        pid, [](void *a) { static_cast<const App *>(a)->open(); }, const_cast<App *>(&app));
+    return proc::table().call(pid, fn, context, size);
 }
 
 proc::Pid process_for(const char *program)

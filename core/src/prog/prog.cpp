@@ -63,8 +63,9 @@ bool Runner::late(proc::Pid pid) const
     return state == Late || state == LateDone;
 }
 
-bool Runner::start(proc::Pid pid)
+bool Runner::start(proc::Pid pid, uint32_t stack_bytes)
 {
+    stack_bytes = stack_bytes < kStackBytes ? kStackBytes : stack_bytes;
     if (!threaded() || !procs_.alive(pid)) {
         return false;
     }
@@ -91,12 +92,12 @@ bool Runner::start(proc::Pid pid)
         s.kit.go->wait(0);
         s.kit.done->wait(0);
         const proc::Process *row = procs_.find(pid);
-        s.task = tasks_->start(row->name, &Runner::task, &s, kStackBytes, ports::Priority::High);
+        s.task = tasks_->start(row->name, &Runner::task, &s, stack_bytes, ports::Priority::High);
         if (s.task == nullptr) {
             s.used = false;
             return false;
         }
-        procs_.add_memory(pid, static_cast<int32_t>(kStackBytes));
+        procs_.add_memory(pid, static_cast<int32_t>(stack_bytes));
         return true;
     }
     return false;

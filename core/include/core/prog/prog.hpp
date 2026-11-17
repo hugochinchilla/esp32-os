@@ -83,7 +83,9 @@ public:
     // counted as the process's memory. False if it has none now (no tasks
     // here, all the kits lent, no memory for the stack): it then runs on the
     // caller's task. True too if it already had one.
-    bool start(proc::Pid pid);
+    // `stack_bytes` is what the program asks for (the program table's
+    // figure); nothing asks for less than kStackBytes.
+    bool start(proc::Pid pid, uint32_t stack_bytes = kStackBytes);
     bool has_task(proc::Pid pid) const { return slot_of(pid) != nullptr; }
     // Not responding: in a call that has taken longer than the limit.
     bool late(proc::Pid pid) const;

@@ -43,6 +43,9 @@ struct App {
     // Its code runs on a task of its own where the machine has tasks
     // (core/prog, backlog item 26): the first one is Culebra.
     bool own_task = false;
+    // What that task's stack is, in bytes; 0 is the least there is
+    // (prog::Runner::kStackBytes).
+    uint32_t stack = 0;
 };
 
 int app_count();
