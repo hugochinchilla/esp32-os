@@ -31,14 +31,14 @@ board or the merge), `done`.
 | 8 | Message queue into the UI task. The loop sleeps until there is work | M | | Yes | done (checked on the board 2026-11-16). [Journal](journal/2026-11-16-message-queue.md) |
 | 8b | Services loop: one task for the network services (VNC, the web viewer, later the telnet listener) that sleeps on all their sockets and reaches the desktop only by messages. The network leaves the UI loop | M | 8 | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-services-loop.md) |
 | 9 | Lock on the file system | S | | | done (checked on the board 2026-11-16). [Journal](journal/2026-11-16-file-system-lock.md) |
-| 10 | Jobs owned by a process, and "cannot exit until jobs finish". The Editor saves through a job, its window locked meanwhile | M | 2, 8, 9 | Yes | on a branch (`claude/project-thread-8q7ksu`), PC tests pass, firmware compiles; not run on the board. [Journal](journal/2026-11-17-jobs.md) |
+| 10 | Jobs owned by a process, and "cannot exit until jobs finish". The Editor saves through a job, its window locked meanwhile | M | 2, 8, 9 | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-jobs.md) |
 | 11 | Three priority classes (Low, Normal, High) for jobs and services | S | 10 | Yes | todo |
 | | **Phase 3: the console** | | | | |
-| 12 | TTY object: echo, line editing, Ctrl+C | M | 8 | | on a branch (`claude/project-thread-8q7ksu`), PC tests pass; nothing on the board uses it yet. [Journal](journal/2026-11-17-tty.md) |
-| 13 | Shell with the file and process commands (Linux names, DOS aliases, both slashes), tested on the PC | L | 2, 9, 12 | | on a branch (`claude/project-thread-8q7ksu`), PC tests pass; runs in a PC terminal (`chinchilla-console`), nothing on the board starts it yet. [Journal](journal/2026-11-17-command-shell.md) |
+| 12 | TTY object: echo, line editing, Ctrl+C | M | 8 | | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-tty.md) |
+| 13 | Shell with the file and process commands (Linux names, DOS aliases, both slashes), tested on the PC | L | 2, 9, 12 | | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-command-shell.md) |
 | 14 | Serial console sharing the wire with the debug link | M | 12, 13 | Yes, with care | todo |
-| 15 | Terminal window on the desktop | M | 12, 13 | Yes | on a branch (`claude/project-thread-8q7ksu`), PC tests pass; the session has a task of its own where the machine has tasks. Journals: [window](journal/2026-11-17-terminal-window.md), [task](journal/2026-11-17-terminal-task.md) |
-| 16 | `top`, `dmesg`, `edit`, `open`, `run`, and the Run... dialog | S | 3, 13 | | in part, on a branch (`claude/project-thread-8q7ksu`): Run..., `open`, `run`, `edit`; PC tests pass, firmware compiles, not run on the board. `top` waits for item 3, `dmesg` for a log. [Journal](journal/2026-11-17-run.md) |
+| 15 | Terminal window on the desktop | M | 12, 13 | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-terminal-window.md) |
+| 16 | `top`, `dmesg`, `edit`, `open`, `run`, and the Run... dialog | S | 3, 13 | | in part: Run..., `open`, `run`, `edit` done (checked on the board 2026-11-17); `top` waits for item 3, `dmesg` for a log. [Journal](journal/2026-11-17-run.md) |
 | 17 | Telnet server, no password. Ask the owner first: on by default, or switched on in a settings file | S | 13 | Yes | todo |
 | | **Phase 4: structure** | | | | |
 | 18 | init as PID 1 with a start-up file. Services start after the desktop | M | 2, 8 | Yes | todo |
@@ -48,7 +48,7 @@ board or the merge), `done`.
 | 21 | Split the window manager into window server and desktop shell. The taskbar becomes a process that restarts when killed | L | 18, 20 | Yes | todo |
 | | **Later** | | | | |
 | 22 | Console text editor | M | 13 | | todo |
-| 23 | Pipes and redirection | M | 13 | | on a branch (`claude/project-thread-8q7ksu`), PC tests pass, firmware compiles; not run on the board. [Journal](journal/2026-11-17-pipes.md) |
+| 23 | Pipes and redirection | M | 13 | | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-pipes.md) |
 | 24 | File dates | S to M | | Yes | todo |
 | 25 | Updates over Wi-Fi | M | | Yes | todo |
 | 26 | Apps on their own tasks, one at a time | XL | 8, 20 | Yes | todo |
