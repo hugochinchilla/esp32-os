@@ -55,11 +55,14 @@ def ttf(path):
 
 FONTS = [
     ("a-spleen", "Spleen 8x16", "BSD. Already in the repo, same family as the desktop font", bdf(REPO + "/third_party/fonts/spleen/spleen-8x16.bdf")),
-    ("b-terminus", "Terminus 8x16", "SIL Open Font Licence. The classic Linux console font", bdf(FD + "/ter-u16n.bdf")),
-    ("c-unscii", "Unscii 16", "Public domain. Drawn to recall 80s and 90s computer text", hexfont(FD + "/unscii-16.hex")),
-    ("d-tamzen", "Tamzen 8x16", "Free licence. Slim, modern terminal look", bdf(FD + "/tamzen8x16r.bdf")),
-    ("e-unifont", "GNU Unifont", "SIL Open Font Licence. Plain, covers every script", ttf("/usr/share/fonts/opentype/unifont/unifont.otf")),
 ]
+if os.path.exists(FD + "/ter-u16n.bdf"):  # the candidates that were not chosen
+    FONTS += [
+        ("b-terminus", "Terminus 8x16", "SIL Open Font Licence. The classic Linux console font", bdf(FD + "/ter-u16n.bdf")),
+        ("c-unscii", "Unscii 16", "Public domain. Drawn to recall 80s and 90s computer text", hexfont(FD + "/unscii-16.hex")),
+        ("d-tamzen", "Tamzen 8x16", "Free licence. Slim, modern terminal look", bdf(FD + "/tamzen8x16r.bdf")),
+        ("e-unifont", "GNU Unifont", "SIL Open Font Licence. Plain, covers every script", ttf("/usr/share/fonts/opentype/unifont/unifont.otf")),
+    ]
 HI, TXT, DIM, YEL, GRN = WHITE, c(5, 5, 2), c(3, 3, 1), c(7, 7, 0), c(2, 6, 1)
 
 def put(img, g, col, row, text, colour, bg=None):
@@ -104,6 +107,53 @@ def screen(g, grid=False):
 for key, name, note, g in FONTS:
     screen(g).save(f"{OUT}/bios-text-{key}.png")
 
+# ---- The reference for the PC test (host/tests/test_bios.cpp): the screen
+# as core/src/bios/post.cpp lays it out, drawn here from Spleen's BDF file
+# and the mascot's own squares, with the test's values. ----
+MASCOT16 = [
+    "................", ".GGG........GGG.", "GPPPG......GPPPG", "GPPPG.GGGG.GPPPG",
+    "GPPPGGLLLLGGPPPG", ".GGGLLLLLLLLGGG.", "..GLLLLLLLLLLG..", "..GLKLLLLLLKLG..",
+    "..GLKLLLLLLKLG..", "..GLLLLNNLLLLG..", "D.GLLLLNNLLLLG.D", ".DDGLLLLLLLLGDD.",
+    "D..GGLLLLLLGG..D", "....GGGGGGGG....", "................", "................"]
+DARK, RED = c(2, 2, 1), c(7, 1, 0)
+
+
+def post_reference(g):
+    img = Image.new("RGB", (640, 480), BLACK)
+    colours = {"G": TXT, "D": TXT, "L": HI, "P": c(7, 4, 2), "K": BLACK, "N": c(7, 3, 2)}
+    px = img.load()
+    for r, line in enumerate(MASCOT16):
+        for q, ch in enumerate(line):
+            if ch in colours:
+                for y in range(5):
+                    for x in range(5):
+                        px[68 * 8 + q * 5 + x, 16 + r * 5 + y] = colours[ch]
+    rows = [
+        (1, [(HI, "Chinchilla BIOS v0.3")]),
+        (2, [(TXT, "Copyleft 2026, built on nine resistors")]),
+        (4, [(TXT, "Main Processor : ESP32-S3 dual core, 240 MHz")]),
+        (5, [(TXT, "Memory Test    : "), (HI, "  8192K OK"), (TXT, "   (external)")]),
+        (6, [(TXT, "               : "), (HI, "   376K OK"), (TXT, "   (internal)")]),
+        (8, [(TXT, "Detecting video ....... VGA 640x480, 256 colours")]),
+        (9, [(TXT, "Detecting drive C: .... 12 MB flash disk")]),
+        (10, [(TXT, "Detecting keyboard .... serial debug link")]),
+        (11, [(TXT, "Detecting sound ....... none")]),
+        (13, [(YEL, "Starting Chinchilla...")]),
+        (15, [(TXT, "Press any key to continue")]),
+        (16, [(HI, "Booting in 5")]),
+        (28, [(DARK, "Press DEL to enter SETUP (there is no setup)")]),
+        (29, [(DARK, "17/11/2026-ESP32S3-N16R8-CHINCHILLA")]),
+    ]
+    for row, parts in rows:
+        col = 2
+        for colour, text in parts:
+            put(img, g, col, row, text, colour)
+            col += len(text)
+    return img
+
+
+post_reference(FONTS[0][3]).save(f"{OUT}/bios-post.png")
+
 # comparison sheet: the same lines in each font, twice the size
 sheet = Image.new("RGB", (640, 480), BLACK)
 lab = FONTS[0][3]
@@ -117,4 +167,5 @@ for key, name, note, g in FONTS:
     put(sheet, lab, 1 + 20, y * 6, note[:57], DIM)
     sheet.paste(strip.resize((640, 64), Image.NEAREST).crop((0, 0, 624, 64)), (8, row + 20))
     y += 1
-sheet.save(f"{OUT}/bios-text-fonts.png")
+if len(FONTS) > 1:
+    sheet.save(f"{OUT}/bios-text-fonts.png")

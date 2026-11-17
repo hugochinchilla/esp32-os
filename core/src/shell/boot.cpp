@@ -24,8 +24,12 @@ struct Screen {
     gfx::RectList clip;
 };
 
-// Waits until the clock reaches `until` (micros, wrapping), answering the
-// debug link meanwhile; false if a key or button skipped it.
+// The address-dependent pattern: each word differs from its neighbours, so
+// stuck bits and address faults both show.
+inline uint32_t pattern(uintptr_t address) { return static_cast<uint32_t>(address) * 2654435761u ^ 0x5AC3E10Fu; }
+
+} // namespace
+
 bool wait_until(BootIo &io, uint32_t until)
 {
     int32_t left;
@@ -56,12 +60,6 @@ void format_bytes(char *out, size_t n, uint64_t bytes)
         snprintf(out, n, "%u KB", static_cast<unsigned>(bytes / 1024));
     }
 }
-
-// The address-dependent pattern: each word differs from its neighbours, so
-// stuck bits and address faults both show.
-inline uint32_t pattern(uintptr_t address) { return static_cast<uint32_t>(address) * 2654435761u ^ 0x5AC3E10Fu; }
-
-} // namespace
 
 BootSettings boot_settings(const fs::Storage &storage)
 {
@@ -246,6 +244,11 @@ void nine(gfx::Canvas &c, int x, int y, int size, int gap, int lit)
 }
 
 } // namespace
+
+void draw_mascot(gfx::Canvas &c, int x, int y, int scale, gfx::Colour outline, gfx::Colour fur)
+{
+    splash_mascot(c, x, y, scale, outline, fur);
+}
 
 void show_splash(BootIo &io, bool hold)
 {
