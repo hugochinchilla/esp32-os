@@ -7,6 +7,7 @@ namespace prog {
 Runner::Runner(proc::Table &procs) : procs_(procs)
 {
     procs_.set_caller(&Runner::call_for_table, this);
+    procs_.set_between([](void *self) { static_cast<Runner *>(self)->serve(); }, this);
     procs_.on_exit(&Runner::exited, this);
 }
 
@@ -18,6 +19,7 @@ Runner::~Runner()
         }
     }
     procs_.set_caller(nullptr, nullptr);
+    procs_.set_between(nullptr, nullptr);
 }
 
 void Runner::set_tasks(ports::Tasks *tasks, Kit *kits, int count)

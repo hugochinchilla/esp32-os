@@ -214,6 +214,7 @@ int main(int argc, char **argv)
         program_kits[i] = {&program_events[2 * i], &program_events[2 * i + 1]};
     }
     prog::runner().set_tasks(&program_tasks, program_kits, prog::Runner::kMaxTasks);
+    prog::runner().set_limit(prog::Runner::kLimitMs);
     static msg::Inbox inbox(queue);
     static msg::PostedInput remote_input(screen);
     static rfb::Server remote(display, pointer, remote_input, clock, memory);

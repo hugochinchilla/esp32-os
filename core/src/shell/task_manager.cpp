@@ -275,7 +275,9 @@ private:
             if (!all && (p.is(proc::kSystem) || w == os::kNoWindow || p.pid == os::self())) {
                 continue;
             }
-            const char *what = w != os::kNoWindow ? os::window_title(w) : (p.is(proc::kSystem) ? "(system)" : "");
+            const char *what = !os::responding(p.pid) ? "Not responding"
+                               : w != os::kNoWindow ? os::window_title(w)
+                                                    : (p.is(proc::kSystem) ? "(system)" : "");
             now[n] = p.pid;
             char time[16], held[16];
             snprintf(text[n], kRowText, "%5d  %-12.12s %7s %6s  %s", p.pid, p.name,

@@ -42,6 +42,9 @@ public:
     static constexpr int kMaxTasks = 8;
     // ponytail: one size for every program; to be measured on the board.
     static constexpr uint32_t kStackBytes = 8 * 1024;
+    // How long the machine waits for a program before it goes on without
+    // it (set_limit; the board and the simulator use it).
+    static constexpr uint32_t kLimitMs = 2000;
     // How long a late program is let run OS calls at a time (serve()).
     static constexpr uint32_t kSliceMs = 10;
 

@@ -755,6 +755,10 @@ public:
                 e.drawing = g_drawings.add(c);
                 tell(e);
                 g_drawings.end();
+                if (prog::runner().late(owner())) {
+                    // Not responding: grey where it would have painted.
+                    c.fill(what == What::Cell ? part : gfx::Rect{0, 0, control.rect.w, control.rect.h}, gfx::kGrey);
+                }
             }
         }
     }

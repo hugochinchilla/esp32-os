@@ -2186,9 +2186,20 @@ The rest is the agent's, to confirm:
   Culebra first.
 - 8 KB of stack from internal memory, counted as the program's; to be
   measured.
-- Not yet: the limit on the wait (and with it the lock around the OS
-  calls, the grey window, the queue of events). Until then nothing is
-  gained but the measurement.
+- The limit is two seconds. A program that has not answered by then is
+  late: calls for it are dropped until it has finished, what it paints
+  is grey, the Task Manager says "Not responding", and closing its
+  window ends it without asking.
+- No lock around the OS calls: each begins with `enter()` and ends with
+  `leave()` (a count). A late program sleeps in `enter()` and is let in
+  for 10 ms a round when the UI task has nothing else under way.
+  Rejected: a mutex held by the UI task whenever it runs.
+- What goes to a program goes by copy, never as a pointer into the
+  caller's stack.
+- A late program's task is taken away when it is ended; it is outside
+  every OS call by then, so it holds no lock.
+- Not yet: the queue of events (what a late program missed is lost),
+  the other programs, programs that call each other's code directly.
 
 ### Missed video refills are logged (2026-11-17, the owner's request)
 

@@ -254,6 +254,20 @@ public:
         caller_ = caller;
         caller_self_ = self;
     }
+    // What whoever makes the calls has to do on the UI task when nothing
+    // else is under way (prog::Runner::serve): the window manager calls
+    // between() once a round.
+    void set_between(void (*fn)(void *self), void *self)
+    {
+        between_ = fn;
+        between_self_ = self;
+    }
+    void between()
+    {
+        if (between_ != nullptr) {
+            between_(between_self_);
+        }
+    }
     // Tests: an empty table that counts from 1 again.
     void reset();
 
@@ -278,6 +292,8 @@ private:
 
     Supervisor *supervisor_ = nullptr;
     CallerFn caller_ = nullptr;
+    void (*between_)(void *self) = nullptr;
+    void *between_self_ = nullptr;
     void *caller_self_ = nullptr;
     struct {
         ExitFn fn = nullptr;

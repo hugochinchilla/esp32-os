@@ -56,6 +56,9 @@ int process_count();
 const proc::Process &process_at(int index);
 const proc::Process *process(proc::Pid pid); // nullptr: there is none
 bool alive(proc::Pid pid);
+// False while the process is in a call that has taken longer than the
+// system waits (a program on a task of its own that hangs, or is slow).
+bool responding(proc::Pid pid);
 // Processor time and memory of jobs still running, brought up to now.
 void refresh_figures();
 // Asks a process to close (Term) or ends it (Kill). The answer says if it

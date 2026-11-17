@@ -118,7 +118,7 @@ add_test(NAME init COMMAND test_init)
 # The OS calls, and the check that the programs moved to them stay moved
 # (backlog 20).
 add_executable(test_os tests/test_os.cpp)
-target_link_libraries(test_os PRIVATE core)
+target_link_libraries(test_os PRIVATE core Threads::Threads)
 add_test(NAME os COMMAND test_os)
 add_test(NAME os_calls
          COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/check_os_calls.py ${CMAKE_CURRENT_SOURCE_DIR}/..)

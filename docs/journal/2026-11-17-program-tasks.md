@@ -73,6 +73,8 @@ kept by the system to come back.
 
 ## What it does not do yet
 
+(The limit came later the same day: see below.)
+
 - **No limit on the wait.** The UI task waits for as long as the
   program takes, so a program that hangs still freezes the desktop.
   This step costs a stack and two task switches per call and gives
@@ -109,3 +111,91 @@ kept by the system to come back.
   pictures, the task given back at each close.
 - The simulator gives Culebra a task as the board does.
 - PC gate passes (42 of 42 tests, the pictures, the OS-call check).
+
+## On the board, first step (figures from the board thread, 2026-11-17)
+
+It works and nothing hangs (menus, the box over it, key repeat, drag,
+minimise, the screen saver, End Task, `kill`, `kill -9`; no missed
+refills). What it costs: 8.5 KB of internal memory while Culebra is
+open, all back on close; the stack was used up to about 2.8 KB of the
+8 KB. Processor time for 10 s of play, UI task plus Culebra's task:
+about 194 ms against 182 ms on `main`, +7 %. A repaint with Culebra
+open 25.6 to 26.0 ms against 25.2 to 25.3. By the rule this thread gave
+("measurably worse: do not merge"), it was not merged, and the board
+thread put the figures to the owner on a card.
+
+## The same day: the limit on the wait
+
+The owner chose the first option. This is its second half: what makes
+a program that hangs stop freezing the desktop.
+
+**The limit.** Whoever hands a call to a program waits two seconds for
+it (`prog::Runner::kLimitMs`; the agent's figure, to confirm). After
+that the program is *late*: the caller goes on as if the call had not
+been used, and no call is made for it until it has finished the one it
+is in. Its keys, clicks and timer ticks in between are dropped, not
+kept.
+
+**What had to be true first.**
+
+- Nothing handed to a program may point into the caller's stack, since
+  the caller may have gone. A call's context is handed over by copy
+  and copied back only if it finished in time (`proc::call_as`). An
+  event goes whole: the key, the mouse message and the text (a path at
+  most) are copied with it.
+- A late program must not touch the desktop's things while the desktop
+  is using them. Every OS call now begins with `enter()` and ends with
+  `leave()` (`prog::InCall`, first line of each of the 163 functions of
+  `os` and `os::ui`, and of the eight helpers of the shell that
+  programs call). For the UI task and for a program being waited for,
+  that is a count going up and down, no lock. A late program sleeps in
+  `enter()`.
+- When the caller gives up it first waits for the program to leave the
+  OS call it may be inside (calls are short), so it never goes on with
+  a call half done.
+- Once a round, with nothing else under way (`Wm::tick`), the UI task
+  lets each late program that is waiting in `enter()` run for up to
+  10 ms, and takes back those that have finished. A program that hangs
+  in its own code asks for nothing and costs nothing; one that is only
+  slow gets its calls done a slice at a time and then answers again.
+
+**What is seen.** What the program paints itself is grey while it is
+late; the system's own controls in its window still paint. The Task
+Manager says "Not responding" in place of the window's title. Closing
+the window (or End Task, or `kill`) ends it without asking it: the
+close question cannot be put to a program that does not answer.
+
+**Ending it.** A late program is outside every OS call, so it holds
+nothing of the system's, and its task can be taken away
+(`ports::Tasks::kill`: `vTaskDelete` on the board). On the PC a thread
+cannot be taken away: the process ends at once and the thread is left
+to return by itself, kept out of the OS for good.
+
+**Options not taken.**
+
+- A lock around the OS calls (a mutex taken by the UI task whenever it
+  runs): two lock operations on every call, for every program, and
+  every loop of every machine and test would have to take and give it.
+  The count costs nothing where nothing is late.
+- Keeping what a late program missed in a queue for it: the queue of
+  events is still to come; for now a late program has missed what it
+  missed and is painted again whole when it is back. A job's result
+  that arrives while its program is late is lost with the rest: to be
+  put right with the queue.
+- Suspending a late program: it may be inside an OS call.
+
+**Not done.** Only Culebra has a task. Before the others get one:
+programs that call each other's code directly (the File manager's
+windows told that files changed, the dialogs' answers) must go through
+`proc::Table::call` too. The stack size (8 KB; the board used 2.8).
+
+**Tested.** `test_prog`: the limit with real threads: a call that does
+not come back, calls refused meanwhile, the late program kept out of an
+OS call until `serve()`, taken back, called again; ended while it
+hangs. `test_os`: a program with a picture on a thread of its own hangs
+on a key: the key comes back, the picture goes grey, the desktop paints
+and takes keys, the program wakes and paints again; it hangs again and
+closing its window ends it, with all its memory back. PC gate passes
+(42 of 42, pictures, OS-call check). The limit is switched on in the
+firmware and the simulator; the tests that do not ask for it wait for
+ever, as before.

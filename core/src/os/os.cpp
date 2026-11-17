@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <new>
 
+#include "core/msg/queue.hpp"
 #include "core/saver/saver.hpp"
 #include "core/sys/log.hpp"
 
@@ -60,6 +61,22 @@ void install(const Kit &kit)
     const prog::InCall in_call;
     g_kit = kit;
     file::installed();
+    // A program that stops responding, or comes back, is painted again;
+    // one that waits to be let back in makes the UI loop go round.
+    prog::runner().set_news(
+        [](proc::Pid pid, bool, void *) {
+            if (g_kit.wm != nullptr) {
+                g_kit.wm->invalidate_owned(pid);
+            }
+        },
+        nullptr);
+    prog::runner().set_wake(
+        [](void *) {
+            if (msg::queue() != nullptr) {
+                msg::queue()->wake();
+            }
+        },
+        nullptr);
 }
 void install_network(net::Manager *wifi)
 {
@@ -116,6 +133,12 @@ const proc::Process *process(proc::Pid pid)
     const prog::InCall in_call;
     return proc::table().find(pid);
 }
+bool responding(proc::Pid pid)
+{
+    const prog::InCall in_call;
+    return !prog::runner().late(pid);
+}
+
 bool alive(proc::Pid pid)
 {
     const prog::InCall in_call;

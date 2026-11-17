@@ -1170,6 +1170,7 @@ extern "C" void app_main(void)
         program_kits[i].done = &program_events[2 * i + 1];
     }
     prog::runner().set_tasks(&tasks, program_kits, prog::Runner::kMaxTasks);
+    prog::runner().set_limit(prog::Runner::kLimitMs);
 
     ESP_LOGI(TAG, "starting video on core 1");
     static StaticSemaphore_t done_buffer;

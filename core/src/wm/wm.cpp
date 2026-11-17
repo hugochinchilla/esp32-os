@@ -332,6 +332,15 @@ void Wm::dispose_closed()
 
 /* ---- Processes ----------------------------------------------------------- */
 
+void Wm::invalidate_owned(proc::Pid pid)
+{
+    for (int i = 0; i < count_; i++) {
+        if (stack_[i]->owner_ == pid) {
+            invalidate(stack_[i]->frame_);
+        }
+    }
+}
+
 int Wm::windows_of(proc::Pid pid) const
 {
     int n = 0;
@@ -2289,6 +2298,9 @@ void Wm::stop_timer(int id)
 
 void Wm::tick()
 {
+    if (procs_ != nullptr) {
+        procs_->between(); // programs that were late and have come back
+    }
     const proc::Scope desktop(procs_, desktop_pid_);
     const uint32_t start = clock_.micros();
     const uint64_t now = now_us();
