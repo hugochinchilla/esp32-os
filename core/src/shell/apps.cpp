@@ -312,6 +312,7 @@ const App *find_app(const char *name)
 
 void launch(const App &app)
 {
+    const prog::InCall in_call;
     if (app.many) {
         app.open(); // makes its own process, one for each copy
         return;
@@ -326,6 +327,7 @@ void launch(const App &app)
 
 proc::Pid process_for(const char *program)
 {
+    const prog::InCall in_call;
     proc::Table &t = proc::table();
     proc::Pid pid = t.find_by_name(program);
     if (pid == proc::kNone) {

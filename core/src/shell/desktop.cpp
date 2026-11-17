@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <strings.h>
+#include "core/prog/prog.hpp"
 #include "core/fs/ini.hpp"
 #include "core/gfx/art.hpp"
 #include "core/desk/desk.hpp"
@@ -476,6 +477,7 @@ void desktop_files_tick(void *) { refresh_desktop_files(false); }
 
 void files_changed()
 {
+    const prog::InCall in_call;
     refresh_folder_windows();
     refresh_desktop_files(false);
 }
@@ -567,6 +569,7 @@ wm::Window *window_numbered(int number) { return g_wm != nullptr ? g_wm->window(
 
 bool has_dialog(int number)
 {
+    const prog::InCall in_call;
     wm::Window *w = window_numbered(number);
     if (w == nullptr || g_wm->blocker(*w) == nullptr) {
         return false;
@@ -581,6 +584,7 @@ ports::Memory &program_port() { return os::memory(); }
 
 void no_memory_for(const char *program)
 {
+    const prog::InCall in_call;
     char text[96]; // the box keeps its own copy
     snprintf(text, sizeof(text), "There is not enough memory to open\n%s.", program);
     message_box("Chinchilla", text);
@@ -605,6 +609,7 @@ fs::Storage &storage() { return *g_storage; }
 
 void show(wm::Window &w)
 {
+    const prog::InCall in_call;
     if (w.open()) {
         manager().activate(w);
     } else {
@@ -620,6 +625,7 @@ gfx::Rect centred(const wm::Wm &wm, int w, int h)
 
 void message_box(const char *title, const char *text)
 {
+    const prog::InCall in_call;
     static const char *const ok[] = {"OK"};
     if (MessageBox *box = message_window()) {
         box->ask(title, text, ok, 1, nullptr, nullptr);
@@ -756,6 +762,7 @@ void start_taskbar(void *)
 
 void set_tray_icon(const gfx::Bitmap *icon, void (*click)(void *context), void *context)
 {
+    const prog::InCall in_call;
     g_tray_icon = icon;
     g_tray_click = click;
     g_tray_context = context;

@@ -42,9 +42,12 @@ proc::Pid find(const char *name);
 class As {
 public:
     explicit As(proc::Pid pid);
+    ~As();
+    As(const As &) = delete;
+    As &operator=(const As &) = delete;
 
 private:
-    proc::Scope scope_;
+    proc::Pid before_;
 };
 
 // The process list, for the tools that show it or act on it (the Task
