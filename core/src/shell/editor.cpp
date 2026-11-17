@@ -161,7 +161,7 @@ private:
             show(*this);
             break;
         case Then::Open:
-            open_file_dialog(this, folder(), &EditorWindow::chosen_to_open, this);
+            open_file_dialog(id(), folder(), &EditorWindow::chosen_to_open, this);
             break;
         case Then::OpenPath:
             load(pending_path_);
@@ -289,7 +289,7 @@ private:
     void save_as(bool continue_after)
     {
         continue_after_save_as_ = continue_after;
-        save_file_dialog(this, folder(), path_[0] ? fs::path::name(path_) : "untitled.txt",
+        save_file_dialog(id(), folder(), path_[0] ? fs::path::name(path_) : "untitled.txt",
                          &EditorWindow::chosen_to_save, this);
     }
 

@@ -7,13 +7,12 @@
 #include <cstring>
 #include <strings.h>
 
+#include "core/app/app.hpp"
 #include "core/fs/ini.hpp"
 #include "core/gfx/art.hpp"
 #include "core/sh/sh.hpp"
 #include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
-#include "core/wm/widgets.hpp"
-#include "core/wm/wm.hpp"
 #include "internal.hpp"
 
 namespace shell {
@@ -110,46 +109,30 @@ public:
 
 /* ---- The Run dialog ---------------------------------------------------------------- */
 
-class RunDialog : public wm::Window {
+class RunDialog : public app::Window {
 public:
     RunDialog()
-        : Window("Run", {0, 0, 340, 150}, &gfx::run_icon_16()),
-          line1_({52, 14, 276, 14}, "Type the name of a program, folder or file,"),
-          line2_({52, 28, 276, 14}, "and Chinchilla will open it."),
-          label_({10, 63, 40, 14}, "&Open:"),
-          field_({52, 60, 272, 21}),
-          ok_({332 - 3 * 75 - 2 * 6 - 8, 92, 75, 23}, "OK", &RunDialog::ok, this),
-          cancel_({332 - 2 * 75 - 6 - 8, 92, 75, 23}, "Cancel", &RunDialog::cancel, this),
-          browse_({332 - 75 - 8, 92, 75, 23}, "&Browse...", &RunDialog::browse, this)
+        : line1_(label({52, 14, 276, 14}, "Type the name of a program, folder or file,")),
+          line2_(label({52, 28, 276, 14}, "and Chinchilla will open it.")),
+          label_(label({10, 63, 40, 14}, "&Open:")),
+          field_(text_field({52, 60, 272, 21})),
+          ok_(button({332 - 3 * 75 - 2 * 6 - 8, 92, 75, 23}, "OK")),
+          cancel_(button({332 - 2 * 75 - 6 - 8, 92, 75, 23}, "Cancel")),
+          browse_(button({332 - 75 - 8, 92, 75, 23}, "&Browse..."))
     {
-        set_dialog(true);
-        set_frame(os::centred(frame().w, frame().h));
-        add(line1_);
-        add(line2_);
-        add(label_);
-        add(field_);
-        add(ok_);
-        add(cancel_);
-        add(browse_);
-        ok_.set_default(true);
-        set_default(&ok_);
+        set_default(ok_);
         // What was run last time is there to run again, or to type over.
         if (load_settings("run", settings_)) {
-            char last[2 * wm::TextField::kCapacity + 1];
+            char last[2 * app::TextField::kCapacity + 1];
             if (settings_.get("run", "last", last, sizeof(last))) {
                 field_.set(last);
             }
         }
-        set_focus(&field_);
+        set_focus(field_);
         field_.select_all();
     }
 
-    bool layered() const override { return true; } // the picture over the face
-    void paint(gfx::Canvas &c) override
-    {
-        Window::paint(c);
-        c.blit(gfx::run_icon_32(), 10, 12);
-    }
+    void paint(app::Canvas &c) override { c.blit(gfx::run_icon_32(), 10, 12); } // the picture over the face
 
     bool key(const wm::KeyMsg &k) override
     {
@@ -158,23 +141,33 @@ public:
             return true;
         }
         if (k.pressed && (k.mods & wm::kAlt) && k.usage == wm::key::A + ('o' - 'a')) {
-            set_focus(&field_);
+            set_focus(field_);
             field_.select_all();
             return true;
         }
         if (k.pressed && (k.mods & wm::kAlt) && k.usage == wm::key::A + ('b' - 'a')) {
-            browse_.click();
+            browse_.press();
             return true;
         }
-        return Window::key(k);
+        return false;
+    }
+
+    void command(app::Control which) override
+    {
+        if (which == ok_) {
+            ok();
+        } else if (which == cancel_) {
+            close();
+        } else if (which == browse_) {
+            open_file_dialog(number(), "C:\\", &RunDialog::browsed, this);
+        }
     }
 
 private:
-    static void ok(wm::Button &, void *context)
+    void ok()
     {
-        auto *d = static_cast<RunDialog *>(context);
-        char typed[2 * wm::TextField::kCapacity + 1];
-        d->field_.get(typed, sizeof(typed));
+        char typed[2 * app::TextField::kCapacity + 1];
+        field_.get(typed, sizeof(typed));
         char why[160];
         // What it opens is its own program, a child of the desktop, not of
         // this dialog: the dialog is gone a moment later.
@@ -185,39 +178,36 @@ private:
         }
         if (!opened) {
             // The dialog stays, with what was typed, for another try.
-            snprintf(d->message_, sizeof(d->message_), "%s", why);
-            message_box("Run", d->message_);
+            snprintf(message_, sizeof(message_), "%s", why);
+            message_box("Run", message_);
             return;
         }
-        d->settings_.set("run", "last", typed);
-        save_settings("run", d->settings_);
-        d->close();
+        settings_.set("run", "last", typed);
+        save_settings("run", settings_);
+        close();
     }
-    static void cancel(wm::Button &, void *context) { static_cast<RunDialog *>(context)->close(); }
-    static void browse(wm::Button &, void *context)
-    {
-        open_file_dialog(static_cast<RunDialog *>(context), "C:\\", &RunDialog::chosen, context);
-    }
-    static void chosen(const char *path, void *context)
+    static void browsed(const char *path, void *context)
     {
         auto *d = static_cast<RunDialog *>(context);
         d->field_.set(path);
-        d->set_focus(&d->field_);
+        d->set_focus(d->field_);
     }
 
     char message_[200] = "";
     fs::Ini settings_;
-    wm::Label line1_, line2_, label_;
-    wm::TextField field_;
-    wm::Button ok_, cancel_, browse_;
+    app::Label line1_, line2_, label_;
+    app::TextField field_;
+    app::Button ok_, cancel_, browse_;
 };
+
+app::Number g_run = app::kNone; // the one there may be: a number, dead once it has closed
 
 } // namespace
 
 bool run_text(const char *typed, const char *folder, char *why, size_t capacity, bool programs, bool paths)
 {
     // Without the spaces around it, and without quotes around all of it.
-    char text[2 * wm::TextField::kCapacity + 1];
+    char text[2 * app::TextField::kCapacity + 1];
     while (*typed == ' ') {
         typed++;
     }
@@ -269,7 +259,19 @@ bool run_text(const char *typed, const char *folder, char *why, size_t capacity,
 void run_dialog()
 {
     const AsProgram as("Run");
-    open_one<RunDialog>("Run");
+    if (app::bring_forward(g_run)) {
+        return;
+    }
+    app::Look look;
+    look.title = "Run";
+    look.width = 340;
+    look.height = 150;
+    look.icon = &gfx::run_icon_16();
+    look.flags = app::kDialog | app::kPicture;
+    g_run = app::open<RunDialog>(look);
+    if (g_run == app::kNone) {
+        no_memory_for("Run");
+    }
 }
 
 sh::Desktop &desktop_for_sessions()

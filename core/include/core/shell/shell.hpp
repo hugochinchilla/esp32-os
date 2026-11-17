@@ -75,21 +75,22 @@ void screen_saver_dialog();
 // desktop): the desktop's colour and pattern.
 void display_dialog();
 
-// File dialogs, for any program. Modal to `owner`. `chosen` gets the full
+// File dialogs, for any program. Modal to `owner`, a window by its number
+// (os::WindowId: wm::Window::id(), or app::Window::number()). `chosen` gets the full
 // path ("C:\docs\notes.txt") when the user picks one; nothing on Cancel.
 // Save As asks before replacing an existing file.
 using PathFn = void (*)(const char *path, void *context);
-void open_file_dialog(wm::Window *owner, const char *folder, PathFn chosen, void *context);
-void save_file_dialog(wm::Window *owner, const char *folder, const char *name, PathFn chosen,
+void open_file_dialog(int owner, const char *folder, PathFn chosen, void *context);
+void save_file_dialog(int owner, const char *folder, const char *name, PathFn chosen,
                       void *context);
 // The colour dialog, for any program: the board's 256 colours on one sheet.
 // Modal to `owner`; opens on `start`. `chosen` gets the colour picked when
 // the user presses OK; nothing on Cancel.
 using ColourFn = void (*)(gfx::Colour colour, void *context);
-void colour_dialog(wm::Window *owner, gfx::Colour start, ColourFn chosen, void *context);
+void colour_dialog(int owner, gfx::Colour start, ColourFn chosen, void *context);
 // A question with a text answer (a new name).
 using TextFn = void (*)(const char *text, void *context);
-void input_dialog(wm::Window *owner, const char *title, const char *prompt, const char *initial,
+void input_dialog(int owner, const char *title, const char *prompt, const char *initial,
                   TextFn done, void *context);
 
 // Opens a file with the program for its kind (by extension). Returns

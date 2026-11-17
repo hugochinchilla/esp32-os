@@ -48,6 +48,8 @@ void settings_path(const char *program, char *out, size_t n)
 
 } // namespace
 
+const Kit &installed_kit() { return g_kit; }
+
 void install(const Kit &kit)
 {
     g_kit = kit;

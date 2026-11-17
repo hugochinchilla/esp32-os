@@ -563,6 +563,18 @@ void welcome_file()
 } // namespace
 
 // A program's memory is the OS's to give and to count (core/os/os.hpp).
+wm::Window *window_numbered(int number) { return g_wm != nullptr ? g_wm->window(number) : nullptr; }
+
+bool has_dialog(int number)
+{
+    wm::Window *w = window_numbered(number);
+    if (w == nullptr || g_wm->blocker(*w) == nullptr) {
+        return false;
+    }
+    os::bring_forward(number);
+    return true;
+}
+
 void *program_memory(size_t bytes) { return os::allocate(bytes); }
 void free_program_memory(void *block) { os::release(block); }
 ports::Memory &program_port() { return os::memory(); }

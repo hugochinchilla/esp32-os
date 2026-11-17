@@ -9,13 +9,12 @@
 #include <cstdio>
 #include <cstring>
 
+#include "core/app/app.hpp"
 #include "core/fs/ini.hpp"
 #include "core/gfx/art.hpp"
 #include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
-#include "core/wm/widgets.hpp"
 #include "internal.hpp"
-#include "picker.hpp"
 
 namespace shell {
 
@@ -178,91 +177,104 @@ void write_settings(fs::Ini &ini, const Choice &c)
 }
 
 // The preview: a small screen with the colour and pattern picked, a window
-// and a taskbar on it.
-class Preview : public wm::Widget {
-public:
-    explicit Preview(const Rect &r) : Widget(r) {}
-    void set(Rgb colour, int pattern)
-    {
-        colour_ = colour;
-        pattern_ = pattern;
-        invalidate();
+// and a taskbar on it. `size`: of the picture it is painted in.
+void paint_preview(app::Canvas &c, const Rect &size, Rgb colour, int pattern)
+{
+    c.fill({0, 0, size.w, size.h}, gfx::kGrey);
+    // The monitor: a case, the screen, a foot.
+    const Rect box = {(size.w - 132) / 2, 0, 132, 100};
+    c.button(box, gfx::ButtonLook::Raised);
+    const Rect screen = box.inset(8);
+    c.edge(screen, gfx::kDarkGrey, gfx::kWhite);
+    const Rect glass = screen.inset(1);
+    const wm::Wm::Backdrop b = backdrop_for(colour, pattern);
+    if (pattern == 0) {
+        c.fill_rgb(glass, b.colour);
+    } else {
+        c.fill_pattern(glass, b.colour, b.ink, b.pattern);
     }
-    void paint(gfx::Canvas &c) override
-    {
-        const Rect all = {0, 0, rect.w, rect.h};
-        c.fill(all, gfx::kGrey);
-        // The monitor: a case, the screen, a foot.
-        const Rect box = {(rect.w - 132) / 2, 0, 132, 100};
-        c.button(box, gfx::ButtonLook::Raised);
-        const Rect screen = box.inset(8);
-        c.edge(screen, gfx::kDarkGrey, gfx::kWhite);
-        const Rect glass = screen.inset(1);
-        const wm::Wm::Backdrop b = backdrop_for(colour_, pattern_);
-        if (pattern_ == 0) {
-            c.fill_rgb(glass, b.colour);
-        } else {
-            c.fill_pattern(glass, b.colour, b.ink, b.pattern);
-        }
-        c.fill({glass.x, glass.bottom() - 7, glass.w, 7}, gfx::kGrey);
-        c.hline(glass.x, glass.bottom() - 7, glass.w, gfx::kWhite);
-        c.fill({glass.x + 2, glass.bottom() - 5, 14, 4}, gfx::kDarkGrey);
-        const Rect window = {glass.x + 34, glass.y + 14, 52, 38};
-        c.fill(window, gfx::kGrey);
-        c.edge(window, gfx::kWhite, gfx::kBlack);
-        c.fill({window.x + 2, window.y + 2, window.w - 4, 6}, gfx::rgb(0, 0, 2));
-        c.fill({window.x + 4, window.y + 11, window.w - 8, window.h - 15}, gfx::kWhite);
-        c.fill({box.x + 50, box.bottom(), 32, 4}, gfx::kDarkGrey);
-        c.button({box.x + 30, box.bottom() + 4, 72, 8}, gfx::ButtonLook::Raised);
-    }
+    c.fill({glass.x, glass.bottom() - 7, glass.w, 7}, gfx::kGrey);
+    c.hline(glass.x, glass.bottom() - 7, glass.w, gfx::kWhite);
+    c.fill({glass.x + 2, glass.bottom() - 5, 14, 4}, gfx::kDarkGrey);
+    const Rect window = {glass.x + 34, glass.y + 14, 52, 38};
+    c.fill(window, gfx::kGrey);
+    c.edge(window, gfx::kWhite, gfx::kBlack);
+    c.fill({window.x + 2, window.y + 2, window.w - 4, 6}, gfx::rgb(0, 0, 2));
+    c.fill({window.x + 4, window.y + 11, window.w - 8, window.h - 15}, gfx::kWhite);
+    c.fill({box.x + 50, box.bottom(), 32, 4}, gfx::kDarkGrey);
+    c.button({box.x + 30, box.bottom() + 4, 72, 8}, gfx::ButtonLook::Raised);
+}
 
-private:
-    Rgb colour_ = {0, 0, 0};
-    int pattern_ = 0;
-};
+constexpr Rect kPreview = {8, 8, 348, 114};
 
-class DisplayDialog : public wm::Window {
+class DisplayDialog : public app::Window {
 public:
     DisplayDialog()
-        : Window("Display", {0, 0, 372, 388}, &gfx::display_icon_16()),
-          preview_({8, 8, 348, 114}),
-          group_({8, 128, 348, 190}, "Desktop background"),
-          colour_label_({18, 148, 60, 14}, "&Colour:"),
-          colour_name_({80, 148, 180, 14}, colour_text_),
-          colours_({18, 164, 328, 52}, 8, kColourCount, 41, 26, &DisplayDialog::paint_colour,
-                   &DisplayDialog::colour_changed, this),
-          other_({271, 143, 75, 21}, "&Other...", &DisplayDialog::other, this),
-          pattern_label_({18, 222, 60, 14}, "&Pattern:"),
-          pattern_name_({80, 222, 266, 14}, pattern_text_),
-          patterns_({18, 238, 328, 72}, 5, kPatternCount, 65, 36, &DisplayDialog::paint_pattern,
-                    &DisplayDialog::changed, this),
-          ok_({118, 328, 75, 23}, "OK", &DisplayDialog::ok, this),
-          cancel_({199, 328, 75, 23}, "Cancel", &DisplayDialog::cancel, this),
-          apply_({280, 328, 75, 23}, "&Apply", &DisplayDialog::apply_now, this)
+        : preview_(picture(kPreview)),
+          group_(group({8, 128, 348, 190}, "Desktop background")),
+          colour_label_(label({18, 148, 60, 14}, "&Colour:")),
+          colour_name_(plain({80, 148, 180, 14})),
+          colours_(grid({18, 164, 328, 52}, 8, kColourCount, 41, 26)),
+          other_(button({271, 143, 75, 21}, "&Other...")),
+          pattern_label_(label({18, 222, 60, 14}, "&Pattern:")),
+          pattern_name_(plain({80, 222, 266, 14})),
+          patterns_(grid({18, 238, 328, 72}, 5, kPatternCount, 65, 36)),
+          ok_(button({118, 328, 75, 23}, "OK")),
+          cancel_(button({199, 328, 75, 23}, "Cancel")),
+          apply_(button({280, 328, 75, 23}, "&Apply"))
     {
-        set_dialog(true);
-        add(preview_);
-        add(group_);
-        add(colour_label_);
-        add(colour_name_);
-        add(colours_);
-        add(other_);
-        add(pattern_label_);
-        add(pattern_name_);
-        add(patterns_);
-        add(ok_);
-        add(cancel_);
-        add(apply_);
-        ok_.set_default(true);
-        set_default(&ok_);
+        set_default(ok_);
         // What the desktop shows now, to start from and to go back to.
         before_ = read_settings(settings_);
         colour_ = before_.colour;
-        show_colour();
-        patterns_.select_quietly(before_.pattern);
+        colours_.select(named(colour_)); // if it is one of the list's own, else no cell
+        patterns_.select(before_.pattern);
         sync();
-        set_frame(os::centred(frame().w, frame().h));
-        set_focus(&colours_);
+        set_focus(colours_);
+    }
+
+    void command(app::Control which) override
+    {
+        if (which == other_) {
+            // Other...: the 256 colours, in the colour dialog that any
+            // program can ask for (colour_dialog.cpp), over this one.
+            colour_dialog(number(), gfx::nearest(colour_), &DisplayDialog::other_picked, this);
+        } else if (which == ok_) {
+            before_ = picked();
+            write_settings(settings_, before_);
+            close(); // applies
+        } else if (which == cancel_) {
+            close();
+        } else if (which == apply_) {
+            apply(picked()); // shown on the real desktop; only OK keeps it
+        }
+    }
+
+    // A cell was picked.
+    void changed(app::Control which) override
+    {
+        if (which == colours_) {
+            colour_ = kColours[colours_.selected()].rgb;
+        }
+        sync();
+    }
+
+    void paint_in(app::Control, app::Canvas &c) override
+    {
+        paint_preview(c, kPreview, colour_, patterns_.selected());
+    }
+    void paint_cell(app::Control which, int index, const Rect &cell, app::Canvas &c) override
+    {
+        if (which == colours_) {
+            c.fill_rgb(cell, kColours[index].rgb);
+            return;
+        }
+        const wm::Wm::Backdrop b = backdrop_for(colour_, index);
+        if (index == 0) {
+            c.fill_rgb(cell, b.colour);
+        } else {
+            c.fill_pattern(cell, b.colour, b.ink, b.pattern);
+        }
     }
 
     bool key(const wm::KeyMsg &k) override
@@ -274,124 +286,87 @@ public:
         if (k.pressed && (k.mods & wm::kAlt)) {
             const char letter = wm::key::letter(k.usage);
             if (letter == 'c' || letter == 'C') {
-                set_focus(&colours_);
+                set_focus(colours_);
                 return true;
             }
             if (letter == 'o' || letter == 'O') {
-                other_.click();
+                other_.press();
                 return true;
             }
             if (letter == 'p' || letter == 'P') {
-                set_focus(&patterns_);
+                set_focus(patterns_);
                 return true;
             }
             if (letter == 'a' || letter == 'A') {
-                apply_.click();
+                apply_.press();
                 return true;
             }
         }
-        return Window::key(k);
+        return false;
     }
 
     // Closed without OK: what Apply showed is taken back.
     void closed() override { apply(before_); }
 
 private:
-    static void paint_colour(gfx::Canvas &c, const Rect &cell, int index, void *)
-    {
-        c.fill_rgb(cell, kColours[index].rgb);
-    }
-    static void paint_pattern(gfx::Canvas &c, const Rect &cell, int index, void *context)
-    {
-        auto *d = static_cast<DisplayDialog *>(context);
-        const wm::Wm::Backdrop b = backdrop_for(d->colour_, index);
-        if (index == 0) {
-            c.fill_rgb(cell, b.colour);
-        } else {
-            c.fill_pattern(cell, b.colour, b.ink, b.pattern);
-        }
-    }
-    // A cell of the list was picked.
-    static void colour_changed(void *context)
-    {
-        auto *d = static_cast<DisplayDialog *>(context);
-        d->colour_ = kColours[d->colours_.selected()].rgb;
-        d->sync();
-    }
-    static void changed(void *context) { static_cast<DisplayDialog *>(context)->sync(); }
-    // Other...: the 256 colours, in the colour dialog that any program can
-    // ask for (colour_dialog.cpp), over this one.
-    static void other(wm::Button &, void *context)
-    {
-        auto *d = static_cast<DisplayDialog *>(context);
-        colour_dialog(d, gfx::nearest(d->colour_), &DisplayDialog::other_picked, d);
-    }
     static void other_picked(gfx::Colour colour, void *context)
     {
         auto *d = static_cast<DisplayDialog *>(context);
         d->colour_ = gfx::shown(colour);
-        d->show_colour();
+        d->colours_.select(named(d->colour_));
         d->sync();
-    }
-    // The list shows the colour if it is one of its own, else no cell.
-    void show_colour()
-    {
-        if (named(colour_) >= 0) {
-            colours_.select_quietly(named(colour_));
-        } else {
-            colours_.clear();
-        }
     }
     void sync()
     {
+        char text[32];
         if (named(colour_) >= 0) {
-            snprintf(colour_text_, sizeof(colour_text_), "%s", kColours[named(colour_)].name);
+            snprintf(text, sizeof(text), "%s", kColours[named(colour_)].name);
         } else {
-            snprintf(colour_text_, sizeof(colour_text_), "#%02X%02X%02X%s", colour_.r, colour_.g, colour_.b,
+            snprintf(text, sizeof(text), "#%02X%02X%02X%s", colour_.r, colour_.g, colour_.b,
                      is_exact(colour_) ? "" : " (dithered)");
         }
-        snprintf(pattern_text_, sizeof(pattern_text_), "%s", kPatterns[patterns_.selected()].name);
-        colour_name_.invalidate();
-        pattern_name_.invalidate();
-        patterns_.invalidate(); // the patterns are shown in the colour picked
-        preview_.set(colour_, patterns_.selected());
+        colour_name_.set(text);
+        pattern_name_.set(kPatterns[patterns_.selected()].name);
+        patterns_.redraw(); // the patterns are shown in the colour picked
+        preview_.redraw();
     }
     Choice picked() const { return {colour_, patterns_.selected()}; }
-    static void ok(wm::Button &, void *context)
-    {
-        auto *d = static_cast<DisplayDialog *>(context);
-        d->before_ = d->picked();
-        write_settings(d->settings_, d->before_);
-        d->close(); // applies
-    }
-    static void cancel(wm::Button &, void *context) { static_cast<DisplayDialog *>(context)->close(); }
-    // Apply shows the choice on the real desktop; only OK keeps it.
-    static void apply_now(wm::Button &, void *context)
-    {
-        apply(static_cast<DisplayDialog *>(context)->picked());
-    }
 
-    char colour_text_[32] = "";
     Rgb colour_ = kColours[0].rgb;
-    char pattern_text_[24] = "";
     Choice before_; // what the settings file holds
     fs::Ini settings_;
-    Preview preview_;
-    wm::GroupFrame group_;
-    wm::Label colour_label_, colour_name_;
-    Picker colours_;
-    wm::Button other_;
-    wm::Label pattern_label_, pattern_name_;
-    Picker patterns_;
-    wm::Button ok_, cancel_, apply_;
+    app::Picture preview_;
+    app::GroupFrame group_;
+    app::Label colour_label_;
+    app::Plain colour_name_;
+    app::Grid colours_;
+    app::Button other_;
+    app::Label pattern_label_;
+    app::Plain pattern_name_;
+    app::Grid patterns_;
+    app::Button ok_, cancel_, apply_;
 };
+
+app::Number g_dialog = app::kNone; // the one there may be: a number, dead once it has closed
 
 } // namespace
 
 void display_dialog()
 {
     const AsProgram as("Display");
-    open_one<DisplayDialog>("Display");
+    if (app::bring_forward(g_dialog)) {
+        return;
+    }
+    app::Look look;
+    look.title = "Display";
+    look.width = 372;
+    look.height = 388;
+    look.icon = &gfx::display_icon_16();
+    look.flags = app::kDialog;
+    g_dialog = app::open<DisplayDialog>(look);
+    if (g_dialog == app::kNone) {
+        no_memory_for("Display");
+    }
 }
 
 void install_display()

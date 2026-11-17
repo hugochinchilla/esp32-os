@@ -291,10 +291,10 @@ constexpr uint16_t kF2 = 0x3B;
 
 void test_window()
 {
-    const Snake &g = shell::culebra_game();
     const shell::App *app = shell::find_app("Culebra");
     CHECK(app != nullptr && app->icon != nullptr);
     shell::launch(*app);
+    const Snake &g = shell::culebra_game(); // the game is in the window
     CHECK(strcmp(title(), "Culebra") == 0);
     CHECK(g.state() == State::Ready);
 
@@ -387,7 +387,7 @@ void test_window()
     const int blocks = memory.in_use();
     key(wm::key::F4, true);
     CHECK(strcmp(title(), "Culebra") != 0);
-    CHECK(memory.in_use() == blocks - 1); // the window, with the game in it
+    CHECK(memory.in_use() == blocks - 4); // the window, with the game in it, and its three controls
     wait(kStep * 3);
     shell::launch(*app);
     desktop.update(); // a direct call, not an event: paint it
@@ -398,7 +398,7 @@ void test_window()
     wait(80000 * 4);
     CHECK(g2.head_row() == 5); // still Fast
     key(wm::key::F4, true);
-    CHECK(memory.in_use() == blocks - 1);
+    CHECK(memory.in_use() == blocks - 4);
 }
 
 } // namespace

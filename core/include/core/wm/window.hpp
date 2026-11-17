@@ -160,7 +160,10 @@ public:
     {
     }
 
+    // The window's number: given when it first opens and kept, or before
+    // that by whoever made it (Wm::new_id()). 0: it has none yet.
     int id() const { return id_; }
+    void set_id(int id) { id_ = id; }
     // The process that opened the window (0: none, or no process table).
     int owner() const { return owner_; }
     const char *title() const { return title_; }

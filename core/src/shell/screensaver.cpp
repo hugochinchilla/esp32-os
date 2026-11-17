@@ -5,12 +5,12 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "core/app/app.hpp"
 #include "core/fs/ini.hpp"
 #include "core/gfx/art.hpp"
 #include "core/os/os.hpp"
 #include "core/saver/saver.hpp"
 #include "core/shell/shell.hpp"
-#include "core/wm/widgets.hpp"
 #include "internal.hpp"
 
 namespace shell {
@@ -70,45 +70,31 @@ const char *const *names()
     return list;
 }
 
-class SaverDialog : public wm::Window {
+class SaverDialog : public app::Window {
 public:
     SaverDialog()
-        : Window("Screen Saver", {0, 0, 300, 250}, &gfx::saver_icon_16()),
-          group_({8, 6, 276, 170}, "Screen saver"),
-          list_({18, 24, 256, 60}, names(), 1 + saver::kCount),
-          wait_label_({18, 99, 36, 14}, "Wait:"),
-          wait_({56, 95, 34, 20}),
-          minutes_label_({96, 99, 60, 14}, "minutes"),
-          preview_({199, 93, 75, 23}, "&Preview", &SaverDialog::preview, this),
-          last_run_({18, 130, 256, 14}, last_run_text_),
-          slowest_({18, 146, 256, 14}, slowest_text_),
-          ok_({126, 188, 75, 23}, "OK", &SaverDialog::ok, this),
-          cancel_({207, 188, 75, 23}, "Cancel", &SaverDialog::cancel, this)
+        : group_(group({8, 6, 276, 170}, "Screen saver")),
+          list_(list({18, 24, 256, 60}, names(), 1 + saver::kCount)),
+          wait_label_(label({18, 99, 36, 14}, "Wait:")),
+          wait_(text_field({56, 95, 34, 20})),
+          minutes_label_(label({96, 99, 60, 14}, "minutes")),
+          preview_(button({199, 93, 75, 23}, "&Preview")),
+          last_run_(label({18, 130, 256, 14}, last_run_text_)),
+          slowest_(label({18, 146, 256, 14}, slowest_text_)),
+          ok_(button({126, 188, 75, 23}, "OK")),
+          cancel_(button({207, 188, 75, 23}, "Cancel"))
     {
-        set_dialog(true);
-        add(group_);
-        add(list_);
-        add(wait_label_);
-        add(wait_);
-        add(minutes_label_);
-        add(preview_);
-        add(last_run_);
-        add(slowest_);
-        add(ok_);
-        add(cancel_);
-        ok_.set_default(true);
-        set_default(&ok_);
+        set_default(ok_);
         // What is in force now, to start from.
         now_ = read_settings(settings_);
         char text[8];
         snprintf(text, sizeof(text), "%d", now_.minutes);
         wait_.set(text);
         list_.select(now_.saver);
-        set_frame(os::centred(frame().w, frame().h));
-        set_focus(&list_);
+        set_focus(list_);
     }
 
-    void paint(gfx::Canvas &c) override
+    void painting() override
     {
         // How the last run went (a preview or the real thing): real figures,
         // as on the start-up screen.
@@ -120,7 +106,6 @@ public:
             snprintf(slowest_text_, sizeof(slowest_text_), "Slowest frame: %u.%u ms",
                      static_cast<unsigned>(r.slowest_us / 1000), static_cast<unsigned>(r.slowest_us / 100 % 10));
         }
-        Window::paint(c);
     }
 
     bool key(const wm::KeyMsg &k) override
@@ -130,61 +115,74 @@ public:
             return true;
         }
         if (k.pressed && (k.mods & wm::kAlt) && k.usage == wm::key::A + ('p' - 'a')) {
-            preview_.click();
+            preview_.press();
             return true;
         }
-        return Window::key(k);
+        return false;
+    }
+
+    void command(app::Control which) override
+    {
+        if (which == preview_) {
+            const int choice = list_.selected();
+            if (choice >= 1) {
+                os::preview_screen_saver(choice - 1);
+            }
+        } else if (which == ok_) {
+            char text[2 * app::TextField::kCapacity + 1];
+            wait_.get(text, sizeof(text));
+            const int minutes = atoi(text);
+            if (minutes >= 1) {
+                now_.minutes = in_range(minutes);
+            }
+            if (list_.selected() >= 0) {
+                now_.saver = list_.selected();
+            }
+            write_settings(settings_, now_);
+            close(); // applies
+        } else if (which == cancel_) {
+            close();
+        }
     }
 
     // Closed without OK: a preview may have put another saver in place.
     void closed() override { apply(now_); }
 
 private:
-    static void preview(wm::Button &, void *context)
-    {
-        auto *d = static_cast<SaverDialog *>(context);
-        const int choice = d->list_.selected();
-        if (choice >= 1) {
-            os::preview_screen_saver(choice - 1);
-        }
-    }
-    static void ok(wm::Button &, void *context)
-    {
-        auto *d = static_cast<SaverDialog *>(context);
-        char text[2 * wm::TextField::kCapacity + 1];
-        d->wait_.get(text, sizeof(text));
-        const int minutes = atoi(text);
-        if (minutes >= 1) {
-            d->now_.minutes = in_range(minutes);
-        }
-        if (d->list_.selected() >= 0) {
-            d->now_.saver = d->list_.selected();
-        }
-        write_settings(d->settings_, d->now_);
-        d->close(); // applies
-    }
-    static void cancel(wm::Button &, void *context) { static_cast<SaverDialog *>(context)->close(); }
-
     Choice now_; // what the settings file holds
     fs::Ini settings_;
     char last_run_text_[48] = "";
     char slowest_text_[48] = "";
-    wm::GroupFrame group_;
-    wm::ListBox list_;
-    wm::Label wait_label_;
-    wm::TextField wait_;
-    wm::Label minutes_label_;
-    wm::Button preview_;
-    wm::Label last_run_, slowest_;
-    wm::Button ok_, cancel_;
+    app::GroupFrame group_;
+    app::ListBox list_;
+    app::Label wait_label_;
+    app::TextField wait_;
+    app::Label minutes_label_;
+    app::Button preview_;
+    app::Label last_run_, slowest_;
+    app::Button ok_, cancel_;
 };
+
+app::Number g_dialog = app::kNone; // the one there may be: a number, dead once it has closed
 
 } // namespace
 
 void screen_saver_dialog()
 {
     const AsProgram as("Screen Saver");
-    open_one<SaverDialog>("Screen Saver");
+    if (app::bring_forward(g_dialog)) {
+        return;
+    }
+    app::Look look;
+    look.title = "Screen Saver";
+    look.width = 300;
+    look.height = 250;
+    look.icon = &gfx::saver_icon_16();
+    look.flags = app::kDialog;
+    g_dialog = app::open<SaverDialog>(look);
+    if (g_dialog == app::kNone) {
+        no_memory_for("Screen Saver");
+    }
 }
 
 void install_screen_saver()

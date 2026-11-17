@@ -232,7 +232,7 @@ int main(int argc, char **)
     shell::ask("Question", "Are you sure?", yes_no, 2, [](int, void *) {}, nullptr);
     check_window("a question");
     shell::open_in_editor("C:\\Documents\\notes.txt");
-    shell::save_file_dialog(desktop.active(), "C:\\Documents", "notes.txt", [](const char *, void *) {}, nullptr);
+    shell::save_file_dialog(desktop.active()->id(), "C:\\Documents", "notes.txt", [](const char *, void *) {}, nullptr);
     check_window("the Save As dialog");
     shell::shut_down_dialog();
     check_window("the Shut Down dialog");

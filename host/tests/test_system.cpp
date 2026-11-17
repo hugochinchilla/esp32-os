@@ -176,10 +176,10 @@ void test_defragmenter_window()
     const int blocks = memory.in_use();
     key(wm::key::Escape);
     CHECK(find("Defragmenter") == nullptr);
-    CHECK(memory.in_use() == blocks - 1);
+    CHECK(memory.in_use() == blocks - 10); // the window and its nine controls;
     CHECK(proc::table().find_by_name("Defragmenter") == proc::kNone);
     wait(20 * shell::kDefragStepUs);
-    CHECK(memory.in_use() == blocks - 1);
+    CHECK(memory.in_use() == blocks - 10); // the window and its nine controls;
     // Opened again it starts from the scrambled disk.
     shell::open_defragmenter();
     CHECK(disk().moves() == 0 && !disk().done());

@@ -243,6 +243,7 @@ struct Kit {
 };
 // What the calls work with. The desktop hands it in when it starts.
 void install(const Kit &kit);
+const Kit &installed_kit(); // for the other files of core/os
 // The Wi-Fi service, when the board has one (before or after install()).
 void install_network(net::Manager *wifi);
 

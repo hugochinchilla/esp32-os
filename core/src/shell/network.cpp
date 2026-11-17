@@ -9,7 +9,7 @@
 #include "core/net/wifi.hpp"
 #include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
-#include "core/wm/widgets.hpp"
+#include "core/app/app.hpp"
 #include "internal.hpp"
 
 namespace shell {
@@ -18,32 +18,6 @@ namespace {
 
 // The Wi-Fi service. The panel only opens when there is one.
 net::Manager &wifi() { return *os::network(); }
-
-// A line of text exactly as given (a Label would read '&' in a network's
-// name as an access letter).
-class Plain : public wm::Widget {
-public:
-    explicit Plain(const gfx::Rect &r) : Widget(r) {}
-    void set(const char *text)
-    {
-        if (strcmp(text, text_) != 0) {
-            snprintf(text_, sizeof(text_), "%.*s", static_cast<int>(sizeof(text_) - 1), text); // longer text is cut
-            invalidate();
-        }
-    }
-    const char *get() const { return text_; }
-    void paint(gfx::Canvas &c) override
-    {
-        const int y = (rect.h - 12) / 2;
-        c.fill({0, 0, rect.w, y}, gfx::kGrey);
-        const int x = c.text_opaque(0, y, text_, gfx::kBlack, gfx::kGrey);
-        c.fill({x, y, rect.w - x, 12}, gfx::kGrey);
-        c.fill({0, y + 12, rect.w, rect.h - y - 12}, gfx::kGrey);
-    }
-
-private:
-    char text_[96] = "";
-};
 
 const char *failure_text(net::Failure f)
 {
@@ -58,58 +32,46 @@ const char *failure_text(net::Failure f)
 /* ---- The password dialog ------------------------------------------------------- */
 
 // Asks for the password of a network; with `ask_name`, for its name too (a
-// network that is not in the list).
-class JoinDialog : public wm::Window {
+// network that is not in the list). Made when it is asked for, over the
+// panel, and gone when it closes: nothing typed stays behind.
+class JoinDialog : public app::Window {
 public:
-    explicit JoinDialog(bool ask_name)
-        : Window(ask_name ? "Other network" : "Connect to network", {0, 0, 320, ask_name ? 204 : 176},
-                 &gfx::network_icon_16()),
-          ask_name_(ask_name), top_(ask_name ? 28 : 0),
-          prompt_({12, 10, 290, 14}),
-          name_label_({12, 14, 72, 14}, "&Name:"),
-          name_({88, 10, 212, 21}),
-          password_label_({12, 34 + top_, 72, 14}, "&Password:"),
-          password_({88, 30 + top_, 212, 21}),
-          show_({88, 56 + top_, 212, 18}, "&Show characters", false, &JoinDialog::show_changed, this),
-          remember_({88, 76 + top_, 212, 18}, "&Remember this network", true),
-          ok_({312 - 2 * 75 - 6 - 10, 110 + top_, 75, 23}, "OK", &JoinDialog::ok, this),
-          cancel_({312 - 75 - 10, 110 + top_, 75, 23}, "Cancel", &JoinDialog::cancel, this)
+    JoinDialog(bool ask_name, const char *ssid) : ask_name_(ask_name)
     {
-        set_dialog(true);
+        const int top = ask_name ? 28 : 0;
+        snprintf(ssid_, sizeof(ssid_), "%s", ssid);
         if (ask_name) {
-            add(name_label_);
-            add(name_);
+            label({12, 14, 72, 14}, "&Name:");
+            name_ = text_field({88, 10, 212, 21});
         } else {
-            add(prompt_);
+            char line[96];
+            snprintf(line, sizeof(line), "Password for %s", ssid);
+            plain({12, 10, 290, 14}).set(line);
         }
-        add(password_label_);
-        add(password_);
-        add(show_);
-        add(remember_);
-        add(ok_);
-        add(cancel_);
-        ok_.set_default(true);
-        set_default(&ok_);
+        label({12, 34 + top, 72, 14}, "&Password:");
+        password_ = text_field({88, 30 + top, 212, 21});
+        show_ = check_box({88, 56 + top, 212, 18}, "&Show characters", false);
+        remember_ = check_box({88, 76 + top, 212, 18}, "&Remember this network", true);
+        ok_ = button({312 - 2 * 75 - 6 - 10, 110 + top, 75, 23}, "OK");
+        cancel_ = button({312 - 75 - 10, 110 + top, 75, 23}, "Cancel");
+        set_default(ok_);
         password_.set_hidden(true);
+        set_focus(ask_name ? name_ : password_);
     }
 
-    void ask(wm::Window *owner, const char *ssid)
+    // Over the panel, which cannot be used meanwhile.
+    static void ask(app::Number panel, bool ask_name, const char *ssid)
     {
-        if (open()) {
-            close();
+        app::Look look;
+        look.title = ask_name ? "Other network" : "Connect to network";
+        look.width = 320;
+        look.height = ask_name ? 204 : 176;
+        look.icon = &gfx::network_icon_16();
+        look.flags = app::kDialog;
+        look.over = panel;
+        if (app::open<JoinDialog>(look, ask_name, ssid) == app::kNone) {
+            no_memory_for(look.title);
         }
-        snprintf(ssid_, sizeof(ssid_), "%s", ssid);
-        char line[96];
-        snprintf(line, sizeof(line), "Password for %s", ssid);
-        prompt_.set(line);
-        name_.set("");
-        password_.set("");
-        show_.set_checked(false);
-        remember_.set_checked(true);
-        set_focus(ask_name_ ? &name_ : &password_);
-        set_frame(os::centred(frame().w, frame().h));
-        set_modal(owner);
-        os::show(*this);
     }
 
     bool key(const wm::KeyMsg &k) override
@@ -118,121 +80,95 @@ public:
             close();
             return true;
         }
-        return Window::key(k);
+        return false;
     }
 
-    void closed() override
+    void changed(app::Control which) override
     {
-        password_.set(""); // nothing typed stays behind
+        if (which == show_) {
+            password_.set_hidden(!show_.checked());
+        }
+    }
+
+    void command(app::Control which) override
+    {
+        if (which == cancel_) {
+            close();
+        } else if (which == ok_) {
+            ok();
+        }
     }
 
 private:
-    static void show_changed(wm::CheckBox &box, void *context)
+    void ok()
     {
-        static_cast<JoinDialog *>(context)->password_.set_hidden(!box.checked());
-    }
-    static void cancel(wm::Button &, void *context) { static_cast<JoinDialog *>(context)->close(); }
-    static void ok(wm::Button &, void *context)
-    {
-        auto *d = static_cast<JoinDialog *>(context);
-        char ssid[2 * wm::TextField::kCapacity + 1];
-        char password[2 * wm::TextField::kCapacity + 1];
-        if (d->ask_name_) {
-            d->name_.get(ssid, sizeof(ssid));
+        char ssid[2 * app::TextField::kCapacity + 1];
+        char password[2 * app::TextField::kCapacity + 1];
+        if (ask_name_) {
+            name_.get(ssid, sizeof(ssid));
         } else {
-            snprintf(ssid, sizeof(ssid), "%s", d->ssid_);
+            snprintf(ssid, sizeof(ssid), "%s", ssid_);
         }
-        d->password_.get(password, sizeof(password));
+        password_.get(password, sizeof(password));
         const size_t length = strlen(password);
         const char *problem = nullptr;
         if (ssid[0] == 0 || strlen(ssid) > net::kSsidMax) {
             problem = "Type the name of the network\n(at most 32 characters).";
         } else if (length > net::kPasswordMax || (length > 0 && length < 8)) {
             problem = "A Wi-Fi password has 8 to 63 characters.";
-        } else if (length == 0 && !d->ask_name_) {
+        } else if (length == 0 && !ask_name_) {
             problem = "Type the password of the network.";
         }
         if (problem != nullptr) {
             memset(password, 0, sizeof(password));
-            message_box(d->title(), problem);
+            message_box(ask_name_ ? "Other network" : "Connect to network", problem);
             return;
         }
-        const bool remember = d->remember_.checked();
-        d->close();
+        const bool remember = remember_.checked();
+        close();
         wifi().connect(ssid, password, remember);
         memset(password, 0, sizeof(password));
     }
 
     bool ask_name_;
-    int top_;
     char ssid_[net::kSsidMax + 1] = "";
-    Plain prompt_;
-    wm::Label name_label_;
-    wm::TextField name_;
-    wm::Label password_label_;
-    wm::TextField password_;
-    wm::CheckBox show_, remember_;
-    wm::Button ok_, cancel_;
-};
-
-// The two kinds, each made when it is asked for and gone when it closes.
-class PasswordDialog : public JoinDialog {
-public:
-    PasswordDialog() : JoinDialog(false) {}
-};
-class OtherDialog : public JoinDialog {
-public:
-    OtherDialog() : JoinDialog(true) {}
+    app::TextField name_, password_;
+    app::CheckBox show_, remember_;
+    app::Button ok_, cancel_;
 };
 
 /* ---- The panel ----------------------------------------------------------------- */
 
-class NetworkWindow : public wm::Window {
+class NetworkWindow : public app::Window {
 public:
     NetworkWindow()
-        : Window("Network", {0, 0, 396, 316}, &gfx::network_icon_16()),
-          status_({8, 4, 372, 70}, "Wi-Fi"),
-          line1_({60, 20, 312, 14}),
-          line2_({60, 35, 312, 14}),
-          line3_({60, 50, 312, 14}),
-          list_label_({8, 80, 200, 14}, "Wireless &networks:"),
-          list_({8, 96, 284, 150}, nullptr, 0, &NetworkWindow::selected, this),
-          connect_({300, 96, 80, 23}, "&Connect", &NetworkWindow::connect, this),
-          forget_({300, 125, 80, 23}, "&Forget", &NetworkWindow::forget, this),
-          refresh_({300, 154, 80, 23}, "&Refresh", &NetworkWindow::rescan, this),
-          other_({300, 183, 80, 23}, "&Other...", &NetworkWindow::other, this),
-          hint_({8, 252, 284, 14}),
-          close_({300, 255, 80, 23}, "Close", &NetworkWindow::close_clicked, this)
+        : status_(group({8, 4, 372, 70}, "Wi-Fi")),
+          line1_(plain({60, 20, 312, 14})),
+          line2_(plain({60, 35, 312, 14})),
+          line3_(plain({60, 50, 312, 14})),
+          list_label_(label({8, 80, 200, 14}, "Wireless &networks:")),
+          list_(list({8, 96, 284, 150}, nullptr, 0)), // after its label: Alt+N goes to it
+          connect_(button({300, 96, 80, 23}, "&Connect")),
+          forget_(button({300, 125, 80, 23}, "&Forget")),
+          refresh_(button({300, 154, 80, 23}, "&Refresh")),
+          other_(button({300, 183, 80, 23}, "&Other...")),
+          hint_(plain({8, 252, 284, 14})),
+          close_(button({300, 255, 80, 23}, "Close"))
     {
-        set_dialog(true);
-        list_.set_icons(&NetworkWindow::row_icon);
-        list_.set_on_activate(&NetworkWindow::activated);
-        add(status_);
-        add(line1_);
-        add(line2_);
-        add(line3_);
-        add(list_label_);
-        add(list_); // after its label: Alt+N goes to it
-        set_focus(&list_);
-        add(connect_);
-        add(forget_);
-        add(refresh_);
-        add(other_);
-        add(hint_);
-        add(close_);
-        connect_.set_default(true);
-        set_default(&connect_);
+        list_.set_items(nullptr, 0, row_icons_);
+        set_focus(list_);
+        set_default(connect_);
         // Four times a second, while the panel exists: has the radio news?
         timer_ = os::start_timer(250000, 250000, &NetworkWindow::tick, this);
+        refresh();
+        if (!wifi().scanning()) {
+            wifi().scan(); // a fresh list each time it opens
+            refresh();
+        }
     }
-    ~NetworkWindow() { os::stop_timer(timer_); }
+    ~NetworkWindow() override { os::stop_timer(timer_); }
 
-    bool layered() const override { return true; } // the picture over the face
-    void paint(gfx::Canvas &c) override
-    {
-        Window::paint(c);
-        c.blit2x(gfx::signal_icon_16(shown_bars_), 18, 26);
-    }
+    void paint(app::Canvas &c) override { c.blit2x(gfx::signal_icon_16(shown_bars_), 18, 26); } // over the face
 
     bool key(const wm::KeyMsg &k) override
     {
@@ -240,7 +176,39 @@ public:
             close();
             return true;
         }
-        return Window::key(k);
+        return false;
+    }
+
+    void command(app::Control which) override
+    {
+        if (which == connect_) {
+            join();
+        } else if (which == forget_) {
+            if (const net::Manager::Seen *s = chosen_network()) {
+                char ssid[net::kSsidMax + 1];
+                snprintf(ssid, sizeof(ssid), "%s", s->network.ssid);
+                wifi().forget(ssid);
+            }
+        } else if (which == refresh_) {
+            wifi().scan();
+        } else if (which == other_) {
+            JoinDialog::ask(number(), true, "");
+        } else if (which == close_) {
+            close();
+        }
+    }
+    void changed(app::Control which) override
+    {
+        if (which == list_) {
+            sync_button();
+        }
+    }
+    bool chosen(app::Control which) override
+    {
+        if (which == list_) {
+            join();
+        }
+        return true;
     }
 
     // Shows the manager's state again; the selection follows its network.
@@ -253,7 +221,7 @@ public:
 
         // The reason a connect failed is told once, in a box.
         if (was_connecting_ && link.link == net::Link::Idle && m.last_failure() != net::Failure::None &&
-            open()) {
+            on_screen()) {
             snprintf(text, sizeof(text), "Could not connect to %.32s:\n%s.", m.attempt_ssid(),
                      failure_text(m.last_failure()));
             message_box("Network", text);
@@ -264,7 +232,7 @@ public:
                                                            : (link.link == net::Link::Connecting ? 0 : -1);
         if (icon != shown_bars_) {
             shown_bars_ = icon;
-            invalidate_client({18, 26, 32, 32});
+            redraw({18, 26, 32, 32});
         }
         switch (link.link) {
         case net::Link::Off:
@@ -308,7 +276,7 @@ public:
             snprintf(chosen, sizeof(chosen), "%s", ssids_[list_.selected()]);
         }
         count_ = m.seen_count();
-        bool same = count_ == list_.count();
+        bool same = count_ == listed_;
         for (int i = 0; i < count_; i++) {
             const net::Manager::Seen &s = m.seen(i);
             char row[sizeof(rows_[0])];
@@ -320,9 +288,11 @@ public:
             snprintf(ssids_[i], sizeof(ssids_[i]), "%s", s.network.ssid);
             icons_[i] = static_cast<uint8_t>(icon_now);
             row_ptrs_[i] = rows_[i];
+            row_icons_[i] = &gfx::signal_icon_16(icon_now & 7, (icon_now & 8) != 0);
         }
         if (!same) {
-            list_.set_items(row_ptrs_, count_);
+            listed_ = count_;
+            list_.set_items(row_ptrs_, count_, row_icons_);
             for (int i = 0; i < count_; i++) {
                 if (chosen[0] != 0 && strcmp(chosen, ssids_[i]) == 0) {
                     list_.select(i);
@@ -341,9 +311,7 @@ public:
     }
 
 private:
-    static NetworkWindow &self(void *context) { return *static_cast<NetworkWindow *>(context); }
-
-    const net::Manager::Seen *chosen() const
+    const net::Manager::Seen *chosen_network() const
     {
         const int i = list_.selected();
         return i >= 0 && i < wifi().seen_count() ? &wifi().seen(i) : nullptr;
@@ -351,7 +319,7 @@ private:
 
     void sync_button()
     {
-        const net::Manager::Seen *s = chosen();
+        const net::Manager::Seen *s = chosen_network();
         const bool on = s != nullptr && s->connected;
         if (on != shows_disconnect_) {
             shows_disconnect_ = on;
@@ -361,7 +329,7 @@ private:
 
     void join()
     {
-        const net::Manager::Seen *s = chosen();
+        const net::Manager::Seen *s = chosen_network();
         if (s == nullptr) {
             return;
         }
@@ -372,55 +340,31 @@ private:
         } else if (s->saved || s->network.security == net::Security::Open) {
             wifi().connect(s->network.ssid, nullptr, true);
         } else {
-            if (PasswordDialog *d = one<PasswordDialog>("Connect to network")) {
-                d->ask(this, s->network.ssid);
-            }
+            JoinDialog::ask(number(), false, s->network.ssid);
         }
     }
 
-    static void selected(wm::ListBox &, void *context) { self(context).sync_button(); }
-    static void activated(wm::ListBox &, void *context) { self(context).join(); }
-    static void connect(wm::Button &, void *context) { self(context).join(); }
-    static void forget(wm::Button &, void *context)
-    {
-        if (const net::Manager::Seen *s = self(context).chosen()) {
-            char ssid[net::kSsidMax + 1];
-            snprintf(ssid, sizeof(ssid), "%s", s->network.ssid);
-            wifi().forget(ssid);
-        }
-    }
-    static void rescan(wm::Button &, void *) { wifi().scan(); }
-    static void other(wm::Button &, void *context)
-    {
-        if (OtherDialog *d = one<OtherDialog>("Other network")) {
-            d->ask(&self(context), "");
-        }
-    }
-    static void close_clicked(wm::Button &, void *context) { self(context).close(); }
     static void tick(void *context)
     {
-        NetworkWindow &w = self(context);
-        if (w.open() && wifi().changes() != w.shown_changes_) {
+        auto &w = *static_cast<NetworkWindow *>(context);
+        if (w.on_screen() && wifi().changes() != w.shown_changes_) {
             w.refresh();
         }
     }
-    static const gfx::Bitmap *row_icon(int index, void *context)
-    {
-        const uint8_t v = self(context).icons_[index];
-        return &gfx::signal_icon_16(v & 7, (v & 8) != 0);
-    }
 
-    wm::GroupFrame status_;
-    Plain line1_, line2_, line3_;
-    wm::Label list_label_;
-    wm::ListBox list_;
-    wm::Button connect_, forget_, refresh_, other_;
-    Plain hint_;
-    wm::Button close_;
+    app::GroupFrame status_;
+    app::Plain line1_, line2_, line3_;
+    app::Label list_label_;
+    app::ListBox list_;
+    app::Button connect_, forget_, refresh_, other_;
+    app::Plain hint_;
+    app::Button close_;
 
     char rows_[net::Manager::kMaxSeen][net::kSsidMax + 16] = {};
     char ssids_[net::Manager::kMaxSeen][net::kSsidMax + 1] = {};
     const char *row_ptrs_[net::Manager::kMaxSeen] = {};
+    const gfx::Bitmap *row_icons_[net::Manager::kMaxSeen] = {};
+    int listed_ = 0; // rows the list was last given
     uint8_t icons_[net::Manager::kMaxSeen] = {};
     int count_ = 0;
     int timer_ = 0;
@@ -429,6 +373,8 @@ private:
     bool shows_disconnect_ = false;
     bool was_connecting_ = false;
 };
+
+app::Number g_panel = app::kNone; // the one there may be: a number, dead once it has closed
 
 } // namespace
 
@@ -439,20 +385,19 @@ void open_network()
         return;
     }
     const AsProgram as("Network");
-    NetworkWindow *w = one<NetworkWindow>("Network");
-    if (w == nullptr) {
+    if (app::bring_forward(g_panel)) {
         return;
     }
-    if (!w->open()) {
-        w->set_frame(os::centred(w->frame().w, w->frame().h));
-        w->refresh();
-        if (!wifi().scanning()) {
-            wifi().scan(); // a fresh list each time it opens
-            w->refresh();
-        }
+    app::Look look;
+    look.title = "Network";
+    look.width = 396;
+    look.height = 316;
+    look.icon = &gfx::network_icon_16();
+    look.flags = app::kDialog | app::kPicture;
+    g_panel = app::open<NetworkWindow>(look);
+    if (g_panel == app::kNone) {
+        no_memory_for("Network");
     }
-    show(*w);
-    discard(w); // if the window manager had no room for it
 }
 
 } // namespace shell

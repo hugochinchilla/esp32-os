@@ -2090,8 +2090,27 @@ option of a card the owner has not answered yet.
   own windows stay C++ objects. The agent's, on the recommended option of
   a second card (how far window handles go) that the owner has not
   answered yet.
-- Still open in item 37: windows and widgets wholly by number (what item
-  27 needs); events through a queue, with item 26.
+- **Windows and widgets wholly by number** (the owner's choice on the
+  second card, 2026-11-17). `core/os/ui.hpp`: a program asks for a window
+  and controls and gets numbers; the objects are the system's; events
+  reach it through one function. First cut built with Shut Down as the
+  sample. [Journal](journal/2026-11-17-ui-handles.md).
+- The list of calls is what a "DLL" of the window system would export (the
+  owner's idea): versions are one table that only grows, with a number.
+  Loading it is item 27.
+- **Thin C++ classes on top of the calls** (the owner's choice on a card,
+  2026-11-17; the calls used directly, Win16 style, was the other
+  option): `core/app/app.hpp`, one header compiled into each program.
+  `app::Button` is a number and the functions that call the system with
+  it. Programs are written with these, never with `core/wm`'s classes.
+- **Drawing by calls on a number** (the owner's choice on a card,
+  2026-11-17; keeping the system's canvas object for now was the other
+  option). `os::ui::draw`: the canvas's own calls, one for one, on a
+  number good only while the Paint event is answered. Programs write
+  `app::Canvas`, a thin class of the same shape, so a paint reads as
+  before. Bitmaps and texts are still handed over as pointers into the
+  program's memory, as Win16 did.
+- Events through a queue: with item 26.
 
 ### Chosen for background jobs (2026-11-17, to confirm)
 

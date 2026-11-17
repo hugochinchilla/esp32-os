@@ -9,7 +9,7 @@
 #include "core/gfx/art.hpp"
 #include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
-#include "core/wm/widgets.hpp"
+#include "core/app/app.hpp"
 #include "core/wm/wm.hpp"
 #include "internal.hpp"
 
@@ -146,113 +146,24 @@ void cell_picture(const Snake &game, int col, int row, uint8_t *out)
     }
 }
 
-// The board, in a sunken frame, with a message panel over it whenever the
-// game is not running.
-class BoardView : public wm::Widget {
+class CulebraWindow : public app::Window {
 public:
-    static constexpr int kFrame = 2;
+    static constexpr int kFrame = 2; // the board's sunken frame
     // The message panel covers whole cells, so the cells under it are
     // simply not drawn.
     static constexpr int kPanelCol = 4, kPanelRow = 12, kPanelCols = 16, kPanelRows = 4;
-
-    BoardView(const gfx::Rect &r, const Snake &game) : Widget(r), game_(game) {}
-
-    static gfx::Rect cell_rect(int col, int row)
-    {
-        return {kFrame + col * kCell, kFrame + row * kCell, kCell, kCell};
-    }
-
-    void cell_changed(int col, int row) { invalidate_part(cell_rect(col, row)); }
-
-    bool layered() const override { return false; } // painted once already, and often
-    void paint(gfx::Canvas &c) override
-    {
-        c.sunken({0, 0, rect.w, rect.h});
-        const bool panel = game_.state() != Snake::State::Playing;
-        const gfx::Rect limit = c.limit().offset(-c.origin_x(), -c.origin_y());
-        uint8_t pixels[kCell * kCell];
-        const gfx::Bitmap picture = {kCell, kCell, pixels, -1};
-        for (int row = 0; row < Snake::kRows; row++) {
-            for (int col = 0; col < Snake::kCols; col++) {
-                const gfx::Rect r = cell_rect(col, row);
-                if (!r.overlaps(limit) || (panel && under_panel(col, row))) {
-                    continue;
-                }
-                cell_picture(game_, col, row, pixels);
-                c.blit(picture, r.x, r.y);
-            }
-        }
-        if (panel) {
-            paint_panel(c);
-        }
-    }
-
-private:
-    static bool under_panel(int col, int row)
-    {
-        return col >= kPanelCol && col < kPanelCol + kPanelCols && row >= kPanelRow &&
-               row < kPanelRow + kPanelRows;
-    }
-
-    void paint_panel(gfx::Canvas &c)
-    {
-        const char *title = "Culebra", *hint = "Press an arrow key to start";
-        switch (game_.state()) {
-        case Snake::State::Paused:
-            title = "Paused";
-            hint = "Press Space to carry on";
-            break;
-        case Snake::State::Over:
-            title = "Game over";
-            hint = "Press Space to play again";
-            break;
-        case Snake::State::Won:
-            title = "You filled the board!";
-            hint = "Press Space to play again";
-            break;
-        default:
-            break;
-        }
-        const gfx::Rect r = {kFrame + kPanelCol * kCell, kFrame + kPanelRow * kCell, kPanelCols * kCell,
-                             kPanelRows * kCell};
-        c.button_frame(r, gfx::ButtonLook::Raised);
-        // Two centred lines; every pixel of the panel is written once.
-        const gfx::Rect inside = r.inset(2);
-        const int th = gfx::Canvas::text_height();
-        const int tw = gfx::Canvas::text_width(title), hw = gfx::Canvas::text_width(hint);
-        const gfx::Rect line1 = {inside.x + (inside.w - tw) / 2, inside.y + 8, tw, th};
-        const gfx::Rect line2 = {inside.x + (inside.w - hw) / 2, inside.y + 24, hw, th};
-        const gfx::Rect top = {inside.x, inside.y, inside.w, line2.y - inside.y};
-        const gfx::Rect bottom = {inside.x, line2.y, inside.w, inside.bottom() - line2.y};
-        c.fill_around(top, line1, gfx::kGrey);
-        c.fill_around(bottom, line2, gfx::kGrey);
-        c.text_opaque(line1.x, line1.y, title, gfx::kBlack, gfx::kGrey);
-        c.text_opaque(line2.x, line2.y, hint, gfx::kBlack, gfx::kGrey);
-    }
-
-    const Snake &game_;
-};
-
-class CulebraWindow : public wm::Window {
-public:
     static constexpr int kMargin = 6;
     static constexpr int kBoardTop = 26;
-    static constexpr int kClientW = kBoardW + 2 * BoardView::kFrame + 2 * kMargin;
-    static constexpr int kClientH = kBoardTop + kBoardH + 2 * BoardView::kFrame + kMargin;
+    static constexpr int kClientW = kBoardW + 2 * kFrame + 2 * kMargin;
+    static constexpr int kClientH = kBoardTop + kBoardH + 2 * kFrame + kMargin;
+    static constexpr gfx::Rect kBoard = {kMargin, kBoardTop, kBoardW + 2 * kFrame, kBoardH + 2 * kFrame};
     static constexpr int kSpeeds = 3;
 
     CulebraWindow()
-        : Window("Culebra",
-                 {150, 60, kClientW + 2 * kBorder, kClientH + kClientTop + kMenuBarHeight + kBorder},
-                 &gfx::snake_icon_16()),
-          score_label_({kMargin + 2, 6, 120, 14}, score_text_),
-          best_label_({kClientW - kMargin - 80, 6, 80, 14}, best_text_),
-          board_({kMargin, kBoardTop, kBoardW + 2 * BoardView::kFrame, kBoardH + 2 * BoardView::kFrame}, game_)
+        : score_label_(plain({kMargin + 2, 6, 120, 14})),
+          best_label_(plain({kClientW - kMargin - 80, 6, 80, 14})),
+          board_(picture(kBoard, app::kOnce)) // painted once already, and often
     {
-        set_resizable(false);
-        add(score_label_);
-        add(best_label_);
-        add(board_);
         game_items_[0] = {"&New game", &CulebraWindow::menu_new, this, nullptr, nullptr, 0};
         game_items_[1] = {"&Pause", &CulebraWindow::menu_pause, this, nullptr, nullptr, 0};
         game_items_[2] = {nullptr, nullptr, nullptr, nullptr, nullptr, wm::kMenuSeparator};
@@ -281,6 +192,32 @@ public:
         new_game();
     }
 
+    static gfx::Rect cell_rect(int col, int row) { return {kFrame + col * kCell, kFrame + row * kCell, kCell, kCell}; }
+
+    // The board, in a sunken frame, with a message panel over it whenever
+    // the game is not running.
+    void paint_in(app::Control, app::Canvas &c) override
+    {
+        c.sunken({0, 0, kBoard.w, kBoard.h});
+        const bool panel = game_.state() != Snake::State::Playing;
+        const gfx::Rect limit = c.limit();
+        uint8_t pixels[kCell * kCell];
+        const gfx::Bitmap picture = {kCell, kCell, pixels, -1};
+        for (int row = 0; row < Snake::kRows; row++) {
+            for (int col = 0; col < Snake::kCols; col++) {
+                const gfx::Rect r = cell_rect(col, row);
+                if (!r.overlaps(limit) || (panel && under_panel(col, row))) {
+                    continue;
+                }
+                cell_picture(game_, col, row, pixels);
+                c.blit(picture, r.x, r.y);
+            }
+        }
+        if (panel) {
+            paint_panel(c);
+        }
+    }
+
     const Snake &game() const { return game_; }
 
     void new_game()
@@ -291,13 +228,13 @@ public:
         game_.reset(static_cast<uint32_t>(os::now_us()) + games_ * 2654435761u);
         score_ = 0;
         show_score();
-        board_.invalidate();
+        board_.redraw();
     }
 
     bool key(const wm::KeyMsg &k) override
     {
         if (!k.pressed || (k.mods & (wm::kAlt | wm::kCtrl)) != 0) {
-            return Window::key(k);
+            return false;
         }
         switch (k.usage) {
         case wm::key::Up:
@@ -320,7 +257,7 @@ public:
             new_game();
             return true;
         default:
-            return Window::key(k);
+            return false;
         }
     }
 
@@ -348,6 +285,48 @@ public:
     }
 
 private:
+    static bool under_panel(int col, int row)
+    {
+        return col >= kPanelCol && col < kPanelCol + kPanelCols && row >= kPanelRow &&
+               row < kPanelRow + kPanelRows;
+    }
+
+    void paint_panel(app::Canvas &c)
+    {
+        const char *title = "Culebra", *hint = "Press an arrow key to start";
+        switch (game_.state()) {
+        case Snake::State::Paused:
+            title = "Paused";
+            hint = "Press Space to carry on";
+            break;
+        case Snake::State::Over:
+            title = "Game over";
+            hint = "Press Space to play again";
+            break;
+        case Snake::State::Won:
+            title = "You filled the board!";
+            hint = "Press Space to play again";
+            break;
+        default:
+            break;
+        }
+        const gfx::Rect r = {kFrame + kPanelCol * kCell, kFrame + kPanelRow * kCell, kPanelCols * kCell,
+                             kPanelRows * kCell};
+        c.button_frame(r, gfx::ButtonLook::Raised);
+        // Two centred lines; every pixel of the panel is written once.
+        const gfx::Rect inside = r.inset(2);
+        const int th = app::Canvas::text_height();
+        const int tw = app::Canvas::text_width(title), hw = app::Canvas::text_width(hint);
+        const gfx::Rect line1 = {inside.x + (inside.w - tw) / 2, inside.y + 8, tw, th};
+        const gfx::Rect line2 = {inside.x + (inside.w - hw) / 2, inside.y + 24, hw, th};
+        const gfx::Rect top = {inside.x, inside.y, inside.w, line2.y - inside.y};
+        const gfx::Rect bottom = {inside.x, line2.y, inside.w, inside.bottom() - line2.y};
+        c.fill_around(top, line1, gfx::kGrey);
+        c.fill_around(bottom, line2, gfx::kGrey);
+        c.text_opaque(line1.x, line1.y, title, gfx::kBlack, gfx::kGrey);
+        c.text_opaque(line2.x, line2.y, hint, gfx::kBlack, gfx::kGrey);
+    }
+
     // Time between steps, and points for a berry, at each speed.
     static constexpr uint32_t kStepUs[kSpeeds] = {200000, 130000, 80000};
     static constexpr int kPoints[kSpeeds] = {5, 10, 20};
@@ -404,7 +383,7 @@ private:
     // snake moves.
     void state_changed()
     {
-        board_.invalidate();
+        board_.redraw();
         if (game_.state() == Snake::State::Playing) {
             if (timer_ == 0) {
                 timer_ = os::start_timer(kStepUs[speed_], kStepUs[speed_], &CulebraWindow::tick, this);
@@ -426,7 +405,7 @@ private:
     {
         CulebraWindow &w = self(context);
         // Nobody is steering while another window or a menu is in use.
-        if (!w.focused() || w.state() == wm::WindowState::Minimized || os::menu_open()) {
+        if (!w.has_keys() || os::menu_open()) {
             if (w.game_.pause()) {
                 w.state_changed();
             }
@@ -437,7 +416,7 @@ private:
             w.show_score();
         }
         for (int i = 0; i < w.game_.changed_count(); i++) {
-            w.board_.cell_changed(w.game_.changed_col(i), w.game_.changed_row(i));
+            w.board_.redraw(cell_rect(w.game_.changed_col(i), w.game_.changed_row(i)));
         }
         if (w.game_.state() != Snake::State::Playing) {
             w.state_changed();
@@ -449,10 +428,11 @@ private:
         if (score_ > best_) {
             best_ = score_;
         }
-        snprintf(score_text_, sizeof(score_text_), "Score: %d", score_);
-        snprintf(best_text_, sizeof(best_text_), "Best: %d", best_);
-        score_label_.set_text(score_text_);
-        best_label_.set_text(best_text_);
+        char text[24];
+        snprintf(text, sizeof(text), "Score: %d", score_);
+        score_label_.set(text);
+        snprintf(text, sizeof(text), "Best: %d", best_);
+        best_label_.set(text);
     }
 
     Snake game_;
@@ -462,10 +442,8 @@ private:
     fs::Ini settings_; // C:\.config\culebra.ini
     int timer_ = 0;
     uint32_t games_ = 0;
-    char score_text_[24] = "";
-    char best_text_[24] = "";
-    wm::Label score_label_, best_label_;
-    BoardView board_;
+    app::Plain score_label_, best_label_;
+    app::Picture board_;
 
     wm::MenuItem game_items_[6];
     wm::MenuItem speed_items_[kSpeeds];
@@ -477,14 +455,31 @@ private:
     const wm::MenuBar bar_ = {entries_, 2};
 };
 
+app::Number g_window = app::kNone; // the one there may be: a number, dead once it has closed
+
 } // namespace
 
 void open_culebra()
 {
     const AsProgram as("Culebra");
-    open_one<CulebraWindow>("Culebra");
+    if (app::bring_forward(g_window)) {
+        return;
+    }
+    app::Look look;
+    look.title = "Culebra";
+    look.x = 150;
+    look.y = 60;
+    look.width = CulebraWindow::kClientW;
+    look.height = CulebraWindow::kClientH;
+    look.icon = &gfx::snake_icon_16();
+    look.flags = app::kClientSize | app::kFixedSize | app::kMenuBar;
+    g_window = app::open<CulebraWindow>(look);
+    if (g_window == app::kNone) {
+        no_memory_for("Culebra");
+    }
 }
 
-const games::Snake &culebra_game() { return one<CulebraWindow>("Culebra")->game(); }
+// For the tests, while Culebra is open.
+const games::Snake &culebra_game() { return app::program<CulebraWindow>(g_window)->game(); }
 
 } // namespace shell
