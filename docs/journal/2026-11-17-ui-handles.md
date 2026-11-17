@@ -439,8 +439,9 @@ Programs sixteen and seventeen: the folder windows and the Trash window
 - The view of icons with names (`FolderView`) was a widget of the File
   manager's. It is a control of the system's now (`icon_view`): the
   program hands it the names and the icons, and asks which is selected
-  and which is under a point (`item_at`). Large and small icons, the
-  scrolling and the selection are the control's.
+  and which is under a point (`item_at`). The scrolling and the
+  selection are the control's. (The File manager shows large icons only:
+  there is no choice of size in its View menu.)
 - Dragging files out of a window and dropping them on one are three
   events: Drag (the control says a drag began on an item), DragOver (a
   file is over the window: the program answers whether it would take it)
@@ -465,6 +466,7 @@ system's side.
 
 PC tests pass (41 of 41), the pictures match. Firmware not compiled
 since, and not run.
+
 
 ## On the board, first tranche (added by the board thread, 2026-11-17)
 

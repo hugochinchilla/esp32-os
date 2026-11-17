@@ -149,6 +149,8 @@ public:
     // How many windows and timers a process owns, and its window that was
     // opened first with a taskbar button (nullptr: none).
     int windows_of(proc::Pid pid) const;
+    // Asks for every window of the process to be painted again.
+    void invalidate_owned(proc::Pid pid);
     int timers_of(proc::Pid pid) const;
     Window *main_window_of(proc::Pid pid) const;
     // The open window with this number (Window::id(), given when it opens

@@ -48,6 +48,7 @@ set(CORE_SRCS
     src/desk/icons.cpp
     src/desk/taskbar.cpp
     src/job/job.cpp
+    src/prog/prog.cpp
     src/msg/input.cpp
     src/msg/queue.cpp
     src/proc/table.cpp
@@ -105,4 +106,4 @@ endif()
 add_library(core STATIC ${CORE_SRCS})
 target_include_directories(core PUBLIC include)
 target_compile_features(core PUBLIC cxx_std_17)
-target_compile_options(core PRIVATE -Wall -Wextra -Werror -fno-exceptions -fno-rtti)
+target_compile_options(core PRIVATE -Wall -Wextra -Woverloaded-virtual -Werror -fno-exceptions -fno-rtti)

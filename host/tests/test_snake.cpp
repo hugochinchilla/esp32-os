@@ -6,6 +6,7 @@
 
 #include "core/fs/memory_volume.hpp"
 #include "core/games/snake.hpp"
+#include "core/prog/prog.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/wm.hpp"
 #include "../host_adapters.hpp"
@@ -289,7 +290,9 @@ bool no_stale_pixels()
 constexpr uint32_t kStep = 130000; // Normal speed
 constexpr uint16_t kF2 = 0x3B;
 
-void test_window()
+// own_task: the machine has tasks, so Culebra's code runs on one of its own
+// (backlog item 26) and everything below must go as it does without.
+void test_window(bool own_task)
 {
     const shell::App *app = shell::find_app("Culebra");
     CHECK(app != nullptr && app->icon != nullptr);
@@ -297,6 +300,8 @@ void test_window()
     const Snake &g = shell::culebra_game(); // the game is in the window
     CHECK(strcmp(title(), "Culebra") == 0);
     CHECK(g.state() == State::Ready);
+    CHECK(prog::runner().has_task(proc::table().find_by_name("Culebra")) == own_task);
+    CHECK(prog::runner().tasks() == (own_task ? 1 : 0));
 
     // Nothing moves, and no timer runs, until an arrow key.
     wait(1000000);
@@ -388,6 +393,7 @@ void test_window()
     key(wm::key::F4, true);
     CHECK(strcmp(title(), "Culebra") != 0);
     CHECK(memory.in_use() == blocks - 4); // the window, with the game in it, and its three controls
+    CHECK(prog::runner().tasks() == 0);   // and its task
     wait(kStep * 3);
     shell::launch(*app);
     desktop.update(); // a direct call, not an event: paint it
@@ -420,7 +426,21 @@ int main()
     while (desktop.active() != nullptr) {
         desktop.close(*desktop.active());
     }
-    test_window();
+    test_window(false);
+
+    // The same again with the program on a task of its own: a real thread
+    // here. Every event, timer and menu action is handed to it.
+    static host::ThreadTasks tasks;
+    static host::ThreadEvent events[4];
+    static prog::Kit kits[2];
+    kits[0] = {&events[0], &events[1]};
+    kits[1] = {&events[2], &events[3]};
+    storage.remove("C:\\.config\\culebra.ini"); // the speed the first round left
+    prog::runner().set_tasks(&tasks, kits, 2);
+    test_window(true);
+    CHECK(tasks.started == 2 && tasks.ended == 2); // launched twice, both given back
+    CHECK(prog::runner().tasks() == 0);
+    prog::runner().set_tasks(nullptr, nullptr, 0);
     if (failures == 0) {
         printf("all tests passed\n");
     }

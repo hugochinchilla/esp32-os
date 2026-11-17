@@ -126,6 +126,16 @@ bool Table::exit(Pid pid)
     return true;
 }
 
+bool Table::call(Pid pid, CallFn fn, void *context, size_t size)
+{
+    if (caller_ != nullptr) {
+        return caller_(pid, fn, context, size, caller_self_);
+    }
+    const Scope as(this, pid);
+    fn(context);
+    return true;
+}
+
 void Table::on_exit(ExitFn fn, void *context)
 {
     for (auto &told : exit_fns_) {

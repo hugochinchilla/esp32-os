@@ -6,7 +6,7 @@ project(esp32_os_host CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-add_compile_options(-Wall -Wextra -Werror -fno-exceptions -fno-rtti)
+add_compile_options(-Wall -Wextra -Woverloaded-virtual -Werror -fno-exceptions -fno-rtti)
 # Address and undefined-behaviour checks on everything built for the PC, so a
 # bad read in a decoder fails the tests instead of passing by luck.
 option(HOST_SANITIZE "Build the PC tests with sanitizers" ON)
@@ -106,7 +106,7 @@ add_test(NAME cactus_pictures
          COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/check_pictures.py $<TARGET_FILE:test_cactus>)
 
 add_executable(test_snake tests/test_snake.cpp)
-target_link_libraries(test_snake PRIVATE core)
+target_link_libraries(test_snake PRIVATE core Threads::Threads)
 add_test(NAME snake COMMAND test_snake)
 add_executable(test_saver tests/test_saver.cpp)
 target_link_libraries(test_saver PRIVATE core)
@@ -121,7 +121,7 @@ add_test(NAME init COMMAND test_init)
 # The OS calls, and the check that the programs moved to them stay moved
 # (backlog 20).
 add_executable(test_os tests/test_os.cpp)
-target_link_libraries(test_os PRIVATE core)
+target_link_libraries(test_os PRIVATE core Threads::Threads)
 add_test(NAME os COMMAND test_os)
 add_test(NAME os_calls
          COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/check_os_calls.py ${CMAKE_CURRENT_SOURCE_DIR}/..)
@@ -159,6 +159,10 @@ add_test(NAME tty COMMAND test_tty)
 add_executable(test_job tests/test_job.cpp)
 target_link_libraries(test_job PRIVATE core Threads::Threads)
 add_test(NAME job COMMAND test_job)
+
+add_executable(test_prog tests/test_prog.cpp)
+target_link_libraries(test_prog PRIVATE core Threads::Threads)
+add_test(NAME prog COMMAND test_prog)
 
 add_executable(test_sh tests/test_sh.cpp)
 target_link_libraries(test_sh PRIVATE core Threads::Threads)

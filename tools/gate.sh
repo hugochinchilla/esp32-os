@@ -18,4 +18,10 @@ for scenes in render_scenes render_net_scenes test_cactus; do
 done
 python3 tools/check_os_calls.py >build/host/gate-calls.log 2>&1 ||
     { tail -5 build/host/gate-calls.log; echo "gate: the OS-call check failed"; exit 1; }
+# A merge left unfinished: conflict markers in a file git knows.
+if git grep -n -E '^(<<<<<<< |>>>>>>> )' -- . ':!tools/gate.sh' >build/host/gate-markers.log 2>&1; then
+    head -5 build/host/gate-markers.log
+    echo "gate: conflict markers left in"
+    exit 1
+fi
 echo "gate: all passed"

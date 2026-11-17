@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "core/fs/fs.hpp"
+#include "core/os/os.hpp"
 #include "core/ports.hpp"
 #include "core/proc/table.hpp"
 #include "core/sh/terminal_session.hpp"
@@ -24,10 +25,10 @@ proc::Pid process_for(const char *program);
 // here to the end of the block is its own, whoever called.
 class AsProgram {
 public:
-    explicit AsProgram(const char *program) : scope_(&proc::table(), process_for(program)) {}
+    explicit AsProgram(const char *program) : as_(process_for(program)) {}
 
 private:
-    proc::Scope scope_;
+    os::As as_;
 };
 
 // The open window with this number, nullptr if it has closed. Only for the

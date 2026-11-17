@@ -3,6 +3,7 @@
 // owns the controls and turns what the window manager tells it into events
 // for the program.
 #include "core/os/ui.hpp"
+#include "core/prog/prog.hpp"
 
 #include <cstdio>
 #include <cstring>
@@ -754,6 +755,10 @@ public:
                 e.drawing = g_drawings.add(c);
                 tell(e);
                 g_drawings.end();
+                if (prog::runner().late(owner())) {
+                    // Not responding: grey where it would have painted.
+                    c.fill(what == What::Cell ? part : gfx::Rect{0, 0, control.rect.w, control.rect.h}, gfx::kGrey);
+                }
             }
         }
     }
@@ -914,7 +919,49 @@ public:
 
 private:
     // Nothing reaches a program whose object has gone.
-    bool tell(const Event &e) { return !gone_ && events_(handle(), e, state_); }
+    // Every event goes to the program through here: on its own task, if it
+    // has one (core/prog), while this one waits.
+    bool tell(const Event &e)
+    {
+        if (gone_) {
+            return false;
+        }
+        if (owner() == proc::kNone) {
+            return events_(handle(), e, state_);
+        }
+        // Handed over whole, by copy: a program that does not come back in
+        // time is not left with pointers into this task's stack.
+        Told told;
+        told.window = this;
+        told.event = e;
+        if (e.key != nullptr) {
+            told.key = *e.key;
+        }
+        if (e.mouse != nullptr) {
+            told.mouse = *e.mouse;
+        }
+        if (e.text != nullptr) {
+            snprintf(told.text, sizeof told.text, "%s", e.text);
+        }
+        return proc::call_as(&proc::table(), owner(), told) && told.used;
+    }
+
+    struct Told {
+        Behind *window;
+        Event event;
+        wm::KeyMsg key;
+        wm::MouseMsg mouse;
+        char text[fs::kMaxPath + 1];
+        bool used;
+        void operator()()
+        {
+            Event e = event;
+            e.key = event.key != nullptr ? &key : nullptr;
+            e.mouse = event.mouse != nullptr ? &mouse : nullptr;
+            e.text = event.text != nullptr ? text : nullptr;
+            used = window->events_(window->handle(), e, window->state_);
+        }
+    };
 
     int slot_;
     Events events_;
@@ -968,6 +1015,7 @@ template <class T> T *control_of(Window window, Control control, Kind kind)
 
 Window create(const Look &look, Events events, size_t state_bytes)
 {
+    const prog::InCall in_call;
     int slot = -1;
     for (int i = 0; i < kMaxWindows && slot < 0; i++) {
         slot = g_windows[i] == nullptr ? i : -1;
@@ -984,20 +1032,27 @@ Window create(const Look &look, Events events, size_t state_bytes)
 
 void *state(Window window)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     return w != nullptr ? w->state() : nullptr;
 }
 
-bool alive(Window window) { return behind(window) != nullptr; }
+bool alive(Window window)
+{
+    const prog::InCall in_call;
+    return behind(window) != nullptr;
+}
 
 bool on_screen(Window window)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     return w != nullptr && w->open();
 }
 
 void redraw(Window window, const gfx::Rect &part)
 {
+    const prog::InCall in_call;
     if (Behind *w = behind(window)) {
         w->invalidate_client(part);
     }
@@ -1005,30 +1060,35 @@ void redraw(Window window, const gfx::Rect &part)
 
 Control plain(Window window, const gfx::Rect &place)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     return w != nullptr ? w->make<PlainText>(Kind::Plain, place) : kNoControl;
 }
 
 Control label(Window window, const gfx::Rect &place, const char *text)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     return w != nullptr ? w->make<wm::Label>(Kind::Label, place, text) : kNoControl;
 }
 
 Control button(Window window, const gfx::Rect &place, const char *text)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     return w != nullptr ? w->make<wm::Button>(Kind::Button, place, text, &Behind::pressed, w) : kNoControl;
 }
 
 Control check_box(Window window, const gfx::Rect &place, const char *text, bool checked)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     return w != nullptr ? w->make<wm::CheckBox>(Kind::CheckBox, place, text, checked, &Behind::ticked, w) : kNoControl;
 }
 
 Control radio(Window window, const gfx::Rect &place, const char *text, int group, int value)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     int *chosen = w != nullptr ? w->radio_group(group) : nullptr;
     return chosen != nullptr ? w->make<wm::RadioButton>(Kind::Radio, place, text, chosen, value) : kNoControl;
@@ -1036,18 +1096,21 @@ Control radio(Window window, const gfx::Rect &place, const char *text, int group
 
 Control text_field(Window window, const gfx::Rect &place, const char *initial)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     return w != nullptr ? w->make<wm::TextField>(Kind::TextField, place, initial) : kNoControl;
 }
 
 Control scroll_bar(Window window, const gfx::Rect &place, bool vertical)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     return w != nullptr ? w->make<wm::ScrollBar>(Kind::ScrollBar, place, vertical, &Behind::scrolled, w) : kNoControl;
 }
 
 Control list(Window window, const gfx::Rect &place, const char *const *items, int count)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     const Control c = w != nullptr ? w->make<wm::ListBox>(Kind::List, place, items, count, &Behind::picked, w) : kNoControl;
     if (c != kNoControl) {
@@ -1058,18 +1121,21 @@ Control list(Window window, const gfx::Rect &place, const char *const *items, in
 
 Control group(Window window, const gfx::Rect &place, const char *caption)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     return w != nullptr ? w->make<wm::GroupFrame>(Kind::Group, place, caption) : kNoControl;
 }
 
 Control text_area(Window window, const gfx::Rect &place, const char *text)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     return w != nullptr ? w->make<wm::TextArea>(Kind::TextArea, place, text) : kNoControl;
 }
 
 Control picture(Window window, const gfx::Rect &place, uint8_t how)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     return w != nullptr ? w->make<Picture>(Kind::Picture, place, how, &Behind::paint_picture, &Behind::picture_mouse,
                                            &Behind::picture_key, w)
@@ -1078,6 +1144,7 @@ Control picture(Window window, const gfx::Rect &place, uint8_t how)
 
 Control icon_view(Window window, const gfx::Rect &place)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     return w != nullptr ? w->make<IconView>(Kind::IconView, place, &Behind::icon_opened, &Behind::icon_picked,
                                             &Behind::icon_dragged, w)
@@ -1086,6 +1153,7 @@ Control icon_view(Window window, const gfx::Rect &place)
 
 void reset_view(Window window, Control control)
 {
+    const prog::InCall in_call;
     if (auto *v = control_of<IconView>(window, control, Kind::IconView)) {
         v->reset();
     }
@@ -1093,12 +1161,14 @@ void reset_view(Window window, Control control)
 
 int item_at(Window window, Control control, int x, int y)
 {
+    const prog::InCall in_call;
     auto *v = control_of<IconView>(window, control, Kind::IconView);
     return v != nullptr ? v->item_at(x, y) : -1;
 }
 
 Control text_edit(Window window, const gfx::Rect &place, size_t text_bytes, size_t undo_bytes)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     const Control c = w != nullptr ? w->make<OwnedTextEdit>(Kind::TextEdit, place, text_bytes, undo_bytes) : kNoControl;
     if (c == kNoControl) {
@@ -1116,6 +1186,7 @@ Control text_edit(Window window, const gfx::Rect &place, size_t text_bytes, size
 
 void edit(Window window, Control control, Edit what)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     auto *e = w != nullptr ? w->as<OwnedTextEdit>(control, Kind::TextEdit) : nullptr;
     if (e == nullptr) {
@@ -1137,6 +1208,7 @@ void edit(Window window, Control control, Edit what)
 
 uint8_t edit_state(Window window, Control control)
 {
+    const prog::InCall in_call;
     auto *e = control_of<OwnedTextEdit>(window, control, Kind::TextEdit);
     return e == nullptr ? 0
                         : static_cast<uint8_t>((e->modified() ? kModified : 0) | (e->can_undo() ? kCanUndo : 0) |
@@ -1145,6 +1217,7 @@ uint8_t edit_state(Window window, Control control)
 
 void set_modified(Window window, Control control, bool modified)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     if (auto *e = w != nullptr ? w->as<OwnedTextEdit>(control, Kind::TextEdit) : nullptr) {
         e->set_modified(modified);
@@ -1154,6 +1227,7 @@ void set_modified(Window window, Control control, bool modified)
 
 void load_begin(Window window, Control control)
 {
+    const prog::InCall in_call;
     if (auto *e = control_of<OwnedTextEdit>(window, control, Kind::TextEdit)) {
         e->load_begin();
     }
@@ -1161,12 +1235,14 @@ void load_begin(Window window, Control control)
 
 bool load_append(Window window, Control control, const uint8_t *bytes, size_t size)
 {
+    const prog::InCall in_call;
     auto *e = control_of<OwnedTextEdit>(window, control, Kind::TextEdit);
     return e != nullptr && e->load_append(bytes, size);
 }
 
 void load_finish(Window window, Control control)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     if (auto *e = w != nullptr ? w->as<OwnedTextEdit>(control, Kind::TextEdit) : nullptr) {
         e->load_finish();
@@ -1176,18 +1252,25 @@ void load_finish(Window window, Control control)
 
 TextReader text_reader(Window window, Control control)
 {
+    const prog::InCall in_call;
     return control_of<OwnedTextEdit>(window, control, Kind::TextEdit);
 }
 
 size_t read_text(TextReader reader, size_t offset, uint8_t *out, size_t room)
 {
+    const prog::InCall in_call;
     return reader != nullptr ? static_cast<const OwnedTextEdit *>(reader)->save_bytes(offset, out, room) : 0;
 }
 
-size_t clipboard_size() { return wm::clipboard::size(); }
+size_t clipboard_size()
+{
+    const prog::InCall in_call;
+    return wm::clipboard::size();
+}
 
 void set_locked(Window window, bool locked)
 {
+    const prog::InCall in_call;
     if (Behind *w = behind(window)) {
         w->set_locked(locked);
     }
@@ -1195,12 +1278,14 @@ void set_locked(Window window, bool locked)
 
 bool locked(Window window)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     return w != nullptr && w->locked();
 }
 
 void set_caret(Window window, Control control, const gfx::Rect &caret)
 {
+    const prog::InCall in_call;
     if (auto *p = control_of<Picture>(window, control, Kind::Picture)) {
         p->set_caret(caret);
     }
@@ -1208,6 +1293,7 @@ void set_caret(Window window, Control control, const gfx::Rect &caret)
 
 bool control_has_keys(Window window, Control control)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     const wm::Widget *c = w != nullptr ? w->any(control) : nullptr;
     return c != nullptr && c->has_focus();
@@ -1215,12 +1301,14 @@ bool control_has_keys(Window window, Control control)
 
 bool caret_lit(Window window)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     return w != nullptr && (w->manager() == nullptr || w->manager()->caret_visible());
 }
 
 void place_control(Window window, Control control, const gfx::Rect &place)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     if (wm::Widget *c = w != nullptr ? w->any(control) : nullptr) {
         c->invalidate(); // where it was
@@ -1236,12 +1324,14 @@ void place_control(Window window, Control control, const gfx::Rect &place)
 
 gfx::Rect client_size(Window window)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     return w != nullptr ? gfx::Rect{0, 0, w->client().w, w->client().h} : gfx::Rect{0, 0, 0, 0};
 }
 
 void resize(Window window, int client_width, int client_height)
 {
+    const prog::InCall in_call;
     if (Behind *w = behind(window)) {
         w->resize_client(client_width, client_height);
     }
@@ -1249,6 +1339,7 @@ void resize(Window window, int client_width, int client_height)
 
 void redraw_control(Window window, Control control)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     if (wm::Widget *c = w != nullptr ? w->any(control) : nullptr) {
         c->invalidate();
@@ -1257,6 +1348,7 @@ void redraw_control(Window window, Control control)
 
 void redraw_control_part(Window window, Control control, const gfx::Rect &part)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     if (wm::Widget *c = w != nullptr ? w->any(control) : nullptr) {
         c->invalidate_part(part);
@@ -1265,6 +1357,7 @@ void redraw_control_part(Window window, Control control, const gfx::Rect &part)
 
 Control grid(Window window, const gfx::Rect &place, int columns, int count, int cell_w, int cell_h, int margin)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     return w != nullptr ? w->make<Grid>(Kind::Grid, place, columns, count, cell_w, cell_h, margin, &Behind::paint_cell,
                                         &Behind::cell_picked, w)
@@ -1273,12 +1366,14 @@ Control grid(Window window, const gfx::Rect &place, int columns, int count, int 
 
 Control drop_down(Window window, const gfx::Bitmap *icon, const gfx::Rect &place)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     return w != nullptr ? w->make<DropDown>(Kind::DropDown, place, icon, &Behind::arrow_pressed, w) : kNoControl;
 }
 
 void menu_under(Window window, Control control, wm::Menu &menu)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     if (const wm::Widget *c = w != nullptr ? w->any(control) : nullptr) {
         const gfx::Rect client = w->client();
@@ -1288,12 +1383,14 @@ void menu_under(Window window, Control control, wm::Menu &menu)
 
 Control meter(Window window, const gfx::Rect &place, gfx::Colour colour)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     return w != nullptr ? w->make<Meter>(Kind::Meter, place, colour) : kNoControl;
 }
 
 void set_level(Window window, Control control, uint32_t value, uint32_t total)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     if (Meter *m = w != nullptr ? w->as<Meter>(control, Kind::Meter) : nullptr) {
         m->set(value, total);
@@ -1302,18 +1399,21 @@ void set_level(Window window, Control control, uint32_t value, uint32_t total)
 
 bool in_front(Window window)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     return w != nullptr && os::in_front(*w);
 }
 
 bool has_keys(Window window)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     return w != nullptr && w->wm::Window::focused() && w->wm::Window::state() != wm::WindowState::Minimized;
 }
 
 void set_menu_bar(Window window, const wm::MenuBar *bar)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     if (w != nullptr && w->has_menu_room()) {
         w->set_menu_bar(bar);
@@ -1322,6 +1422,7 @@ void set_menu_bar(Window window, const wm::MenuBar *bar)
 
 void set_title(Window window, const char *title)
 {
+    const prog::InCall in_call;
     if (Behind *w = behind(window)) {
         w->set_title(title);
     }
@@ -1329,12 +1430,14 @@ void set_title(Window window, const char *title)
 
 Control focus(Window window)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     return w != nullptr ? w->focus_number() : kNoControl;
 }
 
 void set_text(Window window, Control control, const char *text)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     if (w == nullptr || w->any(control) == nullptr) {
         return;
@@ -1352,6 +1455,7 @@ void set_text(Window window, Control control, const char *text)
 
 void get_text(Window window, Control control, char *out, int capacity)
 {
+    const prog::InCall in_call;
     if (capacity > 0) {
         out[0] = 0;
     }
@@ -1362,6 +1466,7 @@ void get_text(Window window, Control control, char *out, int capacity)
 
 void select_all(Window window, Control control)
 {
+    const prog::InCall in_call;
     if (auto *f = control_of<wm::TextField>(window, control, Kind::TextField)) {
         f->select_all();
     }
@@ -1369,6 +1474,7 @@ void select_all(Window window, Control control)
 
 void set_hidden(Window window, Control control, bool hidden)
 {
+    const prog::InCall in_call;
     if (auto *f = control_of<wm::TextField>(window, control, Kind::TextField)) {
         f->set_hidden(hidden);
     }
@@ -1376,6 +1482,7 @@ void set_hidden(Window window, Control control, bool hidden)
 
 void set_enabled(Window window, Control control, bool enabled)
 {
+    const prog::InCall in_call;
     if (auto *b = control_of<wm::Button>(window, control, Kind::Button)) {
         b->set_enabled(enabled);
     }
@@ -1383,12 +1490,14 @@ void set_enabled(Window window, Control control, bool enabled)
 
 bool checked(Window window, Control control)
 {
+    const prog::InCall in_call;
     auto *b = control_of<wm::CheckBox>(window, control, Kind::CheckBox);
     return b != nullptr && b->checked();
 }
 
 void set_checked(Window window, Control control, bool on)
 {
+    const prog::InCall in_call;
     if (auto *b = control_of<wm::CheckBox>(window, control, Kind::CheckBox)) {
         b->set_checked(on);
     }
@@ -1396,6 +1505,7 @@ void set_checked(Window window, Control control, bool on)
 
 int radio_value(Window window, int group)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     const int *chosen = w != nullptr ? w->radio_group(group) : nullptr;
     return chosen != nullptr ? *chosen : 0;
@@ -1403,6 +1513,7 @@ int radio_value(Window window, int group)
 
 void set_radio_value(Window window, int group, int value)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     if (int *chosen = w != nullptr ? w->radio_group(group) : nullptr) {
         *chosen = value;
@@ -1412,6 +1523,7 @@ void set_radio_value(Window window, int group, int value)
 
 void set_range(Window window, Control control, int maximum, int page)
 {
+    const prog::InCall in_call;
     if (auto *b = control_of<wm::ScrollBar>(window, control, Kind::ScrollBar)) {
         b->set_range(maximum, page);
     }
@@ -1419,12 +1531,14 @@ void set_range(Window window, Control control, int maximum, int page)
 
 int value(Window window, Control control)
 {
+    const prog::InCall in_call;
     auto *b = control_of<wm::ScrollBar>(window, control, Kind::ScrollBar);
     return b != nullptr ? b->value() : 0;
 }
 
 void set_value(Window window, Control control, int value)
 {
+    const prog::InCall in_call;
     if (auto *b = control_of<wm::ScrollBar>(window, control, Kind::ScrollBar)) {
         b->set_value_quietly(value);
     }
@@ -1446,6 +1560,7 @@ void set_items(Window window, Control control, const char *const *items, int cou
 
 int selected(Window window, Control control)
 {
+    const prog::InCall in_call;
     if (auto *g = control_of<Grid>(window, control, Kind::Grid)) {
         return g->selected();
     }
@@ -1458,6 +1573,7 @@ int selected(Window window, Control control)
 
 void select(Window window, Control control, int index)
 {
+    const prog::InCall in_call;
     if (auto *l = control_of<wm::ListBox>(window, control, Kind::List)) {
         l->select(index);
     } else if (auto *g = control_of<Grid>(window, control, Kind::Grid)) {
@@ -1469,6 +1585,7 @@ void select(Window window, Control control, int index)
 
 void set_focus(Window window, Control control)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     if (wm::Widget *c = w != nullptr ? w->any(control) : nullptr) {
         w->set_focus(c);
@@ -1477,6 +1594,7 @@ void set_focus(Window window, Control control)
 
 void set_default(Window window, Control control)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     if (wm::Button *b = w != nullptr ? w->button(control) : nullptr) {
         b->set_default(true);
@@ -1486,6 +1604,7 @@ void set_default(Window window, Control control)
 
 void press(Window window, Control control)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     if (wm::Button *b = w != nullptr ? w->button(control) : nullptr) {
         b->click();
@@ -1494,6 +1613,7 @@ void press(Window window, Control control)
 
 bool show(Window window)
 {
+    const prog::InCall in_call;
     Behind *w = behind(window);
     if (w == nullptr) {
         return false;
@@ -1508,6 +1628,7 @@ bool show(Window window)
 
 void close(Window window)
 {
+    const prog::InCall in_call;
     if (Behind *w = behind(window)) {
         if (w->open()) {
             w->close();
@@ -1524,6 +1645,7 @@ namespace draw {
 
 Drawing part(Drawing on, const gfx::Rect &part)
 {
+    const prog::InCall in_call;
     gfx::Canvas *c = g_drawings.at(on);
     return c != nullptr ? g_drawings.add(c->sub(part)) : kNoDrawing;
 }
@@ -1533,43 +1655,109 @@ Drawing part(Drawing on, const gfx::Rect &part)
         c->call;                                                                                                       \
     }
 
-void fill(Drawing on, const gfx::Rect &r, gfx::Colour col) { DRAW(fill(r, col)) }
-void hline(Drawing on, int x, int y, int w, gfx::Colour col) { DRAW(hline(x, y, w, col)) }
-void vline(Drawing on, int x, int y, int h, gfx::Colour col) { DRAW(vline(x, y, h, col)) }
-void fill_rgb(Drawing on, const gfx::Rect &r, gfx::Rgb col) { DRAW(fill_rgb(r, col)) }
+void fill(Drawing on, const gfx::Rect &r, gfx::Colour col)
+{
+    const prog::InCall in_call;
+    DRAW(fill(r, col))
+}
+void hline(Drawing on, int x, int y, int w, gfx::Colour col)
+{
+    const prog::InCall in_call;
+    DRAW(hline(x, y, w, col))
+}
+void vline(Drawing on, int x, int y, int h, gfx::Colour col)
+{
+    const prog::InCall in_call;
+    DRAW(vline(x, y, h, col))
+}
+void fill_rgb(Drawing on, const gfx::Rect &r, gfx::Rgb col)
+{
+    const prog::InCall in_call;
+    DRAW(fill_rgb(r, col))
+}
 void fill_pattern(Drawing on, const gfx::Rect &r, gfx::Rgb paper, gfx::Rgb ink, const uint8_t rows[8])
 {
+    const prog::InCall in_call;
     DRAW(fill_pattern(r, paper, ink, rows))
 }
 void fill_fade(Drawing on, const gfx::Rect &r, gfx::Rgb from, gfx::Rgb to, bool vertical, const gfx::Rect *span)
 {
+    const prog::InCall in_call;
     DRAW(fill_fade(r, from, to, vertical, span))
 }
-void focus_rect(Drawing on, const gfx::Rect &r) { DRAW(focus_rect(r)) }
-void checker(Drawing on, const gfx::Rect &r) { DRAW(checker(r)) }
-void edge(Drawing on, const gfx::Rect &r, gfx::Colour tl, gfx::Colour br) { DRAW(edge(r, tl, br)) }
-void raised(Drawing on, const gfx::Rect &r) { DRAW(raised(r)) }
-void sunken(Drawing on, const gfx::Rect &r) { DRAW(sunken(r)) }
-void button(Drawing on, const gfx::Rect &r, gfx::ButtonLook look) { DRAW(button(r, look)) }
-void button_frame(Drawing on, const gfx::Rect &r, gfx::ButtonLook look) { DRAW(button_frame(r, look)) }
-void blit(Drawing on, const gfx::Bitmap &b, int x, int y) { DRAW(blit(b, x, y)) }
+void focus_rect(Drawing on, const gfx::Rect &r)
+{
+    const prog::InCall in_call;
+    DRAW(focus_rect(r))
+}
+void checker(Drawing on, const gfx::Rect &r)
+{
+    const prog::InCall in_call;
+    DRAW(checker(r))
+}
+void edge(Drawing on, const gfx::Rect &r, gfx::Colour tl, gfx::Colour br)
+{
+    const prog::InCall in_call;
+    DRAW(edge(r, tl, br))
+}
+void raised(Drawing on, const gfx::Rect &r)
+{
+    const prog::InCall in_call;
+    DRAW(raised(r))
+}
+void sunken(Drawing on, const gfx::Rect &r)
+{
+    const prog::InCall in_call;
+    DRAW(sunken(r))
+}
+void button(Drawing on, const gfx::Rect &r, gfx::ButtonLook look)
+{
+    const prog::InCall in_call;
+    DRAW(button(r, look))
+}
+void button_frame(Drawing on, const gfx::Rect &r, gfx::ButtonLook look)
+{
+    const prog::InCall in_call;
+    DRAW(button_frame(r, look))
+}
+void blit(Drawing on, const gfx::Bitmap &b, int x, int y)
+{
+    const prog::InCall in_call;
+    DRAW(blit(b, x, y))
+}
 void blit_selected(Drawing on, const gfx::Bitmap &b, int x, int y, gfx::Colour tint)
 {
+    const prog::InCall in_call;
     DRAW(blit_selected(b, x, y, tint))
 }
-void blit2x(Drawing on, const gfx::Bitmap &b, int x, int y) { DRAW(blit2x(b, x, y)) }
-void blit_opaque(Drawing on, const gfx::Bitmap &b, int x, int y, gfx::Colour bg) { DRAW(blit_opaque(b, x, y, bg)) }
+void blit2x(Drawing on, const gfx::Bitmap &b, int x, int y)
+{
+    const prog::InCall in_call;
+    DRAW(blit2x(b, x, y))
+}
+void blit_opaque(Drawing on, const gfx::Bitmap &b, int x, int y, gfx::Colour bg)
+{
+    const prog::InCall in_call;
+    DRAW(blit_opaque(b, x, y, bg))
+}
 void pattern(Drawing on, int x, int y, const char *const *rows, int count, gfx::Colour col)
 {
+    const prog::InCall in_call;
     DRAW(pattern(x, y, rows, count, col))
 }
 void pattern_opaque(Drawing on, int x, int y, const char *const *rows, int count, gfx::Colour fg, gfx::Colour bg)
 {
+    const prog::InCall in_call;
     DRAW(pattern_opaque(x, y, rows, count, fg, bg))
 }
-void text_up(Drawing on, int x, int y, const char *s, gfx::Colour col, bool bold) { DRAW(text_up(x, y, s, col, bold)) }
+void text_up(Drawing on, int x, int y, const char *s, gfx::Colour col, bool bold)
+{
+    const prog::InCall in_call;
+    DRAW(text_up(x, y, s, col, bold))
+}
 void fill_around(Drawing on, const gfx::Rect &area, const gfx::Rect &hole, gfx::Colour col)
 {
+    const prog::InCall in_call;
     DRAW(fill_around(area, hole, col))
 }
 
@@ -1578,6 +1766,7 @@ void fill_around(Drawing on, const gfx::Rect &area, const gfx::Rect &hole, gfx::
 // Drawing nothing, a text still ends where it would have.
 int text(Drawing on, int x, int y, const char *s, gfx::Colour col, bool bold)
 {
+    const prog::InCall in_call;
     gfx::Canvas *c = g_drawings.at(on);
     return c != nullptr ? c->text(x, y, s, col, bold) : x + gfx::Canvas::text_width(s, bold);
 }
@@ -1589,23 +1778,34 @@ int text_scaled(Drawing on, int x, int y, const char *s, gfx::Colour col, bool b
 }
 int text_opaque(Drawing on, int x, int y, const char *s, gfx::Colour fg, gfx::Colour bg, int caret_x)
 {
+    const prog::InCall in_call;
     gfx::Canvas *c = g_drawings.at(on);
     return c != nullptr ? c->text_opaque(x, y, s, fg, bg, caret_x) : x + gfx::Canvas::text_width(s);
 }
 int text_opaque_rgb(Drawing on, int x, int y, const char *s, gfx::Colour fg, gfx::Rgb bg, int caret_x)
 {
+    const prog::InCall in_call;
     gfx::Canvas *c = g_drawings.at(on);
     return c != nullptr ? c->text_opaque(x, y, s, fg, bg, caret_x) : x + gfx::Canvas::text_width(s);
 }
 
 gfx::Rect bounds(Drawing on)
 {
+    const prog::InCall in_call;
     gfx::Canvas *c = g_drawings.at(on);
     return c != nullptr ? c->limit().offset(-c->origin_x(), -c->origin_y()) : gfx::Rect{0, 0, 0, 0};
 }
 
-int text_width(const char *s, bool bold) { return gfx::Canvas::text_width(s, bold); }
-int text_height() { return gfx::Canvas::text_height(); }
+int text_width(const char *s, bool bold)
+{
+    const prog::InCall in_call;
+    return gfx::Canvas::text_width(s, bold);
+}
+int text_height()
+{
+    const prog::InCall in_call;
+    return gfx::Canvas::text_height();
+}
 
 } // namespace draw
 

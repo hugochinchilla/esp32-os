@@ -323,7 +323,7 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
         // kind, then optionally the PID to charge it to (16 bits): the fault
         // happens as if that program had made it, so the crash record and
         // the error screen name it.
-        if (args_size < 1 || args[0] > static_cast<uint8_t>(ports::Fault::Abort) || (args_size != 1 && args_size != 3)) {
+        if (args_size < 1 || args[0] > static_cast<uint8_t>(ports::Fault::Slow) || (args_size != 1 && args_size != 3)) {
             reply(type, seq, kBadArguments, nullptr, 0);
             break;
         }
@@ -333,7 +333,14 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
             break;
         }
         reply(type, seq, kOk, nullptr, 0);
-        proc::Scope as(&proc::table(), pid);
+        if (pid != proc::kNone) {
+            // As the program, where its code runs: on its own task if it
+            // has one, so that a hang there is the program not responding.
+            ports::System *system = &system_;
+            const ports::Fault kind = static_cast<ports::Fault>(args[0]);
+            proc::call_as(&proc::table(), pid, [system, kind] { system->fault(kind); });
+            break;
+        }
         system_.fault(static_cast<ports::Fault>(args[0]));
         break;
     }

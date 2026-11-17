@@ -3,6 +3,7 @@
 // Culebra.)
 #include <cstdio>
 
+#include "core/prog/prog.hpp"
 #include "core/gfx/art.hpp"
 #include "core/shell/defrag.hpp"
 #include "core/shell/shell.hpp"
@@ -261,7 +262,7 @@ struct Entry {
 const Entry kApps[] = {
     {{"About Chinchilla", nullptr, &open_about}, &gfx::mascot_16},
     {{"Cactus Patch", nullptr, &open_cactus_patch}, &gfx::cactus_icon_16},
-    {{"Culebra", nullptr, &open_culebra}, &gfx::snake_icon_16},
+    {{"Culebra", nullptr, &open_culebra, false, true}, &gfx::snake_icon_16},
     {{"Defragmenter", nullptr, &open_defragmenter}, &gfx::defrag_icon_16},
     {{"Editor", nullptr, &open_editor, true}, &gfx::editor_icon_16},
     {{"File manager", nullptr, &open_file_manager}, &gfx::files_icon_16},
@@ -312,16 +313,22 @@ const App *find_app(const char *name)
 
 void launch(const App &app)
 {
+    const prog::InCall in_call;
     if (app.many) {
         app.open(); // makes its own process, one for each copy
         return;
     }
-    const AsProgram as(app.name);
-    app.open();
+    const proc::Pid pid = process_for(app.name);
+    if (app.own_task) {
+        prog::runner().start(pid); // without one it runs here, as the others do
+    }
+    proc::table().call(
+        pid, [](void *a) { static_cast<const App *>(a)->open(); }, const_cast<App *>(&app));
 }
 
 proc::Pid process_for(const char *program)
 {
+    const prog::InCall in_call;
     proc::Table &t = proc::table();
     proc::Pid pid = t.find_by_name(program);
     if (pid == proc::kNone) {

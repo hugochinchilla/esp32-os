@@ -171,6 +171,17 @@ void crash_fault(ports::Fault kind)
             const uint32_t next = n + 1;
             n = next;
         }
+    case ports::Fault::Slow: {
+        // A program that is only slow: busy for five seconds, then back.
+        // As a program with a task of its own it is "not responding" for
+        // the three seconds past the limit, and answers again after.
+        const int64_t until = esp_timer_get_time() + 5000000;
+        for (volatile uint32_t n = 0; esp_timer_get_time() < until;) {
+            const uint32_t next = n + 1;
+            n = next;
+        }
+        return;
+    }
     case ports::Fault::BadPointer: {
         volatile uint32_t *const nowhere = nullptr;
         *nowhere = 0xC41C4111; // StoreProhibited

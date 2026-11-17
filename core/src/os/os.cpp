@@ -2,11 +2,13 @@
 // manager, the drives, the process table or a port. The point is not what
 // they do but that programs come through here.
 #include "core/os/os.hpp"
+#include "core/prog/prog.hpp"
 
 #include <atomic>
 #include <cstdio>
 #include <new>
 
+#include "core/msg/queue.hpp"
 #include "core/saver/saver.hpp"
 #include "core/sys/log.hpp"
 
@@ -48,51 +50,136 @@ void settings_path(const char *program, char *out, size_t n)
 
 } // namespace
 
-const Kit &installed_kit() { return g_kit; }
+const Kit &installed_kit()
+{
+    const prog::InCall in_call;
+    return g_kit;
+}
 
 void install(const Kit &kit)
 {
+    const prog::InCall in_call;
     g_kit = kit;
     file::installed();
+    // A program that stops responding, or comes back, is painted again;
+    // one that waits to be let back in makes the UI loop go round.
+    prog::runner().set_news(
+        [](proc::Pid pid, bool, void *) {
+            if (g_kit.wm != nullptr) {
+                g_kit.wm->invalidate_owned(pid);
+            }
+        },
+        nullptr);
+    prog::runner().set_wake(
+        [](void *) {
+            if (msg::queue() != nullptr) {
+                msg::queue()->wake();
+            }
+        },
+        nullptr);
 }
-void install_network(net::Manager *wifi) { g_network = wifi; }
+void install_network(net::Manager *wifi)
+{
+    const prog::InCall in_call;
+    g_network = wifi;
+}
 
 /* ---- The process ------------------------------------------------------------ */
 
-proc::Pid self() { return proc::table().current(); }
+proc::Pid self()
+{
+    const prog::InCall in_call;
+    return proc::table().current();
+}
 
 proc::Pid spawn(const char *name)
 {
+    const prog::InCall in_call;
     proc::Table &t = proc::table();
     return t.spawn(name, t.current(), proc::kWindowed);
 }
 
-proc::Pid find(const char *name) { return proc::table().find_by_name(name); }
+proc::Pid find(const char *name)
+{
+    const prog::InCall in_call;
+    return proc::table().find_by_name(name);
+}
 
-As::As(proc::Pid pid) : scope_(&proc::table(), pid) {}
+As::As(proc::Pid pid)
+{
+    const prog::InCall in_call;
+    before_ = proc::table().current();
+    proc::table().set_current(pid);
+}
 
-int process_count() { return proc::table().count(); }
-const proc::Process &process_at(int index) { return proc::table().at(index); }
-const proc::Process *process(proc::Pid pid) { return proc::table().find(pid); }
-bool alive(proc::Pid pid) { return proc::table().alive(pid); }
-void refresh_figures() { proc::table().bring_up_to_date(); }
-proc::Sent signal(proc::Pid pid, proc::Signal signal) { return proc::table().signal(pid, signal); }
+As::~As()
+{
+    const prog::InCall in_call;
+    proc::table().set_current(before_);
+}
+
+int process_count()
+{
+    const prog::InCall in_call;
+    return proc::table().count();
+}
+const proc::Process &process_at(int index)
+{
+    const prog::InCall in_call;
+    return proc::table().at(index);
+}
+const proc::Process *process(proc::Pid pid)
+{
+    const prog::InCall in_call;
+    return proc::table().find(pid);
+}
+bool responding(proc::Pid pid)
+{
+    const prog::InCall in_call;
+    return !prog::runner().late(pid);
+}
+
+bool alive(proc::Pid pid)
+{
+    const prog::InCall in_call;
+    return proc::table().alive(pid);
+}
+void refresh_figures()
+{
+    const prog::InCall in_call;
+    proc::table().bring_up_to_date();
+}
+proc::Sent signal(proc::Pid pid, proc::Signal signal)
+{
+    const prog::InCall in_call;
+    return proc::table().signal(pid, signal);
+}
 
 /* ---- Time --------------------------------------------------------------------- */
 
-uint64_t now_us() { return g_kit.wm->now_us(); }
+uint64_t now_us()
+{
+    const prog::InCall in_call;
+    return g_kit.wm->now_us();
+}
 
 int start_timer(uint32_t delay_us, uint32_t period_us, wm::Wm::TimerFn fn, void *context)
 {
+    const prog::InCall in_call;
     return g_kit.wm->start_timer(delay_us, period_us, fn, context);
 }
 
-void stop_timer(int id) { g_kit.wm->stop_timer(id); }
+void stop_timer(int id)
+{
+    const prog::InCall in_call;
+    g_kit.wm->stop_timer(id);
+}
 
 /* ---- Memory ------------------------------------------------------------------- */
 
 void *allocate(size_t bytes)
 {
+    const prog::InCall in_call;
     if (g_kit.memory == nullptr) {
         return nullptr;
     }
@@ -110,6 +197,7 @@ void *allocate(size_t bytes)
 
 void release(void *block)
 {
+    const prog::InCall in_call;
     if (block != nullptr) {
         BlockNote *note = static_cast<BlockNote *>(block) - 1;
         proc::table().add_memory(note->owner, -static_cast<int32_t>(note->bytes));
@@ -121,6 +209,7 @@ void release(void *block)
 
 ports::Memory &memory()
 {
+    const prog::InCall in_call;
     class Port : public ports::Memory {
     public:
         void *allocate(size_t bytes) override { return os::allocate(bytes); }
@@ -130,13 +219,22 @@ ports::Memory &memory()
     return port;
 }
 
-uint32_t blocks_out() { return g_blocks; }
-uint32_t bytes_out() { return g_bytes; }
+uint32_t blocks_out()
+{
+    const prog::InCall in_call;
+    return g_blocks;
+}
+uint32_t bytes_out()
+{
+    const prog::InCall in_call;
+    return g_bytes;
+}
 
 /* ---- Windows ------------------------------------------------------------------ */
 
 void show(wm::Window &window)
 {
+    const prog::InCall in_call;
     if (window.open()) {
         g_kit.wm->activate(window);
     } else {
@@ -144,39 +242,76 @@ void show(wm::Window &window)
     }
 }
 
-void activate(wm::Window &window) { g_kit.wm->activate(window); }
-void move(wm::Window &window, const gfx::Rect &frame) { g_kit.wm->resize(window, frame); }
-gfx::Rect work_area() { return g_kit.wm->work_area(); }
+void activate(wm::Window &window)
+{
+    const prog::InCall in_call;
+    g_kit.wm->activate(window);
+}
+void move(wm::Window &window, const gfx::Rect &frame)
+{
+    const prog::InCall in_call;
+    g_kit.wm->resize(window, frame);
+}
+gfx::Rect work_area()
+{
+    const prog::InCall in_call;
+    return g_kit.wm->work_area();
+}
 
 gfx::Rect centred(int w, int h)
 {
+    const prog::InCall in_call;
     const gfx::Rect area = g_kit.wm->work_area();
     return {(area.w - w) / 2, (area.h - h) / 2, w, h};
 }
 
-bool menu_open() { return g_kit.wm->menu_open(); }
+bool menu_open()
+{
+    const prog::InCall in_call;
+    return g_kit.wm->menu_open();
+}
 
-void open_menu(wm::Menu &menu, int x, int y) { g_kit.wm->open_menu(menu, x, y); }
-wm::Window *blocker(const wm::Window &window) { return g_kit.wm->blocker(window); }
-bool in_front(const wm::Window &window) { return g_kit.wm->active() == &window; }
-void caret_moved() { g_kit.wm->caret_moved(); }
+void open_menu(wm::Menu &menu, int x, int y)
+{
+    const prog::InCall in_call;
+    g_kit.wm->open_menu(menu, x, y);
+}
+wm::Window *blocker(const wm::Window &window)
+{
+    const prog::InCall in_call;
+    return g_kit.wm->blocker(window);
+}
+bool in_front(const wm::Window &window)
+{
+    const prog::InCall in_call;
+    return g_kit.wm->active() == &window;
+}
+void caret_moved()
+{
+    const prog::InCall in_call;
+    g_kit.wm->caret_moved();
+}
 WindowId main_window(proc::Pid pid)
 {
+    const prog::InCall in_call;
     const wm::Window *w = g_kit.wm->main_window_of(pid);
     return w != nullptr ? w->id() : kNoWindow;
 }
 const char *window_title(WindowId window)
 {
+    const prog::InCall in_call;
     const wm::Window *w = g_kit.wm->window(window);
     return w != nullptr ? w->title() : "";
 }
 const gfx::Bitmap *window_icon(WindowId window)
 {
+    const prog::InCall in_call;
     const wm::Window *w = g_kit.wm->window(window);
     return w != nullptr ? w->icon() : nullptr;
 }
 bool bring_forward(WindowId window)
 {
+    const prog::InCall in_call;
     wm::Window *w = g_kit.wm->window(window);
     if (w == nullptr) {
         return false;
@@ -185,17 +320,35 @@ bool bring_forward(WindowId window)
     g_kit.wm->activate(dialog != nullptr ? *dialog : *w);
     return true;
 }
-void begin_drag(const char *path) { g_kit.wm->begin_drag(path); }
+void begin_drag(const char *path)
+{
+    const prog::InCall in_call;
+    g_kit.wm->begin_drag(path);
+}
 
-Busy::Busy() { g_kit.wm->begin_wait(); }
-Busy::~Busy() { g_kit.wm->end_wait(); }
+Busy::Busy()
+{
+    const prog::InCall in_call;
+    g_kit.wm->begin_wait();
+}
+
+Busy::~Busy()
+{
+    const prog::InCall in_call;
+    g_kit.wm->end_wait();
+}
 
 /* ---- The desktop --------------------------------------------------------------- */
 
-void set_backdrop(const wm::Wm::Backdrop &backdrop) { g_kit.wm->set_backdrop(backdrop); }
+void set_backdrop(const wm::Wm::Backdrop &backdrop)
+{
+    const prog::InCall in_call;
+    g_kit.wm->set_backdrop(backdrop);
+}
 
 void set_screen_saver(int animation, uint32_t wait_seconds)
 {
+    const prog::InCall in_call;
     if (animation < 0 || animation >= saver::kCount || wait_seconds == 0) {
         g_saver_wait = 0;
         g_kit.wm->set_screen_saver(nullptr, 0);
@@ -208,6 +361,7 @@ void set_screen_saver(int animation, uint32_t wait_seconds)
 
 void preview_screen_saver(int animation)
 {
+    const prog::InCall in_call;
     if (animation < 0 || animation >= saver::kCount) {
         return;
     }
@@ -218,20 +372,30 @@ void preview_screen_saver(int animation)
 
 SaverRun last_saver_run()
 {
+    const prog::InCall in_call;
     const saver::Runner &r = saver_runner();
     return {r.frames(), r.shown_us(), r.slowest_us()};
 }
 
-bool shut_down() { return g_kit.shut_down != nullptr && g_kit.shut_down(); }
+bool shut_down()
+{
+    const prog::InCall in_call;
+    return g_kit.shut_down != nullptr && g_kit.shut_down();
+}
 
 /* ---- The network ---------------------------------------------------------------- */
 
-net::Manager *network() { return g_network; }
+net::Manager *network()
+{
+    const prog::InCall in_call;
+    return g_network;
+}
 
 /* ---- Terminal sessions ----------------------------------------------------------- */
 
 sh::TerminalSession *open_session(ports::ByteSink &device, const char *&why)
 {
+    const prog::InCall in_call;
     if (g_kit.open_session == nullptr) {
         why = "This machine has no command shell.";
         return nullptr;
@@ -243,14 +407,46 @@ sh::TerminalSession *open_session(ports::ByteSink &device, const char *&why)
 
 namespace file {
 
-bool has_drive(char letter) { return g_kit.storage->volume(letter) != nullptr; }
-int drives(char *letters, int capacity) { return g_kit.storage->drives(letters, capacity); }
-Error drive_info(char letter, fs::VolumeInfo &out) { return g_kit.storage->info(letter, out); }
-Error stat(const char *path, fs::DirEntry &out) { return g_kit.storage->stat(path, out); }
-Error entry(const char *folder, int index, fs::DirEntry &out) { return g_kit.storage->entry(folder, index, out); }
-Error make_folder(const char *path) { return g_kit.storage->make_folder(path); }
-Error remove(const char *path) { return g_kit.storage->remove(path); }
-Error rename(const char *from, const char *to) { return g_kit.storage->rename(from, to); }
+bool has_drive(char letter)
+{
+    const prog::InCall in_call;
+    return g_kit.storage->volume(letter) != nullptr;
+}
+int drives(char *letters, int capacity)
+{
+    const prog::InCall in_call;
+    return g_kit.storage->drives(letters, capacity);
+}
+Error drive_info(char letter, fs::VolumeInfo &out)
+{
+    const prog::InCall in_call;
+    return g_kit.storage->info(letter, out);
+}
+Error stat(const char *path, fs::DirEntry &out)
+{
+    const prog::InCall in_call;
+    return g_kit.storage->stat(path, out);
+}
+Error entry(const char *folder, int index, fs::DirEntry &out)
+{
+    const prog::InCall in_call;
+    return g_kit.storage->entry(folder, index, out);
+}
+Error make_folder(const char *path)
+{
+    const prog::InCall in_call;
+    return g_kit.storage->make_folder(path);
+}
+Error remove(const char *path)
+{
+    const prog::InCall in_call;
+    return g_kit.storage->remove(path);
+}
+Error rename(const char *from, const char *to)
+{
+    const prog::InCall in_call;
+    return g_kit.storage->rename(from, to);
+}
 
 /* The table of open files. A slot is claimed with its `used` flag alone, so
  * the UI task and a job's task can each take one without a lock; after that
@@ -339,6 +535,7 @@ void closed_for(proc::Pid pid, void *)
 // is told of every process that ends.
 void installed()
 {
+    const prog::InCall in_call;
     if (g_open == nullptr && g_kit.memory != nullptr) {
         void *room = g_kit.memory->allocate(kMaxOpen * sizeof(Open));
         if (room != nullptr) {
@@ -350,6 +547,7 @@ void installed()
 
 int open_files(proc::Pid pid)
 {
+    const prog::InCall in_call;
     int count = 0;
     for (int i = 0; g_open != nullptr && i < kMaxOpen; i++) {
         count += g_open[i].used && (pid == proc::kNone || g_open[i].owner == pid);
@@ -359,6 +557,7 @@ int open_files(proc::Pid pid)
 
 Error open(const char *path, ports::OpenMode mode, Handle &file, const job::Job *job)
 {
+    const prog::InCall in_call;
     file = kNoFile;
     Open *o = claim(job);
     if (o == nullptr) {
@@ -375,6 +574,7 @@ Error open(const char *path, ports::OpenMode mode, Handle &file, const job::Job 
 
 Error read(Handle file, void *data, size_t size, size_t &done)
 {
+    const prog::InCall in_call;
     done = 0;
     Open *o = held(file);
     return o != nullptr ? g_kit.storage->read(o->save.file, data, size, done) : Error::Io;
@@ -382,18 +582,21 @@ Error read(Handle file, void *data, size_t size, size_t &done)
 
 Error write(Handle file, const void *data, size_t size)
 {
+    const prog::InCall in_call;
     Open *o = held(file);
     return o != nullptr ? g_kit.storage->write(o->save.file, data, size) : Error::Io;
 }
 
 Error seek(Handle file, uint32_t offset)
 {
+    const prog::InCall in_call;
     Open *o = held(file);
     return o != nullptr ? g_kit.storage->seek(o->save.file, offset) : Error::Io;
 }
 
 Error close(Handle file)
 {
+    const prog::InCall in_call;
     Open *o = held(file);
     if (o == nullptr) {
         return Error::Io;
@@ -405,6 +608,7 @@ Error close(Handle file)
 
 Error begin_save(const char *path, Handle &save, const job::Job *job)
 {
+    const prog::InCall in_call;
     save = kNoFile;
     Open *o = claim(job);
     if (o == nullptr) {
@@ -422,6 +626,7 @@ Error begin_save(const char *path, Handle &save, const job::Job *job)
 
 Error finish_save(Handle save, bool keep)
 {
+    const prog::InCall in_call;
     Open *o = held(save);
     if (o == nullptr || !o->saving) {
         return Error::Io;
@@ -433,10 +638,12 @@ Error finish_save(Handle save, bool keep)
 
 Error read_file(const char *path, void *data, size_t capacity, size_t &size)
 {
+    const prog::InCall in_call;
     return g_kit.storage->read_file(path, data, capacity, size);
 }
 Error write_file(const char *path, const void *data, size_t size)
 {
+    const prog::InCall in_call;
     return g_kit.storage->write_file(path, data, size);
 }
 
@@ -446,6 +653,7 @@ Error write_file(const char *path, const void *data, size_t size)
 
 bool load_settings(const char *program, fs::Ini &ini)
 {
+    const prog::InCall in_call;
     char path[fs::kMaxPath];
     settings_path(program, path, sizeof(path));
     return ini.load(*g_kit.storage, path);
@@ -453,6 +661,7 @@ bool load_settings(const char *program, fs::Ini &ini)
 
 bool save_settings(const char *program, const fs::Ini &ini)
 {
+    const prog::InCall in_call;
     g_kit.storage->make_folder("C:\\.config"); // already there is fine
     char path[fs::kMaxPath];
     settings_path(program, path, sizeof(path));
@@ -461,12 +670,25 @@ bool save_settings(const char *program, const fs::Ini &ini)
 
 /* ---- The machine ---------------------------------------------------------------- */
 
-void restart() { g_kit.system->reboot(); }
-void stats(ports::SystemStats &out) { g_kit.system->stats(out); }
+void restart()
+{
+    const prog::InCall in_call;
+    g_kit.system->reboot();
+}
+void stats(ports::SystemStats &out)
+{
+    const prog::InCall in_call;
+    g_kit.system->stats(out);
+}
 bool fact(ports::Fact which, uint32_t &value, char *text, size_t capacity)
 {
+    const prog::InCall in_call;
     return g_kit.system->fact(which, value, text, capacity);
 }
-uint32_t busy_us() { return g_kit.wm->busy_us(); }
+uint32_t busy_us()
+{
+    const prog::InCall in_call;
+    return g_kit.wm->busy_us();
+}
 
 } // namespace os
