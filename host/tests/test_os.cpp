@@ -356,7 +356,7 @@ void test_desktop_calls()
     shell::display_dialog();
     shell::screen_saver_dialog();
     wait(10000);
-    CHECK(os::blocks_out() == blocks + 1 + 11); // Display's window; Screen Saver's and its ten controls
+    CHECK(os::blocks_out() == blocks + 13 + 11); // each its window and its controls: twelve and ten
     while (desktop.active() != nullptr) {
         desktop.close(*desktop.active());
         wait(10000);

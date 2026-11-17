@@ -58,7 +58,20 @@ constexpr int kMaxWindows = 16; // ponytail: as many as the window manager shows
 class Behind;
 Behind *g_windows[kMaxWindows] = {};
 
-enum class Kind : uint8_t { Label, Plain, Button, CheckBox, Radio, TextField, ScrollBar, List, Group, TextArea };
+enum class Kind : uint8_t {
+    Label,
+    Plain,
+    Button,
+    CheckBox,
+    Radio,
+    TextField,
+    ScrollBar,
+    List,
+    Group,
+    TextArea,
+    Picture,
+    Grid,
+};
 
 // A line of text exactly as given, kept by the control.
 class PlainText : public wm::Widget {
@@ -85,10 +98,132 @@ private:
     char text_[96] = "";
 };
 
+// A rectangle the program paints.
+class Picture : public wm::Widget {
+public:
+    using PaintFn = void (*)(Picture &picture, gfx::Canvas &c, void *context);
+    Picture(const gfx::Rect &r, PaintFn paint, void *context) : Widget(r), paint_(paint), context_(context) {}
+    void paint(gfx::Canvas &c) override { paint_(*this, c, context_); }
+    ~Picture() = default;
+
+private:
+    PaintFn paint_;
+    void *context_;
+};
+
+// A grid of cells to pick one from: the colours, or the patterns. The cell
+// chosen has a black and white frame; arrows move it when it has the focus.
+class Grid : public wm::Widget {
+public:
+    using PaintFn = void (*)(Grid &grid, gfx::Canvas &c, const gfx::Rect &cell, int index, void *context);
+    using ChangeFn = void (*)(Grid &grid, void *context);
+
+    Grid(const gfx::Rect &r, int columns, int count, int cell_w, int cell_h, int margin, PaintFn paint_cell,
+         ChangeFn changed, void *context)
+        : Widget(r), columns_(columns > 0 ? columns : 1), count_(count), cell_w_(cell_w > 0 ? cell_w : 1),
+          cell_h_(cell_h > 0 ? cell_h : 1), margin_(margin), paint_cell_(paint_cell), changed_(changed),
+          context_(context)
+    {
+    }
+    ~Grid() = default;
+    int selected() const { return selected_; }
+    // Nobody is told; -1: no cell chosen.
+    void select_quietly(int index)
+    {
+        if (index >= -1 && index < count_ && index != selected_) {
+            selected_ = index;
+            invalidate();
+        }
+    }
+    void select(int index)
+    {
+        if (index < 0 || index >= count_ || index == selected_) {
+            return;
+        }
+        selected_ = index;
+        invalidate();
+        changed_(*this, context_);
+    }
+    gfx::Rect cell(int index) const
+    {
+        return {(index % columns_) * cell_w_, (index / columns_) * cell_h_, cell_w_, cell_h_};
+    }
+
+    void paint(gfx::Canvas &c) override
+    {
+        c.fill({0, 0, rect.w, rect.h}, gfx::kGrey);
+        for (int i = 0; i < count_; i++) {
+            const gfx::Rect r = cell(i);
+            if (i == selected_) {
+                c.edge(r, gfx::kBlack, gfx::kBlack);
+                c.edge(r.inset(1), gfx::kWhite, gfx::kWhite);
+            }
+            const gfx::Rect inner = r.inset(margin_);
+            c.edge(inner, gfx::kDarkGrey, gfx::kWhite);
+            paint_cell_(*this, c, inner.inset(1), i, context_);
+            if (i == selected_ && margin_ < 3) {
+                // A tight grid: the mark goes over the cell's own edge.
+                c.edge(r, gfx::kBlack, gfx::kBlack);
+                c.edge(r.inset(1), gfx::kWhite, gfx::kWhite);
+                c.edge(r.inset(2), gfx::kBlack, gfx::kBlack);
+            }
+        }
+        if (has_focus() && selected_ >= 0) {
+            c.focus_rect(cell(selected_).inset(margin_ > 2 ? 2 : 0));
+        }
+    }
+    bool wants_mouse() const override { return true; }
+    void mouse(const wm::MouseMsg &m) override
+    {
+        if (m.kind != wm::MouseKind::Down || m.x < 0 || m.y < 0 || m.x >= columns_ * cell_w_) {
+            return;
+        }
+        select(m.y / cell_h_ * columns_ + m.x / cell_w_);
+    }
+    bool focusable() const override { return true; }
+    bool key(const wm::KeyMsg &k) override
+    {
+        if (!k.pressed) {
+            return false;
+        }
+        switch (k.usage) {
+        case wm::key::Left:
+            select(selected_ - 1);
+            return true;
+        case wm::key::Right:
+            select(selected_ + 1);
+            return true;
+        case wm::key::Up:
+            select(selected_ - columns_);
+            return true;
+        case wm::key::Down:
+            select(selected_ + columns_);
+            return true;
+        default:
+            return false;
+        }
+    }
+
+private:
+    int columns_, count_, cell_w_, cell_h_, margin_;
+    PaintFn paint_cell_;
+    ChangeFn changed_;
+    void *context_;
+    int selected_ = 0;
+};
+
+// The frame for a client area of this size.
+gfx::Rect frame_for(const Look &look)
+{
+    const bool client = (look.flags & kClientSize) != 0;
+    return os::centred(look.width + (client ? 2 * wm::Window::kBorder : 0),
+                       look.height + (client ? wm::Window::kClientTop + wm::Window::kBorder : 0));
+}
+
 class Behind : public wm::Window {
 public:
     Behind(int slot, const Look &look, Events events, void *state)
-        : Window(look.title, os::centred(look.width, look.height), look.icon), slot_(slot), events_(events),
+        : Window(look.title, frame_for(look), look.icon), slot_(slot), events_(events),
           state_(state), flags_(look.flags)
     {
         if ((flags_ & kDialog) != 0) {
@@ -121,6 +256,8 @@ public:
             case Kind::List: static_cast<wm::ListBox *>(controls_[i])->~ListBox(); break;
             case Kind::Group: static_cast<wm::GroupFrame *>(controls_[i])->~GroupFrame(); break;
             case Kind::TextArea: static_cast<wm::TextArea *>(controls_[i])->~TextArea(); break;
+            case Kind::Picture: static_cast<Picture *>(controls_[i])->~Picture(); break;
+            case Kind::Grid: static_cast<Grid *>(controls_[i])->~Grid(); break;
             }
             os::release(controls_[i]);
         }
@@ -192,6 +329,31 @@ public:
             w->default_widget()->press();
         }
     }
+
+    // A control of the program's own painting: the event, with a drawing.
+    void paint_control(const wm::Widget &control, gfx::Canvas &c, What what, int index, const gfx::Rect &part)
+    {
+        for (int i = 0; i < count_; i++) {
+            if (controls_[i] == &control) {
+                Event e{what};
+                e.control = i + 1;
+                e.index = index;
+                e.part = part;
+                e.drawing = g_drawings.add(c);
+                tell(e);
+                g_drawings.end();
+            }
+        }
+    }
+    static void paint_picture(Picture &p, gfx::Canvas &c, void *context)
+    {
+        static_cast<Behind *>(context)->paint_control(p, c, What::Paint, 0, {});
+    }
+    static void paint_cell(Grid &g, gfx::Canvas &c, const gfx::Rect &cell, int index, void *context)
+    {
+        static_cast<Behind *>(context)->paint_control(g, c, What::Cell, index, cell);
+    }
+    static void cell_picked(Grid &g, void *context) { static_cast<Behind *>(context)->from(g, What::Changed); }
 
     bool layered() const override { return (flags_ & kPicture) != 0 || Window::layered(); }
     void paint(gfx::Canvas &c) override
@@ -360,6 +522,28 @@ Control text_area(Window window, const gfx::Rect &place, const char *text)
     return w != nullptr ? w->make<wm::TextArea>(Kind::TextArea, place, text) : kNoControl;
 }
 
+Control picture(Window window, const gfx::Rect &place)
+{
+    Behind *w = behind(window);
+    return w != nullptr ? w->make<Picture>(Kind::Picture, place, &Behind::paint_picture, w) : kNoControl;
+}
+
+void redraw_control(Window window, Control control)
+{
+    Behind *w = behind(window);
+    if (wm::Widget *c = w != nullptr ? w->any(control) : nullptr) {
+        c->invalidate();
+    }
+}
+
+Control grid(Window window, const gfx::Rect &place, int columns, int count, int cell_w, int cell_h, int margin)
+{
+    Behind *w = behind(window);
+    return w != nullptr ? w->make<Grid>(Kind::Grid, place, columns, count, cell_w, cell_h, margin, &Behind::paint_cell,
+                                        &Behind::cell_picked, w)
+                        : kNoControl;
+}
+
 void set_text(Window window, Control control, const char *text)
 {
     Behind *w = behind(window);
@@ -478,6 +662,9 @@ void set_items(Window window, Control control, const char *const *items, int cou
 
 int selected(Window window, Control control)
 {
+    if (auto *g = control_of<Grid>(window, control, Kind::Grid)) {
+        return g->selected();
+    }
     auto *l = control_of<wm::ListBox>(window, control, Kind::List);
     return l != nullptr ? l->selected() : -1;
 }
@@ -486,6 +673,8 @@ void select(Window window, Control control, int index)
 {
     if (auto *l = control_of<wm::ListBox>(window, control, Kind::List)) {
         l->select(index);
+    } else if (auto *g = control_of<Grid>(window, control, Kind::Grid)) {
+        g->select_quietly(index);
     }
 }
 

@@ -14,51 +14,57 @@
 // sheets that were set aside: docs/journal/2026-11-17-colour-chooser.md.
 #include <cstdio>
 
+#include "core/app/app.hpp"
 #include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
-#include "core/wm/widgets.hpp"
 #include "internal.hpp"
-#include "picker.hpp"
 
 namespace shell {
 
 namespace {
 
-class ColourDialog : public wm::Window {
+class ColourDialog : public app::Window {
 public:
     static constexpr int kColumns = 16, kRows = 16, kCellW = 18, kCellH = 14;
     static constexpr int kGridW = kColumns * kCellW, kBelow = 8 + kRows * kCellH;
 
-    ColourDialog(wm::Window *owner, gfx::Colour start, ColourFn picked, void *context)
-        : Window("Colour", {0, 0, kGridW + 16 + 2 * kBorder, kBelow + 68 + kClientTop + kBorder}, nullptr),
-          grid_({8, 8, kGridW, kRows * kCellH}, kColumns, kColumns * kRows, kCellW, kCellH,
-                &ColourDialog::paint_cell, &ColourDialog::changed, this, 1),
-          levels_({8, kBelow + 6, kGridW, 14}, text_),
-          ok_({8 + kGridW - 156, kBelow + 30, 75, 23}, "OK", &ColourDialog::ok, this),
-          cancel_({8 + kGridW - 75, kBelow + 30, 75, 23}, "Cancel", &ColourDialog::cancel, this),
+    ColourDialog(gfx::Colour start, ColourFn picked, void *context)
+        : grid_(grid({8, 8, kGridW, kRows * kCellH}, kColumns, kColumns * kRows, kCellW, kCellH, 1)),
+          levels_(plain({8, kBelow + 6, kGridW, 14})),
+          ok_(button({8 + kGridW - 156, kBelow + 30, 75, 23}, "OK")),
+          cancel_(button({8 + kGridW - 75, kBelow + 30, 75, 23}, "Cancel")),
           picked_(picked), context_(context)
     {
-        set_dialog(true);
-        add(grid_);
-        add(levels_);
-        add(ok_);
-        add(cancel_);
-        ok_.set_default(true);
-        set_default(&ok_);
-        grid_.select_quietly(cell_of(start));
+        set_default(ok_);
+        grid_.select(cell_of(start));
         describe();
-        set_modal(owner);
-        set_frame(os::centred(frame().w, frame().h));
-        set_focus(&grid_);
+        set_focus(grid_);
     }
 
+    void command(app::Control which) override
+    {
+        if (which == ok_) {
+            const gfx::Colour colour = colour_of(grid_.selected());
+            const ColourFn picked = picked_;
+            void *owner = context_;
+            close();
+            picked(colour, owner);
+        } else if (which == cancel_) {
+            close();
+        }
+    }
+    void changed(app::Control) override { describe(); }
+    void paint_cell(app::Control, int index, const gfx::Rect &cell, app::Canvas &c) override
+    {
+        c.fill(cell, colour_of(index));
+    }
     bool key(const wm::KeyMsg &k) override
     {
         if (k.pressed && k.usage == wm::key::Escape) {
             close();
             return true;
         }
-        return Window::key(k);
+        return false;
     }
 
     // The board colour in a cell, and the cell of a board colour.
@@ -76,31 +82,19 @@ public:
     }
 
 private:
-    static void paint_cell(gfx::Canvas &c, const gfx::Rect &cell, int index, void *) { c.fill(cell, colour_of(index)); }
-    static void changed(void *context) { static_cast<ColourDialog *>(context)->describe(); }
     void describe()
     {
         const gfx::Colour c = colour_of(grid_.selected());
         const gfx::Rgb rgb = gfx::shown(c);
-        snprintf(text_, sizeof(text_), "Red %d of 7   Green %d of 7   Blue %d of 3   #%02X%02X%02X", c >> 5, (c >> 2) & 7,
+        char text[64];
+        snprintf(text, sizeof(text), "Red %d of 7   Green %d of 7   Blue %d of 3   #%02X%02X%02X", c >> 5, (c >> 2) & 7,
                  c & 3, rgb.r, rgb.g, rgb.b);
-        levels_.invalidate();
+        levels_.set(text);
     }
-    static void ok(wm::Button &, void *context)
-    {
-        auto *d = static_cast<ColourDialog *>(context);
-        const gfx::Colour colour = colour_of(d->grid_.selected());
-        const ColourFn picked = d->picked_;
-        void *owner = d->context_;
-        d->close();
-        picked(colour, owner);
-    }
-    static void cancel(wm::Button &, void *context) { static_cast<ColourDialog *>(context)->close(); }
 
-    char text_[64] = "";
-    Picker grid_;
-    wm::Label levels_;
-    wm::Button ok_, cancel_;
+    app::Grid grid_;
+    app::Plain levels_;
+    app::Button ok_, cancel_;
     ColourFn picked_;
     void *context_;
 };
@@ -113,10 +107,13 @@ void colour_dialog(int owner, gfx::Colour start, ColourFn chosen, void *context)
     if (has_dialog(owner)) {
         return;
     }
-    if (ColourDialog *d = make_window<ColourDialog>(window_numbered(owner), start, chosen, context)) {
-        os::show(*d);
-        discard(d); // if the window manager had no room for it
-    } else {
+    app::Look look;
+    look.title = "Colour";
+    look.width = ColourDialog::kGridW + 16;
+    look.height = ColourDialog::kBelow + 68;
+    look.flags = app::kDialog | app::kClientSize;
+    look.over = owner;
+    if (app::open<ColourDialog>(look, start, chosen, context) == app::kNone) {
         no_memory_for("Colour");
     }
 }

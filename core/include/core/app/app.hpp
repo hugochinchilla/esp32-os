@@ -116,6 +116,7 @@ private:
 using Look = os::ui::Look;
 using Number = os::ui::Window; // a window's number: dead once it has closed
 constexpr Number kNone = os::ui::kNoWindow;
+using os::ui::kClientSize;
 using os::ui::kDialog;
 using os::ui::kPicture;
 using os::ui::kWholeDesktop;
@@ -198,6 +199,24 @@ public:
     void select(int index) const { os::ui::select(window_, number_, index); }
 };
 
+// A rectangle the program paints (Window::paint_in).
+class Picture : public Control {
+public:
+    using Control::Control;
+    void redraw() const { os::ui::redraw_control(window_, number_); }
+};
+
+// A grid of cells to pick one from, each painted by the program
+// (Window::paint_cell).
+class Grid : public Control {
+public:
+    using Control::Control;
+    int selected() const { return os::ui::selected(window_, number_); } // -1: none
+    // Tells nobody. -1: none.
+    void select(int index) const { os::ui::select(window_, number_, index); }
+    void redraw() const { os::ui::redraw_control(window_, number_); }
+};
+
 class GroupFrame : public Control {
 public:
     using Control::Control;
@@ -231,6 +250,10 @@ public:
     virtual void painting() {}
     // Only with kPicture: after the face and the controls are painted.
     virtual void paint(Canvas &) {}
+    // A picture of the window's is to be painted, its corner as (0, 0).
+    virtual void paint_in(Control /*which*/, Canvas &) {}
+    // A cell of a grid is to be painted.
+    virtual void paint_cell(Control /*which*/, int /*index*/, const gfx::Rect & /*cell*/, Canvas &) {}
     // The window has closed; the object is destroyed after this.
     virtual void closed() {}
 
@@ -266,6 +289,11 @@ protected:
     ListBox list(const gfx::Rect &place, const char *const *items, int count)
     {
         return {number_, os::ui::list(number_, place, items, count)};
+    }
+    Picture picture(const gfx::Rect &place) { return {number_, os::ui::picture(number_, place)}; }
+    Grid grid(const gfx::Rect &place, int columns, int count, int cell_w, int cell_h, int margin = 3)
+    {
+        return {number_, os::ui::grid(number_, place, columns, count, cell_w, cell_h, margin)};
     }
     GroupFrame group(const gfx::Rect &place, const char *caption)
     {
@@ -310,7 +338,17 @@ private:
         case os::ui::What::Paint:
             {
                 Canvas canvas(event.drawing);
-                window->paint(canvas);
+                if (event.control != os::ui::kNoControl) {
+                    window->paint_in(Control(window->number_, event.control), canvas);
+                } else {
+                    window->paint(canvas);
+                }
+            }
+            return true;
+        case os::ui::What::Cell:
+            {
+                Canvas canvas(event.drawing);
+                window->paint_cell(Control(window->number_, event.control), event.index, event.part, canvas);
             }
             return true;
         case os::ui::What::Closed:

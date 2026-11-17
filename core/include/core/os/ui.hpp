@@ -44,7 +44,9 @@ enum class What : uint8_t {
     Chosen,  // a row of a list was double-clicked, or Enter on it: `control`. False: press the default button
     Key,     // a key the controls did not use: `key`. True: the program used it
     Painting, // the window is about to be painted: the last moment to change what the controls show
-    Paint,   // the client area, after the face and the controls are painted: `drawing`
+    Paint,   // the client area, after the face and the controls are painted: `drawing`. With a
+             // `control`, that picture alone, its corner as (0, 0)
+    Cell,    // a cell of a grid is to be painted: `control`, `index`, `part` (the cell), `drawing`
     Closed,  // the window has closed, or never opened; once, and it and its numbers are dead after this
 };
 
@@ -53,6 +55,8 @@ struct Event {
     Control control = kNoControl;
     const wm::KeyMsg *key = nullptr;
     Drawing drawing = kNoDrawing;
+    int index = 0;
+    gfx::Rect part = {};
 };
 
 using Events = bool (*)(Window window, const Event &event, void *state);
@@ -61,6 +65,7 @@ enum Flag : uint8_t {
     kDialog = 1,       // fixed size, only a close button
     kWholeDesktop = 2, // nothing else can be used while it is open
     kPicture = 4,      // the program paints too (What::Paint)
+    kClientSize = 8,   // `width` and `height` are of the client area, not of the frame
 };
 
 struct Look {
@@ -102,6 +107,17 @@ Control list(Window window, const gfx::Rect &place, const char *const *items, in
 Control group(Window window, const gfx::Rect &place, const char *caption); // a frame with a caption
 Control text_area(Window window, const gfx::Rect &place, const char *text); // several lines, read only
 
+// A rectangle the program paints (What::Paint with this control).
+Control picture(Window window, const gfx::Rect &place);
+// Asks for a control to be painted again.
+void redraw_control(Window window, Control control);
+// A grid of cells to pick one from, each painted by the program
+// (What::Cell): colours, patterns. The one picked has a frame, the arrows
+// move it, and Changed tells of it. `margin`: from the edge of a cell to
+// its sunken frame. selected() and select() are a list's; select() tells
+// nobody, and -1 leaves none picked.
+Control grid(Window window, const gfx::Rect &place, int columns, int count, int cell_w, int cell_h, int margin = 3);
+
 // What a control shows: a label, a button, a text area, a text field.
 void set_text(Window window, Control control, const char *text);
 // What is in a text field, as UTF-8.
@@ -122,7 +138,7 @@ void set_value(Window window, Control scroll_bar, int value); // no Changed for 
 // pictures a window.
 void set_items(Window window, Control list, const char *const *items, int count,
                const gfx::Bitmap *const *icons = nullptr);
-int selected(Window window, Control list); // -1: none
+int selected(Window window, Control list); // -1: none. A grid's too
 void select(Window window, Control list, int index);
 // Which control the keys go to.
 void set_focus(Window window, Control control);

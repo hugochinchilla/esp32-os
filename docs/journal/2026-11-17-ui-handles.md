@@ -232,3 +232,33 @@ Tested on the PC: a program paints a square and a corner of it through a
 part, the parts run out at eight, and the number does nothing after the
 event (`test_os`). 41 of 41 pass, the pictures match. Firmware not
 compiled since this change, and not run.
+
+## The same day: Display and the colour dialog
+
+Programs five and six of seventeen. Both had widgets of their own, which
+a program by number cannot have: Display's preview (a small monitor) and
+the grid of cells that both use for colours and patterns.
+
+Options for a program's own widget:
+
+- **Two system controls the program paints** (chosen; the agent's, to
+  confirm): a `picture`, a rectangle painted by the program when the
+  system says so (the Paint event, with the control's number), and a
+  `grid` of cells to pick one from, where the system keeps the selection,
+  the arrows and the frame and asks the program to paint each cell (the
+  Cell event). This is Win16's "owner-drawn" control.
+- Let the program build any widget out of a picture plus mouse and key
+  events: more general, and the games and the Terminal will need those
+  events anyway, but then each program carries its own copy of the grid.
+  Not now; the events come with the programs that need them.
+
+Also new: a window can give the size of its client area instead of its
+frame (`kClientSize`), since a program no longer knows how thick the
+frame is.
+
+The grid's code moved from `core/src/shell/picker.hpp` into the system
+(`core/src/os/ui.cpp`); the file is gone. Display's names of the colour
+and the pattern are `plain` texts now.
+
+PC tests pass (41 of 41) and the pictures match: both dialogs are
+pixel-identical. Firmware not compiled since, and not run.
