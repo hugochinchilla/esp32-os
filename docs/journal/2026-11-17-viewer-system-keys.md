@@ -67,7 +67,8 @@ Browsers have one way for a page to ask for those keys, the Keyboard Lock
 
 Option 1 was built, as the one that works everywhere and that the other two
 would need beside them anyway (neither gives all three keys). Whether to add
-2 or 3 on top is the owner's to say; asked in the thread.
+2 or 3 on top was the owner's to say. Asked in the thread, he chose the
+buttons only: nothing more is built.
 
 Chosen while building, to confirm:
 
@@ -118,6 +119,5 @@ and a phone were not tried.
 ## What is left
 
 - The check on the board, from the owner's own browser.
-- The owner's answer on options 2 and 3.
 - Ctrl+W, Ctrl+T and Ctrl+N still close and open the browser's tabs
   instead of reaching the board. No program on the board uses them today.

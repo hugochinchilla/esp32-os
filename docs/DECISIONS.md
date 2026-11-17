@@ -947,7 +947,7 @@ Put to the owner as options; built on the recommended one until he answers.
   The web server answers nothing else: one page, one WebSocket, up to four
   requests at a time. Like the VNC port, no password.
 
-### Chosen for the viewer's system keys (2026-11-17, to confirm)
+### Chosen for the viewer's system keys (2026-11-17)
 
 - Alt+Tab, Alt+F4, Ctrl+Alt+Del and the logo key never reach a web page: the
   viewing computer keeps them. The board's page has a button for each
@@ -955,9 +955,9 @@ Put to the owner as options; built on the recommended one until he answers.
   nothing.
 - The buttons go where the picture leaves more room (right edge or top);
   with no room they lie faint on its top right corner.
-- Not built, open for the owner: the browser's Keyboard Lock (Chrome only,
-  refused to a page served over http, never gives Ctrl+Alt+Del) and stand-in
-  keys such as Ctrl+Alt+End.
+- Buttons only (the owner's choice, 2026-11-17). Not built: the browser's
+  Keyboard Lock (Chrome only, refused to a page served over http, never
+  gives Ctrl+Alt+Del) and stand-in keys such as Ctrl+Alt+End.
 
 ### Chosen in the Cactus Patch game (2026-11-16); to confirm or overrule
 
