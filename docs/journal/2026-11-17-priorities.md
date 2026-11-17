@@ -104,3 +104,23 @@ firmware compiles and links in the cloud; it has not run on the board.
   search in the File manager (Low), sound when there is any (High).
 - The figure of a task that is running at the moment it is read is up to
   its last switch: a few milliseconds under at most.
+
+
+## On the board (added by the board thread, 2026-11-17)
+
+Branch commit 4f9ffb6 with main 7c435ca merged in, and then origin/main
+c53d019, which has the restored journals. The backlog table and the journal
+index conflicted; the resolution keeps the board results already on main and
+the branch's new lines. PC tests passed (32 of 32) and the firmware build was
+clean.
+
+1. Ten 300 KB Editor saves in a row (3.9 s each; the file right byte for
+   byte at the end) and ten Terminal commands, including a pipe and a
+   redirection. With everything closed afterwards: internal and external RAM
+   back to the byte. The task list shows only `ui`: no task is left
+   suspended or forgotten.
+2. Three Terminals closed with Alt+F4 while each ran `cat` of a 300 KB file:
+   the windows went, no `terminal` task was left, and memory came back to the
+   byte.
+3. No late or missed refill in the save, command, open-and-close and
+   Terminal runs above.

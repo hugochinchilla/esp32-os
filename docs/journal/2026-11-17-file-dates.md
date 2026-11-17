@@ -112,3 +112,25 @@ not run on the board.
 - Copying a file gives the copy today's date, as on Unix; Windows keeps
   the original's. Not asked; one line to change in the RAM disk, not
   possible through the POSIX layer without `utime`.
+
+
+## On the board (added by the board thread, 2026-11-17)
+
+Branch commit 4f9ffb6 with main 7c435ca merged in, and then origin/main
+c53d019, which has the restored journals. The backlog table and the journal
+index conflicted; the resolution keeps the board results already on main and
+the branch's new lines. PC tests passed (32 of 32) and the firmware build was
+clean.
+
+1. After Wi-Fi had set the clock, a file saved from the Editor (save.txt):
+   `dir` and `ls -l` show "2026-11-17 03:52", the laptop's local time at the
+   save. The File manager's status bar for the same file says
+   "306,610 bytes, 2026-11-17 03:52".
+2. `date` prints "Tue 17 Nov 2026 03:52:25".
+3. A file written before the clock was set: right after a hard reset (EN
+   pin, the clock at 00:00:00), early2.txt was copied in with `dbg.py put`.
+   It lists with no date; the clock was set about 30 s later.
+4. Older files on C: (readme.txt, written when the drive was formatted)
+   list with no date and no garbage; the File manager's status bar shows only
+   "180 bytes" for it. crash.txt shows the time of its last report.
+5. `del` with four names deleted all four.

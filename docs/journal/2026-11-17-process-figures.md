@@ -126,3 +126,29 @@ The firmware compiles and links in the cloud; it has not run on the board.
   should show time growing; the Picture viewer about 2.3 MB with a picture
   open), and that the wider Task Manager still fits at 640x480.
 - `dmesg` still waits for a log kept in memory.
+
+
+## On the board (added by the board thread, 2026-11-17)
+
+Branch commit 4f9ffb6 with main 7c435ca merged in, and then origin/main
+c53d019, which has the restored journals. The backlog table and the journal
+index conflicted; the resolution keeps the board results already on main and
+the branch's new lines. PC tests passed (32 of 32) and the firmware build was
+clean.
+
+1. Task Manager with Editor, Picture viewer and Culebra open: the wider
+   window fits on the 640 x 480 screen and the Time and Mem columns line up.
+   The Editor shows 578K, the Picture viewer 1.9M with its Open box and 2.3M
+   once earthrise.jpg is shown, and Culebra 4K. Culebra's time went 0.0 s,
+   0.1 s, 0.3 s as it was played.
+2. Closing the three programs with the Task Manager still open removes
+   their rows. Opening and closing all eleven programs, three rounds: no
+   crash, internal RAM back to the byte each round. External RAM was
+   3,588 bytes lower after the first round and stayed there for rounds two and
+   three: something kept after first use, not a leak.
+3. `ps` shows the columns. `top` refreshes every 2 s (the "on for" figure
+   moved 0:00:33 to 0:00:37 between two pictures, with the Terminal's own time
+   going 0.3 s, 0.4 s, 0.5 s). It leaves with q and with Ctrl+C, and `top -n 1`
+   prints once and returns to the prompt.
+4. Free internal RAM on an idle desktop: 211,071 to 211,083 bytes, against
+   211,967 on main 7c435ca (0.9 KB less).
