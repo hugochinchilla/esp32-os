@@ -432,8 +432,8 @@ with the board's figures):
 |---|---|---|
 | Culebra, Cactus Patch | yes | 4 KB |
 | Editor (each copy), File manager, Picture viewer, Task Manager, Defragmenter | yes | 8 KB, a first figure to trim |
-| Terminal | not yet | its session and the shell under it need their own look |
-| About, Welcome, Widget gallery | not yet | still windows of the system's kind, not on the OS calls |
+| About, Welcome, Widget gallery | yes | 4 KB (see "The last three" below) |
+| Terminal | no | see below |
 | Display, Network, Run, Screen Saver, Shut Down, the dialogs | no | the recommended answer leaves them on the UI task |
 
 Eight tasks at most at a time (`kMaxTasks`); a program started beyond
@@ -456,3 +456,31 @@ with a PNG and a JPEG, the Task Manager with everything open, a
 defragmentation run. Free internal RAM with all of them open. Processor
 time and repaint time against `main`. `dbg.py fault hang` and `slow` on
 the Editor and the File manager. `dbg.py misses`.
+
+## The last three programs, and the Terminal (2026-11-17)
+
+**About, Welcome and the Widget gallery** were the last windows of the
+system's kind outside the desktop itself: three classes in `apps.cpp`
+that inherited from the window class and held their buttons as objects.
+A program like that cannot have a task (its events do not pass through
+the one way in) and could not be loaded from a file either (item 27). They
+are now three files (`about.cpp`, `welcome.cpp`, `gallery.cpp`) on the
+thin classes, on the `MOVED` list of `tools/check_os_calls.py`, and
+`apps.cpp` is only the program table. The reference pictures did not
+change by a pixel (the bold name in About is now text the program
+paints, since a label has no bold). Each has a task, 4 KB. About is
+opened from other programs' Help menus, so its way in goes through
+`in_program` like the others; the PC round with threads checks it (the
+gallery's Help menu opens About, on a task of its own, as the gallery's
+child).
+
+**The Terminal stays on the UI task** (the agent's choice, to confirm).
+
+| Option | Chosen | Why |
+|---|---|---|
+| Leave the window on the UI task | Yes | The window is a device and nothing else: the shell and every command already run in the session, which has a task of its own on the board. What is left on the UI task is painting a grid and passing keys on |
+| A task for the window too | No | A third task on the grid's lock (the UI task, the session, the window) for no work taken off the UI task; and the session's "ended" call comes into the window from the system, one more border to cross |
+
+**Tested.** PC gate (43 tests), the round with threads ten times in a
+row. The firmware compiles and links; not run on the board.
+

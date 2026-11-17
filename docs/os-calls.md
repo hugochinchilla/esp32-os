@@ -75,10 +75,11 @@ background job: the drives have their own lock.
 the drives, the System port or the process table again, and prints how far
 the move has got.
 
-Moved (17 of 17): Cactus Patch, the colour chooser, Culebra, Defrag, the
-file dialogs and the message box, Display, the Editor, the File manager,
-Network, the Picture viewer, Run, Screen Saver, the settings files, Shut
-Down, the Task Manager, the Terminal, the Trash.
+Moved (20 of 20): About, Cactus Patch, the colour chooser, Culebra, Defrag,
+the file dialogs and the message box, Display, the Editor, the File
+manager, Network, the Picture viewer, Run, Screen Saver, the settings
+files, Shut Down, the Task Manager, the Terminal, the Trash, Welcome, the
+Widget gallery.
 
 Display, Screen Saver, Network and Shut Down were each half a window and
 half something the system keeps going. The window is the program; the

@@ -59,7 +59,10 @@ set(CORE_SRCS
     src/sys/crash.cpp
     src/sys/log.cpp
     src/sys/missed_refills.cpp
+    src/shell/about.cpp
     src/shell/apps.cpp
+    src/shell/gallery.cpp
+    src/shell/welcome.cpp
     src/shell/boot.cpp
     src/shell/cactus_patch.cpp
     src/shell/culebra.cpp

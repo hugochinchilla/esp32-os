@@ -2174,9 +2174,9 @@ option of a card the owner has not answered yet.
   panels are pictures it paints itself. The one thing a program holds
   that is not a number is the Editor's reader for its text while a save
   job runs (good only while the window is locked).
-- All 17 programs are written with the thin classes. What is left on
-  `core/wm`'s classes is the desktop itself and its own windows (About,
-  Welcome, the widget gallery, the message box).
+- All 17 programs are written with the thin classes, and since item 26
+  About, Welcome and the widget gallery too (20 files). What is left on
+  `core/wm`'s classes is the desktop itself and the message box.
 - Events through a queue: with item 26.
 
 ### Chosen for background jobs (2026-11-17, to confirm)
@@ -2264,8 +2264,10 @@ The rest is the agent's, to confirm:
 - Stack per program in the program table. The first tranche with tasks
   (2026-11-17, to confirm with the owner's card and the board): Cactus
   Patch at 4 KB; Editor, File manager, Picture viewer, Task Manager and
-  Defragmenter at 8 KB. Not yet: Terminal, About, Welcome, Widget
-  gallery. The settings tools and dialogs stay on the UI task.
+  Defragmenter at 8 KB; About, Welcome and Widget gallery at 4 KB, now
+  written on the OS calls like the rest. The Terminal's window stays on
+  the UI task (its shell already has a task: the session). The settings
+  tools and dialogs stay on the UI task.
 - A late program's task runs at the idle priority until it answers: it
   may spin for ever, and the kernel's idle tasks must still get their
   turn (ESP-IDF's task watchdog watches them, 5 s).

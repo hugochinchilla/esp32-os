@@ -706,6 +706,18 @@ void test_programs_on_tasks()
     shell::open_task_manager();
     wait(1100000); // the Task Manager's list fills on its timer
     CHECK(runner.tasks() == 4 && strcmp(title(), "Task Manager") == 0);
+    // One program's menu opens another: the gallery's Help, About.
+    shell::launch(*shell::find_app("Widget gallery"));
+    const proc::Pid gallery = t.find_by_name("Widget gallery");
+    CHECK(runner.has_task(gallery) && runner.tasks() == 5);
+    desktop.key(wm::key::LeftAlt, true); // Alt+H: Help, and its one entry
+    press(wm::key::A + 7);
+    desktop.key(wm::key::LeftAlt, false);
+    press(wm::key::Enter);
+    wait(10000);
+    const proc::Pid about = t.find_by_name("About Chinchilla");
+    CHECK(strcmp(title(), "About Chinchilla") == 0 && runner.has_task(about) && runner.tasks() == 6);
+    CHECK(about != proc::kNone && t.find(about)->parent == gallery);
     CHECK(runner.has_task(t.find_by_name("Picture viewer")) && runner.has_task(t.find_by_name("Task Manager")));
 
     // All closed: the processes end and every task is given back.

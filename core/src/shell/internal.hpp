@@ -213,6 +213,9 @@ void delete_asking(const char *path);
 // Dragged to the Trash: moved without asking on C:, asks elsewhere.
 void drop_in_trash(const char *path);
 void open_trash();
+void open_about();   // about.cpp
+void open_welcome(); // welcome.cpp
+void open_gallery(); // gallery.cpp
 // After files moved or went away: the desktop, the File manager windows
 // and the Trash window read their folders again.
 void files_changed();
