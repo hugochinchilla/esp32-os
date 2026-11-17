@@ -360,6 +360,12 @@ Error write(Handle file, const void *data, size_t size)
     return o != nullptr ? g_kit.storage->write(o->save.file, data, size) : Error::Io;
 }
 
+Error seek(Handle file, uint32_t offset)
+{
+    Open *o = held(file);
+    return o != nullptr ? g_kit.storage->seek(o->save.file, offset) : Error::Io;
+}
+
 Error close(Handle file)
 {
     Open *o = held(file);
@@ -407,8 +413,6 @@ Error write_file(const char *path, const void *data, size_t size)
 {
     return g_kit.storage->write_file(path, data, size);
 }
-
-const fs::Storage &storage() { return *g_kit.storage; }
 
 } // namespace file
 

@@ -248,7 +248,27 @@ void test_process_list()
     uint32_t value = 0;
     char text[64] = "";
     os::fact(ports::Fact::Processor, value, text, sizeof(text));
-    CHECK(&os::file::storage() == &storage);
+
+    // The Picture viewer holds its file, as a handle, only while it decodes:
+    // one while the picture is being read, none when it is on the screen,
+    // and none when the viewer is ended half way.
+    {
+        uint8_t bmp[54 + 16] = {'B', 'M', 70, 0, 0, 0, 0, 0, 0, 0, 54, 0, 0, 0, 40, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 1, 0, 24};
+        bmp[34] = 16;
+        CHECK(os::file::write_file("C:\\dot.bmp", bmp, sizeof(bmp)) == os::file::Error::Ok);
+        CHECK(os::file::open_files() == 0);
+        shell::open_picture("C:\\dot.bmp");
+        const proc::Pid viewer = os::find("Picture viewer");
+        CHECK(viewer != proc::kNone && os::file::open_files(viewer) == 1);
+        shell::finish_picture();
+        CHECK(os::file::open_files() == 0);
+        shell::open_picture("C:\\dot.bmp"); // the same window starts again
+        CHECK(os::file::open_files(viewer) == 1);
+        CHECK(os::signal(viewer, proc::Signal::Kill) == proc::Sent::Ok);
+        wait(10000);
+        CHECK(!os::alive(viewer) && os::file::open_files() == 0);
+        CHECK(os::file::remove("C:\\dot.bmp") == os::file::Error::Ok);
+    }
 }
 
 // Every program opened and closed: the memory out comes back to where it

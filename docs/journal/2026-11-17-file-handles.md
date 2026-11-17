@@ -96,9 +96,27 @@ the desktop in use meanwhile, memory before and after, `dbg.py misses`.
 
 ## What was left out
 
-- The picture viewer's decoder still takes the drives (`os::file::storage()`)
-  and holds its own file across timer ticks. It needs a small reader over a
-  handle; next.
 - The shell's commands open files through `sh::Env`, as before.
 - Windows as numbers, and events through a queue: the rest of item 37,
   waiting for the owner's answer.
+
+## The same day: the picture decoder
+
+The Picture viewer was the one program that held a file across events: its
+decoder (`core/image`) opened the file itself and read a piece on every
+timer tick, so it had been handed the drives whole (`os::file::storage()`,
+a call that existed only for it).
+
+The decoder now reads from an `image::Source`: read some bytes, go to a
+place. The viewer opens the file through the OS calls and hands in a
+source over the handle (`os::file::seek` was added for it); the decoder no
+longer knows about drives when a program uses it. Opening by path stays
+for the code that is not a program (the boot picture, the tests): it makes
+a source over the drives itself. `os::file::storage()` is gone.
+
+The viewer closes its handle when the picture is done, so it holds a file
+only while it decodes. `test_os`: one file open while a picture is read,
+none when it is on the screen, none after the viewer is ended half way.
+PC tests pass (41), pictures match, firmware compiles and links
+(0x169b00 of 0x1f0000), not run. For the board: open a BMP, a PNG and a
+JPEG, and close the viewer while a large one loads.

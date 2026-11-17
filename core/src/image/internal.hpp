@@ -15,7 +15,7 @@ namespace image {
 // cleanly instead of reading garbage.
 class Reader {
 public:
-    void attach(const fs::Storage &storage, fs::File &file);
+    void attach(Source &source);
     int byte();                // 0..255, or -1 at the end
     uint32_t be16();
     uint32_t be32();
@@ -30,8 +30,7 @@ public:
 private:
     bool fill();
 
-    const fs::Storage *storage_ = nullptr;
-    fs::File *file_ = nullptr;
+    Source *source_ = nullptr;
     uint8_t buf_[1024];
     size_t filled_ = 0, at_ = 0;
     uint32_t pos_ = 0; // file position of the end of what is in buf_

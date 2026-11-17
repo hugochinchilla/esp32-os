@@ -2056,8 +2056,10 @@ option of a card the owner has not answered yet.
 - No lock: a slot is claimed by an atomic flag. The table (2 KB) comes
   from the Memory port once, so it is external RAM on the board.
 - ponytail: six open in the machine, two for one process.
-- Still to do in item 37: the picture decoder's own file, windows as
-  numbers, events through a queue.
+- The picture decoder reads from an `image::Source`; the Picture viewer
+  hands in one over a handle it opened, held only while it decodes.
+  `os::file::storage()`, which handed a program the drives whole, is gone.
+- Still to do in item 37: windows as numbers, events through a queue.
 
 ### Chosen for background jobs (2026-11-17, to confirm)
 

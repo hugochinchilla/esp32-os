@@ -188,6 +188,8 @@ constexpr int kMaxOpenEach = 2;
 Error open(const char *path, ports::OpenMode mode, Handle &file, const job::Job *job = nullptr);
 Error read(Handle file, void *data, size_t size, size_t &done);
 Error write(Handle file, const void *data, size_t size);
+// The place the next read() starts at, in bytes from the start of the file.
+Error seek(Handle file, uint32_t offset);
 Error close(Handle file);
 // Saving without putting the old file at risk (fs::Storage::begin_save):
 // write() to the handle, then finish_save(), which closes it. keep false
@@ -199,10 +201,6 @@ int open_files(proc::Pid pid = proc::kNone);
 // Whole files at once; write_file saves the safe way too.
 Error read_file(const char *path, void *data, size_t capacity, size_t &size);
 Error write_file(const char *path, const void *data, size_t size);
-
-// The drives themselves, for library code that reads a file on its own
-// (the picture decoder). A program passes it on and does not keep it.
-const fs::Storage &storage();
 
 } // namespace file
 

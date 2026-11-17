@@ -366,12 +366,20 @@ private:
             timer_ = 0;
         }
         decoder_.close();
+        if (source_.file != os::file::kNoFile) {
+            os::file::close(source_.file);
+            source_.file = os::file::kNoFile;
+        }
     }
 
     void start()
     {
         stop();
-        const image::Error e = decoder_.open(os::file::storage(), path_, program_port(), info_, kBackgroundRgb);
+        // The file is this program's, held while the picture is decoded a
+        // piece at a time; the decoder only reads from it.
+        const image::Error e = os::file::open(path_, ports::OpenMode::Read, source_.file) == ports::FsError::Ok
+                                   ? decoder_.open(source_, program_port(), info_, kBackgroundRgb)
+                                   : image::Error::NotFound;
         snprintf(title_, sizeof(title_), "%s - Picture viewer", fs::path::name(path_));
         set_title(title_);
         if (e != image::Error::None) {
@@ -500,6 +508,16 @@ private:
     char path_[fs::kMaxPath] = "";
     char title_[96] = "";
     char message_[200] = "";
+    // The picture's file, as the decoder reads it: a handle of the OS.
+    struct FromHandle : image::Source {
+        bool read(void *data, size_t size, size_t &got) override
+        {
+            return os::file::read(file, data, size, got) == ports::FsError::Ok;
+        }
+        bool seek(uint32_t offset) override { return os::file::seek(file, offset) == ports::FsError::Ok; }
+        os::file::Handle file = os::file::kNoFile;
+    };
+    FromHandle source_;
     image::Decoder decoder_;
     image::Converter converter_;
     image::Info info_;
