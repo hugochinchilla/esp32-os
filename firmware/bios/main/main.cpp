@@ -307,7 +307,7 @@ extern "C" void app_main(void)
     ESP_ERROR_CHECK(uart_driver_install(kSerial, 2048, 2048, 0, nullptr, 0));
 
     if (fast_start_armed()) {
-        static const char line[] = "\r\nChinchilla BIOS: fast start asked for, no self-test\r\n";
+        static const char line[] = "\r\nRodent BIOS: fast start asked for, no self-test\r\n";
         uart_write_bytes(kSerial, line, sizeof(line) - 1);
         start_os();
     }

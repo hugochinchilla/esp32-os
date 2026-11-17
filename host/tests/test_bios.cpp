@@ -244,7 +244,7 @@ void test_splash()
     CHECK(clock.now >= 3500000 && clock.now < 3600000);
     CHECK(io.video_start_us >= 3500000);
     CHECK(sent.empty());
-    CHECK(row(s, 12) == std::string("    Chinchilla BIOS ") + shell::kVersion);
+    CHECK(row(s, 12) == std::string("    Rodent BIOS ") + shell::kVersion);
     CHECK(row(s, 7).find("Energy Nibbler") == 58 && s.colour_at(58, 7) == bios::kLeaf);
     CHECK(row(s, bios::kIdRow) == "  TEST-ID");
     // The self-test that follows starts from a clean screen.
@@ -284,7 +284,7 @@ void test_run()
     // No drive is given, so that one check fails.
     CHECK(bios::run_post(post, true) == 1);
     CHECK(logged == 10); // processor, two memory tests, three sizes, video, drive, keyboard, sound
-    CHECK(row(s, bios::kTitleRow) == std::string("  Chinchilla BIOS ") + shell::kVersion);
+    CHECK(row(s, bios::kTitleRow) == std::string("  Rodent BIOS ") + shell::kVersion);
     CHECK(row(s, bios::kProcessorRow) == "  Main Processor : ESP32-S3 dual core, 240 MHz (simulated)");
     CHECK(row(s, bios::kMemoryRow) == "  Memory Test    :   4096K OK   (external)");
     CHECK(row(s, bios::kMemoryRow + 1).find("K OK   (internal)") != std::string::npos);

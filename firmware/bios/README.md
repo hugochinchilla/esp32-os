@@ -1,4 +1,4 @@
-# The BIOS
+# Rodent BIOS
 
 A small firmware of its own, in the `bios` partition (the first megabyte of
 the app area, `../os/partitions.csv`). After every reset the bootloader

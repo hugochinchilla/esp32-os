@@ -2359,6 +2359,12 @@ Step 2 of backlog item 46, compiled but not run on the board
   noise" (the owner's changes to the first drawing). The real Energy Star
   mark is not used.
 - The name "Energy Nibbler" is to confirm.
+- The BIOS is called "Rodent BIOS" on its screens, on serial and in the
+  docs from here on (the owner, 2026-11-17: so that not everything is
+  called Chinchilla). Earlier journal entries keep the words of their day.
+  The OS's own self-test screen, which still says "Chinchilla BIOS" and is
+  shown only without a BIOS or after an error, goes away in step 3.
+- The second drawing of the first screen is approved by the owner.
 - The memory count in the BIOS runs at the speed of the test, without the
   pause between steps that the OS's self-test has.
 - After an error the OS restarts without the BIOS, and a reset by a

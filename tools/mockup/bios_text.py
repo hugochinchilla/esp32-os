@@ -130,7 +130,7 @@ def post_reference(g):
                     for x in range(5):
                         px[68 * 8 + q * 5 + x, 16 + r * 5 + y] = colours[ch]
     rows = [
-        (1, [(HI, "Chinchilla BIOS v0.3")]),
+        (1, [(HI, "Rodent BIOS v0.3")]),
         (2, [(TXT, "Copyleft 2026, built on nine resistors")]),
         (4, [(TXT, "Main Processor : ESP32-S3 dual core, 240 MHz")]),
         (5, [(TXT, "Memory Test    : "), (HI, "  8192K OK"), (TXT, "   (external)")]),
@@ -180,7 +180,7 @@ def splash_reference(g):
     for col, row, colour, text in [
         (58, 7, LEAF, "Energy Nibbler"),
         (56, 8, TXT, "Runs on a USB port"),
-        (4, 12, HI, "Chinchilla BIOS v0.3"),
+        (4, 12, HI, "Rodent BIOS v0.3"),
         (4, 13, TXT, "Copyleft 2026, built on nine resistors"),
         (4, 16, DARK, "Waking the monitor..."),
         (2, 28, DARK, "Press DEL to enter SETUP (there is no setup)"),

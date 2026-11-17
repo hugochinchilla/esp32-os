@@ -45,6 +45,14 @@ Also on the screen: "Chinchilla BIOS" and the version, "Copyleft 2026,
 built on nine resistors", "Waking the monitor..." in dim letters, which is
 what the screen is for, and the two bottom lines of the self-test screen.
 
+The owner liked the second drawing better and approved it, and added a
+name: "the BIOS, instead of plainly BIOS, we will call it Rodent BIOS, so
+that we do not use the same name for everything". The title on both
+screens and the BIOS's line on serial now say "Rodent BIOS". The OS's own
+self-test screen still says "Chinchilla BIOS": it is shown only when there
+is no BIOS or after an error, its drawing is an approved one with its own
+test, and step 3 removes it.
+
 ## What was built
 
 - `bios::run_splash` and `bios::draw_splash` in `core/bios/post`: the text

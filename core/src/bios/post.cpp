@@ -33,7 +33,7 @@ void header(TextScreen &s, const char *version, const char *id)
     s.clear();
     s.reserve(kLogoColumn, kLogoRow, kLogoColumns, kLogoRows);
     char t[64];
-    snprintf(t, sizeof(t), "Chinchilla BIOS %s", version);
+    snprintf(t, sizeof(t), "Rodent BIOS %s", version);
     s.move_to(kTitleRow);
     s.print("  ", kText);
     s.print(t, kBright);
@@ -115,7 +115,7 @@ void draw_splash(gfx::Canvas &c, TextScreen &s, const char *version, const char 
     s.put(58, 7, "Energy Nibbler", kLeaf);
     s.put(56, 8, "Runs on a USB port", kText);
     char t[64];
-    snprintf(t, sizeof(t), "Chinchilla BIOS %s", version);
+    snprintf(t, sizeof(t), "Rodent BIOS %s", version);
     s.put(4, 12, t, kBright);
     s.put(4, 13, "Copyleft 2026, built on nine resistors", kText);
     s.put(4, 16, "Waking the monitor...", kDim);
