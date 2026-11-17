@@ -196,3 +196,44 @@ what `main` gained since). It has not run on the board. On the board the
 file has to be rewritten by hand or deleted, or the start-up box will
 count its lines: asked of the board thread.
 
+
+
+## On the board, only WHAT:ACTION (added by the board thread, 2026-11-17)
+
+Branch commit f3193a2 with main 6433aa0 merged in (clean). PC tests 42 of
+42, firmware 0x167a10, flashed by cable, the app only. Nothing but
+C:\.config\startup.txt was changed on the board: no erase, NVS and the rest
+of C: untouched.
+
+1. The first start after the flash, with the board's old file (the earlier
+   default: `start desktop`, `start inetd` and comments): the box "Start-up"
+   after the start; the log says "not understood: start desktop", "not
+   understood: start inetd", "no line starts desktop; started anyway", "no
+   line starts taskbar; started anyway", "2 lines failed". Desktop and bar up;
+   no network services (ports 23, 5900 and 80 refused, chinchilla.local did
+   not resolve).
+2. The file deleted and a restart: init wrote it again in the new form
+   (`desktop:once`, `taskbar:respawn`, `inetd:once`, `console:off`, with its
+   comments and `# terminal:once`); no box; the log has "started desktop",
+   "started taskbar", "started inetd", "console is off" and no "not
+   understood"; telnet, VNC and the web page answer.
+3. A file with `start desktop`, `taskbar:respawn`, `inetd:once`: the box,
+   "not understood: start desktop", and the desktop still came up. One line
+   of the log reads oddly: "init: taskbar goes before taskbar" (after
+   "desktop goes before taskbar"); harmless, but its wording could be
+   looked at.
+4. `editor:once` and `frobnicator:once` added: an Untitled Editor opened
+   ("init: ran editor"); "init: run frobnicator: Cannot find 'frobnicator'."
+   and the box with one failed line.
+5. respawn: the taskbar killed came back. The brake: six kills through one
+   telnet session, 0.7 to 0.8 s apart: after the fifth quick end "taskbar keeps
+   ending as soon as it starts; not started again"; `run taskbar` brought it
+   back. `taskbar:off` in place of respawn: no bar, "taskbar is off"; `run
+   taskbar` started it. (A first try with `taskbar:off` added above the
+   respawn line started the taskbar, as the later line asks.)
+6. `dbg.py misses`: none. VNC and telnet answered. Free RAM on the idle
+   desktop: internal 206,051 against 206,047 on main, external 6,469,328
+   against 6,469,572.
+
+Left on the board: the new-form file init wrote in 2. The old file is kept
+in the board thread's scratchpad.
