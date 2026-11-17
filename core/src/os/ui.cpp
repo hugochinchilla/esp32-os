@@ -1772,6 +1772,7 @@ int text(Drawing on, int x, int y, const char *s, gfx::Colour col, bool bold)
 }
 int text_scaled(Drawing on, int x, int y, const char *s, gfx::Colour col, bool bold, bool slanted, int scale)
 {
+    const prog::InCall in_call;
     gfx::Canvas *c = g_drawings.at(on);
     return c != nullptr ? c->text_scaled(x, y, s, col, bold, slanted, scale)
                         : x + gfx::Canvas::text_width(s, bold) * scale;

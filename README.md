@@ -30,6 +30,9 @@ built from `main` on every change; how it works is under
   for BMP, PNG and JPEG images.
 - Wi-Fi, with the clock set from NTP, or from an optional battery-backed clock
   chip.
+- Vizcacha, a web browser for pages as the 1990s wrote them: no scripts, no
+  style sheets, plain HTTP. [FrogFind](http://frogfind.com/) is its way into
+  today's web.
 - A serial debug protocol (screen capture, injected keyboard and mouse events)
   so the OS can be tested by an agent without a human.
 - Remote keyboard, mouse and screen over the network until USB input hardware
@@ -188,6 +191,10 @@ To publish it on GitHub Pages on every change to `main`, copy
 `ci/github-pages-workflow.yml` to `.github/workflows/pages.yml` and choose
 Settings > Pages > Source: "GitHub Actions". The address is then
 `https://<owner>.github.io/<repository>/`.
+
+The page reaches the web through a relay, because a page may not open
+connections of its own: `web/relay/README.md` says how to put it on
+Cloudflare and give the page its address.
 
 What differs from the desktop program: the browser keeps some keys for itself
 (Ctrl+W, Ctrl+T, F5, F11 and others; Ctrl+Alt+End is still Ctrl+Alt+Del),

@@ -7,6 +7,7 @@
 
 #include "core/job/job.hpp"
 #include "core/os/os.hpp"
+#include "core/prog/prog.hpp"
 #include "core/sys/log.hpp"
 
 namespace os {
@@ -111,6 +112,7 @@ bool available() { return g_dialer != nullptr; }
 
 int open_connections(proc::Pid pid)
 {
+    const prog::InCall in_call;
     int count = 0;
     for (const Open &o : g_open) {
         count += o.used && (pid == proc::kNone || o.owner == pid);
@@ -120,6 +122,7 @@ int open_connections(proc::Pid pid)
 
 Handle connect(const char *host, int port)
 {
+    const prog::InCall in_call;
     const proc::Pid owner = proc::table().current();
     if (g_dialer == nullptr || open_connections(owner) >= kMaxOpenEach) {
         return kNone;
@@ -156,6 +159,7 @@ Handle connect(const char *host, int port)
 
 State state(Handle connection)
 {
+    const prog::InCall in_call;
     const Open *o = held(connection);
     if (o == nullptr) {
         return State::Closed;
@@ -166,6 +170,7 @@ State state(Handle connection)
 
 net::DialFailure failure(Handle connection)
 {
+    const prog::InCall in_call;
     const Open *o = held(connection);
     const int result = o != nullptr ? o->result.load() : kPending;
     return result < 0 && result != kPending ? static_cast<net::DialFailure>(-result) : net::DialFailure::None;
@@ -173,6 +178,7 @@ net::DialFailure failure(Handle connection)
 
 int read(Handle connection, void *out, size_t capacity)
 {
+    const prog::InCall in_call;
     const Open *o = held(connection);
     const int line = o != nullptr ? o->result.load() : -1;
     return line >= 0 ? g_dialer->read(line, static_cast<uint8_t *>(out), capacity) : -1;
@@ -180,6 +186,7 @@ int read(Handle connection, void *out, size_t capacity)
 
 int write(Handle connection, const void *data, size_t size)
 {
+    const prog::InCall in_call;
     const Open *o = held(connection);
     const int line = o != nullptr ? o->result.load() : -1;
     return line >= 0 ? g_dialer->write(line, static_cast<const uint8_t *>(data), size) : -1;
@@ -187,6 +194,7 @@ int write(Handle connection, const void *data, size_t size)
 
 void close(Handle connection)
 {
+    const prog::InCall in_call;
     Open *o = held(connection);
     if (o == nullptr) {
         return;

@@ -42,7 +42,7 @@ The journal entry with the reasons is
 | | `os::caret_moved()` | The text cursor of the window in use has moved: shown at once (the Terminal) |
 | Windows by number | `os::ui` (`core/os/ui.hpp`): windows, controls and their events | A program asks for a window and controls and gets numbers; written through the thin classes of `core/app/app.hpp` (item 37) |
 | | `os::ui::icon_view`, `set_items`, `item_at`, `reset_view`; events Drag, DragOver, Dropped | The view of icons with names (File manager), and files dragged out of it and dropped on a window |
-| | `os::ui::draw::fill`, `text`, `blit`, `part`, ... | Drawing while a Paint event is answered, on a number good only until it returns (`app::Canvas`) |
+| | `os::ui::draw::fill`, `text`, `text_scaled`, `blit`, `part`, ... | Drawing while a Paint event is answered, on a number good only until it returns (`app::Canvas`) |
 | | `os::begin_drag(path)` | A file starts being dragged |
 | | `os::Busy busy;` | The hourglass until the end of the block |
 | Desktop | `os::set_backdrop(backdrop)` | The desktop's colour and pattern (Display) |
@@ -57,6 +57,8 @@ The journal entry with the reasons is
 | | `os::file::open_files(pid)` | How many a process holds |
 | | `os::file::read_file`, `write_file` | Whole files |
 | | `os::file::has_drive`, `drives`, `drive_info` | The drives |
+| Connections | `os::tcp::connect(host, port)`, `state`, `failure`, `read`, `write`, `close` (`core/os/tcp.hpp`) | An outgoing connection as a handle the system keeps and closes when the process ends. No call waits: the dialling is a background job |
+| | `os::tcp::available()`, `open_connections(pid)` | Whether the machine has a way out; how many a process holds |
 | Settings | `os::load_settings(program, ini)`, `os::save_settings(program, ini)` | `C:\.config\<program>.ini` |
 | Machine | `os::restart()` | |
 | | `os::stats(out)`, `os::fact(which, ...)`, `os::busy_us()` | Figures and facts for the tools that show them |
@@ -75,10 +77,11 @@ background job: the drives have their own lock.
 the drives, the System port or the process table again, and prints how far
 the move has got.
 
-Moved (17 of 17): Cactus Patch, the colour chooser, Culebra, Defrag, the
+Moved (18 of 18): Cactus Patch, the colour chooser, Culebra, Defrag, the
 file dialogs and the message box, Display, the Editor, the File manager,
 Network, the Picture viewer, Run, Screen Saver, the settings files, Shut
-Down, the Task Manager, the Terminal, the Trash.
+Down, the Task Manager, the Terminal, the Trash, Vizcacha (the web
+browser).
 
 Display, Screen Saver, Network and Shut Down were each half a window and
 half something the system keeps going. The window is the program; the
