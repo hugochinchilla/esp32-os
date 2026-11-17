@@ -119,12 +119,19 @@ void test_runner()
             CHECK(jobs.start(p.spec()));
         }
         CHECK(p.worked == 0 && p.done == 0 && jobs.running(app) == 1 && procs.jobs(app) == 1);
+        // While it runs its stack counts as the owner's memory.
+        CHECK(procs.find(app)->memory == job::Spec().stack_bytes && procs.find(root)->memory == 0);
+        const uint64_t cpu_before = procs.find(app)->cpu_us;
         tasks.finish();
         CHECK(p.worked == 1 && p.done == 0 && procs.jobs(app) == 1); // done, but not yet told
         CHECK(procs.current() == proc::kNone);
         inbox.deliver();
         CHECK(p.done == 1 && p.result == 41 && p.done_as == app && procs.current() == proc::kNone);
         CHECK(jobs.running() == 0 && procs.jobs(app) == 0);
+        // Told: the stack is given back, and what the task used of the
+        // processor is the owner's (a thread that has run has used some).
+        CHECK(procs.find(app)->memory == 0);
+        CHECK(procs.find(app)->cpu_us > cpu_before && procs.find(root)->cpu_us == 0);
 
         // done() may start the next job: its slot is free by then.
         p.again = &jobs;

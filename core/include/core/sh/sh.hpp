@@ -184,7 +184,7 @@ private:
     int have_ = 0;
     bool prompted_ = false, ended_ = false;
     bool at_line_start_ = true; // nothing written since the last '\n'
-    char buffer_[kBufferSize];
+    alignas(8) char buffer_[kBufferSize]; // aligned: commands keep records in it
     char walk_from_[fs::kMaxPath], walk_to_[fs::kMaxPath];
 
     // Redirection, for the command that is running.

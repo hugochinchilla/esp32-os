@@ -108,6 +108,8 @@ private:
         Spec spec;
         proc::Pid owner = proc::kNone;
         uint32_t result = 0;
+        uint64_t cpu_us = 0; // what its task used, read by the task as it ends
+        uint32_t stack = 0;  // charged to the owner as memory while it runs
         bool used = false;
         bool told = false; // spec.stop has been called
     };

@@ -57,6 +57,9 @@ public:
     // task ends when fn returns. False if it could not be started (no memory
     // for the stack), and then fn is never called.
     virtual bool start(const char *name, TaskFn fn, void *context, uint32_t stack_bytes) = 0;
+    // The processor time the calling task has used so far, in µs; 0 where
+    // it cannot be told. A job reads it as its last act, for its process.
+    virtual uint64_t run_time_us() { return 0; }
 
 protected:
     ~Tasks() = default;

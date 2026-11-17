@@ -73,6 +73,11 @@ struct Process {
     uint8_t flags = 0;
     uint8_t pending = 0; // Signal bits sent and not yet acted on
     uint8_t jobs = 0;    // background jobs running for it (core/job/job.hpp)
+    // What it has used (docs/journal/2026-11-17-process-figures.md).
+    uint64_t cpu_us = 0;  // processor time: the UI task's while it was the
+                          // current process, and its finished jobs' tasks
+    uint32_t memory = 0;  // bytes it holds now: what its windows asked the
+                          // Memory port for, and the stacks of its jobs
     char name[kNameSize] = "";
     StartFn restart = nullptr; // for kRespawn
     void *restart_context = nullptr;
@@ -158,7 +163,19 @@ public:
 
     // The process the UI task is working for now; kNone outside any.
     Pid current() const { return current_; }
-    void set_current(Pid pid) { current_ = pid; }
+    void set_current(Pid pid);
+
+    // Figures. With a clock set, the time between two set_current() calls is
+    // charged to the process that was current in between: the window manager
+    // makes a program current around every call into it, so this is the
+    // program's share of the UI task. Time with no process current is the
+    // OS's own and is not kept here.
+    void set_clock(uint32_t (*micros)(void *context), void *context);
+    // Adds processor time used elsewhere on the process's behalf (a job's task).
+    void add_cpu(Pid pid, uint64_t us);
+    // Memory taken (bytes > 0) or given back (bytes < 0). A process that has
+    // gone is ignored: what it held is given back after its row.
+    void add_memory(Pid pid, int32_t bytes);
 
     // Tests: an empty table that counts from 1 again.
     void reset();
@@ -174,6 +191,9 @@ private:
     Pid current_ = kNone;
     uint32_t changes_ = 0;
     int waiting_ = 0; // rows with a signal pending
+    uint32_t (*micros_)(void *context) = nullptr;
+    void *micros_context_ = nullptr;
+    uint32_t since_ = 0; // when current_ was set
     StopJobsFn stop_jobs_ = nullptr;
     void *stop_jobs_context_ = nullptr;
 
@@ -209,6 +229,11 @@ private:
     Table *table_;
     Pid before_;
 };
+
+// The figures as text, for whoever lists processes: processor time as
+// "4.2s", "3:07" or "1:02:45"; memory as "640K" or "1.2M" ("-" for none).
+const char *time_text(uint64_t us, char *out, int capacity);
+const char *memory_text(uint32_t bytes, char *out, int capacity);
 
 // The machine's one table.
 Table &table();

@@ -34,8 +34,13 @@ bool Jobs::start(const Spec &spec)
     slot->spec = spec;
     slot->owner = owner;
     slot->result = 0;
+    slot->cpu_us = 0;
+    slot->stack = 0;
     if (tasks_ != nullptr && msg::queue() != nullptr) {
         if (tasks_->start(spec.name, &Jobs::task, slot, spec.stack_bytes)) {
+            // The task's stack is memory the process holds while the job runs.
+            slot->stack = spec.stack_bytes;
+            procs_.add_memory(owner, static_cast<int32_t>(spec.stack_bytes));
             return true;
         }
         slot->used = false;
@@ -53,6 +58,7 @@ void Jobs::task(void *context)
 {
     Slot &slot = *static_cast<Slot *>(context);
     slot.result = slot.spec.work(slot.job, slot.spec.context);
+    slot.cpu_us = slot.jobs->tasks_->run_time_us(); // this task's whole life: charged to the owner
     // To the OS, not to the owner: the count must come down even if the
     // owner's row has gone some other way. It waits for room as long as it
     // takes; a result that was dropped would leave the process unable to end.
@@ -76,6 +82,8 @@ void Jobs::finish(Slot &slot)
     slot.used = false;
     slot.owner = proc::kNone;
     procs_.job_finished(owner);
+    procs_.add_cpu(owner, slot.cpu_us);
+    procs_.add_memory(owner, -static_cast<int32_t>(slot.stack));
     if (spec.done != nullptr && procs_.alive(owner)) {
         const proc::Scope as(&procs_, owner);
         spec.done(spec.context, result, stopped);

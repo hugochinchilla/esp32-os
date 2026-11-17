@@ -1,5 +1,6 @@
 #include "core/proc/table.hpp"
 
+#include <cstdio>
 #include <cstring>
 
 namespace proc {
@@ -225,6 +226,48 @@ void Table::set_flags(Pid pid, uint8_t flags)
     }
 }
 
+void Table::set_clock(uint32_t (*micros)(void *context), void *context)
+{
+    micros_ = micros;
+    micros_context_ = context;
+    since_ = micros != nullptr ? micros(context) : 0;
+}
+
+void Table::set_current(Pid pid)
+{
+    if (micros_ != nullptr) {
+        const uint32_t now = micros_(micros_context_);
+        if (current_ != kNone) {
+            if (Process *p = row(current_)) {
+                p->cpu_us += static_cast<uint32_t>(now - since_); // the clock wraps; the difference does not
+            }
+        }
+        since_ = now;
+    }
+    current_ = pid;
+}
+
+void Table::add_cpu(Pid pid, uint64_t us)
+{
+    if (Process *p = row(pid)) {
+        p->cpu_us += us;
+    }
+}
+
+void Table::add_memory(Pid pid, int32_t bytes)
+{
+    Process *p = row(pid);
+    if (p == nullptr) {
+        return;
+    }
+    if (bytes >= 0) {
+        p->memory += static_cast<uint32_t>(bytes);
+    } else {
+        const uint32_t back = static_cast<uint32_t>(-bytes);
+        p->memory = p->memory > back ? p->memory - back : 0;
+    }
+}
+
 void Table::reset()
 {
     for (Process &p : rows_) {
@@ -236,6 +279,36 @@ void Table::reset()
     waiting_ = 0;
     due_count_ = 0;
     changes_++;
+}
+
+const char *time_text(uint64_t us, char *out, int capacity)
+{
+    const uint32_t tenths = static_cast<uint32_t>(us / 100000);
+    const uint32_t seconds = tenths / 10;
+    if (seconds < 60) {
+        snprintf(out, static_cast<size_t>(capacity), "%u.%us", static_cast<unsigned>(seconds),
+                 static_cast<unsigned>(tenths % 10));
+    } else if (seconds < 3600) {
+        snprintf(out, static_cast<size_t>(capacity), "%u:%02u", static_cast<unsigned>(seconds / 60),
+                 static_cast<unsigned>(seconds % 60));
+    } else {
+        snprintf(out, static_cast<size_t>(capacity), "%u:%02u:%02u", static_cast<unsigned>(seconds / 3600),
+                 static_cast<unsigned>(seconds / 60 % 60), static_cast<unsigned>(seconds % 60));
+    }
+    return out;
+}
+
+const char *memory_text(uint32_t bytes, char *out, int capacity)
+{
+    if (bytes == 0) {
+        snprintf(out, static_cast<size_t>(capacity), "-");
+    } else if (bytes < 1000 * 1024) {
+        snprintf(out, static_cast<size_t>(capacity), "%uK", static_cast<unsigned>((bytes + 1023) / 1024));
+    } else {
+        const unsigned tenths = static_cast<unsigned>((static_cast<uint64_t>(bytes) * 10 + (1 << 19)) >> 20);
+        snprintf(out, static_cast<size_t>(capacity), "%u.%uM", tenths / 10, tenths % 10);
+    }
+    return out;
 }
 
 Table &table()

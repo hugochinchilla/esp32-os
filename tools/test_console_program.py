@@ -70,7 +70,7 @@ def main():
     out = run(program, ["cd Documents", "type español.txt", "ps", "kill 1", "nonsense"])
     assert "help lists the commands." in out, out
     assert "C:\\Documents> Texto en español: año, niño, café, ¡hola!" in out, out
-    assert "    1     0  SP--   desktop" in out, out
+    assert "    1     0  SP--     0.0s      -  desktop" in out, out
     assert "kill: 1: it is protected" in out, out
     assert "nonsense: there is no such command" in out, out
 

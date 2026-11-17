@@ -196,6 +196,7 @@ const Command kCommands[] = {
     {"echo", &cmd_echo, "echo [TEXT...]", "Write the text"},
     {"ps", &cmd_ps, "ps", "List the processes"},
     {"tasklist", &cmd_ps, nullptr, ""},
+    {"top", &cmd_top, "top [-n N]", "Show the busiest processes, every two seconds; q leaves"},
     {"kill", &cmd_kill, "kill [-TERM | -KILL | -9] PID...", "Ask a process to end; -9 ends it without asking"},
     {"taskkill", &cmd_kill, nullptr, ""},
     {"free", &cmd_free, "free", "Show the free memory"},

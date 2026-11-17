@@ -10,6 +10,7 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
 #include <map>
 #include <cstdint>
 #include <vector>
@@ -230,6 +231,12 @@ public:
             threads_.emplace_back(fn, context);
         }
         return true;
+    }
+    uint64_t run_time_us() override
+    {
+        timespec t = {};
+        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &t);
+        return static_cast<uint64_t>(t.tv_sec) * 1000000u + static_cast<uint64_t>(t.tv_nsec) / 1000u;
     }
     void hold() { held_ = true; }
     void release()

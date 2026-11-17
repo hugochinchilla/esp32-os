@@ -43,6 +43,21 @@ public:
         return true;
     }
 
+    // The kernel's run-time counter for the calling task: µs, as set up for
+    // the task statistics (backlog item 1).
+    // What the scheduler has counted for the calling task: up to the last
+    // time it was switched in, so a little under.
+    uint64_t run_time_us() override
+    {
+#if CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS && CONFIG_FREERTOS_USE_TRACE_FACILITY
+        TaskStatus_t status = {};
+        vTaskGetInfo(nullptr, &status, pdFALSE, eRunning);
+        return static_cast<uint64_t>(status.ulRunTimeCounter);
+#else
+        return 0;
+#endif
+    }
+
 private:
     struct Start {
         ports::TaskFn fn = nullptr;

@@ -30,6 +30,83 @@ using proc::Pid;
 
 /* ---- The table by itself ---------------------------------------------------------- */
 
+// What a process has used: processor time, charged by a clock to whoever is
+// current, and memory, added and taken away by whoever hands it out.
+void test_figures()
+{
+    static proc::Table t;
+    static uint32_t now = 0;
+    const Pid desktop = t.spawn("desktop", proc::kNone, proc::kSystem);
+    const Pid editor = t.spawn("Editor", desktop, proc::kWindowed);
+    CHECK(t.find(editor)->cpu_us == 0 && t.find(editor)->memory == 0);
+
+    // Without a clock nothing is charged.
+    {
+        const proc::Scope as(&t, editor);
+        now += 500;
+    }
+    CHECK(t.find(editor)->cpu_us == 0);
+
+    // With one, the time between two changes of the current process goes to
+    // the one that was current. Scopes nest: the inner one's time is not the
+    // outer one's. Time with nobody current is nobody's.
+    t.set_clock([](void *) { return now; }, nullptr);
+    now += 1000;
+    {
+        const proc::Scope outer(&t, desktop);
+        now += 300;
+        {
+            const proc::Scope inner(&t, editor);
+            now += 2000;
+        }
+        now += 50;
+    }
+    now += 7000;
+    CHECK(t.find(desktop)->cpu_us == 350 && t.find(editor)->cpu_us == 2000);
+    // The clock is 32 bits of microseconds and wraps every 71 minutes: the
+    // difference is still right.
+    now = 0xFFFFFF00u;
+    {
+        const proc::Scope as(&t, editor);
+        now += 0x200;
+    }
+    CHECK(t.find(editor)->cpu_us == 2000 + 0x200);
+    // Time used elsewhere for a process (a job's task) is added.
+    t.add_cpu(editor, 5000000000ull);
+    t.add_cpu(99, 1);
+    CHECK(t.find(editor)->cpu_us == 5000000000ull + 2512);
+
+    // Memory: taken, given back, never below nothing, and a process that
+    // has gone is ignored.
+    t.add_memory(editor, 4096);
+    t.add_memory(editor, 600 * 1024);
+    CHECK(t.find(editor)->memory == 604 * 1024 && t.find(desktop)->memory == 0);
+    t.add_memory(editor, -4096);
+    CHECK(t.find(editor)->memory == 600 * 1024);
+    t.add_memory(editor, -(700 * 1024));
+    CHECK(t.find(editor)->memory == 0);
+    t.add_memory(99, 10);
+    // A new process in an old row starts from nothing.
+    t.add_memory(editor, 10);
+    CHECK(t.exit(editor));
+    const Pid next = t.spawn("Paint", desktop, proc::kWindowed);
+    CHECK(t.find(next)->cpu_us == 0 && t.find(next)->memory == 0);
+    t.set_clock(nullptr, nullptr);
+
+    // As text.
+    char text[16];
+    CHECK(strcmp(proc::time_text(0, text, sizeof text), "0.0s") == 0);
+    CHECK(strcmp(proc::time_text(4249999, text, sizeof text), "4.2s") == 0);
+    CHECK(strcmp(proc::time_text(59999999, text, sizeof text), "59.9s") == 0);
+    CHECK(strcmp(proc::time_text(187000000, text, sizeof text), "3:07") == 0);
+    CHECK(strcmp(proc::time_text(3765000000ull, text, sizeof text), "1:02:45") == 0);
+    CHECK(strcmp(proc::memory_text(0, text, sizeof text), "-") == 0);
+    CHECK(strcmp(proc::memory_text(1, text, sizeof text), "1K") == 0);
+    CHECK(strcmp(proc::memory_text(640 * 1024, text, sizeof text), "640K") == 0);
+    CHECK(strcmp(proc::memory_text(1200 * 1024, text, sizeof text), "1.2M") == 0);
+    CHECK(strcmp(proc::memory_text(8u << 20, text, sizeof text), "8.0M") == 0);
+}
+
 void test_table()
 {
     static proc::Table t;
@@ -730,6 +807,7 @@ void test_shell()
     }
     const proc::Process *editor = process("Editor");
     CHECK(editor != nullptr && editor->parent == files && strcmp(title(), "notes.txt - Editor") == 0);
+    CHECK(editor != nullptr && editor->memory > 100 * 1024); // its text buffer, asked of the Memory port
     const Pid editor_pid = editor->pid;
     CHECK(desktop.active()->owner() == editor_pid);
     // A second folder window is the same File manager.
@@ -868,6 +946,7 @@ void test_shell()
 int main()
 {
     test_table();
+    test_figures();
     test_signals_in_the_table();
     test_owners();
 

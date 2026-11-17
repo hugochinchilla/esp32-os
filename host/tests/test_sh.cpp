@@ -635,12 +635,35 @@ void test_processes()
     const proc::Pid game = m.procs.spawn("culebra", desktop, proc::kWindowed | proc::kRespawn);
     CHECK(desktop == 1 && editor == 2 && game == 3);
 
-    CHECK_TEXT(run(m, s, "ps"), "  PID  PPID  FLAGS  NAME\n"
-                                "    1     0  SP--   desktop\n"
-                                "    2     1  ---W   editor\n"
-                                "    3     1  --RW   culebra\n"
+    CHECK_TEXT(run(m, s, "ps"), "  PID  PPID  FLAGS     TIME    MEM  NAME\n"
+                                "    1     0  SP--     0.0s      -  desktop\n"
+                                "    2     1  ---W     0.0s      -  editor\n"
+                                "    3     1  --RW     0.0s      -  culebra\n"
                                 "S system  P protected  R restarts  W has windows\n");
     CHECK_TEXT(run(m, s, "tasklist"), run(m, s, "ps"));
+
+    // The figures: processor time and memory, in ps and in top. Where top
+    // cannot wait for a key (here; or sent to a file) it shows one table of
+    // the totals and returns.
+    m.procs.add_cpu(editor, 4200000);
+    m.procs.add_memory(editor, 640 * 1024);
+    m.procs.add_cpu(game, 187000000);
+    m.procs.add_memory(game, 1200 * 1024);
+    CHECK(run(m, s, "ps").find("    2     1  ---W     4.2s   640K  editor\n"
+                               "    3     1  --RW     3:07   1.2M  culebra\n") != std::string::npos);
+    const std::string table = run(m, s, "top");
+    CHECK(table.rfind("3 processes, on for 0:00:0", 0) == 0);
+    CHECK(table.find("\n\n  PID     TIME    MEM  NAME\n"
+                     "    1     0.0s      -  desktop\n"
+                     "    2     4.2s   640K  editor\n"
+                     "    3     3:07   1.2M  culebra\n") != std::string::npos);
+    CHECK(table.find("q to leave") == std::string::npos);
+    CHECK_TEXT(run(m, s, "top -n 2"), table);
+    CHECK_TEXT(run(m, s, "top > t.txt"), "");
+    CHECK(m.contents("C:\\t.txt").find("    3     3:07   1.2M  culebra") != std::string::npos);
+    CHECK_TEXT(run(m, s, "top -x", 1), "top: -x: it takes -n and a number of screens\n");
+    CHECK_TEXT(run(m, s, "top -n 0", 1), "top: -n: it takes -n and a number of screens\n");
+    m.procs.add_cpu(editor, 0);
 
     // kill leaves the signal on the row, for whoever runs the process.
     CHECK_TEXT(run(m, s, "kill 2"), "");
@@ -669,7 +692,7 @@ void test_processes()
     }
     CHECK(m.procs.count() == proc::Table::kMaxProcesses);
     const std::string full = run(m, s, "ps");
-    CHECK(full.find("   32     1  ---W   a process with a long n\n") != std::string::npos);
+    CHECK(full.find("   32     1  ---W     0.0s      -  a process with a long n\n") != std::string::npos);
 
     m.system.free_internal_ram = 123456;
     m.system.free_external_ram = 7654321;
@@ -808,7 +831,7 @@ void test_session_on_a_thread()
     // ps and kill are done by the UI thread, and the session waits for them.
     terminal.input("ps\r");
     const std::string list = wait_for("has windows\nC:\\> ");
-    CHECK(list.find("    2     1  ---W   editor\n") != std::string::npos);
+    CHECK(list.find("    2     1  ---W     0.0s      -  editor\n") != std::string::npos);
     CHECK(ui_ran == 1);
     terminal.input("kill 2\rkill 1\r");
     wait_for("kill: 1: it is protected\nC:\\> ");
@@ -864,6 +887,24 @@ void test_session_on_a_thread()
     terminal.input("q");
     page = wait_for("C:\\> ");
     CHECK(page.find("row 48") == std::string::npos);
+
+    // top has a task to wait on here: it clears the screen, shows each
+    // process's share of the processor since its last look, and comes back
+    // every two seconds until q. -n 1: one screen and back to the prompt.
+    terminal.input("top -n 1\r");
+    page = wait_for("C:\\> ");
+    CHECK(page.find("(q to leave)\n\n  PID   CPU     TIME    MEM  NAME\n") != std::string::npos);
+    CHECK(page.find("    1   0.0%    0.0s      -  desktop\n") != std::string::npos);
+    CHECK(page.find("\x1b[2J") != std::string::npos);
+    terminal.input("top\r");
+    wait_for("NAME\n");
+    wait_for("desktop\n");
+    terminal.input("q");
+    wait_for("C:\\> ");
+    terminal.input("top\r");
+    wait_for("desktop\n");
+    terminal.input("\x03");
+    wait_for("C:\\> ");
 
     terminal.input("exit\r");
     session.join();
