@@ -55,6 +55,13 @@ in the same change whenever a decision is made or reversed.
   `docs/os-calls.md`; backlog item 20). A new program uses only those and
   goes on the `MOVED` list of `tools/check_os_calls.py`; if a call is
   missing, add it there rather than reaching for `manager()` or `storage()`.
+- No backward compatibility (the owner's rule, 2026-11-17): there are no
+  releases and no users, and everything on the board may be wiped at any
+  time, C: included. When a file format or a setting changes, read only the
+  new form and have the board's copy rewritten; do not keep the old form
+  understood. The saved Wi-Fi networks are the one thing to leave alone
+  where that costs nothing; if they must go, ask the owner for the
+  credentials.
 - After board checks run `tools/dbg.py misses`: a missed video refill not
   caused by the debug link is a failure to chase, not noise. Do not hold a
   lock or mask interrupts for more than about 100 us, and do not call

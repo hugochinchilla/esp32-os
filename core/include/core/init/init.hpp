@@ -19,9 +19,9 @@
 //     console:off          not started
 //     terminal:once        a program or a file, as Start > Run... takes it
 //
-// The action is after the last colon, so a path keeps its own. The lines
-// of the first form, "start desktop" and "run terminal", are still
-// understood: a file written then goes on working.
+// The action is after the last colon, so a path keeps its own. This is the
+// only form: the verbs of the first one ("start desktop") are not read any
+// more (the owner, 2026-11-17: nothing on the board has to be kept).
 //
 // The parts are what the machine has said it has (add()): the desktop, its
 // taskbar and the network services today. What comes back is watched by

@@ -172,3 +172,68 @@ restart with that file; processes read with `ps` over telnet, the log with
 The single painted frame without the bar between an end and the restart was
 not filmed again in this turn; the earlier turn (the taskbar as a process)
 showed that restart is not visible to the eye.
+
+## The same day: the old form taken out
+
+Checked on the board and merged with the old lines still understood. The
+owner then wrote: do not support old formats, rewrite the file on my
+board; there are no releases, the board's data can be wiped whole, C:
+included; keep the saved Wi-Fi networks if that is free; simplify the
+parser.
+
+So the branch that read `start NAME` and `run WHAT` is gone from init:
+a line is `WHAT:ACTION` or it is not understood. One thing changes with
+it: a name init does not know is no longer "nothing here is called
+that" but a program to run, since the fields do not say which of the two
+a line means. The simulator's start-up text and the serial console test
+moved to the new form. The rule is in `CLAUDE.md` and `docs/DECISIONS.md`
+("No backward compatibility") for every thread.
+
+Tested: `test_init` with every line in the new form and `start desktop`
+as one of the lines that is not understood; all 41 PC tests pass, the
+pictures match. The firmware compiles and links (0x169640 bytes, with
+what `main` gained since). It has not run on the board. On the board the
+file has to be rewritten by hand or deleted, or the start-up box will
+count its lines: asked of the board thread.
+
+
+
+## On the board, only WHAT:ACTION (added by the board thread, 2026-11-17)
+
+Branch commit f3193a2 with main 6433aa0 merged in (clean). PC tests 42 of
+42, firmware 0x167a10, flashed by cable, the app only. Nothing but
+C:\.config\startup.txt was changed on the board: no erase, NVS and the rest
+of C: untouched.
+
+1. The first start after the flash, with the board's old file (the earlier
+   default: `start desktop`, `start inetd` and comments): the box "Start-up"
+   after the start; the log says "not understood: start desktop", "not
+   understood: start inetd", "no line starts desktop; started anyway", "no
+   line starts taskbar; started anyway", "2 lines failed". Desktop and bar up;
+   no network services (ports 23, 5900 and 80 refused, chinchilla.local did
+   not resolve).
+2. The file deleted and a restart: init wrote it again in the new form
+   (`desktop:once`, `taskbar:respawn`, `inetd:once`, `console:off`, with its
+   comments and `# terminal:once`); no box; the log has "started desktop",
+   "started taskbar", "started inetd", "console is off" and no "not
+   understood"; telnet, VNC and the web page answer.
+3. A file with `start desktop`, `taskbar:respawn`, `inetd:once`: the box,
+   "not understood: start desktop", and the desktop still came up. One line
+   of the log reads oddly: "init: taskbar goes before taskbar" (after
+   "desktop goes before taskbar"); harmless, but its wording could be
+   looked at.
+4. `editor:once` and `frobnicator:once` added: an Untitled Editor opened
+   ("init: ran editor"); "init: run frobnicator: Cannot find 'frobnicator'."
+   and the box with one failed line.
+5. respawn: the taskbar killed came back. The brake: six kills through one
+   telnet session, 0.7 to 0.8 s apart: after the fifth quick end "taskbar keeps
+   ending as soon as it starts; not started again"; `run taskbar` brought it
+   back. `taskbar:off` in place of respawn: no bar, "taskbar is off"; `run
+   taskbar` started it. (A first try with `taskbar:off` added above the
+   respawn line started the taskbar, as the later line asks.)
+6. `dbg.py misses`: none. VNC and telnet answered. Free RAM on the idle
+   desktop: internal 206,051 against 206,047 on main, external 6,469,328
+   against 6,469,572.
+
+Left on the board: the new-form file init wrote in 2. The old file is kept
+in the board thread's scratchpad.

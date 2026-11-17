@@ -16,7 +16,7 @@ import dbg  # noqa: E402
 
 
 def main():
-    env = dict(os.environ, CHINCHILLA_STARTUP="start desktop;start inetd;start console",
+    env = dict(os.environ, CHINCHILLA_STARTUP="desktop:once;inetd:once;console:once",
                ASAN_OPTIONS="detect_leaks=0")
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
