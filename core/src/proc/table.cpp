@@ -118,7 +118,23 @@ bool Table::exit(Pid pid)
     }
     *p = Process();
     changes_++;
+    for (const auto &told : exit_fns_) {
+        if (told.fn != nullptr) {
+            told.fn(pid, told.context);
+        }
+    }
     return true;
+}
+
+void Table::on_exit(ExitFn fn, void *context)
+{
+    for (auto &told : exit_fns_) {
+        if (told.fn == fn || told.fn == nullptr) {
+            told.fn = fn;
+            told.context = context;
+            return;
+        }
+    }
 }
 
 Sent Table::signal(Pid pid, Signal signal)

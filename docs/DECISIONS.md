@@ -2040,6 +2040,25 @@ the Terminal's process.
 - Left as they are for now: the serial console and telnet make their own
   TTY and shell; the shell's commands reach the system through `sh::Env`.
 
+### Open files are handles the system keeps (2026-11-17, the agent's, to confirm)
+
+Backlog item 37, first step. Journal:
+`docs/journal/2026-11-17-file-handles.md`. Started on the recommended
+option of a card the owner has not answered yet.
+
+- `os::file::open` and `begin_save` give a number, not an `fs::File` in
+  the program. The system keeps the table of which process holds which
+  file, and closes what a process leaves when it ends; a save not finished
+  is thrown away and the old file stays.
+- From a background job the call is given the job, which says whose the
+  file is. Not chosen: a per-task variable (hidden state), or opening on
+  the UI task (flash work where the job was meant to keep it away).
+- No lock: a slot is claimed by an atomic flag. The table (2 KB) comes
+  from the Memory port once, so it is external RAM on the board.
+- ponytail: six open in the machine, two for one process.
+- Still to do in item 37: the picture decoder's own file, windows as
+  numbers, events through a queue.
+
 ### Chosen for background jobs (2026-11-17, to confirm)
 
 Backlog item 10. Journal: `docs/journal/2026-11-17-jobs.md`. Chosen by the
