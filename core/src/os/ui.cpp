@@ -914,7 +914,20 @@ public:
 
 private:
     // Nothing reaches a program whose object has gone.
-    bool tell(const Event &e) { return !gone_ && events_(handle(), e, state_); }
+    // Every event goes to the program through here: on its own task, if it
+    // has one (core/prog), while this one waits.
+    bool tell(const Event &e)
+    {
+        if (gone_) {
+            return false;
+        }
+        if (owner() == proc::kNone) {
+            return events_(handle(), e, state_);
+        }
+        bool used = false;
+        proc::call_as(&proc::table(), owner(), [&] { used = events_(handle(), e, state_); });
+        return used;
+    }
 
     int slot_;
     Events events_;

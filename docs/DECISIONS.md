@@ -2158,6 +2158,28 @@ architecture" above already says about saves and signals.
 - On the board a job's task has priority 4, one below the UI task: the
   Normal class of item 11 ("Chosen for the priority classes").
 
+### Programs on tasks of their own (2026-11-17, the agent's, to confirm)
+
+Backlog item 26, first step. [Journal](journal/2026-11-17-program-tasks.md).
+The owner has been asked how a program paints from another task (the
+server waits for it; a lock on the screen; a picture per window; not doing
+it); what is below is built on the first, the one recommended, and is his
+to confirm or turn down.
+
+- A program may have a task of its own (`core/prog`). Every call into its
+  code goes through `proc::Table::call` and is handed to that task while
+  the caller waits: one of the two runs at a time, so windows, timers and
+  the process table still have no locks.
+- A call back into a program that is itself waiting is made where the
+  caller is. Rejected: letting the two wait for each other.
+- Which programs: a mark in the program table, one program at a time.
+  Culebra first.
+- 8 KB of stack from internal memory, counted as the program's; to be
+  measured.
+- Not yet: the limit on the wait (and with it the lock around the OS
+  calls, the grey window, the queue of events). Until then nothing is
+  gained but the measurement.
+
 ### Missed video refills are logged (2026-11-17, the owner's request)
 
 - `dbg.py tasks` stays as it is (the owner, 2026-11-17: "we can leave the

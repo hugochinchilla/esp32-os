@@ -38,6 +38,7 @@
 #include "rtos_queue.hpp"
 #include "rtos_tasks.hpp"
 #include "core/job/job.hpp"
+#include "core/prog/prog.hpp"
 #include "core/msg/input.hpp"
 #include "core/msg/queue.hpp"
 #include "core/net/posix_tcp.hpp"
@@ -1161,6 +1162,14 @@ extern "C" void app_main(void)
     // Background jobs (the Editor's save) get tasks of their own.
     static RtosTasks tasks;
     job::jobs().set_tasks(&tasks);
+    // Programs that run on a task of their own (backlog item 26).
+    static RtosEvent program_events[2 * prog::Runner::kMaxTasks];
+    static prog::Kit program_kits[prog::Runner::kMaxTasks];
+    for (int i = 0; i < prog::Runner::kMaxTasks; i++) {
+        program_kits[i].go = &program_events[2 * i];
+        program_kits[i].done = &program_events[2 * i + 1];
+    }
+    prog::runner().set_tasks(&tasks, program_kits, prog::Runner::kMaxTasks);
 
     ESP_LOGI(TAG, "starting video on core 1");
     static StaticSemaphore_t done_buffer;

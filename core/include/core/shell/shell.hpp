@@ -40,6 +40,9 @@ struct App {
     // Each launch is another copy, in a process of its own that open() makes
     // (the Editor). Otherwise the program runs once at a time.
     bool many = false;
+    // Its code runs on a task of its own where the machine has tasks
+    // (core/prog, backlog item 26): the first one is Culebra.
+    bool own_task = false;
 };
 
 int app_count();

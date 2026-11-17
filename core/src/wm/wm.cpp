@@ -1832,10 +1832,15 @@ void Wm::choose(int level, int item)
     }
     void (*action)(void *) = it.action;
     void *context = it.context;
-    const proc::Scope as(procs_, popups_[level].owner);
+    const proc::Pid owner = popups_[level].owner;
+    const proc::Scope as(procs_, owner);
     close_menus();
     if (action != nullptr) {
-        action(context);
+        if (procs_ != nullptr && owner != proc::kNone) {
+            procs_->call(owner, action, context); // on the program's own task, if it has one
+        } else {
+            action(context);
+        }
     }
 }
 
@@ -2302,7 +2307,11 @@ void Wm::tick()
         } else {
             t.id = 0;
         }
-        fn(context);
+        if (procs_ != nullptr && t.owner != proc::kNone) {
+            procs_->call(t.owner, fn, context); // on the program's own task, if it has one
+        } else {
+            fn(context);
+        }
     }
     if (saver_on_) {
         saver_->tick(now);

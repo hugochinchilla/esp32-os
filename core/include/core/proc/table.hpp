@@ -67,6 +67,11 @@ using StopFn = void (*)(Pid pid, Signal signal, void *context);
 // Told of every process that ends (see Table::on_exit).
 using ExitFn = void (*)(Pid pid, void *context);
 
+// A call into a program's code, and whoever makes such calls on the
+// program's own task (see Table::call).
+using CallFn = void (*)(void *context);
+using CallerFn = void (*)(Pid pid, CallFn fn, void *context, void *self);
+
 struct Process;
 
 // Whoever looks after what ends (see Table::set_supervisor): init. The
@@ -231,6 +236,17 @@ public:
     void set_figures_source(void (*source)(void *context), void *context);
     void bring_up_to_date();
 
+    // Calls into a program's code: fn(context) with `pid` as the current
+    // process. Every such call from outside the program goes through here
+    // (an event for its window, its timer, its menu's action, a message, a
+    // job's result), so that a program with a task of its own (core/prog)
+    // has it made there; without a caller set, it is made here.
+    void call(Pid pid, CallFn fn, void *context);
+    void set_caller(CallerFn caller, void *self)
+    {
+        caller_ = caller;
+        caller_self_ = self;
+    }
     // Tests: an empty table that counts from 1 again.
     void reset();
 
@@ -254,6 +270,8 @@ private:
     void *stop_jobs_context_ = nullptr;
 
     Supervisor *supervisor_ = nullptr;
+    CallerFn caller_ = nullptr;
+    void *caller_self_ = nullptr;
     struct {
         ExitFn fn = nullptr;
         void *context = nullptr;
@@ -283,6 +301,18 @@ private:
     Table *table_;
     Pid before_;
 };
+
+// Table::call for a lambda or any other callable: `call_as(table, pid, [&] {
+// ... })`. A null table calls it here.
+template <class F> void call_as(Table *table, Pid pid, F &&f)
+{
+    if (table == nullptr) {
+        f();
+        return;
+    }
+    table->call(
+        pid, [](void *context) { (*static_cast<F *>(context))(); }, const_cast<void *>(static_cast<const void *>(&f)));
+}
 
 // The figures as text, for whoever lists processes: processor time as
 // "4.2s", "3:07" or "1:02:45"; memory as "640K" or "1.2M" ("-" for none).
