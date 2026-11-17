@@ -2352,7 +2352,7 @@ Step 2 of backlog item 46, compiled but not run on the board
 `docs/journal/2026-11-17-bios-first-screen.md`.
 
 - Before the self-test the BIOS shows a first screen (asked for as 2 or
-  3 s; held until 7 s after the reset, to confirm, because the bench
+  3 s; held until 7 s after the reset, the owner's choice on a card, because the bench
   monitor was measured to show a steady picture only 5.5 to 6 s after a
   reset, for the BIOS and for `main` alike, not the 2.4 s recorded on
   2026-11-16), as the PCs

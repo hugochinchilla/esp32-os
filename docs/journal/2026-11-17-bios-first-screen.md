@@ -168,7 +168,7 @@ Options:
   about a second, then the self-test's lines at once.
 - C. No first screen: the self-test's header until 7 s.
 
-Chosen: B, to confirm with the owner. The three take the same time, and
+Chosen: B, by the owner on a card ("Until 7 s, then self-test", 2026-11-17 19:06 UTC), after it was built as the recommendation. The three take the same time, and
 only B shows both the screen he asked for and the self-test from its first
 line. Built: `kSplashMs` is 6,500 (the video starts 0.5 s after the
 reset) and the BIOS's own wait before the lines is 0. From reset: first
