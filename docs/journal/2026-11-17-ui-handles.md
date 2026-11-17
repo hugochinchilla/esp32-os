@@ -309,3 +309,10 @@ from the shell.
 
 PC tests pass (41 of 41), the pictures match. Firmware not compiled
 since, and not run.
+
+The commit that moved the Defragmenter was pushed with `test_system` not
+compiling (a semicolon lost in a count of blocks): the command that ran
+the tests went on to the commit when it should have stopped, the same
+kind of slip as with the Screen Saver. Fixed in the next commit, and the
+checks before a commit are one script now, `tools/gate.sh`, which fails
+unless the build, every test, the pictures and the OS-call check pass.
