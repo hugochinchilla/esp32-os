@@ -250,6 +250,32 @@ drivers, no PSRAM). Nothing is built. The details still open are under
 Still open; the whole conversation is in
 `docs/journal/2026-11-17-bios-stage.md`.
 
+Measured on the board the same day
+(`docs/journal/2026-11-17-bios-restart-measured.md`): a restart loses the
+picture every time, for 3.5 to 3.9 s; the video signal is back 0.76 s after
+the reset and the display needs about 3 s more. So the handover from the
+BIOS to the OS is a blank of about 3.8 s that ends on the desktop, and a
+splash would have to stay about 4 s to be seen. The owner accepted the blank
+("Yes, go ahead").
+The bootloader hook was confirmed by reading ESP-IDF v5.5's source (not
+compiled): our own copy of `bootloader_start.c` starts an app of subtype
+`test`, the BIOS, unless the reserved RTC memory
+(`CONFIG_BOOTLOADER_CUSTOM_RESERVE_RTC`) says it has just run.
+
+### BIOS stage: flash and details (2026-11-17)
+
+Decided by the owner: the BIOS takes 1 MB from C:. The BIOS partition is
+0x10000 to 0x100000, the two update slots stay 1.94 MB each (from 0x100000
+and 0x2f0000), `otadata` at 0x4e0000, C: from 0x500000 with 11 MB; C: is
+wiped once, NVS (the Wi-Fi networks) is not. Not chosen: a 384 KB BIOS with
+two slots of 1.75 MB (tight for both); a 1 MB BIOS with a single OS slot (no
+way back after a bad update). Not applied yet: the table changes when the
+BIOS is built.
+
+Taken as recommended, the owner did not object (to confirm): the BIOS's
+settings live in NVS, not `boot.ini`; the BIOS shows the crash screen;
+an OS image received over serial is a later step.
+
 ### BIOS screen font (2026-11-17)
 
 Decided by the owner: the BIOS's screen is a true text screen, 80 by 30 characters of 8x16 on
@@ -387,7 +413,6 @@ and reasons are in `docs/journal/2026-11-17-program-lifecycle.md`.
 | A PC build of the desktop for testing | Yes, no | Decided: yes. See Decided |
 | How the PC build shows the screen | SDL window, image files only | Open |
 | Clock chip | DS3231 module, another I2C chip | DS3231 |
-| Details of the BIOS stage (`docs/journal/2026-11-17-bios-stage.md`) | How the app area is split (a small BIOS and two smaller update slots, or a larger BIOS and one OS slot); the blank monitor at the handover; settings in NVS or `boot.ini`; an OS image over serial; who shows the crash screen | Small BIOS and two slots; the splash covers the blank; NVS; yes, later; the BIOS |
 
 ## Ideas kept for later
 
@@ -1156,6 +1181,11 @@ Build and use: `README.md`, "Chinchilla as a desktop program".
   within 3 seconds leaves at once. Restart starts the program again.
 - The memory figures in Task Manager and the self-test are the simulator's
   pretend ones, not the PC's and not limits.
+- An `inetd` that serves nothing (the owner's choice, 2026-11-17), here and
+  in the browser: the start-up file is the board's, which starts inetd,
+  and without one every new C: opened with a "Start-up" box. The file stays
+  one file for every machine. The row has no task behind it, the one
+  exception to that rule. Journal: `docs/journal/2026-11-17-empty-inetd.md`.
 
 ### Chosen for the browser version (2026-11-17, to confirm)
 
@@ -2323,3 +2353,21 @@ Backlog item 43. "yes, solid steel blue": the default is Steel blue (73,
 "Chinchilla blue" stays in the list, second, and a `desktop.ini` that
 names it keeps it. This closes the question left open in the second
 review round. Journal: `docs/journal/2026-11-17-solid-default.md`.
+
+### Chosen for the BIOS's text screen (2026-11-17, to confirm)
+
+Step 1 of backlog item 46, built on the PC only
+(`docs/journal/2026-11-17-bios-text-screen.md`).
+
+- One grid of 80 by 30 cells with a cursor: what is printed goes to the
+  screen and, as plain text, to serial, so the two cannot differ.
+- A line that changes in place (the memory count, the countdown) is sent to
+  serial as carriage return, "erase line" and the new text. No colour on
+  serial.
+- "Detecting keyboard" instead of "Detecting mouse"; the memory figures
+  bright; a bottom line with an identity string given by whoever starts the
+  BIOS.
+- Not shown until they are true: a "Boot device" line and a boot menu key.
+- The reference picture `docs/look/bios-text/bios-post.png` is drawn by
+  `tools/mockup/bios_text.py` from the font's BDF file; the PC test compares
+  the screen with it pixel for pixel.

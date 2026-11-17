@@ -1,6 +1,8 @@
 # The portable core. Builds as an ESP-IDF component and as a plain CMake
 # library for the PC. Nothing in here may include ESP-IDF or OS headers.
 set(CORE_SRCS
+    src/bios/post.cpp
+    src/bios/text_screen.cpp
     src/dbg/cobs.cpp
     src/dbg/crc.cpp
     src/dbg/protocol.cpp
