@@ -257,7 +257,7 @@ void test_programs()
     // may be left over by anything below.
     const int base = memory.in_use();
     const size_t base_bytes = memory.bytes_in_use();
-    CHECK(t.count() == 1 && desktop.window_count() == 0);
+    CHECK(t.count() == 2 && desktop.window_count() == 0);
 
     // Every program on the Start menu: while open it holds memory; closed,
     // it holds none, and its process is gone. Twice over, so the second run
@@ -275,7 +275,7 @@ void test_programs()
             }
             key(wm::key::F4, kAlt);
             wait(10000);
-            if (desktop.window_count() != 0 || memory.in_use() != base || t.count() != 1) {
+            if (desktop.window_count() != 0 || memory.in_use() != base || t.count() != 2) {
                 printf("%s left %d windows, %d blocks, %d processes\n", app.name, desktop.window_count(),
                        memory.in_use() - base, t.count() - 1);
                 failures++;
@@ -315,11 +315,11 @@ void test_programs()
     key(wm::key::F4, kAlt);
     CHECK(desktop.window_count() == 1 && memory.in_use() == one_window && processes_named("File manager") == 1);
     key(wm::key::F4, kAlt);
-    CHECK(memory.in_use() == base && t.count() == 1);
+    CHECK(memory.in_use() == base && t.count() == 2);
     shell::open_trash();
     CHECK(strcmp(title(), "Trash") == 0 && memory.in_use() > base);
     key(wm::key::F4, kAlt);
-    CHECK(memory.in_use() == base && t.count() == 1);
+    CHECK(memory.in_use() == base && t.count() == 2);
 }
 
 void test_editors()
@@ -392,7 +392,7 @@ void test_editors()
     wait(10000);
     CHECK(processes_named("Editor") == 2);
     close_all();
-    CHECK(processes_named("Editor") == 0 && t.count() == 1 && memory.in_use() == base);
+    CHECK(processes_named("Editor") == 0 && t.count() == 2 && memory.in_use() == base);
     (void)two;
 }
 
@@ -425,7 +425,7 @@ void test_dialogs()
         wait(1500000);
         key(wm::key::Escape);
         wait(10000);
-        if (memory.in_use() != base || t.count() != 1 || desktop.window_count() != 0) {
+        if (memory.in_use() != base || t.count() != 2 || desktop.window_count() != 0) {
             printf("%s left %d windows, %d blocks, %d processes\n", tool.process, desktop.window_count(),
                    memory.in_use() - base, t.count() - 1);
             failures++;
@@ -438,7 +438,7 @@ void test_dialogs()
     shell::display_dialog();
     key(wm::key::Right); // the next colour
     key(wm::key::Enter); // OK
-    CHECK(memory.in_use() == base && t.count() == 1);
+    CHECK(memory.in_use() == base && t.count() == 2);
     const wm::Wm::Backdrop chosen = desktop.backdrop();
     shell::display_dialog();
     key(wm::key::Right);
@@ -486,7 +486,7 @@ void test_dialogs()
     CHECK(desktop.window_count() == 2);
     desktop.close(*find("Task Manager"));
     wait(10000);
-    CHECK(desktop.window_count() == 0 && answers == 100 && memory.in_use() == base && t.count() == 1);
+    CHECK(desktop.window_count() == 0 && answers == 100 && memory.in_use() == base && t.count() == 2);
 
     // The Picture viewer's Options and the Network panel's password dialog
     // are made for one showing as well.
@@ -501,7 +501,7 @@ void test_dialogs()
     letter('v', kAlt);
     letter('o');
     close_all(); // the viewer and its dialog together
-    CHECK(memory.in_use() == base && t.count() == 1);
+    CHECK(memory.in_use() == base && t.count() == 2);
 }
 
 void test_no_memory()
@@ -525,7 +525,7 @@ void test_no_memory()
     shell::open_folder("C:\\");
     shell::message_box("Note", "Not shown.");
     wait(10000);
-    CHECK(memory.refused > 0 && desktop.window_count() == 0 && t.count() == 1 && memory.in_use() == base);
+    CHECK(memory.refused > 0 && desktop.window_count() == 0 && t.count() == 2 && memory.in_use() == base);
     memory.empty = false;
 
     // Room for windows but not for the big buffers: the program says so and
@@ -535,12 +535,12 @@ void test_no_memory()
     CHECK(strcmp(title(), "Editor") == 0); // "not enough memory"
     key(wm::key::Enter);
     wait(10000);
-    CHECK(desktop.window_count() == 0 && t.count() == 1 && memory.in_use() == base);
+    CHECK(desktop.window_count() == 0 && t.count() == 2 && memory.in_use() == base);
     shell::open_picture("C:\\pictures\\landscape.jpg");
     CHECK(strcmp(title(), "Picture viewer") == 0);
     key(wm::key::Enter);
     wait(10000);
-    CHECK(desktop.window_count() == 0 && t.count() == 1 && memory.in_use() == base);
+    CHECK(desktop.window_count() == 0 && t.count() == 2 && memory.in_use() == base);
     memory.limit = 0;
 
     // The window manager full (16 windows): a program that finds no room is
@@ -572,7 +572,7 @@ void test_no_memory()
         key(wm::key::Enter); // anything that asked
         close_all();
     }
-    CHECK(desktop.window_count() == 0 && t.count() == 1 && memory.in_use() == base);
+    CHECK(desktop.window_count() == 0 && t.count() == 2 && memory.in_use() == base);
 }
 
 // What a game remembers is in its settings file, since nothing of it stays

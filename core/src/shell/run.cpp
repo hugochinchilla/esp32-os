@@ -234,6 +234,15 @@ bool run_text(const char *typed, const char *folder, char *why, size_t capacity,
         snprintf(why, capacity, "Type the name of a program, a folder or a file first.");
         return false;
     }
+    if (programs && strcasecmp(text, "taskbar") == 0) {
+        // Not in the Start menu, for the day it is not there to have one:
+        // from a console, after it ended too often to be started again.
+        if (!start_taskbar_again()) {
+            snprintf(why, capacity, "The taskbar is already running.");
+            return false;
+        }
+        return true;
+    }
     if (programs) {
         if (const App *a = program_named(text)) {
             launch(*a);

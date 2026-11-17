@@ -422,7 +422,7 @@ void test_desktop()
     CHECK(root != nullptr && root->pid == proc::kRoot);
     CHECK(desk != nullptr && desk->pid == 2 && desk->parent == proc::kRoot);
     CHECK(desk != nullptr && desk->is(proc::kSystem) && desk->is(proc::kProtected));
-    CHECK(desktop.processes() == &t && desktop.timers_of(2) >= 3 && desktop.timers_of(proc::kRoot) == 0);
+    CHECK(desktop.processes() == &t && desktop.timers_of(2) >= 2 && desktop.timers_of(proc::kRoot) == 0);
 
     // What the file ran is init's child, as a program a start-up script
     // starts is on Unix; what the desktop opens by itself is the desktop's.

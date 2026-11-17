@@ -118,6 +118,10 @@ template <class T> void open_one(const char *program)
     }
 }
 
+// The taskbar's process (desktop.cpp): starts it if it is not running, as
+// after it ended too often to be restarted. False if it runs.
+bool start_taskbar_again();
+
 // Starts following the network, if there is one (network.cpp).
 void start_network();
 
