@@ -238,6 +238,7 @@ public:
         return r;
     }
     void end(ports::TaskId) override { ended++; }
+    void set_priority(ports::TaskId, ports::Priority priority) override { last_priority = priority; }
     // Live while the thread runs; what it had used at its end afterwards.
     uint64_t run_time_us(ports::TaskId task) override
     {

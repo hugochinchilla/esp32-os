@@ -18,6 +18,7 @@
 #include "core/dbg/protocol.hpp"
 #include "core/fs/memory_volume.hpp"
 #include "core/init/init.hpp"
+#include "core/prog/prog.hpp"
 #include "core/msg/input.hpp"
 #include "core/msg/queue.hpp"
 #include "core/sh/console.hpp"
@@ -205,6 +206,15 @@ int main(int argc, char **argv)
     // mouse come to the desktop as messages.
     static PipeQueue queue;
     msg::set_queue(&queue);
+    // Programs that run on a task of their own (Culebra), as on the board.
+    static host::ThreadTasks program_tasks;
+    static host::ThreadEvent program_events[2 * prog::Runner::kMaxTasks];
+    static prog::Kit program_kits[prog::Runner::kMaxTasks];
+    for (int i = 0; i < prog::Runner::kMaxTasks; i++) {
+        program_kits[i] = {&program_events[2 * i], &program_events[2 * i + 1]};
+    }
+    prog::runner().set_tasks(&program_tasks, program_kits, prog::Runner::kMaxTasks);
+    prog::runner().set_limit(prog::Runner::kLimitMs);
     static msg::Inbox inbox(queue);
     static msg::PostedInput remote_input(screen);
     static rfb::Server remote(display, pointer, remote_input, clock, memory);

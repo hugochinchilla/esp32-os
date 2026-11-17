@@ -22,6 +22,7 @@ The journal entry with the reasons is
 | | `os::find(name)` | The process with that name |
 | | `os::As as(pid);` | Until the end of the block, what is opened or asked for is that process's |
 | | `os::process_count()`, `os::process_at(i)`, `os::process(pid)`, `os::alive(pid)` | The process list, for the tools that show it |
+| | `os::responding(pid)` | False while a program on a task of its own is in a call that has taken longer than the system waits |
 | | `os::refresh_figures()` | Time and memory of running jobs brought up to now |
 | | `os::signal(pid, signal)` | Asks a process to close, or ends it; the answer says if it may be |
 | Time | `os::now_us()` | Microseconds since start-up |

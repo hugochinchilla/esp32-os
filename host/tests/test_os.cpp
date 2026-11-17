@@ -1,13 +1,17 @@
 // The OS calls (core/os/os.hpp): whose a block of memory is, the files, a
 // process and a scope, and that the programs moved to them give back what
 // they asked for.
+#include <atomic>
+#include <chrono>
 #include <cstdio>
+#include <thread>
 #include <cstring>
 
 #include "core/fs/memory_volume.hpp"
 #include "core/app/app.hpp"
 #include "core/os/os.hpp"
 #include "core/proc/table.hpp"
+#include "core/prog/prog.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/wm.hpp"
 #include "../host_adapters.hpp"
@@ -537,6 +541,116 @@ void test_ui()
     CHECK(sample_gone == 2 && !os::ui::alive(number) && os::blocks_out() == blocks && !os::alive(second));
 }
 
+// A program on a task of its own that stops answering (backlog item 26):
+// the desktop goes on without it, its picture is grey, and it can be ended.
+host::ThreadEvent sleepy_gate;
+std::atomic<int> sleepy_hangs{0}, sleepy_woke{0}, sleepy_paints{0};
+std::atomic<bool> sleepy_ended{false};
+app::Number sleepy_number = app::kNone;
+constexpr gfx::Colour kSleepyInk = gfx::rgb(7, 0, 0);
+
+class Sleepy : public app::Window {
+public:
+    Sleepy() : picture_(picture({10, 10, 60, 40})) {}
+    bool key(const wm::KeyMsg &k) override
+    {
+        if (!k.pressed || k.usage != wm::key::A + 7) { // H: hang
+            return false;
+        }
+        sleepy_hangs++;
+        sleepy_gate.wait(0xFFFFFFFF);
+        if (sleepy_ended) {
+            return true; // ended while it hung: nothing of it is left to touch
+        }
+        sleepy_woke++;
+        picture_.redraw(); // an OS call, from a program that is late
+        return true;
+    }
+    void paint_in(app::Control, app::Canvas &c) override
+    {
+        sleepy_paints++;
+        c.fill({0, 0, 60, 40}, kSleepyInk);
+    }
+
+private:
+    app::Picture picture_;
+};
+
+template <class F> bool soon(F &&f)
+{
+    for (int i = 0; i < 400 && !f(); i++) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        wait(10000);
+    }
+    return f();
+}
+
+void test_not_responding()
+{
+    static host::ThreadTasks tasks;
+    static host::ThreadEvent events[2];
+    static prog::Kit kit = {&events[0], &events[1]};
+    prog::Runner &runner = prog::runner();
+    runner.set_tasks(&tasks, &kit, 1);
+    runner.set_limit(50);
+    const uint32_t blocks = os::blocks_out();
+
+    const proc::Pid pid = os::spawn("Sleepy");
+    CHECK(runner.start(pid));
+    proc::table().call(
+        pid,
+        [](void *) {
+            app::Look look;
+            look.title = "Sleepy";
+            look.width = 200;
+            look.height = 120;
+            sleepy_number = app::open<Sleepy>(look);
+        },
+        nullptr);
+    wait(10000);
+    CHECK(sleepy_number != app::kNone && desktop.active() != nullptr && desktop.active()->owner() == pid);
+    const gfx::Rect client = desktop.active()->client();
+    const auto ink = [&] { return display.pixels()[(client.y + 30) * 640 + client.x + 40]; };
+    CHECK(ink() == kSleepyInk && sleepy_paints > 0 && os::responding(pid));
+
+    // It hangs on a key. The key comes back unanswered after the limit and
+    // the program is marked; its picture goes grey; the desktop goes on.
+    press(wm::key::A + 7);
+    CHECK(sleepy_hangs == 1 && !os::responding(pid));
+    wait(10000);
+    CHECK(ink() == gfx::kGrey);
+    // Nothing more reaches it, and nothing waits for it.
+    const int paints = sleepy_paints;
+    press(wm::key::A + 7);
+    press(wm::key::Enter);
+    desktop.repaint_all();
+    wait(10000);
+    CHECK(sleepy_hangs == 1 && sleepy_paints == paints && ink() == gfx::kGrey);
+    CHECK(proc::table().current() == proc::table().find_by_name("desktop"));
+
+    // It wakes up: its OS call is let in when the desktop has nothing else
+    // under way, it is taken back, and it paints again.
+    sleepy_gate.set();
+    CHECK(soon([&] { return os::responding(pid); }));
+    wait(10000);
+    CHECK(sleepy_woke == 1 && ink() == kSleepyInk && sleepy_paints > paints);
+
+    // It hangs again and its window is closed: the program is ended without
+    // its say, and what it held comes back.
+    press(wm::key::A + 7);
+    CHECK(sleepy_hangs == 2 && !os::responding(pid));
+    sleepy_ended = true;
+    desktop.close(*desktop.active());
+    wait(10000);
+    CHECK(!os::alive(pid) && !os::ui::alive(sleepy_number));
+    CHECK(os::blocks_out() == blocks);
+    // (A thread of the PC cannot be taken away: it is let finish.)
+    sleepy_gate.set();
+    CHECK(soon([&] { return runner.tasks() == 0; }));
+    runner.set_limit(prog::kForever);
+    runner.set_tasks(nullptr, nullptr, 0);
+}
+
 int main()
 {
     static fs::MemoryVolume disk(memory.allocate(1 << 18), 1 << 18, "RAM disk");
@@ -552,7 +666,8 @@ int main()
     test_windows_and_time();
     test_process_list();
     test_programs_give_back();
-    test_ui(); // before the last one, which ends with the screen taken by Shut Down
+    test_ui();
+    test_not_responding(); // before the last one, which ends with the screen taken by Shut Down
     test_desktop_calls();
 
     if (failures == 0) {

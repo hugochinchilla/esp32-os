@@ -18,7 +18,9 @@
 // One task only for now: the UI task makes and ends every process. No heap.
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
+#include <type_traits>
 
 namespace proc {
 
@@ -66,6 +68,13 @@ using StopFn = void (*)(Pid pid, Signal signal, void *context);
 
 // Told of every process that ends (see Table::on_exit).
 using ExitFn = void (*)(Pid pid, void *context);
+
+// A call into a program's code, and whoever makes such calls on the
+// program's own task (see Table::call).
+using CallFn = void (*)(void *context);
+using CallerFn = bool (*)(Pid pid, CallFn fn, void *context, size_t size, void *self);
+// The most a call's context may be when it is handed over by copy.
+constexpr size_t kCallRoom = 384;
 
 struct Process;
 
@@ -231,6 +240,34 @@ public:
     void set_figures_source(void (*source)(void *context), void *context);
     void bring_up_to_date();
 
+    // Calls into a program's code: fn(context) with `pid` as the current
+    // process. Every such call from outside the program goes through here
+    // (an event for its window, its timer, its menu's action, a message, a
+    // job's result), so that a program with a task of its own (core/prog)
+    // has it made there; without a caller set, it is made here. With a
+    // size, the context is that many bytes, copied for the program and back
+    // (prog::Runner::call). False: not made, or not finished in time (the
+    // program is not responding).
+    bool call(Pid pid, CallFn fn, void *context, size_t size = 0);
+    void set_caller(CallerFn caller, void *self)
+    {
+        caller_ = caller;
+        caller_self_ = self;
+    }
+    // What whoever makes the calls has to do on the UI task when nothing
+    // else is under way (prog::Runner::serve): the window manager calls
+    // between() once a round.
+    void set_between(void (*fn)(void *self), void *self)
+    {
+        between_ = fn;
+        between_self_ = self;
+    }
+    void between()
+    {
+        if (between_ != nullptr) {
+            between_(between_self_);
+        }
+    }
     // Tests: an empty table that counts from 1 again.
     void reset();
 
@@ -254,6 +291,10 @@ private:
     void *stop_jobs_context_ = nullptr;
 
     Supervisor *supervisor_ = nullptr;
+    CallerFn caller_ = nullptr;
+    void (*between_)(void *self) = nullptr;
+    void *between_self_ = nullptr;
+    void *caller_self_ = nullptr;
     struct {
         ExitFn fn = nullptr;
         void *context = nullptr;
@@ -283,6 +324,25 @@ private:
     Table *table_;
     Pid before_;
 };
+
+// Table::call for a lambda or any other callable: `call_as(table, pid, [=] {
+// ... })`. The callable is handed over by copy and copied back, so what it
+// holds by value is safe from a program that does not come back in time,
+// and results it keeps in itself can be read afterwards (pass it by name).
+// What it holds by reference must outlive a late program. A null table
+// calls it here.
+template <class F> bool call_as(Table *table, Pid pid, F &&f)
+{
+    using Fn = typename std::remove_const<typename std::remove_reference<F>::type>::type;
+    static_assert(std::is_trivially_copyable<Fn>::value && sizeof(Fn) <= kCallRoom, "handed over by copy");
+    if (table == nullptr) {
+        f();
+        return true;
+    }
+    return table->call(
+        pid, [](void *context) { (*static_cast<Fn *>(context))(); },
+        const_cast<void *>(static_cast<const void *>(&f)), sizeof(Fn));
+}
 
 // The figures as text, for whoever lists processes: processor time as
 // "4.2s", "3:07" or "1:02:45"; memory as "640K" or "1.2M" ("-" for none).

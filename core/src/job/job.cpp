@@ -124,8 +124,7 @@ void Jobs::finish(Slot &slot)
     procs_.job_finished(owner);
     procs_.add_memory(owner, -static_cast<int32_t>(slot.stack));
     if (spec.done != nullptr && procs_.alive(owner)) {
-        const proc::Scope as(&procs_, owner);
-        spec.done(spec.context, result, stopped);
+        proc::call_as(&procs_, owner, [spec, result, stopped] { spec.done(spec.context, result, stopped); });
     }
 }
 
@@ -138,8 +137,10 @@ void Jobs::stop(proc::Pid pid)
         s.job.stop_.store(true);
         if (!s.told && s.spec.stop != nullptr) {
             s.told = true;
-            const proc::Scope as(&procs_, pid);
-            s.spec.stop(s.spec.context);
+            {
+                Slot *slot = &s;
+                proc::call_as(&procs_, pid, [slot] { slot->spec.stop(slot->spec.context); });
+            }
         }
     }
 }

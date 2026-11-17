@@ -55,8 +55,10 @@ using TaskFn = void (*)(void *context);
 // Low: only when the desktop and the Normal tasks are waiting. Normal: just
 // under the desktop, which is never kept from an event. High: level with the
 // desktop, taking turns with it. All three are below the video, Wi-Fi and
-// the network stack.
-enum class Priority : uint8_t { Low, Normal, High };
+// the network stack. Idle: level with the kernel's own idle tasks, for a
+// program that has stopped answering: it may spin for ever, and the idle
+// tasks must still get their turn (on the board they feed a watchdog).
+enum class Priority : uint8_t { Low, Normal, High, Idle };
 // What names a started task to the adapter that started it.
 using TaskId = void *;
 class Tasks {
@@ -72,6 +74,14 @@ public:
     // The processor time a task has used so far, in µs; 0 where it cannot
     // be told. Between start() and end() only.
     virtual uint64_t run_time_us(TaskId) { return 0; }
+    // Changes how a task stands against the desktop (a program that has
+    // stopped answering goes to Low until it answers again).
+    virtual void set_priority(TaskId, Priority) {}
+    // Takes away a task whose fn has not returned (a program that hangs).
+    // True if it is gone and its stack given back: end() is then not called.
+    // False where a task cannot be taken away (a thread of the PC): it is
+    // left to return by itself. Never for a task that may hold a lock.
+    virtual bool kill(TaskId) { return false; }
 
 protected:
     ~Tasks() = default;
