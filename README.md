@@ -14,7 +14,7 @@ injected input and file transfer.
 
 ## Try it in the browser
 
-**<https://hugochinchilla.github.io/esp32-os/>**
+**<https://www.hugochinchilla.net/esp32-os/>**
 
 The same desktop, running in a web page with nothing to install. It needs a
 mouse and a keyboard. Files saved on its C: stay in your own browser. It is

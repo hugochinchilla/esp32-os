@@ -44,10 +44,22 @@ workflow; it is the setting. 3 and 4 do not avoid it.
 
 ## What was built
 
-`README.md` gets a "Try it in the browser" section near the top with the
-address, `https://hugochinchilla.github.io/esp32-os/`. **When this was
-written the address did not answer yet**; it does once Pages is on and a
-run of the workflow has passed.
+The laptop thread turned Pages on with the owner's sign-in (source: GitHub
+Actions, nothing else changed) and ran the failed deployment of run 5
+again. It passed.
+
+The page is at `https://www.hugochinchilla.net/esp32-os/`, not at the
+`github.io` address everyone expected: the owner's own GitHub site has his
+domain set, and GitHub applies it to every project's pages too.
+`https://hugochinchilla.github.io/esp32-os/` answers with a redirect (302)
+to it.
+
+`README.md` gets a "Try it in the browser" section near the top with that
+address. Checked from the cloud: the address serves the page (title
+"Chinchilla", the text "Starting Chinchilla..."), also over https. Not
+checked: the published page running in a browser; the cloud machine's
+network does not reach that host, and the same build was run in Chromium
+before publishing.
 
 ## What was learned
 
