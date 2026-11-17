@@ -39,6 +39,7 @@ enum class What : uint8_t {
     Changed, // a check box, a scroll bar or a list's selection changed: `control`
     Chosen,  // a row of a list was double-clicked, or Enter on it: `control`
     Key,     // a key the controls did not use: `key`. True: the program used it
+    Painting, // the window is about to be painted: the last moment to change what the controls show
     Paint,   // the client area, after the face and the controls are painted: `canvas`
     Closed,  // the window has closed, or never opened; once, and it and its numbers are dead after this
 };

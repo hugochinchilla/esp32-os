@@ -135,6 +135,9 @@ public:
     virtual void chosen(Control /*which*/) {}
     // A key the controls did not use. True: the program used it.
     virtual bool key(const wm::KeyMsg &) { return false; }
+    // The window is about to be painted: the last moment to change a text
+    // the controls show. Not for changing anything else.
+    virtual void painting() {}
     // Only with kPicture: after the face and the controls are painted.
     virtual void paint(gfx::Canvas &) {}
     // The window has closed; the object is destroyed after this.
@@ -210,6 +213,9 @@ private:
             window->chosen(Control(window->number_, event.control));
             return true;
         case os::ui::What::Key: return window->key(*event.key);
+        case os::ui::What::Painting:
+            window->painting();
+            return true;
         case os::ui::What::Paint:
             window->paint(*event.canvas);
             return true;

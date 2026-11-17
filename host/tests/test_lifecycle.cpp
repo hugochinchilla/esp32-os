@@ -411,7 +411,7 @@ void test_dialogs()
     };
     const Tool tools[] = {
         {"Display", "Display", &shell::display_dialog, 1},
-        {"Screen Saver", "Screen Saver", &shell::screen_saver_dialog, 1},
+        {"Screen Saver", "Screen Saver", &shell::screen_saver_dialog, 11}, // by number: the window and ten controls
         {"Network", "Network", &shell::open_network, 1},
         {"Shut Down", "Shut Down Chinchilla", &shell::shut_down_dialog, 6}, // by number (os::ui): the window and five controls
         {"Task Manager", "Task Manager", &shell::open_task_manager, 1},

@@ -119,6 +119,7 @@ public:
     bool layered() const override { return (flags_ & kPicture) != 0 || Window::layered(); }
     void paint(gfx::Canvas &c) override
     {
+        tell(Event{What::Painting});
         Window::paint(c);
         if ((flags_ & kPicture) != 0) {
             Event e{What::Paint};
