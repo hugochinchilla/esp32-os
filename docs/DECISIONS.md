@@ -2291,9 +2291,18 @@ Backlog item 27. [Journal](journal/2026-11-17-loaded-programs.md).
 
 The rest is the agent's, to confirm:
 
-- A program file is `name.app`: an ELF shared object for the ESP32-S3,
-  built from the same thin classes as the built-in programs
-  (`programs/`, `tools/build_programs.sh`), with `APP_MAIN` as its way in.
+- A program file is `name.app`: **a header of ours, then the code** (an
+  ELF shared object for the ESP32-S3). The header
+  (`core/include/core/app/file.hpp`, 1,332 bytes) carries the program's
+  name, the stack its task asks for and a 16x16 and a 32x32 picture; the
+  program writes it with `APP_INFO` and the build copies it to the front
+  of the file (`tools/pack_app.sh`). The system reads it without loading
+  the program. A file without it is refused. Put to the owner on a card
+  (2026-11-17), built on the recommended option, answer pending; the
+  others: the code alone with one picture for every program, or the
+  picture in a file beside it.
+- Programs are built from the same thin classes as the built-in ones
+  (`programs/`, `tools/build_programs.sh`), with `APP_MAIN` as the way in.
 - It reaches the system **by name** (the owner's choice on a card,
   2026-11-17: "Por nombre (como está hecho)"; a table of calls by number
   was the other): the loader fills in the calls from a table written out
@@ -2302,9 +2311,22 @@ The rest is the agent's, to confirm:
   of libc are in it.
 - The loader on the board is Espressif's `elf_loader` (2.1.0, Apache 2.0)
   behind `ports::Loader`; its own symbol tables are off.
-- A loaded program is a process named after its file, windowed like the
-  others, entered once on the UI task, and unloaded after its process has
-  ended and its last window is destroyed. 1 MB a file, eight at a time.
+- A loaded program is a process with the name its header gives (its
+  file's if it gives none), windowed like the others. **Every loaded
+  program has a task of its own** where the machine has tasks, with the
+  stack its header asks for (4 KB if it says nothing): the owner's rule
+  for item 26, "los programas, no los diálogos", applied to files. Put to
+  him on a card (2026-11-17), answer pending; the others: only programs
+  that mark it, or none for now.
+- What a loaded program takes in memory is counted as its process's.
+- It is unloaded after its process has ended, its last window is
+  destroyed and its task has gone. 1 MB a file, eight at a time.
+- **Start > Programs lists the program files of `C:\Programs`**, after
+  the built-in programs, flat, by the name and picture of each header;
+  the folder is read as the menu opens. Put to the owner on a card
+  (2026-11-17), answer pending; the others: subfolders as submenus, or
+  the menu left alone. In the File manager a `.app` has one picture for
+  the kind, not each program's own (the listing keeps no pixels).
 
 ### Missed video refills are logged (2026-11-17, the owner's request)
 

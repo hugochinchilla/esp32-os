@@ -1410,4 +1410,50 @@ const Bitmap &signal_icon_16(int bars, bool locked)
     return bitmaps[(locked ? 6 : 1) + bars];
 }
 
+// A program kept in a file that brings no picture of its own (backlog item
+// 27): a window with a title bar and a few lines of text.
+namespace {
+constexpr const char *kProgram16[16] = {
+    "................", ".KKKKKKKKKKKKKK.", ".KBBBBBBBBBGGGK.", ".KBBBBBBBBBGKGK.",
+    ".KKKKKKKKKKKKKK.", ".KWWWWWWWWWWWWK.", ".KWDDDDWWWWWWWK.", ".KWWWWWWWWWWWWK.",
+    ".KWDDDDDDDWWWWK.", ".KWWWWWWWWWWWWK.", ".KWDDDDDWWWWWWK.", ".KWWWWWWWWWWWWK.",
+    ".KWWWWWWWGGGGWK.", ".KWWWWWWWWWWWWK.", ".KKKKKKKKKKKKKK.", "................",
+};
+constexpr const char *kProgram32[32] = {
+    "................................", "................................",
+    "..KKKKKKKKKKKKKKKKKKKKKKKKKKKK..", "..KKKKKKKKKKKKKKKKKKKKKKKKKKKK..",
+    "..KKBBBBBBBBBBBBBBBBBBGGGGGGKK..", "..KKBBBBBBBBBBBBBBBBBBGGGGGGKK..",
+    "..KKBBBBBBBBBBBBBBBBBBGGKKGGKK..", "..KKBBBBBBBBBBBBBBBBBBGGKKGGKK..",
+    "..KKKKKKKKKKKKKKKKKKKKKKKKKKKK..", "..KKKKKKKKKKKKKKKKKKKKKKKKKKKK..",
+    "..KKWWWWWWWWWWWWWWWWWWWWWWWWKK..", "..KKWWWWWWWWWWWWWWWWWWWWWWWWKK..",
+    "..KKWWDDDDDDDDWWWWWWWWWWWWWWKK..", "..KKWWDDDDDDDDWWWWWWWWWWWWWWKK..",
+    "..KKWWWWWWWWWWWWWWWWWWWWWWWWKK..", "..KKWWWWWWWWWWWWWWWWWWWWWWWWKK..",
+    "..KKWWDDDDDDDDDDDDDDWWWWWWWWKK..", "..KKWWDDDDDDDDDDDDDDWWWWWWWWKK..",
+    "..KKWWWWWWWWWWWWWWWWWWWWWWWWKK..", "..KKWWWWWWWWWWWWWWWWWWWWWWWWKK..",
+    "..KKWWDDDDDDDDDDWWWWWWWWWWWWKK..", "..KKWWDDDDDDDDDDWWWWWWWWWWWWKK..",
+    "..KKWWWWWWWWWWWWWWWWWWWWWWWWKK..", "..KKWWWWWWWWWWWWWWWWWWWWWWWWKK..",
+    "..KKWWWWWWWWWWWWWWGGGGGGGGWWKK..", "..KKWWWWWWWWWWWWWWGGGGGGGGWWKK..",
+    "..KKWWWWWWWWWWWWWWWWWWWWWWWWKK..", "..KKWWWWWWWWWWWWWWWWWWWWWWWWKK..",
+    "..KKKKKKKKKKKKKKKKKKKKKKKKKKKK..", "..KKKKKKKKKKKKKKKKKKKKKKKKKKKK..",
+    "................................", "................................",
+};
+constexpr Ink kProgramInks[] = {
+    {'K', rgb(0, 0, 0)}, {'B', rgb(0, 0, 2)}, {'G', rgb(5, 5, 2)}, {'W', rgb(7, 7, 3)}, {'D', rgb(2, 2, 1)},
+};
+} // namespace
+
+const Bitmap &program_icon_16()
+{
+    static constexpr Pixels<16> pixels = paint<16>(kProgram16, kProgramInks);
+    static constexpr Bitmap bitmap = {16, 16, pixels.p, kClear};
+    return bitmap;
+}
+
+const Bitmap &program_icon_32()
+{
+    static constexpr Pixels<32> pixels = paint<32>(kProgram32, kProgramInks);
+    static constexpr Bitmap bitmap = {32, 32, pixels.p, kClear};
+    return bitmap;
+}
+
 } // namespace gfx

@@ -5,6 +5,7 @@
 // same way.
 #pragma once
 
+#include "core/app/file.hpp"
 #include "core/fs/fs.hpp"
 #include "core/fs/ini.hpp"
 #include "core/games/cactus.hpp"
@@ -194,7 +195,11 @@ void set_loader(ports::Loader *loader);
 // A file that is a program by its name: "*.app".
 bool is_program_file(const char *path);
 constexpr uint32_t kMaxProgramBytes = 1024 * 1024;
-// Loads the file and runs it as a new process named after it. False, with
+// What the file says of itself at its front (core/app/file.hpp): its name,
+// its pictures, its stack. False if it is not a program file.
+bool program_info(const char *path, app::FileInfo &info);
+// Loads the file and runs it as a new process with the name the program
+// gives itself, on a task of its own where the machine has tasks. False, with
 // `why` in plain words, if it could not be loaded or did not start.
 bool run_file(const char *path, char *why, size_t capacity);
 

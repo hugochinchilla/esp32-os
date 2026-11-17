@@ -44,6 +44,16 @@ Runner::Slot *Runner::slot_of(proc::Pid pid)
 
 const Runner::Slot *Runner::slot_of(proc::Pid pid) const { return const_cast<Runner *>(this)->slot_of(pid); }
 
+bool Runner::task_left(proc::Pid pid) const
+{
+    for (const Slot &s : slots_) {
+        if (s.used && s.pid == pid) {
+            return true;
+        }
+    }
+    return false;
+}
+
 int Runner::tasks() const
 {
     int n = 0;

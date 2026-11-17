@@ -122,6 +122,9 @@ const gfx::Bitmap *Listing::icon(int i, bool large) const
         strcmp(ext, "bmp") == 0 || strcmp(ext, "gif") == 0) {
         return large ? &gfx::picture_icon_32() : &gfx::picture_icon_16();
     }
+    if (strcmp(ext, "app") == 0) {
+        return large ? &gfx::program_icon_32() : &gfx::program_icon_16();
+    }
     return large ? &gfx::file_icon_32() : &gfx::text_icon_16();
 }
 

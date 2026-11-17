@@ -193,8 +193,99 @@ MessageBox *message_window()
 /* ---- Start menu and desktop ------------------------------------------------------ */
 
 constexpr int kMaxApps = 16;
-wm::MenuItem g_program_items[kMaxApps];
+// Programs kept in files (backlog item 27): every program file in this
+// folder has an entry in Start > Programs, after the built-in ones, with
+// the name and the picture its header gives.
+constexpr char kProgramsFolder[] = "C:\\Programs";
+constexpr int kMaxFilePrograms = 8;
+wm::MenuItem g_program_items[kMaxApps + kMaxFilePrograms];
 wm::Menu g_programs = {g_program_items, 0};
+int g_built_in = 0; // how many of the entries are the program table's
+
+struct FileProgram {
+    char path[fs::kMaxPath];
+    char title[app::FileInfo::kTitleSize];
+    uint8_t pixels[16 * 16];
+    gfx::Bitmap icon;
+    bool own_icon;
+    // The file as it was when its header was read: read again if it changes.
+    uint32_t size;
+    int64_t modified;
+};
+struct FilePrograms {
+    FileProgram rows[kMaxFilePrograms];
+    int count;
+    app::FileInfo header; // the one being read
+};
+// The taskbar's, asked for the first time the Start menu opens.
+FilePrograms *g_menu_files = nullptr;
+
+void launch_file(void *context) { open_file(static_cast<const FileProgram *>(context)->path); }
+
+// Brings the entries up to date with the folder, as the Start menu opens.
+// The folder is listed each time; a file's header is read only if the file
+// is new or has changed.
+void find_programs(void *)
+{
+    if (g_menu_files == nullptr) {
+        g_menu_files = static_cast<FilePrograms *>(os::allocate(sizeof(FilePrograms)));
+        if (g_menu_files == nullptr) {
+            return;
+        }
+        g_menu_files->count = 0;
+    }
+    FilePrograms &f = *g_menu_files;
+    int n = 0;
+    fs::DirEntry entry;
+    for (int i = 0; n < kMaxFilePrograms && os::file::entry(kProgramsFolder, i, entry) == ports::FsError::Ok; i++) {
+        char path[fs::kMaxPath];
+        snprintf(path, sizeof(path), "%s\\%s", kProgramsFolder, entry.name);
+        if (entry.folder || !is_program_file(path)) {
+            continue;
+        }
+        int known = -1;
+        for (int j = n; j < f.count && known < 0; j++) {
+            if (strcmp(f.rows[j].path, path) == 0 && f.rows[j].size == entry.size &&
+                f.rows[j].modified == entry.modified) {
+                known = j;
+            }
+        }
+        FileProgram &row = f.rows[n];
+        if (known > n) {
+            const FileProgram moved = row;
+            row = f.rows[known];
+            f.rows[known] = moved;
+        } else if (known < 0) {
+            if (n < f.count) {
+                // Its place goes to the new one; what was here is kept
+                // further on if there is room, or read again another time.
+                f.rows[f.count < kMaxFilePrograms ? f.count++ : kMaxFilePrograms - 1] = row;
+            }
+            if (!program_info(path, f.header)) {
+                continue; // not a program of this system: no entry
+            }
+            snprintf(row.path, sizeof(row.path), "%s", path);
+            snprintf(row.title, sizeof(row.title), "%s", f.header.title);
+            if (row.title[0] == 0) {
+                snprintf(row.title, sizeof(row.title), "%.*s", static_cast<int>(sizeof(row.title)) - 1, entry.name);
+                if (char *dot = strrchr(row.title, '.')) {
+                    *dot = 0;
+                }
+            }
+            memcpy(row.pixels, f.header.icon16, sizeof(row.pixels));
+            row.icon = {16, 16, nullptr, f.header.clear};
+            row.own_icon = f.header.has16 != 0;
+            row.size = entry.size;
+            row.modified = entry.modified;
+        }
+        row.icon.pixels = row.pixels; // the row may have moved
+        g_program_items[g_built_in + n] = {row.title, &launch_file, &row, nullptr,
+                                           row.own_icon ? &row.icon : &gfx::program_icon_16(), 0};
+        n++;
+    }
+    f.count = n;
+    g_programs.count = g_built_in + n;
+}
 void open_screen_saver(void *) { screen_saver_dialog(); }
 void network_panel(void *) { open_network(); }
 void open_display(void *) { display_dialog(); }
@@ -675,6 +766,10 @@ void stop_taskbar(proc::Pid pid, proc::Signal, void *)
     g_taskbar_up = false;
     g_taskbar = proc::kNone;
     wm.set_start_menu(nullptr, nullptr);
+    wm.set_start_menu_opening(nullptr, nullptr);
+    g_programs.count = g_built_in;
+    os::release(g_menu_files);
+    g_menu_files = nullptr;
     destroy(g_bar);
     destroy(g_desk);
     wm.end(pid);
@@ -718,6 +813,8 @@ void start_taskbar(void *)
         g_program_items[i] = {a.name, &launch_app, const_cast<App *>(&a), nullptr, a.icon, 0};
     }
     g_programs.count = n;
+    g_built_in = n;
+    wm.set_start_menu_opening(&find_programs, nullptr);
     g_start_items[0] = {"&Programs", nullptr, nullptr, &g_programs, &gfx::folder_icon_16(), 0};
     g_start_items[1] = {"&Settings", nullptr, nullptr, &g_settings, &gfx::settings_icon_16(), 0};
     g_start_items[2] = {"&Run...", &open_run, nullptr, nullptr, &gfx::run_icon_16(), 0};

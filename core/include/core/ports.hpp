@@ -290,6 +290,8 @@ public:
     // Calls its way in (APP_MAIN in core/app/app.hpp) and returns what it
     // returned: 0 if it started.
     virtual int enter(void *module) = 0;
+    // How much memory it takes while loaded, in bytes (its code and data).
+    virtual size_t bytes(void *module) = 0;
     // Takes it out of memory. None of its code may run after this.
     virtual void unload(void *module) = 0;
 

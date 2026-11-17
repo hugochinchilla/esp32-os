@@ -4,6 +4,9 @@ Read `docs/DECISIONS.md` before proposing or changing anything. It records what
 has been decided, what was rejected and why, and what is still open. Update it
 in the same change whenever a decision is made or reversed.
 
+- Everything in the repository is written in English (the owner's rule,
+  2026-11-17): code, comments, commit messages and documents. The one
+  exception is the owner's own words quoted in the journal.
 - Work runs in parallel threads since 2026-11-16 (the owner's request). Which
   rule applies depends on the thread:
   - The thread that drives the owner's laptop and the board commits directly to

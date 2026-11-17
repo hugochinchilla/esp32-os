@@ -131,12 +131,16 @@ add_test(NAME os_calls
 add_library(hello_app MODULE ../programs/hello/hello.cpp)
 target_include_directories(hello_app PRIVATE ../core/include)
 target_compile_options(hello_app PRIVATE -fvisibility=hidden -fno-exceptions -fno-rtti)
-set_target_properties(hello_app PROPERTIES PREFIX "" OUTPUT_NAME "hello" SUFFIX ".app")
+set_target_properties(hello_app PROPERTIES PREFIX "" OUTPUT_NAME "hello" SUFFIX ".so")
+# The program file: its header, then the code (tools/pack_app.sh).
+add_custom_command(TARGET hello_app POST_BUILD
+                   COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../tools/pack_app.sh ${CMAKE_OBJCOPY} $<TARGET_FILE:hello_app>
+                           ${CMAKE_CURRENT_BINARY_DIR}/hello.app)
 add_executable(test_loaded tests/test_loaded.cpp)
-target_link_libraries(test_loaded PRIVATE core ${CMAKE_DL_LIBS})
+target_link_libraries(test_loaded PRIVATE core ${CMAKE_DL_LIBS} Threads::Threads)
 set_target_properties(test_loaded PROPERTIES ENABLE_EXPORTS ON)
 add_dependencies(test_loaded hello_app)
-add_test(NAME loaded COMMAND test_loaded $<TARGET_FILE:hello_app>)
+add_test(NAME loaded COMMAND test_loaded ${CMAKE_CURRENT_BINARY_DIR}/hello.app)
 # The serial console on the debug link's wire (backlog 14).
 add_executable(test_console tests/test_console.cpp)
 target_link_libraries(test_console PRIVATE core)

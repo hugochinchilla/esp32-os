@@ -227,6 +227,13 @@ public:
     const Backdrop &backdrop() const { return backdrop_; }
     // Pop-up menus. open_menu() opens a free-standing one at (x, y).
     void open_menu(Menu &menu, int x, int y);
+    // Called as the Start menu is about to open, so that whoever owns it
+    // can bring it up to date (the programs found in a folder).
+    void set_start_menu_opening(void (*opening)(void *context), void *context)
+    {
+        start_opening_ = opening;
+        start_opening_context_ = context;
+    }
     void open_start_menu();
     void open_menu_bar(Window &w, int entry);
     void close_menus();
@@ -414,6 +421,8 @@ private:
     void tell_panels(PanelNews what);
 
     Menu *start_menu_ = nullptr;
+    void (*start_opening_)(void *context) = nullptr;
+    void *start_opening_context_ = nullptr;
     const char *start_banner_ = "";
     Popup popups_[kMaxPopups] = {};
     int popup_count_ = 0;

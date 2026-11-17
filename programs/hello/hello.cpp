@@ -9,6 +9,20 @@
 
 namespace {
 
+// Its picture: a window with a waving hand of four fingers.
+constexpr const char *kSmall[16] = {
+    "................", ".KKKKKKKKKKKKKK.", ".KBBBBBBBBBBWWK.", ".KKKKKKKKKKKKKK.",
+    ".KWWWWWWWWWWWWK.", ".KWWWWYWYWWWWWK.", ".KWWWYWYWYWWWWK.", ".KWWWYWYWYWYWWK.",
+    ".KWWWYYYYYWYWWK.", ".KWYWYYYYYYYWWK.", ".KWYYYYYYYYYWWK.", ".KWWYYYYYYYWWWK.",
+    ".KWWWYYYYYWWWWK.", ".KWWWWWWWWWWWWK.", ".KKKKKKKKKKKKKK.", "................",
+};
+constexpr app::Ink kInks[] = {
+    {'K', gfx::kBlack},
+    {'W', gfx::kWhite},
+    {'B', gfx::rgb(0, 0, 2)},
+    {'Y', gfx::rgb(7, 5, 0)},
+};
+
 class HelloWindow : public app::Window {
 public:
     HelloWindow()
@@ -43,6 +57,8 @@ private:
 // Where the system comes in: once, as the program's own process. The
 // window it opens keeps the program loaded; when the window has closed the
 // process ends and the system takes the program out of memory.
+APP_INFO(app::file_info("Hello", 0, kSmall, kInks));
+
 APP_MAIN(int, char **)
 {
     app::Look look;

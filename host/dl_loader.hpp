@@ -41,6 +41,7 @@ public:
             return nullptr;
         }
         loaded++;
+        bytes_ = size;
         return module;
     }
     int enter(void *module) override
@@ -48,12 +49,15 @@ public:
         auto *way_in = reinterpret_cast<int (*)(int, char **)>(dlsym(module, "app_main"));
         return way_in(0, nullptr);
     }
+    // The PC's loader does not say: the size of the file stands in.
+    size_t bytes(void *) override { return bytes_; }
     void unload(void *module) override
     {
         dlclose(module);
         loaded--;
     }
 
+    size_t bytes_ = 0;
     int loaded = 0; // programs in memory now
     char last_error[256] = "";
 };

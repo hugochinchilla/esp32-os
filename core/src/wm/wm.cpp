@@ -1767,6 +1767,9 @@ void Wm::open_start_menu()
     }
     close_menus();
     const proc::Scope as(procs_, owner_of(PanelPlace::Bar));
+    if (start_opening_ != nullptr) {
+        start_opening_(start_opening_context_);
+    }
     open_popup(*start_menu_, 0, height_ - kTaskbarHeight, true, false);
     start_open_ = true;
     tell_panels(PanelNews::Menu);

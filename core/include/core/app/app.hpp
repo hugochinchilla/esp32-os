@@ -33,6 +33,7 @@
 #include <new>
 #include <utility>
 
+#include "core/app/file.hpp"
 #include "core/os/ui.hpp"
 
 namespace app {
@@ -559,3 +560,14 @@ inline bool bring_forward(Number number) { return os::ui::alive(number) && os::u
 // calls it once, as the program's own process; 0 says it started. A
 // built-in program has a row in the program table instead.
 #define APP_MAIN extern "C" __attribute__((visibility("default"), used)) int app_main
+
+// What the program says of itself, kept at the front of its file
+// (core/app/file.hpp): its name, the stack its task asks for in bytes (0:
+// the least) and, if it has them, its pictures. Once in a program:
+//   APP_INFO(app::file_info("Hello", 0, kSmall, kInks));
+// A file without it is not a program.
+#define APP_INFO(...)                                                                          \
+    extern "C" {                                                                               \
+    extern const app::FileInfo app_info __attribute__((visibility("default")));               \
+    __attribute__((used, section(".appinfo"))) constexpr app::FileInfo app_info = __VA_ARGS__; \
+    }

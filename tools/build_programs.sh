@@ -19,6 +19,7 @@ HERE="$(cd "$(dirname "$0")/.." && pwd)"
 CXX="${CXX:-xtensa-esp32s3-elf-g++}"
 NM="${NM:-xtensa-esp32s3-elf-nm}"
 STRIP="${STRIP:-xtensa-esp32s3-elf-strip}"
+OBJCOPY="${OBJCOPY:-xtensa-esp32s3-elf-objcopy}"
 OUT="$HERE/build/programs"
 mkdir -p "$OUT"
 built=""
@@ -30,11 +31,13 @@ for dir in "$HERE"/programs/*/; do
     "$CXX" -std=gnu++17 -Os -Wall -Wextra -Werror -mlongcalls -fno-exceptions -fno-rtti \
         -fPIC -shared -nostartfiles -nostdlib -e app_main \
         -fdata-sections -ffunction-sections -Wl,--gc-sections -fvisibility=hidden \
-        -I"$HERE/core/include" "$dir"*.cpp -o "$OUT/$name.app"
+        -I"$HERE/core/include" "$dir"*.cpp -o "$OUT/$name.elf"
     "$STRIP" --strip-unneeded --remove-section=.comment --remove-section=.xt.lit \
-        --remove-section=.xt.prop --remove-section=.xtensa.info "$OUT/$name.app"
+        --remove-section=.xt.prop --remove-section=.xtensa.info "$OUT/$name.elf"
+    # The file: the program's header, then the code.
+    "$HERE/tools/pack_app.sh" "$OBJCOPY" "$OUT/$name.elf" "$OUT/$name.app"
     echo "$OUT/$name.app: $(wc -c < "$OUT/$name.app") bytes"
-    built="$built $OUT/$name.app"
+    built="$built $OUT/$name.elf"
 done
 if [ -n "$1" ]; then
     python3 "$HERE/tools/gen_exports.py" --nm "$NM" --check $built -- "$1/esp-idf/core/libcore.a"

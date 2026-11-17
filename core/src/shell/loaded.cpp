@@ -4,9 +4,11 @@
 // that process has ended.
 //
 // docs/journal/2026-11-17-loaded-programs.md has the story.
+#include <atomic>
 #include <cstdio>
 #include <cstring>
 
+#include "core/app/file.hpp"
 #include "core/os/os.hpp"
 #include "core/prog/prog.hpp"
 #include "core/shell/shell.hpp"
@@ -22,34 +24,70 @@ ports::Loader *g_loader = nullptr;
 struct Loaded {
     proc::Pid pid = proc::kNone;
     void *module = nullptr;
-    bool inside = false; // its way in has not returned yet
-    bool gone = false;   // its process has ended: to be taken out of memory
+    int32_t bytes = 0;               // counted as the process's memory
+    int result = 0;                  // what its way in returned
+    std::atomic<bool> inside{false}; // its way in has not returned yet
+    bool gone = false;               // its process has ended: to be taken out of memory
 };
 constexpr int kMaxLoaded = 8;
+// The header of the file being made ready: too large for a program's stack,
+// and one file is made ready at a time.
+app::FileInfo g_info;
 Loaded g_loaded[kMaxLoaded];
 bool g_sweep_asked = false;
+constexpr uint32_t kSweepAgainUs = 100 * 1000;
+
+void ask_sweep(uint32_t delay_us = 0);
 
 // Out of memory go the programs whose process has ended. Not from inside
 // the end of the process: its last window is destroyed after that, and the
-// window's own memory is given back by the program's code.
+// window's own memory is given back by the program's code. And not while a
+// task of the program is still there (one that ended while it was late
+// leaves when it can): the sweep comes back for those.
 void sweep(void *)
 {
     g_sweep_asked = false;
+    bool again = false;
     for (Loaded &l : g_loaded) {
-        if (l.module != nullptr && l.gone && !l.inside) {
-            g_loader->unload(l.module);
-            l = Loaded();
+        if (l.module == nullptr) {
+            continue;
         }
+        if (l.inside.load()) {
+            again = true; // late in its way in
+            continue;
+        }
+        if (!l.gone && l.result != 0) {
+            // Its way in gave up after the caller had stopped waiting.
+            os::signal(l.pid, proc::Signal::Kill);
+            l.gone = true;
+        }
+        if (!l.gone) {
+            continue;
+        }
+        if (prog::runner().task_left(l.pid)) {
+            again = true;
+            continue;
+        }
+        proc::table().add_memory(l.pid, -l.bytes);
+        g_loader->unload(l.module);
+        l.pid = proc::kNone;
+        l.module = nullptr;
+        l.bytes = 0;
+        l.result = 0;
+        l.gone = false;
+    }
+    if (again) {
+        ask_sweep(kSweepAgainUs);
     }
 }
 
-void ask_sweep()
+void ask_sweep(uint32_t delay_us)
 {
     if (g_sweep_asked) {
         return;
     }
     const os::As as_desktop(os::find("desktop"));
-    g_sweep_asked = os::start_timer(0, 0, &sweep, nullptr) != 0;
+    g_sweep_asked = os::start_timer(delay_us, 0, &sweep, nullptr) != 0;
 }
 
 void ended(proc::Pid pid, void *)
@@ -62,9 +100,14 @@ void ended(proc::Pid pid, void *)
     }
 }
 
-// "C:\Games\hello.app" is the process "hello".
-void process_name(const char *path, char *out, size_t capacity)
+// The process has the name the program gives itself; one that gives none
+// has its file's: "C:\Games\hello.app" is "hello".
+void process_name(const char *path, const app::FileInfo &info, char *out, size_t capacity)
 {
+    if (info.title[0] != 0) {
+        snprintf(out, capacity, "%.*s", app::FileInfo::kTitleSize - 1, info.title);
+        return;
+    }
     snprintf(out, capacity, "%s", fs::path::name(path));
     if (char *dot = strrchr(out, '.')) {
         *dot = 0;
@@ -92,6 +135,19 @@ bool is_program_file(const char *path)
     char ext[8];
     fs::path::extension(path, ext, sizeof(ext));
     return strcmp(ext, "app") == 0;
+}
+
+bool program_info(const char *path, app::FileInfo &info)
+{
+    const prog::InCall in_call;
+    os::file::Handle file = os::file::kNoFile;
+    if (os::file::open(path, ports::OpenMode::Read, file) != ports::FsError::Ok) {
+        return false;
+    }
+    size_t got = 0;
+    const os::file::Error read = os::file::read(file, &info, sizeof(info), got);
+    os::file::close(file);
+    return read == ports::FsError::Ok && got == sizeof(info) && app::is_program(info);
 }
 
 bool run_file(const char *path, char *why, size_t capacity)
@@ -127,8 +183,15 @@ bool run_file(const char *path, char *why, size_t capacity)
     size_t size = 0;
     const os::file::Error read = os::file::read_file(path, image, entry.size, size);
     const char *reason = "it is not a program for this machine";
-    void *module = read == ports::FsError::Ok ? g_loader->load(static_cast<const uint8_t *>(image), size, reason)
-                                              : nullptr;
+    // It begins with the header (core/app/file.hpp); the code is the rest.
+    app::FileInfo &info = g_info;
+    const bool ours = read == ports::FsError::Ok && size > sizeof(info);
+    if (ours) {
+        memcpy(&info, image, sizeof(info));
+    }
+    void *module = ours && app::is_program(info)
+                       ? g_loader->load(static_cast<const uint8_t *>(image) + sizeof(info), size - sizeof(info), reason)
+                       : nullptr;
     os::release(image);
     if (read != ports::FsError::Ok) {
         return fail(why, capacity, fs::error_text(read));
@@ -137,7 +200,7 @@ bool run_file(const char *path, char *why, size_t capacity)
         return fail(why, capacity, reason);
     }
     char name[proc::Process::kNameSize];
-    process_name(path, name, sizeof(name));
+    process_name(path, info, name, sizeof(name));
     const proc::Pid pid = os::spawn(name);
     if (pid == proc::kNone) {
         g_loader->unload(module);
@@ -145,22 +208,35 @@ bool run_file(const char *path, char *why, size_t capacity)
     }
     place->pid = pid;
     place->module = module;
+    place->bytes = static_cast<int32_t>(g_loader->bytes(module));
+    place->result = 0;
     place->gone = false;
-    place->inside = true;
+    place->inside.store(true);
+    // What the program takes in memory is its process's, as its windows are.
+    proc::table().add_memory(pid, place->bytes);
+    // A program has a task of its own where the machine has tasks (backlog
+    // item 26), with the stack its header asks for. Without one (none here,
+    // none left) it runs on the caller's.
+    prog::runner().start(pid, info.stack);
     // Its way in, as itself. It opens its window and returns; a program
-    // that opens none ends at once and is swept away.
-    struct Enter {
-        void *module;
-        int result;
-    } enter = {module, 0};
-    in_process(pid, nullptr, [&enter] { enter.result = g_loader->enter(enter.module); });
-    place->inside = false;
+    // that opens none ends at once and is swept away. One that is late
+    // coming back is left to it: the sweep sees how it went.
+    in_process(pid, nullptr, [place] {
+        place->result = g_loader->enter(place->module);
+        place->inside.store(false);
+    });
+    if (place->inside.load()) {
+        ask_sweep(kSweepAgainUs);
+        return true;
+    }
     if (place->gone) {
         ask_sweep();
     }
-    if (enter.result != 0) {
+    const int result = place->result;
+    place->result = 0;
+    if (result != 0) {
         os::signal(pid, proc::Signal::Kill);
-        snprintf(why, capacity, "the program gave up as it started (%d)", enter.result);
+        snprintf(why, capacity, "the program gave up as it started (%d)", result);
         return false;
     }
     return true;
