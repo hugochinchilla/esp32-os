@@ -15,6 +15,7 @@
 #include "core/shell/shell.hpp"
 #include "core/wm/widgets.hpp"
 #include "internal.hpp"
+#include "picker.hpp"
 
 namespace shell {
 
@@ -174,116 +175,6 @@ void write_settings(fs::Ini &ini, const Choice &c)
     save_settings("desktop", ini);
 }
 
-// A grid of cells to pick one from: the colours, or the patterns. The cell
-// chosen has a black and white frame; arrows move it when it has the focus.
-class Picker : public wm::Widget {
-public:
-    using PaintFn = void (*)(gfx::Canvas &c, const Rect &cell, int index, void *context);
-    using ChangeFn = void (*)(void *context);
-
-    // `margin`: from the edge of a cell to its sunken frame.
-    Picker(const Rect &r, int columns, int count, int cell_w, int cell_h, PaintFn paint_cell, ChangeFn changed,
-           void *context, int margin = 3)
-        : Widget(r), columns_(columns), count_(count), cell_w_(cell_w), cell_h_(cell_h), margin_(margin),
-          paint_cell_(paint_cell), changed_(changed), context_(context)
-    {
-    }
-    // No cell chosen (the colour is not one of these); nobody is told.
-    void clear()
-    {
-        if (selected_ != -1) {
-            selected_ = -1;
-            invalidate();
-        }
-    }
-    void select_quietly(int index)
-    {
-        if (index != selected_) {
-            selected_ = index;
-            invalidate();
-        }
-    }
-
-    int selected() const { return selected_; }
-    void select(int index)
-    {
-        if (index < 0 || index >= count_ || index == selected_) {
-            return;
-        }
-        selected_ = index;
-        invalidate();
-        if (changed_ != nullptr) {
-            changed_(context_);
-        }
-    }
-    Rect cell(int index) const
-    {
-        return {(index % columns_) * cell_w_, (index / columns_) * cell_h_, cell_w_, cell_h_};
-    }
-
-    void paint(gfx::Canvas &c) override
-    {
-        c.fill({0, 0, rect.w, rect.h}, gfx::kGrey);
-        for (int i = 0; i < count_; i++) {
-            const Rect r = cell(i);
-            if (i == selected_) {
-                c.edge(r, gfx::kBlack, gfx::kBlack);
-                c.edge(r.inset(1), gfx::kWhite, gfx::kWhite);
-            }
-            const Rect inner = r.inset(margin_);
-            c.edge(inner, gfx::kDarkGrey, gfx::kWhite);
-            paint_cell_(c, inner.inset(1), i, context_);
-            if (i == selected_ && margin_ < 3) {
-                // A tight grid: the mark goes over the cell's own edge.
-                c.edge(r, gfx::kBlack, gfx::kBlack);
-                c.edge(r.inset(1), gfx::kWhite, gfx::kWhite);
-                c.edge(r.inset(2), gfx::kBlack, gfx::kBlack);
-            }
-        }
-        if (has_focus() && selected_ >= 0) {
-            c.focus_rect(cell(selected_).inset(margin_ > 2 ? 2 : 0));
-        }
-    }
-    bool wants_mouse() const override { return true; }
-    void mouse(const wm::MouseMsg &m) override
-    {
-        if (m.kind != wm::MouseKind::Down || m.x < 0 || m.y < 0 || m.x >= columns_ * cell_w_) {
-            return;
-        }
-        select(m.y / cell_h_ * columns_ + m.x / cell_w_);
-    }
-    bool focusable() const override { return true; }
-    bool key(const wm::KeyMsg &k) override
-    {
-        if (!k.pressed) {
-            return false;
-        }
-        switch (k.usage) {
-        case wm::key::Left:
-            select(selected_ - 1);
-            return true;
-        case wm::key::Right:
-            select(selected_ + 1);
-            return true;
-        case wm::key::Up:
-            select(selected_ - columns_);
-            return true;
-        case wm::key::Down:
-            select(selected_ + columns_);
-            return true;
-        default:
-            return false;
-        }
-    }
-
-private:
-    int columns_, count_, cell_w_, cell_h_, margin_;
-    PaintFn paint_cell_;
-    ChangeFn changed_;
-    void *context_;
-    int selected_ = 0;
-};
-
 // The preview: a small screen with the colour and pattern picked, a window
 // and a taskbar on it.
 class Preview : public wm::Widget {
@@ -326,95 +217,6 @@ public:
 private:
     Rgb colour_ = {0, 0, 0};
     int pattern_ = 0;
-};
-
-// Other...: any of the board's 256 colours, as one sheet of 16 by 16. The
-// board keeps a colour as red and green in eight levels and blue in four,
-// so there are four squares of 8 by 8, one for each level of blue. The
-// upper two: red to the right in the first and back to the left in the
-// second, green downwards. The lower two are the same upside down, so the
-// brightest greens meet across the middle: dark at the top, light in the
-// middle, the deep blues at the bottom (the owner's fold, 2026-11-17).
-// Modal to the Display dialog, which gets the colour when OK is pressed.
-class ColourDialog : public wm::Window {
-public:
-    using Picked = void (*)(Rgb colour, void *context);
-    static constexpr int kColumns = 16, kRows = 16, kCellW = 18, kCellH = 14;
-    static constexpr int kGridW = kColumns * kCellW, kBelow = 8 + kRows * kCellH;
-
-    ColourDialog(wm::Window *owner, Rgb start, Picked picked, void *context)
-        : Window("Colour", {0, 0, kGridW + 16 + 2 * kBorder, kBelow + 68 + kClientTop + kBorder}, nullptr),
-          grid_({8, 8, kGridW, kRows * kCellH}, kColumns, kColumns * kRows, kCellW, kCellH,
-                &ColourDialog::paint_cell, &ColourDialog::changed, this, 1),
-          levels_({8, kBelow + 6, kGridW, 14}, text_),
-          ok_({8 + kGridW - 156, kBelow + 30, 75, 23}, "OK", &ColourDialog::ok, this),
-          cancel_({8 + kGridW - 75, kBelow + 30, 75, 23}, "Cancel", &ColourDialog::cancel, this),
-          picked_(picked), context_(context)
-    {
-        set_dialog(true);
-        add(grid_);
-        add(levels_);
-        add(ok_);
-        add(cancel_);
-        ok_.set_default(true);
-        set_default(&ok_);
-        grid_.select_quietly(cell_of(gfx::nearest(start)));
-        describe();
-        set_modal(owner);
-        set_frame(os::centred(frame().w, frame().h));
-        set_focus(&grid_);
-    }
-
-    bool key(const wm::KeyMsg &k) override
-    {
-        if (k.pressed && k.usage == wm::key::Escape) {
-            close();
-            return true;
-        }
-        return Window::key(k);
-    }
-
-    // The board colour in a cell, and the cell of a board colour.
-    static gfx::Colour colour_of(int cell)
-    {
-        const int x = cell % kColumns, y = cell / kColumns;
-        const int r = x < 8 ? x : 15 - x, g = y < 8 ? y : 15 - y, b = x / 8 + 2 * (y / 8);
-        return gfx::rgb(static_cast<unsigned>(r), static_cast<unsigned>(g), static_cast<unsigned>(b));
-    }
-    static int cell_of(gfx::Colour c)
-    {
-        const int r = c >> 5, g = (c >> 2) & 7, b = c & 3;
-        return (b < 2 ? g : 15 - g) * kColumns + (b % 2 == 0 ? r : 15 - r);
-    }
-
-private:
-    static void paint_cell(gfx::Canvas &c, const Rect &cell, int index, void *) { c.fill(cell, colour_of(index)); }
-    static void changed(void *context) { static_cast<ColourDialog *>(context)->describe(); }
-    void describe()
-    {
-        const gfx::Colour c = colour_of(grid_.selected());
-        const Rgb rgb = gfx::shown(c);
-        snprintf(text_, sizeof(text_), "Red %d of 7   Green %d of 7   Blue %d of 3   #%02X%02X%02X", c >> 5, (c >> 2) & 7,
-                 c & 3, rgb.r, rgb.g, rgb.b);
-        levels_.invalidate();
-    }
-    static void ok(wm::Button &, void *context)
-    {
-        auto *d = static_cast<ColourDialog *>(context);
-        const Rgb rgb = gfx::shown(colour_of(d->grid_.selected()));
-        const Picked picked = d->picked_;
-        void *owner = d->context_;
-        d->close();
-        picked(rgb, owner);
-    }
-    static void cancel(wm::Button &, void *context) { static_cast<ColourDialog *>(context)->close(); }
-
-    char text_[64] = "";
-    Picker grid_;
-    wm::Label levels_;
-    wm::Button ok_, cancel_;
-    Picked picked_;
-    void *context_;
 };
 
 class DisplayDialog : public wm::Window {
@@ -515,21 +317,17 @@ private:
         d->sync();
     }
     static void changed(void *context) { static_cast<DisplayDialog *>(context)->sync(); }
-    // Other...: the 256 colours, in a dialog of its own over this one.
+    // Other...: the 256 colours, in the colour dialog that any program can
+    // ask for (colour_dialog.cpp), over this one.
     static void other(wm::Button &, void *context)
     {
         auto *d = static_cast<DisplayDialog *>(context);
-        if (ColourDialog *chooser = make_window<ColourDialog>(d, d->colour_, &DisplayDialog::other_picked, d)) {
-            os::show(*chooser);
-            discard(chooser); // if the window manager had no room for it
-        } else {
-            no_memory_for("Colour");
-        }
+        colour_dialog(d, gfx::nearest(d->colour_), &DisplayDialog::other_picked, d);
     }
-    static void other_picked(Rgb colour, void *context)
+    static void other_picked(gfx::Colour colour, void *context)
     {
         auto *d = static_cast<DisplayDialog *>(context);
-        d->colour_ = colour;
+        d->colour_ = gfx::shown(colour);
         d->show_colour();
         d->sync();
     }

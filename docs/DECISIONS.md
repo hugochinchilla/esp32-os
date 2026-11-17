@@ -1963,12 +1963,25 @@ loss again. Flow control on the wire is not possible: the bridge's RTS and
 DTR lines reset the board. Journal:
 `docs/journal/2026-11-17-dbg-reader-thread.md`.
 
-### Restarting moves to init, later (the owner's request, 2026-11-17)
+### init starts again what ends (the owner's request, 2026-11-17)
 
-Today the process table restarts a process marked "respawn" and counts
-quick deaths (5 in a row under 2 s: it gives up). The owner asked for a
-backlog item (39) to move that into `init`, as `respawn` in a Unix
-`/etc/inittab`, so `startup.txt` can say what comes back. Not started.
+Backlog item 39. The owner asked for the restart rule to move from the
+process table into `init`, as `respawn` in a Unix `/etc/inittab`.
+[Journal](journal/2026-11-17-init-respawn.md).
+
+- The process table starts nothing again. It tells a supervisor
+  (`proc::Supervisor`, which is init) of every ending. The brake (ended
+  within 2 s, 5 times in a row: not started again) is init's.
+- `startup.txt` says what comes back. Built as a verb, `respawn NAME`,
+  beside `start` and `run`; the form (a verb, a verb that also takes
+  programs, or inittab's fields) is with the owner on a card, to confirm.
+- The agent's, to confirm: a thing that comes back is watched by its
+  process, which has the thing's name; the taskbar is needed and comes
+  back unless the file says `start taskbar`, so a file from before still
+  works; the taskbar is init's child; `respawn` on the network services or
+  the console starts them once and says so in the log.
+- Not done: init on a task of its own that waits for endings. That is
+  item 26.
 
 ### Chosen for background jobs (2026-11-17, to confirm)
 
@@ -2038,11 +2051,15 @@ Backlog item 40, asked by the owner. Journal:
   and not sliders: everything it offers is undithered. The grid is one
   sheet of 16 by 16: a square of 8 by 8 for each level of blue, red
   running back in the right-hand squares and green running back in the
-  lower ones, so the squares join: dark at the top, light across the
-  middle, blue at the bottom. The owner's fold, after a hue-sorted grid
-  and a 32 by 8 sheet were shown to him and set aside. A colour without a
-  name is kept in `desktop.ini` as `#RRGGBB`. The chooser is a window of
-  Display's program, not a program of its own.
+  lower ones, blue going round the four: dark at the top, the light
+  colours across the middle, the blues at the bottom. The owner's choice
+  (2026-11-17, "I think I like 3 more") after a hue-sorted grid, a strip
+  of greys, a 32 by 8 sheet and two other folds were shown to him and set
+  aside: `docs/journal/2026-11-17-colour-chooser.md`.
+- A colour without a name is kept in `desktop.ini` as `#RRGGBB`.
+- The chooser is `colour_dialog()`, for any program, as the file dialogs
+  are (the owner's request): in the asking program's process, modal to its
+  window, nothing kept between two openings.
 - The Terminal's grid follows its window (20x4 to 104x36, opening at
   80x25) rather than staying 80x25 or scaling the font. Lines already
   written are not wrapped again. It has a scroll bar over its history.

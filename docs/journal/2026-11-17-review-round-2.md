@@ -80,19 +80,10 @@ has). Two makes the sides equal, which is what was asked for.
   a grid sorted by hue, he asked for the neutral greys on a strip; the
   board has only four (black, 73, 182, white: blue has four levels and a
   grey needs the three channels equal), and the hue grid stayed patchy.
-  Then: "the original palette shows 4 nice gradients to the eye [...] If we
-  could get the same perfect gradient but once and for all colors at once I
-  would be delighted". A sheet of 32 by 8 came next, the four squares in a row
-  with red running back in every other one; he answered "If you split this
-  horizontally in half and invert the right part (bottom to top) I think it
-  would look like a choherent gradient". Built so: 16 by 16, the first two
-  squares on top, the other two under them upside down, so the bright
-  greens meet across the middle. Dark at the top, light in the middle, the
-  deep blues at the bottom. Under it the levels and the `#RRGGBB`
-  the board really shows. It is
-  modal to Display and is a window made when opened and destroyed when
-  closed. It is part of Display's program (as a file dialog is part of the
-  Editor's), not a row of its own: it has no life without it.
+  After several more arrangements he chose one sheet of 16 by 16 in
+  which the four squares are folded so that they join, and asked for the
+  chooser to be a dialog any program can open. That story has an entry of
+  its own: [256 colours on one sheet](2026-11-17-colour-chooser.md).
 - **The list: B**. Fifteen solid colours and "Chinchilla blue (dithered)"
   first. The default was **not** changed: that is the look of the system
   and the owner's to decide; "Steel blue" (levels 2, 3, 2) is its nearest
@@ -111,7 +102,8 @@ has). Two makes the sides equal, which is what was asked for.
 - `core/src/shell/display.cpp`: the new list (`exact(r, g, b)` gives a
   board colour from its levels); the choice is a colour, not an index, so
   one without a name can be held; `desktop.ini` keeps the name, or
-  `#RRGGBB` for the others; `ColourDialog`; the "Other..." button (Alt+O).
+  `#RRGGBB` for the others; the "Other..." button (Alt+O), which opens
+  `colour_dialog()` (`core/src/shell/colour_dialog.cpp`).
   When the colour is not in the list no cell is marked and the label shows
   the `#RRGGBB`.
 - `core/tty/screen`: `set_size(columns, rows)`. A taller screen takes lines

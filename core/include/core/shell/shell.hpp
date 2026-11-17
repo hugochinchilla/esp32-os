@@ -82,6 +82,11 @@ using PathFn = void (*)(const char *path, void *context);
 void open_file_dialog(wm::Window *owner, const char *folder, PathFn chosen, void *context);
 void save_file_dialog(wm::Window *owner, const char *folder, const char *name, PathFn chosen,
                       void *context);
+// The colour dialog, for any program: the board's 256 colours on one sheet.
+// Modal to `owner`; opens on `start`. `chosen` gets the colour picked when
+// the user presses OK; nothing on Cancel.
+using ColourFn = void (*)(gfx::Colour colour, void *context);
+void colour_dialog(wm::Window *owner, gfx::Colour start, ColourFn chosen, void *context);
 // A question with a text answer (a new name).
 using TextFn = void (*)(const char *text, void *context);
 void input_dialog(wm::Window *owner, const char *title, const char *prompt, const char *initial,

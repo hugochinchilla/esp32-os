@@ -652,8 +652,8 @@ int main(int argc, char **argv)
               "Escape closes only the colours");
         key(0x12, true);
         for (int i = 0; i < 3; i++) {
-            key(wm::key::Right);
-            key(wm::key::Down);
+            key(wm::key::Left);
+            key(wm::key::Up);
         }
         save("37v-colour-picked");
         key(wm::key::Enter);
