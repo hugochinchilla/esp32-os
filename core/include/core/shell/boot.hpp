@@ -92,6 +92,14 @@ inline bool take_one_shot_fast_boot(uint32_t &word)
     return armed;
 }
 
+// Waits until the clock reaches `until` (micros, wrapping), answering the
+// debug link meanwhile; false if a key or button skipped it.
+bool wait_until(BootIo &io, uint32_t until);
+// "12 MB", "1.5 MB", "376 KB".
+void format_bytes(char *out, size_t n, uint64_t bytes);
+// The mascot's face, 16 by 16 squares of `scale` pixels.
+void draw_mascot(gfx::Canvas &c, int x, int y, int scale, gfx::Colour outline, gfx::Colour fur);
+
 // Fast start: the cheap checks only (no memory test), nothing drawn; each
 // result goes to io.log. Returns the number of failed checks.
 int run_quiet_checks(BootIo &io);
