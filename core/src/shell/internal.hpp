@@ -30,6 +30,14 @@ private:
     proc::Scope scope_;
 };
 
+// The open window with this number, nullptr if it has closed. Only for the
+// dialogs that are still window classes of the system's kind and must name
+// the window they are over; it goes when they are written by number.
+wm::Window *window_numbered(int number);
+// A window that already has a dialog over it gets that one brought forward
+// (true): whoever was about to open another does not.
+bool has_dialog(int number);
+
 // Opens a window if it is not open, otherwise brings it to the front.
 void show(wm::Window &w);
 

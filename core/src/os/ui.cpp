@@ -17,12 +17,10 @@ namespace {
 
 constexpr int kMaxWindows = 16; // ponytail: as many as the window manager shows
 
+// Every window made here, open or not yet. A window's number is the one
+// the window server knows it by (os::WindowId), taken when it is made.
 class Behind;
-struct Slot {
-    Behind *window = nullptr;
-    uint16_t serial = 0; // tells this use of the slot from the one before
-};
-Slot g_slots[kMaxWindows];
+Behind *g_windows[kMaxWindows] = {};
 
 enum class Kind : uint8_t { Label, Button, CheckBox, Radio, TextField, ScrollBar, List, Group, TextArea };
 
@@ -35,8 +33,15 @@ public:
         if ((flags_ & kDialog) != 0) {
             set_dialog(true);
         }
+        set_id(installed_kit().wm->new_id());
         if ((flags_ & kWholeDesktop) != 0) {
             set_modal(nullptr, true);
+        } else if (look.over != kNoWindow) {
+            // A dialog over another window, whoever's it is; if that one
+            // has closed meanwhile, over nothing.
+            if (wm::Window *owner = installed_kit().wm->window(look.over)) {
+                set_modal(owner);
+            }
         }
     }
 
@@ -57,10 +62,10 @@ public:
             }
             os::release(controls_[i]);
         }
-        g_slots[slot_].window = nullptr;
+        g_windows[slot_] = nullptr;
     }
 
-    ui::Window handle() const { return (static_cast<ui::Window>(g_slots[slot_].serial) << 8) | (slot_ + 1); }
+    ui::Window handle() const { return id(); }
     void *state() const { return state_; }
 
     template <class T, class... Args> Control make(Kind kind, Args &&...args)
@@ -152,11 +157,12 @@ private:
 
 Behind *behind(Window window)
 {
-    const int slot = (window & 0xFF) - 1;
-    if (window <= 0 || slot < 0 || slot >= kMaxWindows) {
-        return nullptr;
+    for (Behind *w : g_windows) {
+        if (w != nullptr && window != kNoWindow && w->id() == window) {
+            return w;
+        }
     }
-    return g_slots[slot].serial == (window >> 8) ? g_slots[slot].window : nullptr;
+    return nullptr;
 }
 
 // The window manager's safe point after the window closed: the object, the
@@ -176,16 +182,15 @@ Window create(const Look &look, Events events, size_t state_bytes)
 {
     int slot = -1;
     for (int i = 0; i < kMaxWindows && slot < 0; i++) {
-        slot = g_slots[i].window == nullptr ? i : -1;
+        slot = g_windows[i] == nullptr ? i : -1;
     }
     void *room = slot >= 0 && events != nullptr ? os::allocate(kAligned + state_bytes) : nullptr;
     if (room == nullptr) {
         return kNoWindow;
     }
-    g_slots[slot].serial = g_slots[slot].serial >= 0x7FFF ? 1 : g_slots[slot].serial + 1;
     Behind *w = new (room) Behind(slot, look, events, static_cast<uint8_t *>(room) + kAligned);
     w->set_dispose(&destroy);
-    g_slots[slot].window = w;
+    g_windows[slot] = w;
     return w->handle();
 }
 

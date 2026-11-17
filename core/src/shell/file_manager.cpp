@@ -729,7 +729,7 @@ private:
             }
             snprintf(name, sizeof(name), "New Folder (%d)", n);
         }
-        input_dialog(w, "New Folder", "Name of the new folder:", name, &FolderWindow::new_folder_named, w);
+        input_dialog(w->id(), "New Folder", "Name of the new folder:", name, &FolderWindow::new_folder_named, w);
     }
 
     static void new_folder_named(const char *name, void *context)
@@ -747,7 +747,7 @@ private:
         if (w->folder_[0] == 0 || w->view_.selected() < 0) {
             return;
         }
-        input_dialog(w, "Rename", "New name:", w->listing_.item(w->view_.selected()).name,
+        input_dialog(w->id(), "Rename", "New name:", w->listing_.item(w->view_.selected()).name,
                      &FolderWindow::renamed, w);
     }
 

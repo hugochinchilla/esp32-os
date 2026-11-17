@@ -107,14 +107,13 @@ private:
 
 } // namespace
 
-void colour_dialog(wm::Window *owner, gfx::Colour start, ColourFn chosen, void *context)
+void colour_dialog(int owner, gfx::Colour start, ColourFn chosen, void *context)
 {
     // A window that already has a dialog up gets that one brought forward.
-    if (owner != nullptr && owner->open() && os::blocker(*owner) != nullptr) {
-        os::activate(*owner);
+    if (has_dialog(owner)) {
         return;
     }
-    if (ColourDialog *d = make_window<ColourDialog>(owner, start, chosen, context)) {
+    if (ColourDialog *d = make_window<ColourDialog>(window_numbered(owner), start, chosen, context)) {
         os::show(*d);
         discard(d); // if the window manager had no room for it
     } else {

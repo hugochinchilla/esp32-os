@@ -154,6 +154,9 @@ public:
     // The open window with this number (Window::id(), given when it opens
     // and not given again); nullptr once it has closed.
     Window *window(int id) const;
+    // A number for a window that is not open yet (Window::set_id()): the
+    // same series as the ones given at opening.
+    int new_id() { return next_id_++; }
     // The owner of a timer, 0 if the id is not running.
     proc::Pid timer_owner(int id) const;
 

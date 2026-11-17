@@ -130,3 +130,23 @@ kills the numbers; a process ended with its window open does the same.
 Still missing for the programs to come, and to be added as each needs it:
 a menu bar, a window that can be sized, a dialog over another window, icons
 in a list, and an area the program draws and takes the mouse in.
+
+## The same day: one number per window, dialogs over a number, Run
+
+- **One number.** The first cut gave a window made by number a number of
+  its own (a slot and a count), beside the one the window server gives
+  every window (`os::WindowId`, what the Task Manager sees). Two numbers
+  for one window was one too many. A window made through `os::ui` now
+  takes the window server's number when it is made, before it opens, and
+  that is its number everywhere.
+- **Dialogs take the number of the window they are over**, not a pointer:
+  `open_file_dialog`, `save_file_dialog`, `input_dialog`, `colour_dialog`.
+  A program written with the thin classes has no window object to point
+  at. The dialogs themselves are still classes of the old kind and look
+  the window up (`window_numbered`, for them only, until they are
+  rewritten); `ui::Look::over` is the same thing for a dialog written by
+  number.
+- **Run** is the second program on the thin classes: a text field, three
+  buttons, a picture, Browse opening the file dialog over it.
+
+PC tests pass (41) and the pictures match after each of the three.

@@ -87,6 +87,7 @@ public:
 
 class TextField : public Control {
 public:
+    static constexpr int kCapacity = 80; // characters; twice that in bytes as UTF-8
     using Control::Control;
     void get(char *out, int capacity) const { os::ui::get_text(window_, number_, out, capacity); }
     void set(const char *utf8) const { os::ui::set_text(window_, number_, utf8); }

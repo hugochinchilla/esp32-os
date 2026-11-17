@@ -190,7 +190,9 @@ void Wm::add(Window &w)
     }
     keep(w); // open again before it was disposed of
     w.wm_ = this;
-    w.id_ = next_id_++;
+    if (w.id_ == 0) {
+        w.id_ = next_id_++;
+    }
     w.owner_ = current_pid();
     if (procs_ != nullptr) {
         procs_->set_state(w.owner_, proc::State::Running); // not on its way out after all

@@ -398,22 +398,13 @@ private:
 // Each dialog is made when it is asked for and gone once it has closed, so
 // two programs (or two Editors) can each have their own at the same time.
 // A window that already has a dialog up gets that one brought forward.
-bool busy(wm::Window *owner)
+void file_dialog(bool save, int owner, const char *folder, const char *name, PathFn chosen, void *context)
 {
-    if (owner != nullptr && owner->open() && os::blocker(*owner) != nullptr) {
-        os::activate(*owner);
-        return true;
-    }
-    return false;
-}
-
-void file_dialog(bool save, wm::Window *owner, const char *folder, const char *name, PathFn chosen, void *context)
-{
-    if (busy(owner)) {
+    if (has_dialog(owner)) {
         return;
     }
     if (FileDialog *d = make_window<FileDialog>()) {
-        d->show(save, owner, folder, name, chosen, context);
+        d->show(save, window_numbered(owner), folder, name, chosen, context);
         discard(d); // if the window manager had no room for it
     } else {
         no_memory_for(save ? "Save As" : "Open");
@@ -422,24 +413,24 @@ void file_dialog(bool save, wm::Window *owner, const char *folder, const char *n
 
 } // namespace
 
-void open_file_dialog(wm::Window *owner, const char *folder, PathFn chosen, void *context)
+void open_file_dialog(int owner, const char *folder, PathFn chosen, void *context)
 {
     file_dialog(false, owner, folder, "", chosen, context);
 }
 
-void save_file_dialog(wm::Window *owner, const char *folder, const char *name, PathFn chosen, void *context)
+void save_file_dialog(int owner, const char *folder, const char *name, PathFn chosen, void *context)
 {
     file_dialog(true, owner, folder, name, chosen, context);
 }
 
-void input_dialog(wm::Window *owner, const char *title, const char *prompt, const char *initial, TextFn done,
+void input_dialog(int owner, const char *title, const char *prompt, const char *initial, TextFn done,
                   void *context)
 {
-    if (busy(owner)) {
+    if (has_dialog(owner)) {
         return;
     }
     if (InputDialog *d = make_window<InputDialog>()) {
-        d->show(owner, title, prompt, initial, done, context);
+        d->show(window_numbered(owner), title, prompt, initial, done, context);
         discard(d); // if the window manager had no room for it
     } else {
         no_memory_for(title);

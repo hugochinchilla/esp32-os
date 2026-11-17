@@ -294,7 +294,7 @@ public:
         }
         if (path == nullptr) {
             show(*this);
-            open_file_dialog(this, "C:\\pictures", &ViewerWindow::chosen, this);
+            open_file_dialog(id(), "C:\\pictures", &ViewerWindow::chosen, this);
             return;
         }
         snprintf(path_, sizeof(path_), "%s", path);

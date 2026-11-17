@@ -324,7 +324,7 @@ private:
     static void other(wm::Button &, void *context)
     {
         auto *d = static_cast<DisplayDialog *>(context);
-        colour_dialog(d, gfx::nearest(d->colour_), &DisplayDialog::other_picked, d);
+        colour_dialog(d->id(), gfx::nearest(d->colour_), &DisplayDialog::other_picked, d);
     }
     static void other_picked(gfx::Colour colour, void *context)
     {

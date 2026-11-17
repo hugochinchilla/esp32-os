@@ -26,6 +26,9 @@
 namespace os {
 namespace ui {
 
+// A window's number is the one the whole system knows it by (os::WindowId,
+// what os::main_window() answers): given when the window is made, never
+// given again.
 using Window = int;  // 0: none
 using Control = int; // 0: none
 constexpr Window kNoWindow = 0;
@@ -60,6 +63,9 @@ struct Look {
     int width = 200, height = 100; // of the whole frame; centred on the screen
     const gfx::Bitmap *icon = nullptr;
     uint8_t flags = 0;
+    // A dialog over this window, which cannot be used while the dialog is
+    // open: any window's number, the asking program's or another's.
+    Window over = kNoWindow;
 };
 
 // A new window of the process asking, not yet on the screen. `state_bytes`
