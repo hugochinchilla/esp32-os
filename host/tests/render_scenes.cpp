@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "core/init/init.hpp"
 #include "core/fs/memory_volume.hpp"
 #include "core/shell/boot.hpp"
 #include "core/shell/defrag.hpp"
@@ -204,6 +205,7 @@ int main(int argc, char **argv)
         save("00e-crash-panic", false);
     }
 
+    static init::Init first(proc::table()); // PID 1, as on the board; the desktop is its child
     shell::start(desktop, system_, storage, memory);
     desktop.start();
     desktop.set_animations(false);

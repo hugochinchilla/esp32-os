@@ -64,6 +64,10 @@ using StopJobsFn = void (*)(Pid pid, void *context);
 // Starts a program again (see Table::set_restart).
 using StartFn = void (*)(void *context);
 
+// Told the name of a program that is no longer started again (see
+// Table::set_gave_up).
+using GaveUpFn = void (*)(const char *name, void *context);
+
 struct Process {
     static constexpr int kNameSize = 24;
 
@@ -78,6 +82,7 @@ struct Process {
                           // current process, and its finished jobs' tasks
     uint32_t memory = 0;  // bytes it holds now: what its windows asked the
                           // Memory port for, and the stacks of its jobs
+    uint32_t born = 0;    // the table's clock when it was made (the brake on restarts)
     char name[kNameSize] = "";
     StartFn restart = nullptr; // for kRespawn
     void *restart_context = nullptr;
@@ -90,9 +95,9 @@ public:
     static constexpr int kMaxProcesses = 32;
 
     // A new process. The first one made in an empty table is the root of the
-    // tree: PID 1, without a parent (pass kNone), and it never ends. Today
-    // that is the desktop; init takes the place when it is a real program
-    // (backlog item 18). After that the parent must be alive, or kNone for
+    // tree: PID 1, without a parent (pass kNone), and it never ends. On a
+    // machine that is init (core/init/init.hpp); where the desktop is
+    // started alone, as most tests do, it is the desktop. After that the parent must be alive, or kNone for
     // the root's children. Returns kNone when the table is full or there is
     // no such parent.
     Pid spawn(const char *name, Pid parent, uint8_t flags = 0);
@@ -153,6 +158,20 @@ public:
     // set_restart() on it if that one is to come back too.
     void set_restart(Pid pid, StartFn start, void *context);
     int restart_due(); // how many were started
+    // The brake. A program that ends less than kQuickUs after it was made,
+    // kQuickLimit times one after the other, is not started again: something
+    // is wrong with it, and starting it for ever would take the machine
+    // along. One that lasts longer starts the count again. A program is
+    // known by its start function and context. It needs the clock
+    // (set_clock); without one nothing is braked. init says so in the log.
+    static constexpr uint32_t kQuickUs = 2000000;
+    static constexpr int kQuickLimit = 5;
+    void set_gave_up(GaveUpFn fn, void *context)
+    {
+        gave_up_ = fn;
+        gave_up_context_ = context;
+    }
+    int given_up() const { return given_up_; } // how many programs, since the start
 
     // Live processes in order of creation (lowest PID first, until the
     // numbers have gone round).
@@ -211,6 +230,18 @@ private:
     static constexpr int kMaxDue = 8;
     Restart due_[kMaxDue] = {};
     int due_count_ = 0;
+
+    // Programs that ended quickly the last time, and how many times in a row.
+    struct Quick {
+        StartFn start = nullptr;
+        void *context = nullptr;
+        int count = 0;
+    };
+    bool may_restart(const Process &p);
+    Quick quick_[kMaxDue] = {};
+    GaveUpFn gave_up_ = nullptr;
+    void *gave_up_context_ = nullptr;
+    int given_up_ = 0;
 };
 
 // Makes `pid` the current process until the end of the block, then puts the

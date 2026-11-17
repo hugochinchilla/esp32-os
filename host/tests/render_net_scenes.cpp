@@ -6,6 +6,7 @@
 #include <cstring>
 #include <string>
 
+#include "core/init/init.hpp"
 #include "core/fs/memory_volume.hpp"
 #include "core/net/wifi.hpp"
 #include "core/shell/shell.hpp"
@@ -113,6 +114,7 @@ int main(int argc, char **argv)
     radio.has_time = true;
 
     shell::set_network(&wifi);
+    static init::Init first(proc::table()); // PID 1, as on the board; the desktop is its child
     shell::start(desktop, system_, storage, memory);
     desktop.start();
     desktop.set_animations(false);

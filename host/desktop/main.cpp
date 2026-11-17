@@ -29,6 +29,7 @@
 #include <emscripten.h>
 #endif
 
+#include "core/init/init.hpp"
 #include "core/fs/fs.hpp"
 #include "core/fs/samples.hpp"
 #include "core/gfx/art.hpp"
@@ -535,7 +536,21 @@ void Machine::start()
 
     // No Wi-Fi: the Network panel says it is not available. The clock is
     // the PC's.
-    shell::start(screen_, system_, storage_, memory_);
+    // init is PID 1 and starts the desktop from C:\.config\startup.txt, as
+    // on the board. There are no network services here.
+    static init::Init init_process(proc::table());
+    init_process.set_run(
+        [](const char *what, char *why, size_t capacity, void *) { return shell::run_text(what, "C:\\", why, capacity); },
+        nullptr);
+    init_process.add(
+        "desktop",
+        [](void *self) {
+            auto *m = static_cast<Machine *>(self);
+            shell::start(m->screen_, m->system_, m->storage_, m->memory_);
+            return true;
+        },
+        this, true);
+    init_process.boot(storage_);
     screen_.set_damage_listener([](const gfx::Rect &, void *self) { static_cast<Machine *>(self)->dirty_ = true; },
                                 this);
     const time_t now = time(nullptr);

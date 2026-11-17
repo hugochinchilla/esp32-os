@@ -81,6 +81,7 @@ Pid Table::spawn(const char *name, Pid parent, uint8_t flags)
         p.parent = parent;
         p.state = State::Running;
         p.flags = flags;
+        p.born = micros_ != nullptr ? micros_(micros_context_) : 0;
         strncpy(p.name, name, Process::kNameSize - 1);
         p.name[Process::kNameSize - 1] = 0;
         order_[count_++] = static_cast<uint8_t>(i);
@@ -112,12 +113,54 @@ bool Table::exit(Pid pid)
     if (p->pending != 0) {
         waiting_--;
     }
-    if (p->is(kRespawn) && p->restart != nullptr && due_count_ < kMaxDue) {
+    if (p->is(kRespawn) && p->restart != nullptr && may_restart(*p) && due_count_ < kMaxDue) {
         due_[due_count_++] = {p->restart, p->restart_context};
     }
     *p = Process();
     changes_++;
     return true;
+}
+
+// The brake on restarts: false when this program has just ended quickly
+// once too often.
+bool Table::may_restart(const Process &p)
+{
+    if (micros_ == nullptr) {
+        return true;
+    }
+    const uint32_t lived = micros_(micros_context_) - p.born; // the clock wraps; the difference does not
+    Quick *mine = nullptr;
+    Quick *empty = nullptr;
+    for (Quick &q : quick_) {
+        if (q.start == p.restart && q.context == p.restart_context) {
+            mine = &q;
+        } else if (q.start == nullptr && empty == nullptr) {
+            empty = &q;
+        }
+    }
+    if (lived >= kQuickUs) {
+        if (mine != nullptr) {
+            *mine = Quick();
+        }
+        return true;
+    }
+    if (mine == nullptr) {
+        if (empty == nullptr) {
+            return true; // nowhere to count it
+        }
+        mine = empty;
+        mine->start = p.restart;
+        mine->context = p.restart_context;
+    }
+    if (++mine->count < kQuickLimit) {
+        return true;
+    }
+    *mine = Quick();
+    given_up_++;
+    if (gave_up_ != nullptr) {
+        gave_up_(p.name, gave_up_context_);
+    }
+    return false;
 }
 
 Sent Table::signal(Pid pid, Signal signal)
@@ -291,6 +334,10 @@ void Table::reset()
     current_ = kNone;
     waiting_ = 0;
     due_count_ = 0;
+    given_up_ = 0;
+    for (Quick &q : quick_) {
+        q = Quick();
+    }
     changes_++;
 }
 

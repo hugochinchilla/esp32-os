@@ -749,8 +749,8 @@ void test_shell()
     proc::Table &t = proc::table();
 
     // After start-up: the desktop is PID 1, the root of the tree, and
-    // nothing else is listed. There is no init row until init is a real
-    // program. The debug link, the Wi-Fi manager, the remote screen
+    // nothing else is listed. Here the desktop is started alone; on a
+    // machine init is made first and takes PID 1 (test_init.cpp). The debug link, the Wi-Fi manager, the remote screen
     // and the web page are not tasks of their own (they run on the UI
     // task), so they have no rows. No program runs yet.
     const proc::Process *desk = process("desktop");

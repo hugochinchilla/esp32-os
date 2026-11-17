@@ -111,6 +111,10 @@ add_test(NAME saver COMMAND test_saver)
 add_executable(test_proc tests/test_proc.cpp)
 target_link_libraries(test_proc PRIVATE core)
 add_test(NAME proc COMMAND test_proc)
+# init: PID 1, the start-up file, the brake on restarts (backlog 18).
+add_executable(test_init tests/test_init.cpp)
+target_link_libraries(test_init PRIVATE core)
+add_test(NAME init COMMAND test_init)
 # Programs made when opened and destroyed when closed (backlog 19 and 34).
 add_executable(test_lifecycle tests/test_lifecycle.cpp)
 target_link_libraries(test_lifecycle PRIVATE core)

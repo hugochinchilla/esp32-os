@@ -35,6 +35,7 @@ set(CORE_SRCS
     src/net/viewer_page.cpp
     src/net/web.cpp
     src/net/wifi.cpp
+    src/init/init.cpp
     src/job/job.cpp
     src/msg/input.cpp
     src/msg/queue.cpp
