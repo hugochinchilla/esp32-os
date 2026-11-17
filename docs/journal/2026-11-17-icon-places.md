@@ -123,3 +123,30 @@ On the PC, 41 tests.
 - A file whose name has `=` in it, or begins with `[`, `;` or `#`, is not
   remembered (the settings file's own marks).
 - Nothing arranges by name or by kind.
+
+
+## On the board (added by the board thread, 2026-11-17)
+
+PR 29 at 2ed83a1 with main 27f8c2e merged in (the taskbar under init, PR
+28, the dbg.py reader). The code merged without conflict; BACKLOG, DECISIONS
+and the journal index conflicted, and this PR's items, numbered 40 and 41 on
+its branch, became 41 and 42 (40 is the submenus on main). PC tests 42 of 42,
+`check_os_calls` 16 of 17. The first ESP32 build (0x167b70, 27 % of the slot
+free), flashed by cable, the app only. C:\.config\desktop.ini was saved first
+and put back byte for byte at the end; icons.ini did not exist and was
+deleted again; the desktop folder was empty and is empty again.
+
+1. A test file put in C:\Documents\Desktop, My Board and the file dragged to
+   open places: they stayed where let go, and C:\.config\icons.ini has their
+   places (`My Board = 264,104`, `icontest.txt = 384,244`). After a restart
+   they were still there.
+2. Right click on the desktop: "Snap icons to grid", "Realign icons",
+   "Display...". Snap turned on: ticked, nothing moved (icons.ini and the
+   screen both unchanged). My Board dragged to an odd spot then took a cell
+   (306,148). "Realign icons" put all five in one column.
+3. A file dragged from the File manager onto the desktop: moved into
+   C:\Documents\Desktop and placed where it was let go (382,358).
+4. A desktop file dragged onto the Trash: in C:\.trash, gone from the
+   desktop.
+5. The taskbar killed (it is init's child now): back at once, the icons in
+   their saved places, icons.ini unchanged.

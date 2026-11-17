@@ -134,3 +134,43 @@ On the PC. 39 tests pass, with the sanitizers.
   desktop over VNC against the dithered one.
 - Whether the default becomes a solid colour: the owner's choice.
 - Old lines are not wrapped again when the Terminal changes width.
+
+
+## On the board (added by the board thread, 2026-11-17)
+
+PR 29 at 2ed83a1 with main 27f8c2e merged in (the taskbar under init, PR
+28, the dbg.py reader). The code merged without conflict; BACKLOG, DECISIONS
+and the journal index conflicted, and this PR's items, numbered 40 and 41 on
+its branch, became 41 and 42 (40 is the submenus on main). PC tests 42 of 42,
+`check_os_calls` 16 of 17. The first ESP32 build (0x167b70, 27 % of the slot
+free), flashed by cable, the app only. C:\.config\desktop.ini was saved first
+and put back byte for byte at the end; icons.ini did not exist and was
+deleted again; the desktop folder was empty and is empty again.
+
+1. The Start button: two clear pixel columns between its left edge and the
+   mascot, and two between "Start" and its right edge (read pixel by pixel).
+2. The Terminal: dragged smaller by its corner (350 x 234), `help` wraps at
+   the new width; maximised (640 x 452), `dir`, `top` and `ted` use the whole
+   width; two `help`s, then Page Up and the scroll bar's up arrow move back
+   through the history. Restore brings back the size it had before it was
+   maximised (here the smaller one I had dragged), not 80 x 25: say if
+   80 x 25 was meant. Dragging the scroll bar's thumb was not tried. Three
+   Terminals open, a fourth is refused with the box.
+3. RAM with one Terminal open, against main: internal -12,656 bytes both,
+   external -27,140 against -20,996 (the larger grid); all of it back when it
+   closes.
+4. Display: Teal with Apply, then OK: a single solid colour on screen,
+   `colour = teal` in desktop.ini, still there after a restart. Other... opens
+   the Colour dialog, 16 by 16; Escape closes only it, Display stays. A
+   colour picked there, OK, OK: `colour = #FF9200`, kept over a restart
+   (solid). Teal with a pattern: the pattern drawn over it in two colours
+   (`pattern = dots`). The Colour dialog runs in Display's process (PID 6)
+   and is modal to it, as DECISIONS says; opened and closed twice with
+   Display, internal and external RAM back to the byte.
+5. A VNC full screen: 2.3 to 3.4 s on the solid Teal desktop against 10.7 s
+   with Chinchilla blue (dithered) on main before the flash and 5.3 s on this
+   build. The test client asks for raw rectangles, so the time depends on the
+   network as much as on the picture; these figures are not a fair measure of
+   the gain.
+6. Repaint of the whole screen: 13.96 ms, the same as main. `dbg.py misses`:
+   none. VNC and telnet answered.
