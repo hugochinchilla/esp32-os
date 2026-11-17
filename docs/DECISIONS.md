@@ -2346,3 +2346,21 @@ Step 2 of backlog item 46, compiled but not run on the board
   sharing the adapters is step 3.
 - The BIOS is flashed with `tools/flash-bios.sh`, never `idf.py flash` in
   `firmware/bios`, which would write a bootloader without our file.
+
+### The BIOS's first screen (the owner, 2026-11-17)
+
+`docs/journal/2026-11-17-bios-first-screen.md`.
+
+- Before the self-test the BIOS shows a first screen for 3 s, as the PCs
+  of the nineties showed their BIOS maker's logo and an energy badge. It
+  covers the time the monitor takes to wake; nothing that matters is on it.
+- The badge is our own: a leaf with a lightning bolt in a round ring, the
+  name under it, and "Runs on a USB port". No square frame, no "no fan, no
+  noise" (the owner's changes to the first drawing). The real Energy Star
+  mark is not used.
+- The name "Energy Nibbler" is to confirm.
+- The memory count in the BIOS runs at the speed of the test, without the
+  pause between steps that the OS's self-test has.
+- After an error the OS restarts without the BIOS, and a reset by a
+  watchdog or a brownout starts the OS directly, until the BIOS shows the
+  error screen itself (step 3). To confirm.

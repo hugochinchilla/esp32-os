@@ -23,6 +23,11 @@ constexpr gfx::Colour kText = gfx::rgb(5, 5, 2);
 constexpr gfx::Colour kDim = gfx::rgb(2, 2, 1);
 constexpr gfx::Colour kYellow = gfx::rgb(7, 7, 0);
 constexpr gfx::Colour kRed = gfx::rgb(7, 1, 0);
+constexpr gfx::Colour kLeaf = gfx::rgb(1, 6, 1);
+constexpr gfx::Colour kLeafDark = gfx::rgb(1, 3, 0);
+
+// The first screen: how long it stays, counted from the start of the video.
+constexpr uint32_t kSplashMs = 3000;
 
 struct Post {
     shell::BootIo &io;
@@ -45,6 +50,15 @@ struct Post {
 
 // Black, the mascot, and every cell of the screen.
 void paint_frame(gfx::Canvas &c, TextScreen &screen);
+
+// The first screen, as old BIOSes opened with their maker's logo and an
+// energy badge: the mascot, a badge of our own, the version. It stays until
+// `ms` after the video started (a key ends it), which is when a monitor is
+// still waking, so nothing that matters is on it. Nothing goes to serial.
+// The self-test's own wait for the monitor then counts from its end.
+void run_splash(Post &post, uint32_t ms = kSplashMs);
+// The same picture with given words (for the PC test against the drawing).
+void draw_splash(gfx::Canvas &c, TextScreen &screen, const char *version, const char *id);
 
 // Runs the self-test; returns the number of failed checks. Every check runs
 // to the end. With hold it paces the lines, waits for the monitor first and

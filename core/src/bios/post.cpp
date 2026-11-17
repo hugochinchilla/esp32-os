@@ -7,8 +7,15 @@ namespace bios {
 
 namespace {
 
-constexpr uint32_t kLineMs = 120;     // between lines at 100 % pace
-constexpr uint32_t kCountStepMs = 22; // between memory count updates at 100 %
+constexpr uint32_t kLineMs = 120; // between lines at 100 % pace
+
+// The first screen: the mascot, 16 squares of 8 pixels, and the badge's
+// leaf, 12 squares of 4.
+constexpr int kBigMascotColumn = 4, kBigMascotRow = 2, kBigMascotScale = 8;
+constexpr int kLeafColumn = 62, kLeafRow = 2, kLeafScale = 4;
+const char *const kLeafRows[12] = {
+    ".........GGG", ".......GGGGG", ".....GGGYGGG", "....GGGYYGGG", "...GGGYYGGG.", "..GGGYYYYGG.",
+    "..GGGGGYYGG.", ".GGGGGYYGG..", ".GGGGYYGGG..", ".GGGYGGGG...", "D.GGGGGG....", "DD.........."};
 
 struct Painter {
     explicit Painter(ports::Display &d) : display(d) { clip.set({0, 0, d.width(), d.height()}); }
@@ -87,11 +94,8 @@ void count_progress(uint32_t kb, void *context)
     char t[32];
     memory_value(t, sizeof(t), kb, false);
     line(p->post->screen, kMemoryRow + (p->internal ? 1 : 0), memory_label(p->internal), t, kText);
+    // No waiting here: the count climbs as fast as the memory is tested.
     p->post->screen.paint(*p->c);
-    shell::BootIo &io = p->post->io;
-    if (io.skip == nullptr || !io.skipped) {
-        shell::wait_until(io, io.clock.micros() + kCountStepMs * io.pace_percent * 10);
-    }
 }
 
 } // namespace
@@ -101,6 +105,69 @@ void paint_frame(gfx::Canvas &c, TextScreen &screen)
     c.fill({0, 0, kColumns * kCellWidth, kRows * kCellHeight}, gfx::kBlack);
     shell::draw_mascot(c, kLogoColumn * kCellWidth, kLogoRow * kCellHeight, kLogoScale, kText, kBright);
     screen.paint_all(c);
+}
+
+void draw_splash(gfx::Canvas &c, TextScreen &s, const char *version, const char *id)
+{
+    s.clear();
+    s.reserve(kBigMascotColumn, kBigMascotRow, 16, 8);
+    s.reserve(kLeafColumn, kLeafRow, 6, 3);
+    s.put(58, 7, "Energy Nibbler", kLeaf);
+    s.put(56, 8, "Runs on a USB port", kText);
+    char t[64];
+    snprintf(t, sizeof(t), "Chinchilla BIOS %s", version);
+    s.put(4, 12, t, kBright);
+    s.put(4, 13, "Copyleft 2026, built on nine resistors", kText);
+    s.put(4, 16, "Waking the monitor...", kDim);
+    s.put(kLeftColumn, kSetupRow, "Press DEL to enter SETUP (there is no setup)", kDim);
+    if (id != nullptr) {
+        s.put(kLeftColumn, kIdRow, id, kDim);
+    }
+
+    c.fill({0, 0, kColumns * kCellWidth, kRows * kCellHeight}, gfx::kBlack);
+    shell::draw_mascot(c, kBigMascotColumn * kCellWidth, kBigMascotRow * kCellHeight, kBigMascotScale, kText, kBright);
+    for (int r = 0; r < 12; r++) {
+        for (int q = 0; q < 12; q++) {
+            const char ch = kLeafRows[r][q];
+            if (ch != '.') {
+                c.fill({kLeafColumn * kCellWidth + q * kLeafScale, kLeafRow * kCellHeight + r * kLeafScale, kLeafScale,
+                        kLeafScale},
+                       ch == 'G' ? kLeaf : (ch == 'Y' ? kYellow : kLeafDark));
+            }
+        }
+    }
+    s.paint_all(c);
+    // The ring round the leaf, two pixels: the midpoint circle about the
+    // leaf's middle; drawn last, over the cells' black.
+    const int cx = kLeafColumn * kCellWidth + 6 * kLeafScale, cy = kLeafRow * kCellHeight + 6 * kLeafScale;
+    for (int radius : {37, 36}) {
+        int x = radius, y = 0, err = 1 - radius;
+        while (x >= y) {
+            const int points[8][2] = {{x, y}, {y, x}, {-y, x}, {-x, y}, {-x, -y}, {-y, -x}, {y, -x}, {x, -y}};
+            for (const auto &p : points) {
+                c.fill({cx + p[0], cy + p[1], 1, 1}, kLeaf);
+            }
+            y++;
+            if (err < 0) {
+                err += 2 * y + 1;
+            } else {
+                x--;
+                err += 2 * (y - x) + 1;
+            }
+        }
+    }
+}
+
+void run_splash(Post &post, uint32_t ms)
+{
+    shell::BootIo &io = post.io;
+    Painter painter(io.display);
+    gfx::Canvas c = painter.canvas();
+    draw_splash(c, post.screen, shell::kVersion, post.id);
+    if (ms > 0 && !io.skipped) {
+        shell::wait_until(io, io.video_start_us + ms * 1000);
+    }
+    io.video_start_us = io.clock.micros();
 }
 
 void draw_post(gfx::Canvas &c, TextScreen &s, const PostValues &v)

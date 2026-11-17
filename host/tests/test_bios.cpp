@@ -146,7 +146,7 @@ struct Rows : image::RowSink {
 // The finished screen is the reference drawing (docs/look/bios-text/
 // bios-post.png, drawn by tools/mockup/bios_text.py from the font's BDF
 // file), pixel for pixel.
-void test_matches_reference(const char *look_folder)
+template <typename Draw> void matches(const char *look_folder, const char *file, Draw draw)
 {
     static uint8_t reference[640 * 480];
     host::FolderVolume volume(look_folder);
@@ -155,7 +155,9 @@ void test_matches_reference(const char *look_folder)
     host::HostMemory memory;
     image::Decoder d;
     image::Info info;
-    CHECK(d.open(storage, "L:\\bios-post.png", memory, info) == image::Error::None);
+    char path[64];
+    snprintf(path, sizeof(path), "L:\\%s", file);
+    CHECK(d.open(storage, path, memory, info) == image::Error::None);
     CHECK(info.width == 640 && info.height == 480);
     Rows rows;
     rows.out = reference;
@@ -170,10 +172,7 @@ void test_matches_reference(const char *look_folder)
     Screen screen;
     gfx::Canvas c = screen.canvas();
     static bios::TextScreen s;
-    bios::draw_post(c, s,
-                    {"v0.3", "ESP32-S3 dual core, 240 MHz", 8192, 376, "VGA 640x480, 256 colours", "11 MB flash disk",
-                     "serial debug link", "none", "ota_0, 1.4 MB, image OK", 5,
-                     "17/11/2026-ESP32S3-N16R8-CHINCHILLA"});
+    draw(c, s);
     int differ = 0, x0 = 640, y0 = 480, x1 = -1, y1 = -1;
     for (int i = 0; i < 640 * 480; i++) {
         if (screen.display.pixels()[i] != reference[i]) {
@@ -183,14 +182,26 @@ void test_matches_reference(const char *look_folder)
         }
     }
     if (differ != 0) {
-        printf("the BIOS screen differs from the reference in %d pixels (x %d-%d, y %d-%d)\n", differ, x0, x1, y0,
-               y1);
+        printf("%s differs from the reference in %d pixels (x %d-%d, y %d-%d)\n", file, differ, x0, x1, y0, y1);
     }
     CHECK(differ == 0);
-    // No text under the mascot.
-    for (int r = bios::kLogoRow; r < bios::kLogoRow + bios::kLogoRows; r++) {
-        CHECK(row(s, r).size() <= static_cast<size_t>(bios::kLogoColumn));
-    }
+}
+
+void test_matches_reference(const char *look_folder)
+{
+    matches(look_folder, "bios-post.png", [](gfx::Canvas &c, bios::TextScreen &s) {
+        bios::draw_post(c, s,
+                        {"v0.3", "ESP32-S3 dual core, 240 MHz", 8192, 376, "VGA 640x480, 256 colours",
+                         "11 MB flash disk", "serial debug link", "none", "ota_0, 1.4 MB, image OK", 5,
+                         "17/11/2026-ESP32S3-N16R8-CHINCHILLA"});
+        // No text under the mascot.
+        for (int r = bios::kLogoRow; r < bios::kLogoRow + bios::kLogoRows; r++) {
+            CHECK(row(s, r).size() <= static_cast<size_t>(bios::kLogoColumn));
+        }
+    });
+    matches(look_folder, "bios-splash.png", [](gfx::Canvas &c, bios::TextScreen &s) {
+        bios::draw_splash(c, s, "v0.3", "17/11/2026-ESP32S3-N16R8-CHINCHILLA");
+    });
 }
 
 // A clock that moves on 1 ms each time it is read.
@@ -212,6 +223,46 @@ public:
         return HostSystem::fact(which, value, text, capacity);
     }
 };
+
+// The first screen: stays until its time after the video started, sends
+// nothing to serial, a key ends it, and the self-test's wait counts from its
+// end.
+void test_splash()
+{
+    Screen screen;
+    host::HostSystem system;
+    host::HostMemory memory;
+    SteppingClock clock;
+    shell::BootIo io{screen.display, system, memory, clock, nullptr, nullptr, nullptr, nullptr};
+    io.video_start_us = 500000;
+    clock.now = 600000;
+    static bios::TextScreen s;
+    std::string sent;
+    s.set_out(collect, &sent);
+    bios::Post post{io, s, "TEST-ID"};
+    bios::run_splash(post, 3000);
+    CHECK(clock.now >= 3500000 && clock.now < 3600000);
+    CHECK(io.video_start_us >= 3500000);
+    CHECK(sent.empty());
+    CHECK(row(s, 12) == std::string("    Chinchilla BIOS ") + shell::kVersion);
+    CHECK(row(s, 7).find("Energy Nibbler") == 58 && s.colour_at(58, 7) == bios::kLeaf);
+    CHECK(row(s, bios::kIdRow) == "  TEST-ID");
+    // The self-test that follows starts from a clean screen.
+    io.monitor_wait_ms = 0;
+    io.hold_s = 0;
+    bios::run_post(post, false);
+    CHECK(row(s, 12).empty() && row(s, 7).find("Energy Nibbler") == std::string::npos);
+
+    // A key during it: over at once.
+    SteppingClock clock2;
+    static bool key = false;
+    key = true;
+    shell::BootIo io2{screen.display, system, memory, clock2, nullptr, nullptr, nullptr, nullptr};
+    io2.skip = [](void *) { return key; };
+    bios::Post post2{io2, s, nullptr};
+    bios::run_splash(post2, 3000);
+    CHECK(clock2.now < 100000);
+}
 
 // A whole run: the screen, the serial copy, the log.
 void test_run()
@@ -403,6 +454,7 @@ int main(int argc, char **argv)
 {
     test_boot_word();
     test_text_screen();
+    test_splash();
     test_run();
     test_waiting_and_skipping();
     test_boot_device();

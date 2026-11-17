@@ -284,6 +284,8 @@ void bios_task(void *)
     post.id = identity();
     post.drive = drive_text();
     post.boot_device = &boot_device;
+    // The first screen while the monitor wakes, then the self-test.
+    bios::run_splash(post);
     bios::run_post(post);
 
     if (!post.bootable) {
