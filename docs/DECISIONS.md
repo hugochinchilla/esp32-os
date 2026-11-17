@@ -1143,6 +1143,10 @@ Backlog item 33, made by the agent under the owner's free hand. Journal:
   and turns Pages on, as with the build workflow. The built page is not
   committed to the repository.
 - Restart loads the page again. F11 and F12 are the browser's.
+- The browser build does not treat warnings in `core/` as errors
+  (2026-11-17, after the first Pages run failed on one): only it uses
+  Clang, and a warning GCC does not give must not stop the publication.
+  Its own code still does. Journal: `docs/journal/2026-11-17-pages-first-run.md`.
 
 ### Chosen for painting each pixel once (2026-11-16, to confirm)
 
