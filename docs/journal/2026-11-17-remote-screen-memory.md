@@ -76,3 +76,33 @@ Not run on the board. To check there: `tools/dbg.py memory` at the empty
 desktop, with a viewer connected (about 183 KB less external RAM), and after
 it disconnects (back to the first figure); the same with the web page's
 viewer; and ten connections in a row.
+
+## On the board (added by the board thread, 2026-11-17)
+
+Branch commit 75b377d with main 6cd6087 (services loop, PR 24) merged in; PC
+tests pass; flashed with a fast start.
+
+1. External RAM, free bytes against the empty desktop: a VNC viewer
+   connected -183,612, after it disconnected +0; the browser page's viewer
+   -199,956, after the browser closed -444; after ten connections in a row
+   (the tenth opened Documents with a double click and closed it with Alt+F4
+   through VNC) +40.
+2. A second viewer while the first was on took over and worked (its double
+   click opened Documents); after both closed the memory was back.
+3. A viewer killed without closing (SIGKILL on the client): its memory came
+   back 6 s after the kill.
+4. Internal RAM unchanged by all of the above.
+5. Refills: the run above ended with 3 late and 3 missed refills, stepping
+   after disconnects. To see whether that is this branch, ten cycles of
+   connect, one full screen, disconnect were run on three builds:
+
+   | Build | missed while connected | missed at disconnect | worst late |
+   |---|---|---|---|
+   | main cafef8b (before PR 24) | 0 | 3 | 645 us |
+   | main 6cd6087 (with PR 24) | 1 | 3 | 764 us |
+   | this branch | 2 | 1 | 731 us |
+
+   The missed refills at a viewer's disconnect are older than this branch
+   and older than PR 24; this branch does not add to them. They are a
+   separate finding to chase: a VNC disconnect makes a VGA refill late.
+
