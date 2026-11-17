@@ -36,6 +36,17 @@ task? The card (2026-11-17, not answered when this was written):
    back the decision that windows keep no picture.
 4. Not doing item 26.
 
+**The owner chose the first** (2026-11-17, after this was built). Before
+choosing he asked whether, whatever was decided, a full-screen game
+could have a way of its own to paint, faster than the window system: he
+would like to bring Doom over later. It can, and it does not depend on
+this choice: the card is about painting inside a window, where the
+screen is shared; a game with the whole screen shares nothing, so the
+server can stand aside and hand it the frame buffer (640x480, one byte
+per pixel, RRRGGGBB, no palette: Doom's 256 colours would go through a
+table, its 320x200 doubled), with the keys sent raw and one combination
+kept by the system to come back.
+
 ## What was built (the agent's, on the recommended option)
 
 - `core/prog` (`prog::Runner`): a program can be given a task of its

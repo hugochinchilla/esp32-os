@@ -2158,13 +2158,23 @@ architecture" above already says about saves and signals.
 - On the board a job's task has priority 4, one below the UI task: the
   Normal class of item 11 ("Chosen for the priority classes").
 
-### Programs on tasks of their own (2026-11-17, the agent's, to confirm)
+### Programs on tasks of their own (2026-11-17)
 
 Backlog item 26, first step. [Journal](journal/2026-11-17-program-tasks.md).
-The owner has been asked how a program paints from another task (the
-server waits for it; a lock on the screen; a picture per window; not doing
-it); what is below is built on the first, the one recommended, and is his
-to confirm or turn down.
+
+- **The server waits for the program** (the owner's choice on a card,
+  2026-11-17): each call into a program is handed to its task and the UI
+  task waits for it, with a limit; a program that does not come back is
+  painted grey and marked as not responding. Rejected: the program
+  painting under a lock on the screen (a hung program holding it freezes
+  the desktop), a picture kept per window (RAM, and windows keep no
+  picture), not doing the item.
+- A game that takes the whole screen may later draw straight into the
+  frame buffer whatever was chosen here (the owner's question, with Doom
+  in mind): the server stands aside, as DirectDraw's exclusive mode. Not
+  built; not in the backlog yet.
+
+The rest is the agent's, to confirm:
 
 - A program may have a task of its own (`core/prog`). Every call into its
   code goes through `proc::Table::call` and is handed to that task while
