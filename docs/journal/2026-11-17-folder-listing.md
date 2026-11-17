@@ -70,3 +70,46 @@ time it takes to open.
   became of its memory. `dbg.py fault slow` is busy without asking the
   system for anything; a late program that makes OS calls has only been
   seen working on the PC.
+
+## The board's answer, and the part that was not understood (the same day)
+
+The board ran it: folders of 30, 50 and 80 files open in 0.48, 0.94 and
+1.48 s (on `main`, on the UI task and entry by entry: 0.61 s for 30, 4.03 s
+for 80), and the memory comes back exactly. A folder of 200 files still
+never opened: no window after 60 s, no File manager task, nothing in the
+log, 18,396 bytes of external RAM gone each try. `main` opens it in
+10.82 s.
+
+That result says what the first one could not. 200 files still take more
+than two seconds, so the File manager is late; and then **there is no
+task**. The cause is in `wm::Wm::reap`, the safe point at the end of every
+event: a window program with no windows is one whose last window has
+closed, and it is ended. A File manager that is late listing its first
+folder has no window yet. It was ended, `prog::Runner::exited` took its
+task away in the middle of the listing (on the board a task can be
+deleted; on the PC a thread cannot, which is why the PC tests saw the
+window come), and the window object it had asked for, 18,396 bytes, was
+nobody's any more. The slow listing only decided who met the bug.
+
+Fixed in two places:
+
+- **A program that is late before it has opened any window is still
+  starting.** `proc::kOpened` is set when a process opens a window, and
+  `proc::Table::busy` asks the runner whether a call into the process is
+  still under way. `reap` leaves such a process alone until it has come
+  back. One that hangs after its last window was closed is ended as
+  before, and End Task ends either.
+- The listing asks for 32 entries a call instead of 8, in memory asked for
+  the while (2.6 KB): the 160 entries a listing holds are five passes.
+
+Tested on the PC: `test_os` has a program that is late before its first
+window (five safe points pass, it is alive with its task, its window comes
+when it is let go, and closing it gives everything back). With the fix
+taken out that test stops on a null window. The gate passes and the
+firmware compiles. **Not run on the board.**
+
+A second finding of that turn, from item 27: the desktop came up 83 ms
+later than on `main` (333 ms against about 250). The check of the programs
+that come with the system read the drive on the way to the desktop. It is
+now made two seconds after the desktop is up, from a timer. Not measured
+again yet; if the difference stays, it is somewhere else.

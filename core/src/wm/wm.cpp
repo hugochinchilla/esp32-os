@@ -196,6 +196,7 @@ void Wm::add(Window &w)
     w.owner_ = current_pid();
     if (procs_ != nullptr) {
         procs_->set_state(w.owner_, proc::State::Running); // not on its way out after all
+        procs_->opened_window(w.owner_);
     }
     w.state_ = WindowState::Normal;
     stack_[count_] = &w;
@@ -409,6 +410,15 @@ void Wm::reap()
         const proc::Process &p = procs_->at(i);
         if (!p.is(proc::kWindowed) || windows_of(p.pid) != 0 || p.jobs > 0) {
             continue; // one with a job running waits for it (proc::Table::job_started)
+        }
+        if (!p.is(proc::kOpened) && procs_->busy(p.pid)) {
+            // Late in a call on its own task before it has opened any
+            // window: it is still starting (a large folder being listed),
+            // not finished. Ending it here took its task away in the
+            // middle and lost what it had asked for. It is looked at again
+            // when it has come back; End Task still ends it. One that
+            // hangs after its last window was closed is ended as before.
+            continue;
         }
         end_process(p.pid);
     }

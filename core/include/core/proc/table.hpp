@@ -44,6 +44,7 @@ enum Flag : uint8_t {
     kProtected = 2, // cannot be signalled: signal() answers NotPermitted
     kRespawn = 4,   // started again if it ends, whatever ended it: init marks what it looks after
     kWindowed = 8,  // a window program: it ends when its last window closes
+    kOpened = 16,   // it has opened a window: one without is still starting, not finished
 };
 
 // What a process can be told.
@@ -262,6 +263,23 @@ public:
         between_ = fn;
         between_self_ = self;
     }
+    // Whether a call into the process is still under way on a task of
+    // its own after the caller stopped waiting (it is late). Such a process
+    // is in the middle of something: a program that has not opened its
+    // first window yet is not one that has closed its last.
+    void set_busy(bool (*fn)(Pid pid, void *self), void *self)
+    {
+        busy_ = fn;
+        busy_self_ = self;
+    }
+    bool busy(Pid pid) const { return busy_ != nullptr && busy_(pid, busy_self_); }
+    // The window manager says so when the process opens a window.
+    void opened_window(Pid pid)
+    {
+        if (Process *p = row(pid)) {
+            p->flags |= kOpened;
+        }
+    }
     void between()
     {
         if (between_ != nullptr) {
@@ -292,6 +310,8 @@ private:
 
     Supervisor *supervisor_ = nullptr;
     CallerFn caller_ = nullptr;
+    bool (*busy_)(Pid pid, void *self) = nullptr;
+    void *busy_self_ = nullptr;
     void (*between_)(void *self) = nullptr;
     void *between_self_ = nullptr;
     void *caller_self_ = nullptr;

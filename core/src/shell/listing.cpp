@@ -51,13 +51,16 @@ ports::FsError Listing::read(const char *folder)
     if (!ready()) {
         return ports::FsError::NoSpace;
     }
-    // A few entries a call, each call one pass over the folder: asked for
-    // one by one a folder of 80 files took the board longer than a program
-    // is waited for.
-    constexpr int kRun = 8;
+    // A run of entries a call, each call one pass over the folder: asked
+    // for one by one a folder of 80 files took the board longer than a
+    // program is waited for. The run is held in memory asked for the while.
+    constexpr int kRun = 32;
+    auto *run = static_cast<ports::DirEntry *>(program_memory(sizeof(ports::DirEntry) * kRun));
+    if (run == nullptr) {
+        return ports::FsError::NoSpace;
+    }
     ports::FsError e = ports::FsError::Ok;
     for (int first = 0; !truncated_;) {
-        ports::DirEntry run[kRun];
         int got = 0;
         e = os::file::entries(folder, first, run, kRun, got);
         if (e != ports::FsError::Ok) {
@@ -87,6 +90,7 @@ ports::FsError Listing::read(const char *folder)
         }
         first += got;
     }
+    free_program_memory(run);
     std::sort(items_, items_ + count_, before);
     for (int i = 0; i < count_; i++) {
         names_[i] = items_[i].name;

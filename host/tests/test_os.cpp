@@ -585,6 +585,52 @@ template <class F> bool soon(F &&f)
     return f();
 }
 
+// A program that is late before it has opened its first window (a large
+// folder being listed, on the board) is still starting: it is not taken for
+// one whose last window has closed and ended in the middle.
+host::ThreadEvent slow_start_gate;
+app::Number slow_start_number = app::kNone;
+
+void test_late_before_its_first_window()
+{
+    static host::ThreadTasks tasks;
+    static host::ThreadEvent events[2];
+    static prog::Kit kit = {&events[0], &events[1]};
+    prog::Runner &runner = prog::runner();
+    runner.set_tasks(&tasks, &kit, 1);
+    runner.set_limit(50);
+    const uint32_t blocks = os::blocks_out();
+
+    const proc::Pid pid = os::spawn("Slow start");
+    CHECK(runner.start(pid));
+    const bool in_time = proc::table().call(
+        pid,
+        [](void *) {
+            slow_start_gate.wait(0xFFFFFFFF); // busy with something of its own, in no OS call
+            app::Look look;
+            look.title = "Slow start";
+            look.width = 200;
+            look.height = 120;
+            slow_start_number = app::open<Sample>(look);
+        },
+        nullptr);
+    CHECK(!in_time && !os::responding(pid));
+    for (int i = 0; i < 5; i++) {
+        wait(10000); // safe points come and go
+    }
+    CHECK(os::alive(pid) && runner.has_task(pid) && tasks.ended == 0);
+    slow_start_gate.set();
+    CHECK(soon([&] { return os::responding(pid) && slow_start_number != app::kNone; }));
+    CHECK(desktop.active() != nullptr && desktop.active()->owner() == pid && os::alive(pid));
+    desktop.close(*desktop.active());
+    wait(10000);
+    wait(10000);
+    CHECK(!os::alive(pid) && os::blocks_out() == blocks);
+    CHECK(soon([&] { return runner.tasks() == 0; }));
+    runner.set_limit(prog::kForever);
+    runner.set_tasks(nullptr, nullptr, 0);
+}
+
 void test_not_responding()
 {
     static host::ThreadTasks tasks;
@@ -683,7 +729,14 @@ void test_programs_on_tasks()
     runner.set_limit(1);
     shell::open_folder("C:\\Many");
     runner.set_limit(prog::kForever);
+    // Late, with no window yet: it is not taken for a program whose last
+    // window has closed (on the board that ended it, task and all, in the
+    // middle of the listing).
+    const proc::Pid listing = t.find_by_name("File manager");
+    wait(10000);
+    CHECK(listing != proc::kNone && t.alive(listing) && runner.has_task(listing));
     CHECK(soon([&] { return desktop.active() != nullptr && strcmp(title(), "Many") == 0; }));
+    CHECK(desktop.active() != nullptr && desktop.active()->owner() == listing);
     CHECK(os::responding(t.find_by_name("File manager")));
     while (desktop.active() != nullptr) {
         desktop.close(*desktop.active());
@@ -768,6 +821,7 @@ int main()
     test_programs_give_back();
     test_ui();
     test_programs_on_tasks();
+    test_late_before_its_first_window();
     test_not_responding(); // before the last one, which ends with the screen taken by Shut Down
     test_desktop_calls();
 

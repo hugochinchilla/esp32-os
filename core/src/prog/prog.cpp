@@ -11,6 +11,7 @@ Runner::Runner(proc::Table &procs) : procs_(procs)
 {
     procs_.set_caller(&Runner::call_for_table, this);
     procs_.set_between([](void *self) { static_cast<Runner *>(self)->serve(); }, this);
+    procs_.set_busy([](proc::Pid pid, void *self) { return static_cast<Runner *>(self)->late(pid); }, this);
     procs_.on_exit(&Runner::exited, this);
 }
 
@@ -23,6 +24,7 @@ Runner::~Runner()
     }
     procs_.set_caller(nullptr, nullptr);
     procs_.set_between(nullptr, nullptr);
+    procs_.set_busy(nullptr, nullptr);
 }
 
 void Runner::set_tasks(ports::Tasks *tasks, Kit *kits, int count)

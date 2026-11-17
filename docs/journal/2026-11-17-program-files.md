@@ -204,3 +204,19 @@ each read), so the figure is 4K, and the four reference pictures that show it
 (`host/tests/pictures/45-terminal-commands.png`,
 `46b-terminal-maximized.png`, `34b-task-manager-all.png`,
 `34c-task-manager-protected.png`) were drawn again: one digit each.
+
+## The board's second and third answers (the same day)
+
+With the link fix the board ran everything of this entry: `Hello` is the
+last entry of Start > Programs with its picture, "Press me" counts to
+five, the process has a task of its own (2,260 bytes of its 4 KB stack
+never used), the Task Manager shows 8K a copy, internal memory comes back
+exactly over five rounds, End Task on one of two copies leaves the other
+working, a text file named `x.app` has no menu entry and is refused in
+words, and no refill was missed. The firmware installs `hello.app` and
+puts it back after it is deleted.
+
+One thing to change: the desktop came up 83 ms later than on `main`. The
+install check is no longer made on the way to the desktop but two seconds
+after it (`docs/journal/2026-11-17-folder-listing.md` has that turn's
+other finding).

@@ -82,7 +82,10 @@ int main(int argc, char **argv)
         wait(10000);
     }
     {
+        // Not on the way to the desktop: two seconds after it.
         fs::DirEntry there;
+        CHECK(storage.stat("C:\\Programs\\hello.app", there) == ports::FsError::NotFound);
+        wait(2100000);
         CHECK(storage.stat("C:\\Programs\\hello.app", there) == ports::FsError::Ok && there.size == program.size());
         CHECK(shell::install_programs() == 0); // the same set, all there: nothing written
         CHECK(storage.remove("C:\\Programs\\hello.app") == ports::FsError::Ok);
