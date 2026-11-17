@@ -134,6 +134,26 @@ void Wm::start()
     update();
 }
 
+void Wm::set_shell(proc::Pid pid)
+{
+    shell_pid_ = pid;
+    shell_gone_ = false;
+    invalidate({0, 0, width_, height_});
+}
+
+void Wm::shell_ended()
+{
+    if (start_open_) {
+        close_menus();
+    }
+    if (capture_ == Capture::Taskbar || capture_ == Capture::Icon) {
+        capture_ = Capture::Swallow; // until the button comes up
+    }
+    shell_pid_ = 0;
+    shell_gone_ = true;
+    invalidate({0, 0, width_, height_});
+}
+
 /* ---- Window list --------------------------------------------------------- */
 
 int Wm::stack_index(const Window &w) const
@@ -369,6 +389,11 @@ void Wm::reap()
         end_process(p.pid);
     }
     dispose_closed();
+    if (signalled && procs_->restarts_waiting()) {
+        // What ended is seen to be gone before it is back: the screen shows
+        // what the machine did, in the order it did it.
+        update();
+    }
     const bool restarted = procs_->restart_due() != 0;
     if (signalled || restarted) {
         update(); // the event's own painting is done: show what changed
@@ -1161,6 +1186,11 @@ void Wm::on_press()
         return;
     }
     if (taskbar().contains(x, y)) {
+        if (shell_gone_) {
+            capture_ = Capture::Swallow; // no taskbar there now
+            return;
+        }
+        const proc::Scope as(procs_, shell_or_desktop());
         if (tray_icon_ != nullptr && tray_icon_rect().contains(x, y)) {
             capture_ = Capture::Swallow;
             if (tray_click_ != nullptr) {
@@ -1200,6 +1230,7 @@ void Wm::on_press()
             }
         }
         if (double_click(hit >= 0 ? hit : -2) && hit >= 0 && icons_[hit].open != nullptr) {
+            const proc::Scope as(procs_, shell_or_desktop());
             icons_[hit].open(icons_[hit].context);
         } else if (hit >= 0 && icons_[hit].path != nullptr) {
             capture_ = Capture::Icon;
@@ -1303,7 +1334,7 @@ void Wm::on_right_press()
                 return;
             }
         }
-        const proc::Scope desktop(procs_, desktop_pid_);
+        const proc::Scope desktop(procs_, shell_or_desktop());
         desktop_menu_(pointer_x_, pointer_y_, desktop_menu_context_);
         return;
     }
@@ -1575,8 +1606,10 @@ void Wm::on_release()
         drop_window_ = nullptr;
         desktop_target_ = false;
         if (icon >= 0 && icon < icon_count_) {
+            const proc::Scope as(procs_, shell_or_desktop());
             icons_[icon].drop(path, icons_[icon].context);
         } else if (on_desktop) {
+            const proc::Scope as(procs_, shell_or_desktop());
             desktop_drop_(path, desktop_drop_context_);
         } else if (target != nullptr) {
             const proc::Scope as(procs_, target->owner_);
@@ -1661,7 +1694,7 @@ void Wm::taskbar_click(int index)
         const int which = kQuickIndex - index;
         if (which < quick_count_) {
             const QuickLaunch item = quick_[which];
-            const proc::Scope as(procs_, desktop_pid_);
+            const proc::Scope as(procs_, shell_or_desktop());
             item.click(item.context);
         }
         return;
@@ -1810,11 +1843,11 @@ void Wm::open_menu(Menu &menu, int x, int y)
 
 void Wm::open_start_menu()
 {
-    if (start_menu_ == nullptr) {
+    if (start_menu_ == nullptr || shell_gone_) {
         return;
     }
     close_menus();
-    const proc::Scope as(procs_, desktop_pid_);
+    const proc::Scope as(procs_, shell_or_desktop());
     open_popup(*start_menu_, 0, height_ - kTaskbarHeight, true, false);
     start_open_ = true;
     invalidate(taskbar_button(-1));
@@ -2331,6 +2364,11 @@ void Wm::paint_taskbar(const RectList &clip)
     const Rect bar = taskbar();
     const int ty = bar.y;
     Canvas screen(pixels, width_, height_, clip, bar);
+    if (shell_gone_) {
+        // No shell, no taskbar: the desktop shows through.
+        fill_backdrop(screen, {0, 0, width_, height_});
+        return;
+    }
     screen.layered(bar, [&](Canvas &c) {
     c.fill(bar, gfx::kGrey);
     c.hline(0, ty + 1, width_, gfx::kWhite);

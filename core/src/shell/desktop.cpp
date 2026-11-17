@@ -301,6 +301,8 @@ struct DesktopFile {
 DesktopFile g_files[wm::Wm::kMaxIcons - kSystemIcons];
 uint32_t g_files_signature = 0;
 int g_file_timer = 0;
+proc::Pid g_taskbar = proc::kNone; // the taskbar's process while it runs
+bool g_taskbar_up = false;
 
 void open_desktop_file(void *context)
 {
@@ -372,6 +374,9 @@ const gfx::Bitmap *file_picture(const char *name, bool folder)
 // any way (File manager, a save, tools/dbg.py put) appear without hooks.
 void refresh_desktop_files(bool force)
 {
+    if (!g_taskbar_up) {
+        return; // no shell, no icons to keep right
+    }
     uint32_t signature = 2166136261u;
     int n = 0;
     struct Found {
@@ -586,6 +591,102 @@ void shut_down_dialog()
     open_one<ShutDownDialog>("Shut Down");
 }
 
+namespace {
+
+// The taskbar's end, for TERM and for KILL alike (it has nothing to ask):
+// what it gave the window manager is taken back, its windows and timers go
+// with its row, and the table starts it again.
+void stop_taskbar(proc::Pid pid, proc::Signal, void *)
+{
+    wm::Wm &wm = manager();
+    g_taskbar_up = false;
+    g_taskbar = proc::kNone;
+    g_file_timer = 0;
+    wm.set_start_menu(nullptr, nullptr);
+    wm.set_quick_launch(nullptr, 0);
+    wm.set_desktop_icons(nullptr, 0);
+    wm.set_desktop_drop(nullptr, nullptr);
+    wm.set_desktop_menu(nullptr, nullptr);
+    wm.shell_ended();
+    wm.end(pid);
+}
+
+// The desktop shell: the taskbar with the Start menu and the quick-launch
+// icons, and the icons on the desktop. A process, child of the desktop, not
+// protected: End Task or kill ends it and it comes back.
+void start_taskbar(void *)
+{
+    wm::Wm &wm = manager();
+    proc::Table &processes = proc::table();
+    const proc::Pid desktop = processes.find_by_name("desktop");
+    const proc::Pid pid = processes.spawn("taskbar", desktop, proc::kSystem);
+    if (pid != proc::kNone) {
+        processes.set_stop(pid, &stop_taskbar, nullptr);
+        processes.set_restart(pid, &start_taskbar, nullptr);
+        g_taskbar = pid;
+    }
+    // With no room in the table the taskbar is the desktop's, as it was
+    // before it had a process.
+    const proc::Scope as(&processes, pid != proc::kNone ? pid : desktop);
+
+    const int n = app_count() < kMaxApps ? app_count() : kMaxApps;
+    for (int i = 0; i < n; i++) {
+        const App &a = app(i);
+        g_program_items[i] = {a.name, &launch_app, const_cast<App *>(&a), nullptr, a.icon, 0};
+    }
+    g_programs.count = n;
+    g_start_items[0] = {"&Programs", nullptr, nullptr, &g_programs, &gfx::folder_icon_16(), 0};
+    g_start_items[1] = {"&Settings", nullptr, nullptr, &g_settings, &gfx::settings_icon_16(), 0};
+    g_start_items[2] = {"&Run...", &open_run, nullptr, nullptr, &gfx::run_icon_16(), 0};
+    g_start_items[3] = {nullptr, nullptr, nullptr, nullptr, nullptr, wm::kMenuSeparator};
+    g_start_items[4] = {"Sh&ut Down...", &shut_down, nullptr, nullptr, &gfx::power_icon_16(), 0};
+    wm.set_start_menu(&g_start, "Chinchilla");
+
+    // Quick launch, by the Start button: one click opens the program
+    // (backlog item 30; which three is in docs/DECISIONS.md).
+    {
+        static const char *const kQuick[] = {"File manager", "Editor", "Terminal"};
+        wm::Wm::QuickLaunch quick[wm::Wm::kMaxQuick];
+        int count = 0;
+        for (const char *name : kQuick) {
+            if (const App *program = find_app(name)) {
+                quick[count++] = {program->icon,
+                                  [](void *context) { launch(*static_cast<const App *>(context)); },
+                                  const_cast<App *>(program)};
+            }
+        }
+        wm.set_quick_launch(quick, count);
+    }
+
+    g_icons[0] = {"My Board", &gfx::board_icon_32(), &open_my_board, nullptr};
+    g_icons[1] = {"Documents", &gfx::folder_icon_32(), &open_documents, nullptr};
+    g_icons[2] = {"Network", &gfx::network_icon_32(), &not_yet, const_cast<NotYet *>(&kNetwork)};
+    g_icons[3] = {"Trash", &gfx::bin_icon_32(), &open_trash_icon, nullptr, nullptr, &drop_on_trash};
+    if (network() != nullptr) {
+        g_icons[2] = {"Network", &gfx::network_icon_32(), &network_panel, nullptr};
+        g_settings_items[2].icon = &gfx::network_icon_16();
+        g_settings_items[2].flags = 0;
+    }
+    wm.set_desktop_icons(g_icons, kSystemIcons);
+    wm.set_desktop_drop(&drop_on_desktop, nullptr);
+    g_taskbar_up = true;
+    refresh_desktop_files(true);
+    g_file_timer = wm.start_timer(2000000, 2000000, &desktop_files_tick, nullptr);
+    wm.set_desktop_menu(&desktop_menu, nullptr);
+    wm.set_shell(pid != proc::kNone ? pid : desktop);
+}
+
+} // namespace
+
+bool start_taskbar_again()
+{
+    if (g_taskbar_up) {
+        return false;
+    }
+    start_taskbar(nullptr);
+    return true;
+}
+
 void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memory &memory)
 {
     g_wm = &wm;
@@ -618,55 +719,15 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
         Listing::show_hidden = files.get_bool("view", "show_hidden", false);
     }
 
-    const int n = app_count() < kMaxApps ? app_count() : kMaxApps;
-    for (int i = 0; i < n; i++) {
-        const App &a = app(i);
-        g_program_items[i] = {a.name, &launch_app, const_cast<App *>(&a), nullptr, a.icon, 0};
-    }
-    g_programs.count = n;
-    g_start_items[0] = {"&Programs", nullptr, nullptr, &g_programs, &gfx::folder_icon_16(), 0};
-    g_start_items[1] = {"&Settings", nullptr, nullptr, &g_settings, &gfx::settings_icon_16(), 0};
-    g_start_items[2] = {"&Run...", &open_run, nullptr, nullptr, &gfx::run_icon_16(), 0};
-    g_start_items[3] = {nullptr, nullptr, nullptr, nullptr, nullptr, wm::kMenuSeparator};
-    g_start_items[4] = {"Sh&ut Down...", &shut_down, nullptr, nullptr, &gfx::power_icon_16(), 0};
-    wm.set_start_menu(&g_start, "Chinchilla");
     wm.set_attention_key(&attention_key, nullptr);
-
-    // Quick launch, by the Start button: one click opens the program
-    // (backlog item 30; which three is in docs/DECISIONS.md).
-    {
-        static const char *const kQuick[] = {"File manager", "Editor", "Terminal"};
-        wm::Wm::QuickLaunch quick[wm::Wm::kMaxQuick];
-        int count = 0;
-        for (const char *name : kQuick) {
-            if (const App *program = find_app(name)) {
-                quick[count++] = {program->icon,
-                                  [](void *context) { launch(*static_cast<const App *>(context)); },
-                                  const_cast<App *>(program)};
-            }
-        }
-        wm.set_quick_launch(quick, count);
-    }
-
-    g_icons[0] = {"My Board", &gfx::board_icon_32(), &open_my_board, nullptr};
-    g_icons[1] = {"Documents", &gfx::folder_icon_32(), &open_documents, nullptr};
-    g_icons[2] = {"Network", &gfx::network_icon_32(), &not_yet, const_cast<NotYet *>(&kNetwork)};
-    g_icons[3] = {"Trash", &gfx::bin_icon_32(), &open_trash_icon, nullptr, nullptr, &drop_on_trash};
-    if (network() != nullptr) {
-        g_icons[2] = {"Network", &gfx::network_icon_32(), &network_panel, nullptr};
-        g_settings_items[2].icon = &gfx::network_icon_16();
-        g_settings_items[2].flags = 0;
-    }
-    wm.set_desktop_icons(g_icons, kSystemIcons);
-    wm.set_desktop_drop(&drop_on_desktop, nullptr);
     move_old_documents();
     welcome_file();
-    refresh_desktop_files(true);
-    g_file_timer = wm.start_timer(2000000, 2000000, &desktop_files_tick, nullptr);
     install_screen_saver();
     install_display();
-    wm.set_desktop_menu(&desktop_menu, nullptr);
     start_network();
+    // The taskbar, the Start menu and the icons are a process of their own,
+    // started here and again whenever it ends (backlog item 21).
+    start_taskbar(nullptr);
     // The desktop starts with no windows open (the owner's choice).
 }
 

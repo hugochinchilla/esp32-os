@@ -97,6 +97,22 @@ public:
         desktop_pid_ = desktop;
     }
     proc::Table *processes() const { return procs_; }
+    // The desktop shell (backlog item 21): the process that owns the taskbar,
+    // the Start menu, the quick-launch icons, the tray and the desktop
+    // icons. What it gave (set_start_menu, set_desktop_icons...) is called
+    // as that process. shell_ended(): it has gone and taken those back; the
+    // taskbar is not drawn and takes no clicks until a shell is set again.
+    // Windows stay as they are, and so does the work area: a window does not
+    // move because the bar under it left for a moment. Without either call
+    // the taskbar is the desktop process's, as before.
+    void set_shell(proc::Pid pid);
+    void shell_ended();
+    proc::Pid shell() const { return shell_pid_; }
+    bool taskbar_shown() const { return !shell_gone_; }
+    // Ends a process as KILL does: its windows, menus and timers go and its
+    // row is removed. For a stop function (proc::Table::set_stop) of a
+    // process that may have windows.
+    void end(proc::Pid pid) { end_process(pid); }
     // How many windows and timers a process owns, and its window that was
     // opened first with a taskbar button (nullptr: none).
     int windows_of(proc::Pid pid) const;
@@ -459,6 +475,9 @@ private:
     // Processes.
     proc::Table *procs_ = nullptr;
     proc::Pid desktop_pid_ = 0;
+    proc::Pid shell_pid_ = 0;
+    bool shell_gone_ = false;
+    proc::Pid shell_or_desktop() const { return shell_pid_ != 0 ? shell_pid_ : desktop_pid_; }
     proc::Pid current_pid() const { return procs_ != nullptr ? procs_->current() : 0; }
     int start_timer_for(proc::Pid owner, uint32_t delay_us, uint32_t period_us, TimerFn fn, void *context);
     void reap();

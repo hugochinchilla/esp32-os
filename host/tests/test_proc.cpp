@@ -812,21 +812,27 @@ void test_shell()
 {
     proc::Table &t = proc::table();
 
-    // After start-up: the desktop is PID 1, the root of the tree, and
-    // nothing else is listed. Here the desktop is started alone; on a
+    // After start-up: the desktop is PID 1, the root of the tree, and the
+    // taskbar is its child, a system process that is not protected (backlog
+    // item 21). Nothing else is listed. Here the desktop is started alone; on a
     // machine init is made first and takes PID 1 (test_init.cpp). The debug link, the Wi-Fi manager, the remote screen
     // and the web page are not tasks of their own (they run on the UI
     // task), so they have no rows. No program runs yet.
     const proc::Process *desk = process("desktop");
     CHECK(desk != nullptr && desk->pid == proc::kRoot && desk->parent == proc::kNone);
     CHECK(desk != nullptr && desk->is(proc::kSystem) && desk->is(proc::kProtected));
-    CHECK(t.count() == 1 && desktop.processes() == &t);
+    CHECK(t.count() == 2 && desktop.processes() == &t);
     CHECK(process("init") == nullptr && process("dbgd") == nullptr && process("netd") == nullptr && process("vncd") == nullptr &&
           process("httpd") == nullptr);
     const Pid desk_pid = desk->pid;
-    // Timers: the caret and the clock, the desktop's look at its folder, the
-    // screensaver's and the Wi-Fi manager's are all the desktop's.
-    CHECK(desktop.timers_of(desk_pid) >= 4 && desktop.timers_of(0) == 0);
+    const proc::Process *bar = process("taskbar");
+    CHECK(bar != nullptr && bar->parent == desk_pid && bar->is(proc::kSystem) && !bar->is(proc::kProtected) &&
+          bar->is(proc::kRespawn) && desktop.shell() == bar->pid);
+    const Pid bar_pid = bar != nullptr ? bar->pid : proc::kNone;
+    // Timers: the caret and the clock, the screensaver's and the Wi-Fi
+    // manager's are the desktop's; the look at the desktop's folder is the
+    // taskbar's.
+    CHECK(desktop.timers_of(desk_pid) >= 3 && desktop.timers_of(bar_pid) == 1 && desktop.timers_of(0) == 0);
 
     // Starting the shell again (the tests do) makes no second desktop.
     CHECK(t.find_by_name("desktop") == desk_pid);
@@ -835,13 +841,13 @@ void test_shell()
     // its window. Launching it again is the same process.
     shell::launch(*shell::find_app("Welcome"));
     const proc::Process *welcome = process("Welcome");
-    CHECK(welcome != nullptr && welcome->pid == 2 && welcome->is(proc::kWindowed) && !welcome->is(proc::kSystem));
+    CHECK(welcome != nullptr && welcome->pid == 3 && welcome->is(proc::kWindowed) && !welcome->is(proc::kSystem));
     CHECK(welcome != nullptr && welcome->parent == proc::kRoot); // launched from outside any process
-    CHECK(find("Welcome to Chinchilla")->owner() == 2 && desktop.windows_of(2) == 1);
+    CHECK(find("Welcome to Chinchilla")->owner() == 3 && desktop.windows_of(3) == 1);
     shell::launch(*shell::find_app("Welcome"));
-    CHECK(t.count() == 2 && desktop.window_count() == 1);
+    CHECK(t.count() == 3 && desktop.window_count() == 1);
 
-    // From the Start menu the parent is the desktop: Ctrl+Esc, Programs,
+    // From the Start menu the parent is the taskbar, whose menu it is: Ctrl+Esc, Programs,
     // the first entry (About Chinchilla).
     key(wm::key::Escape, kCtrl);
     key(wm::key::Down); // Programs
@@ -849,16 +855,16 @@ void test_shell()
     key(wm::key::Enter);
     CHECK(strcmp(title(), "About Chinchilla") == 0);
     const proc::Process *about = process("About Chinchilla");
-    CHECK(about != nullptr && about->pid == 3 && about->parent == desk_pid && desktop.active()->owner() == 3);
+    CHECK(about != nullptr && about->pid == 4 && about->parent == bar_pid && desktop.active()->owner() == 4);
 
     // Closing its last window ends the process; the others stay.
     key(wm::key::Enter); // OK
-    CHECK(process("About Chinchilla") == nullptr && t.count() == 2 && process("Welcome") != nullptr);
+    CHECK(process("About Chinchilla") == nullptr && t.count() == 3 && process("Welcome") != nullptr);
     // Started again it is a new process with a new number.
     shell::launch(*shell::find_app("About Chinchilla"));
-    CHECK(process("About Chinchilla") != nullptr && process("About Chinchilla")->pid == 4);
+    CHECK(process("About Chinchilla") != nullptr && process("About Chinchilla")->pid == 5);
     close_all();
-    CHECK(t.count() == 1);
+    CHECK(t.count() == 2);
 
     // A program opened by another is its child: a text file opened from a
     // File manager window goes to the Editor.
@@ -910,7 +916,7 @@ void test_shell()
     // they started, without itself: End Task on the first row closes
     // Culebra and the process goes.
     close_all();
-    CHECK(t.count() == 1);
+    CHECK(t.count() == 2);
     shell::open_culebra();
     shell::launch(*shell::find_app("Widget gallery"));
     const Pid culebra = t.find_by_name("Culebra"), gallery = t.find_by_name("Widget gallery");
@@ -958,10 +964,13 @@ void test_shell()
     letter('e', kAlt);
     click_end();
     wait(10000);
-    CHECK(desktop.active() == its_window && desktop.windows_of(manager) == 1 && t.count() == 3);
+    CHECK(desktop.active() == its_window && desktop.windows_of(manager) == 1 && t.count() == 4);
     CHECK(t.alive(proc::kRoot) && process("desktop") != nullptr);
-    // The next row is a program: the button can be used again.
-    key(wm::key::Down); // desktop, Widget gallery
+    // The next row is the taskbar: a system process, but not a protected
+    // one. Then a program.
+    key(wm::key::Down); // desktop, taskbar
+    CHECK(end_button() == usable);
+    key(wm::key::Down); // taskbar, Widget gallery
     CHECK(end_button() == usable);
     // A click on the button of a program's row works as before.
     click_end();
@@ -999,7 +1008,7 @@ void test_shell()
     // Terminal. One click starts the program, as a child of the desktop,
     // like the Start menu does. The Editor and the Terminal open another
     // copy each time; the File manager comes to the front.
-    CHECK(desktop.quick_launch_count() == 3 && t.count() == 1);
+    CHECK(desktop.quick_launch_count() == 3 && t.count() == 2);
     const auto quick = [&](int i) {
         const wm::Rect r = desktop.quick_launch_rect(i);
         desktop.mouse({true, static_cast<int16_t>(r.x + 8), static_cast<int16_t>(r.y + 8), 0, 0});
@@ -1008,20 +1017,20 @@ void test_shell()
         wait(500000); // never a double click
     };
     quick(0);
-    CHECK(process("File manager") != nullptr && process("File manager")->parent == desk_pid &&
+    CHECK(process("File manager") != nullptr && process("File manager")->parent == bar_pid &&
           strcmp(title(), "My Board") == 0);
     quick(1);
-    CHECK(process("Editor") != nullptr && process("Editor")->parent == desk_pid && t.count() == 3);
+    CHECK(process("Editor") != nullptr && process("Editor")->parent == bar_pid && t.count() == 4);
     quick(1);
-    CHECK(t.count() == 4 && desktop.window_count() == 3);
+    CHECK(t.count() == 5 && desktop.window_count() == 3);
     quick(0);
-    CHECK(t.count() == 4 && strcmp(title(), "My Board") == 0);
+    CHECK(t.count() == 5 && strcmp(title(), "My Board") == 0);
     quick(2);
-    CHECK(process("Terminal") != nullptr && process("Terminal")->parent == desk_pid &&
+    CHECK(process("Terminal") != nullptr && process("Terminal")->parent == bar_pid &&
           desktop.active()->owner() == process("Terminal")->pid);
     close_all();
     wait(10000);
-    CHECK(t.count() == 1);
+    CHECK(t.count() == 2);
 
     key(wm::key::Escape, kCtrl);
     key(wm::key::Up);
@@ -1030,11 +1039,106 @@ void test_shell()
           desktop.active()->owner() == process("Shut Down")->pid);
     key(wm::key::Escape);
     wait(10000);
-    CHECK(t.count() == 1 && t.alive(desk_pid) && desktop.window_count() == 0);
+    CHECK(t.count() == 2 && t.alive(desk_pid) && desktop.window_count() == 0);
     CHECK(desktop.timers_of(0) == 0); // nothing running that nobody owns
 }
 
 } // namespace
+
+// The taskbar as a process (backlog item 21): ended, it goes with what it
+// showed and comes back by itself.
+void test_taskbar()
+{
+    proc::Table &t = proc::table();
+    close_all();
+    wait(3000000); // well past a quick ending
+    const Pid desk_pid = t.find_by_name("desktop");
+    const Pid first = t.find_by_name("taskbar");
+    CHECK(first != proc::kNone && desktop.shell() == first && desktop.taskbar_shown());
+    const std::string with_bar = screen();
+
+    // Every frame painted while there is no taskbar is counted: the bar is
+    // seen to go before it is seen to come back.
+    static int frames_without = 0;
+    frames_without = 0;
+    desktop.set_damage_listener(
+        [](const gfx::Rect &, void *) {
+            if (!desktop.taskbar_shown()) {
+                frames_without++;
+            }
+        },
+        nullptr);
+
+    // A program from the Start menu and a box of the taskbar's own.
+    key(wm::key::Escape, kCtrl);
+    key(wm::key::Down); // Programs
+    key(wm::key::Right);
+    key(wm::key::Enter); // About Chinchilla
+    const Pid about = process("About Chinchilla") != nullptr ? process("About Chinchilla")->pid : proc::kNone;
+    CHECK(about != proc::kNone && t.find(about)->parent == first);
+    {
+        const proc::Scope as(&t, first);
+        shell::message_box("Taskbar", "A box of the taskbar's.");
+    }
+    CHECK(find("Taskbar") != nullptr && find("Taskbar")->owner() == first);
+    key(wm::key::Escape, kCtrl); // its menu open when it ends
+    CHECK(desktop.menu_open());
+
+    CHECK(t.signal(first, proc::Signal::Kill) == proc::Sent::Ok);
+    wait(10000);
+    const Pid second = t.find_by_name("taskbar");
+    CHECK(!t.alive(first) && second != proc::kNone && second != first && desktop.shell() == second);
+    CHECK(t.find(second)->parent == desk_pid && t.find(second)->is(proc::kRespawn));
+    CHECK(frames_without >= 1 && desktop.taskbar_shown() && !desktop.menu_open());
+    // Its box went with it; the program it started lives on, as init's.
+    CHECK(find("Taskbar") == nullptr && t.alive(about) && t.find(about)->parent == proc::kRoot);
+    CHECK(desktop.timers_of(first) == 0 && desktop.timers_of(second) == 1 && desktop.quick_launch_count() == 3);
+    // The new one works: its menu opens and starts a program.
+    close_all();
+    wait(10000);
+    CHECK(screen() == with_bar);
+    key(wm::key::Escape, kCtrl);
+    CHECK(desktop.start_menu_open());
+    key(wm::key::Down);
+    key(wm::key::Right);
+    key(wm::key::Enter);
+    CHECK(process("About Chinchilla") != nullptr && process("About Chinchilla")->parent == second);
+    close_all();
+
+    // TERM ends it too: it has nothing to ask.
+    wait(3000000);
+    CHECK(t.signal(second, proc::Signal::Term) == proc::Sent::Ok);
+    wait(10000);
+    const Pid third = t.find_by_name("taskbar");
+    CHECK(third != proc::kNone && third != second && desktop.taskbar_shown());
+
+    // Ended again and again as soon as it is back, it is left ended (the
+    // brake of item 18). The screen has no bar, no icons and no Start
+    // menu; windows and Ctrl+Alt+Del still work.
+    for (int i = 0; i < 10 && t.find_by_name("taskbar") != proc::kNone; i++) {
+        t.signal(t.find_by_name("taskbar"), proc::Signal::Kill);
+        wait(10000);
+    }
+    CHECK(t.find_by_name("taskbar") == proc::kNone && !desktop.taskbar_shown() && desktop.shell() == proc::kNone);
+    CHECK(desktop.quick_launch_count() == 0 && screen() != with_bar);
+    key(wm::key::Escape, kCtrl);
+    CHECK(!desktop.menu_open());
+    const wm::Rect bar = desktop.taskbar();
+    desktop.mouse({true, static_cast<int16_t>(bar.x + 20), static_cast<int16_t>(bar.y + 10), 1, 0});
+    desktop.mouse({true, static_cast<int16_t>(bar.x + 20), static_cast<int16_t>(bar.y + 10), 0, 0});
+    CHECK(!desktop.menu_open());
+    key(wm::key::Delete, kCtrl | kAlt);
+    CHECK(strcmp(title(), "Task Manager") == 0);
+    close_all();
+    // `run taskbar` (from a console) brings it back; a second one does not.
+    char why[96] = "";
+    wait(3000000);
+    CHECK(shell::run_text("taskbar", "C:\\", why, sizeof(why)));
+    wait(10000);
+    CHECK(t.find_by_name("taskbar") != proc::kNone && desktop.taskbar_shown() && screen() == with_bar);
+    CHECK(!shell::run_text("taskbar", "C:\\", why, sizeof(why)) && strstr(why, "already") != nullptr);
+    desktop.set_damage_listener(nullptr, nullptr);
+}
 
 int main()
 {
@@ -1054,6 +1158,7 @@ int main()
     desktop.start();
     desktop.set_animations(false);
     test_shell();
+    test_taskbar();
     if (failures == 0) {
         printf("all tests passed\n");
     }

@@ -172,6 +172,7 @@ public:
     // set_restart() on it if that one is to come back too.
     void set_restart(Pid pid, StartFn start, void *context);
     int restart_due(); // how many were started
+    bool restarts_waiting() const { return due_count_ > 0; }
     // The brake. A program that ends less than kQuickUs after it was made,
     // kQuickLimit times one after the other, is not started again: something
     // is wrong with it, and starting it for ever would take the machine
