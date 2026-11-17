@@ -206,3 +206,27 @@ Not tested, and it matters:
 - Second round, if wanted: pictures (GIF needs a decoder; PNG and JPEG are
   there), real tables, POST, a proportional font, the Network tray icon
   showing a cable in the web page.
+
+## On the board
+
+A board turn the same evening, at 2b130fb with `main` merged in, run by the
+board thread. Reported, not merged. Every check passed:
+
+- The gate passed (47 tests), the firmware built and was flashed. Before
+  opening: 203,563 bytes of internal RAM free, 6,333,684 external.
+- Vizcacha opens on its home page. A search for "chinchilla" brings
+  FrogFind's real results (`http://frogfind.com/?q=chinchilla`) in under
+  two seconds: the first time the real site was reached on port 80.
+- The first result opens, a Wikipedia page as FrogFind rewrites it. No
+  "Continue" page appeared. Page Down scrolls; Back twice returns home.
+- `https://example.com` shows the page that says the browser cannot
+  encrypt.
+- `http://no-such-host.invalid/` says no site with that name was found in
+  under half a second, and the desktop answered in 3 ms meanwhile.
+- After closing, the internal RAM is back to the byte; external is 20
+  bytes off. The least external RAM free during use was 6,212,640: about
+  121 KB at the peak.
+- `tools/dbg.py misses`: none, during and after the page loads.
+- The "dial" job never appeared in a reading of the tasks, because it is
+  over too soon: there is no figure for its stack yet.
+
