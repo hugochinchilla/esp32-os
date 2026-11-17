@@ -166,6 +166,10 @@ int main(int argc, char **argv)
         [](int which, void *) {
             if (which == 0) {
                 shell::run_self_test(boot_io, false);
+            } else if (which == 3) {
+                sys::CrashRecord sample; // the PC has no crashes of its own to show
+                sys::crash_sample(sample);
+                shell::show_crash_screen(boot_io, sample, true, false);
             } else {
                 shell::show_splash(boot_io, false);
             }

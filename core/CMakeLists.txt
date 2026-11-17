@@ -37,6 +37,7 @@ set(CORE_SRCS
     src/msg/input.cpp
     src/msg/queue.cpp
     src/proc/table.cpp
+    src/sys/crash.cpp
     src/shell/apps.cpp
     src/shell/boot.cpp
     src/shell/cactus_patch.cpp

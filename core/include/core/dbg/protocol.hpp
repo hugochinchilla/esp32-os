@@ -44,6 +44,7 @@ enum FrameType : uint8_t {
     kBootScreen = 0x12,
     kMemoryReport = 0x13, // text: heaps and task stacks // draw a start-up screen now (0 self-test, 1 splash); Repaint brings the desktop back
     kTasks = 0x14,        // the kernel's tasks: state, priority, core, run time, stack
+    kFault = 0x15,        // a fault on purpose: hang, bad pointer or abort, charged to a process
     kWifi = 0x20,       // Wi-Fi: status, scan, list, connect, disconnect, forget
     // Sent by the board without being asked.
     kLog = 0x70,
@@ -90,7 +91,8 @@ public:
     void set_desktop(ports::Desktop *desktop) { desktop_ = desktop; }
     // Optional: the drives for the file commands.
     void set_storage(fs::Storage *storage) { storage_ = storage; }
-    // Draws start-up screen `which` (0 self-test, 1 splash) on request.
+    // Draws start-up screen `which` (0 self-test, 1 splash, 3 the error
+    // screen after a crash) on request.
     void set_boot_screens(void (*show)(int which, void *context), void *context)
     {
         boot_show_ = show;

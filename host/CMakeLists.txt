@@ -127,6 +127,11 @@ add_executable(test_services tests/test_services.cpp)
 target_link_libraries(test_services PRIVATE core Threads::Threads)
 add_test(NAME services COMMAND test_services)
 
+# The watchdog's bookkeeping, the crash record and the error screen.
+add_executable(test_crash tests/test_crash.cpp)
+target_link_libraries(test_crash PRIVATE core)
+add_test(NAME crash COMMAND test_crash)
+
 # Chinchilla as a desktop program (backlog item 32): the same core in an SDL2
 # window. Its parts that need no window are tested everywhere; the program
 # itself is built only where SDL2 is installed, so the tests above need

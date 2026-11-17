@@ -276,3 +276,41 @@ Later:
 - A board with no monitor that skips the UI (the owner's question) can now
   keep its network: nothing in the services task needs the desktop, except
   that the VNC server would have nothing to show.
+
+## On the board (added by the board thread, 2026-11-17)
+
+The branch's own merge commit aed3696 had main up to b966d94 (it is not on
+origin/main itself). Main cafef8b (program lifecycle and watchdog) merged in;
+one conflict in `firmware/os/main/main.cpp` at the top of the UI loop
+resolved by keeping main's `watchdog_start()` and dropping its now unused
+`viewer` flag (the network left the loop); `host/CMakeLists.txt` keeps both
+new tests. PC tests 27 of 27; the first firmware build; flashed with a fast
+start; Wi-Fi joined.
+
+1. `dbg.py tasks`: `inetd` (priority 4, 4 KB) with 2,968 bytes never used at
+   start, 2,072 after VNC viewers and the browser page; no need to raise
+   `kServicesStack`.
+2. Idle with nobody connected: "services loop (inetd): 1 rounds" before and a
+   minute later.
+3. The browser viewer: a double click from the page opened Documents, Alt+F4
+   from the page closed it, the cursor changed to the resize shape on the
+   window's edge and back to the arrow inside.
+4. Against main, measured just before on the same network: connect plus
+   handshake 511, 288, 105, 142, 173 ms (median 173; main 556, 255, 222, 168,
+   222, median 222); a full raw screen 18.4 to 23.2 s (main 17.8 s), with 10 to
+   20 % ping loss tonight.
+5. A viewer following incremental updates while a window was dragged (20 to
+   27 updates): its picture equal to a fresh full screen but for the clock's
+   minute digit; no stale outline dots or half-painted blocks.
+6. Refills with viewers connected, during drags, and with a viewer pulling
+   full raw screens nonstop during two 300 KB saves: no new late or missed
+   refill in any of those runs. Over the whole 20 minutes on this build the
+   counters recorded 1 missed refill (438 us late) and 1 more late one, at
+   moments not tied to any of the checks; the same kind of single event has
+   been seen on main tonight (one at start-up, one in the external-RAM test).
+7. Free internal RAM 213,539 bytes against 218,383 on main (4.8 KB less).
+
+The watchdog from PR 23 did not trip (uptime ran on through all of it); End
+Task on an unsaved Editor (the "has not closed" box at 5.4 s, End Now),
+300 KB saves and key repeat (31 letters in 1.5 s) behave as before.
+
