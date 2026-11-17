@@ -43,6 +43,8 @@ Files so far:
 | `desktop.ini` | `[welcome]` | `created`: true once welcome.txt has been put in C:\Documents\Desktop, so a deleted copy does not come back; set it to false to get it again |
 | `desktop.ini` | `[documents]` | `moved`: true once an old C:\docs has been moved into C:\Documents (done by itself at start-up) |
 | `desktop.ini` | `[background]` | `colour`: chinchilla-blue (default), teal, sea-green, forest, navy, purple, plum, brick, olive, sand, sky, lilac, rose, silver, slate, black. `pattern`: none (default), dots, diagonal, grid, bricks, weave, diamonds, waves, zigzag, crosses. Set in the Display dialog |
+| `culebra.ini` | `[game]` | `best`: the best score. `speed`: slow, normal (default) or fast. Written when Culebra closes, if either changed |
+| `cactus.ini` | `[game]` | `size`: small (default), medium or large, the patch the next game starts with. Written when Cactus Patch closes, if it changed |
 | `network.ini` | `[wifi]` | `tx_power_dbm`: the radio's top transmit power, 2 to 20, default 2 (higher values put lines on the picture while connecting). `enabled`: false leaves the radio off, default true |
 
 A one-shot fast start for debugging: `tools/dbg.py reboot --fast`, or

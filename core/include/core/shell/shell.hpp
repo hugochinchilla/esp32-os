@@ -23,6 +23,9 @@ struct App {
     const char *name;
     const gfx::Bitmap *icon; // 16x16
     void (*open)();          // opens its window, or brings it to the front
+    // Each launch is another copy, in a process of its own that open() makes
+    // (the Editor). Otherwise the program runs once at a time.
+    bool many = false;
 };
 
 int app_count();
@@ -78,7 +81,8 @@ bool open_file(const char *path);
 void open_demo_windows();
 // A File manager window on a folder; nullptr for My Board (the drives).
 void open_folder(const char *path);
-// The Editor with a file (nullptr: a new, empty one).
+// Another Editor, with a file (nullptr: a new, empty one). A file that an
+// Editor already has open comes to the front instead.
 void open_in_editor(const char *path);
 // A program's own settings file, C:\.config\<program>.ini. load: false
 // when there is none (the defaults apply). save: makes C:\.config if needed.

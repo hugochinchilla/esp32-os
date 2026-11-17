@@ -80,7 +80,9 @@ public:
     // process whenever it calls into it, and a window program is removed
     // from the table once its last window has closed (at the end of the
     // event or tick, so a dialog can hand over to the next window first).
-    // Timers such a process left running are stopped then.
+    // Timers such a process left running are stopped then, and windows made
+    // for one showing (Window::set_dispose) are destroyed, which is where a
+    // closed program's memory goes back.
     //
     // The same safe point is where signals take effect (proc::Table::signal
     // leaves them waiting on the row). TERM asks each of the process's
@@ -106,6 +108,9 @@ public:
     // Window list. add() puts the window on top and gives it the focus.
     void add(Window &w);
     void close(Window &w);
+    // For a window made for one showing (Window::set_dispose) that was never
+    // opened: destroyed at the next safe point, as a closed one is.
+    void discard(Window &w);
     void activate(Window &w);
     void minimize(Window &w);
     void restore(Window &w);
@@ -440,6 +445,11 @@ private:
     bool deliver_signals();
     void ask_to_close(proc::Pid pid);
     void end_process(proc::Pid pid);
+    // Windows that live only while open (Window::set_dispose), closed and
+    // waiting for the safe point.
+    Window *closed_ = nullptr;
+    void keep(Window &w);
+    void dispose_closed();
 
     Timer timers_[kMaxTimers] = {};
     int next_timer_id_ = 1;

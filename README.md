@@ -51,7 +51,8 @@ resistor values and build notes.
 | `firmware/vga-test/` | ESP-IDF test program for the VGA wiring |
 | `host/` | PC build: unit tests and picture tests for `core/`, a simulated board, and `desktop/`, Chinchilla as a desktop program for Linux |
 | `third_party/` | Freely licensed files from elsewhere: the Spleen font |
-| `ci/` | GitHub Actions workflow to copy into `.github/workflows/` |
+| `web/` | Chinchilla in a web browser: the Emscripten build of `host/desktop/` and its page |
+| `ci/` | GitHub Actions workflows to copy into `.github/workflows/`: the build, and publishing the browser version on GitHub Pages |
 | `tools/` | `dbg.py`, the debug tool; `check_pictures.py`, the picture tests; `gen_font.py`, the font table generator; `mockup/`, the script that drew the target look; the setup script for Arch-based systems; the script that regenerates the board diagram |
 
 ## Tests on the PC
@@ -134,6 +135,40 @@ In the window:
 `build/host/chinchilla`, built along with the tests when SDL2 is installed,
 is the same program with the memory checks on: some ten times larger, and
 slower.
+
+## Chinchilla in a web browser
+
+The desktop program again, built to WebAssembly: a page that anyone can open,
+with nothing to install. The page is the monitor, C: is kept in the visitor's
+own browser (nothing is sent anywhere), and it comes back on the next visit.
+It needs a mouse and a keyboard; it is not made for phones.
+
+![Chinchilla in a browser](docs/look/web/web-editor.png)
+
+Needs [Emscripten](https://emscripten.org/docs/getting_started/downloads.html)
+(tested with 7.0.0) and CMake. Emscripten downloads its own SDL2 the first
+time.
+
+```sh
+emcmake cmake -S web -B build/web
+cmake --build build/web
+python3 -m http.server -d build/web/site 8080    # then open http://localhost:8080/
+```
+
+The result is one file, `build/web/site/index.html` (about 1.7 MB, 0.6 MB as
+web servers send it). Put it on any web server, or send the file itself: it
+also works opened straight from a folder.
+
+To publish it on GitHub Pages on every change to `main`, copy
+`ci/github-pages-workflow.yml` to `.github/workflows/pages.yml` and choose
+Settings > Pages > Source: "GitHub Actions". The address is then
+`https://<owner>.github.io/<repository>/`.
+
+What differs from the desktop program: the browser keeps some keys for itself
+(Ctrl+W, Ctrl+T, F5, F11 and others; Ctrl+Alt+End is still Ctrl+Alt+Del),
+Restart loads the page again, and in a private window C: lasts only until
+the page is closed. `tools/test_web_page.js` drives the page in a real
+browser (Node and Playwright).
 
 ## Building the VGA test
 
