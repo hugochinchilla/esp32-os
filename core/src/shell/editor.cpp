@@ -1,6 +1,7 @@
 // The Editor: a text file in a TextEdit, with File and Edit menus.
 #include <cstdio>
 #include <cstring>
+#include <strings.h>
 
 #include "core/gfx/art.hpp"
 #include "core/shell/shell.hpp"
@@ -17,10 +18,19 @@ constexpr size_t kUndoCapacity = 64 * 1024;
 
 enum class Then : uint8_t { Nothing, New, Open, OpenPath, Exit };
 
+// More than one Editor can run at once, each a process of its own with its
+// own window and text. ponytail: at most four, since each takes 576 KB of
+// external RAM for its text and undo.
+constexpr int kMaxEditors = 4;
+class EditorWindow;
+EditorWindow *g_editors[kMaxEditors] = {};
+
 class EditorWindow : public wm::Window {
 public:
-    EditorWindow()
-        : Window("Untitled - Editor", {150, 60, 440, 330}, &gfx::editor_icon_16()), edit_({0, 0, 100, 100})
+    // `place`: which of the editors it is, for where its window goes.
+    explicit EditorWindow(int place)
+        : Window("Untitled - Editor", {150 + place * 24, 60 + place * 24, 440, 330}, &gfx::editor_icon_16()),
+          edit_({0, 0, 100, 100})
     {
         file_items_[0] = {"&New", &EditorWindow::menu_new, this, nullptr, nullptr, 0};
         file_items_[1] = {"&Open...", &EditorWindow::menu_open, this, nullptr, nullptr, 0};
@@ -42,17 +52,32 @@ public:
         resized();
     }
 
-    // The text memory, from large memory, on first use.
+    // The text and undo memory go back with the window.
+    ~EditorWindow()
+    {
+        free_program_memory(text_);
+        free_program_memory(undo_);
+        for (EditorWindow *&e : g_editors) {
+            if (e == this) {
+                e = nullptr;
+            }
+        }
+    }
+
+    // The file it has open ("" for none).
+    const char *path() const { return path_; }
+
+    // The text memory, asked for when the Editor opens.
     bool ready()
     {
         if (!edit_.attached()) {
-            auto *text = static_cast<uint8_t *>(memory().allocate(kTextCapacity));
-            auto *undo = static_cast<uint8_t *>(memory().allocate(kUndoCapacity));
-            if (text == nullptr || undo == nullptr) {
+            text_ = static_cast<uint8_t *>(program_memory(kTextCapacity));
+            undo_ = static_cast<uint8_t *>(program_memory(kUndoCapacity));
+            if (text_ == nullptr || undo_ == nullptr) {
                 message_box("Editor", "There is not enough memory for the Editor.");
                 return false;
             }
-            edit_.attach(text, kTextCapacity, undo, kUndoCapacity);
+            edit_.attach(text_, kTextCapacity, undo_, kUndoCapacity);
         }
         return true;
     }
@@ -300,6 +325,7 @@ private:
     Then next_ = Then::Nothing;
     bool continue_after_save_as_ = false;
     bool shown_modified_ = false;
+    uint8_t *text_ = nullptr, *undo_ = nullptr;
     wm::TextEdit edit_;
     wm::MenuItem file_items_[6];
     wm::MenuItem edit_items_[8];
@@ -309,18 +335,38 @@ private:
     const wm::MenuBar bar_ = {entries_, 2};
 };
 
-EditorWindow &editor()
-{
-    static EditorWindow w;
-    return w;
-}
-
 } // namespace
 
+// Every call starts another Editor, as a process of its own; a file that an
+// Editor already has open comes to the front instead.
 void open_in_editor(const char *path)
 {
-    const AsProgram as("Editor");
-    editor().open_path(path);
+    int place = -1;
+    for (int i = kMaxEditors - 1; i >= 0; i--) {
+        EditorWindow *e = g_editors[i];
+        if (e == nullptr || !e->open()) {
+            place = i; // free, or closed and about to go
+        } else if (path != nullptr && strcasecmp(e->path(), path) == 0) {
+            manager().activate(*e);
+            return;
+        }
+    }
+    if (place < 0) {
+        message_box("Editor", "Four Editors are open already.\nClose one of them first.");
+        return;
+    }
+    proc::Table &t = proc::table();
+    const proc::Pid pid = t.spawn("Editor", t.current(), proc::kWindowed);
+    // With no room in the table it is the caller's window, as elsewhere.
+    const proc::Scope as(&t, pid != proc::kNone ? pid : t.current());
+    EditorWindow *w = make_window<EditorWindow>(place);
+    if (w == nullptr) {
+        no_memory_for("Editor");
+        return;
+    }
+    g_editors[place] = w;
+    w->open_path(path);
+    discard(w); // not opened: no memory for the text, the file would not load, or no room
 }
 
 } // namespace shell

@@ -9,6 +9,7 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <map>
 #include <cstdint>
 #include <vector>
 
@@ -70,11 +71,21 @@ public:
     uint32_t now = 0;
 };
 
-// Large buffers from the ordinary heap. ponytail: never freed; they live
-// as long as the program, as on the board.
+// Large buffers from the ordinary heap. Tests count the blocks out
+// (in_use()) to see that a closed program has given everything back.
 class HostMemory : public ports::Memory {
 public:
-    void *allocate(size_t bytes) override { return std::calloc(1, bytes); }
+    void *allocate(size_t bytes) override
+    {
+        void *p = std::calloc(1, bytes);
+        if (p != nullptr) {
+            sizes_[p] = bytes;
+            bytes_ += bytes;
+        }
+        return p;
+    }
+    int in_use() const { return static_cast<int>(sizes_.size()); }
+    size_t bytes_in_use() const { return bytes_; }
     // The start-up memory test borrows from a pretend 4 MB of free memory,
     // in blocks of at most 1.5 MB, so it behaves the same on every PC.
     void *borrow(size_t max, size_t &got) override
@@ -112,6 +123,12 @@ public:
                 return; // what was lent stays counted: the test borrows once
             }
         }
+        const auto found = sizes_.find(block);
+        if (found != sizes_.end()) {
+            bytes_ -= found->second;
+            sizes_.erase(found);
+            std::free(block);
+        }
     }
 
 private:
@@ -119,6 +136,8 @@ private:
     size_t lent_ = 0;
     bool internal_lent_ = false;
     std::vector<std::pair<void *, size_t>> blocks_;
+    std::map<void *, size_t> sizes_;
+    size_t bytes_ = 0;
 };
 
 class NoLock : public ports::Lock {

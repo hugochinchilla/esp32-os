@@ -321,12 +321,6 @@ private:
     wm::Button ok_, cancel_;
 };
 
-FileDialog &file_dialog()
-{
-    static FileDialog d;
-    return d;
-}
-
 /* ---- Input dialog ---------------------------------------------------------------- */
 
 class InputDialog : public wm::Window {
@@ -400,28 +394,55 @@ private:
     wm::Button ok_, cancel_;
 };
 
-InputDialog &input()
+// Each dialog is made when it is asked for and gone once it has closed, so
+// two programs (or two Editors) can each have their own at the same time.
+// A window that already has a dialog up gets that one brought forward.
+bool busy(wm::Window *owner)
 {
-    static InputDialog d;
-    return d;
+    if (owner != nullptr && owner->open() && manager().blocker(*owner) != nullptr) {
+        manager().activate(*owner);
+        return true;
+    }
+    return false;
+}
+
+void file_dialog(bool save, wm::Window *owner, const char *folder, const char *name, PathFn chosen, void *context)
+{
+    if (busy(owner)) {
+        return;
+    }
+    if (FileDialog *d = make_window<FileDialog>()) {
+        d->show(save, owner, folder, name, chosen, context);
+        discard(d); // if the window manager had no room for it
+    } else {
+        no_memory_for(save ? "Save As" : "Open");
+    }
 }
 
 } // namespace
 
 void open_file_dialog(wm::Window *owner, const char *folder, PathFn chosen, void *context)
 {
-    file_dialog().show(false, owner, folder, "", chosen, context);
+    file_dialog(false, owner, folder, "", chosen, context);
 }
 
 void save_file_dialog(wm::Window *owner, const char *folder, const char *name, PathFn chosen, void *context)
 {
-    file_dialog().show(true, owner, folder, name, chosen, context);
+    file_dialog(true, owner, folder, name, chosen, context);
 }
 
 void input_dialog(wm::Window *owner, const char *title, const char *prompt, const char *initial, TextFn done,
                   void *context)
 {
-    input().show(owner, title, prompt, initial, done, context);
+    if (busy(owner)) {
+        return;
+    }
+    if (InputDialog *d = make_window<InputDialog>()) {
+        d->show(owner, title, prompt, initial, done, context);
+        discard(d); // if the window manager had no room for it
+    } else {
+        no_memory_for(title);
+    }
 }
 
 } // namespace shell

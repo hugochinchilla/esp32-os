@@ -62,13 +62,7 @@ private:
     wm::Button ok_;
 };
 
-AboutWindow &about()
-{
-    static AboutWindow window;
-    return window;
-}
-
-void open_about() { show(about()); }
+void open_about() { open_one<AboutWindow>("About Chinchilla"); }
 
 /* ---- Welcome ------------------------------------------------------------------ */
 
@@ -114,13 +108,7 @@ private:
     wm::TextArea text_;
 };
 
-WelcomeWindow &welcome()
-{
-    static WelcomeWindow window;
-    return window;
-}
-
-void open_welcome() { show(welcome()); }
+void open_welcome() { open_one<WelcomeWindow>("Welcome"); }
 
 /* ---- Widget gallery --------------------------------------------------------- */
 
@@ -258,13 +246,7 @@ private:
     const wm::MenuBar bar_ = {entries_, 3};
 };
 
-GalleryWindow &gallery()
-{
-    static GalleryWindow window;
-    return window;
-}
-
-void open_gallery() { show(gallery()); }
+void open_gallery() { open_one<GalleryWindow>("Widget gallery"); }
 
 void open_editor() { open_in_editor(nullptr); }
 void open_viewer() { open_picture(nullptr); }
@@ -281,7 +263,7 @@ const Entry kApps[] = {
     {{"Cactus Patch", nullptr, &open_cactus_patch}, &gfx::cactus_icon_16},
     {{"Culebra", nullptr, &open_culebra}, &gfx::snake_icon_16},
     {{"Defragmenter", nullptr, &open_defragmenter}, &gfx::defrag_icon_16},
-    {{"Editor", nullptr, &open_editor}, &gfx::editor_icon_16},
+    {{"Editor", nullptr, &open_editor, true}, &gfx::editor_icon_16},
     {{"File manager", nullptr, &open_file_manager}, &gfx::files_icon_16},
     {{"Picture viewer", nullptr, &open_viewer}, &gfx::viewer_icon_16},
     {{"Task Manager", nullptr, &open_task_manager}, &gfx::tasks_icon_16},
@@ -328,6 +310,10 @@ const App *find_app(const char *name)
 
 void launch(const App &app)
 {
+    if (app.many) {
+        app.open(); // makes its own process, one for each copy
+        return;
+    }
     const AsProgram as(app.name);
     app.open();
 }

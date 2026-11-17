@@ -107,10 +107,10 @@ void read_settings()
     }
 }
 
-void write_settings()
+// `ini` is the dialog's own (2 KB, too much for the stack this deep).
+void write_settings(fs::Ini &ini)
 {
     // Read again first: the desktop keeps other things in the same file.
-    static fs::Ini ini; // ponytail: one UI task
     load_settings("desktop", ini);
     ini.set("background", "colour", kColours[g_colour].key);
     ini.set("background", "pattern", kPatterns[g_pattern].key);
@@ -280,20 +280,14 @@ public:
         add(apply_);
         ok_.set_default(true);
         set_default(&ok_);
-    }
-
-    void show()
-    {
-        if (!open()) {
-            before_colour_ = g_colour;
-            before_pattern_ = g_pattern;
-            colours_.select(g_colour);
-            patterns_.select(g_pattern);
-            sync();
-            set_frame(centred(shell::manager(), frame().w, frame().h));
-            set_focus(&colours_);
-        }
-        shell::show(*this);
+        // What the desktop shows now, to start from and to go back to.
+        before_colour_ = g_colour;
+        before_pattern_ = g_pattern;
+        colours_.select(g_colour);
+        patterns_.select(g_pattern);
+        sync();
+        set_frame(centred(shell::manager(), frame().w, frame().h));
+        set_focus(&colours_);
     }
 
     bool key(const wm::KeyMsg &k) override
@@ -365,7 +359,7 @@ private:
     {
         auto *d = static_cast<DisplayDialog *>(context);
         d->take();
-        write_settings();
+        write_settings(d->settings_);
         d->kept_ = true;
         d->close(); // applies
     }
@@ -381,6 +375,7 @@ private:
     char pattern_text_[24] = "";
     int before_colour_ = 0, before_pattern_ = 0;
     bool kept_ = false;
+    fs::Ini settings_;
     Preview preview_;
     wm::GroupFrame group_;
     wm::Label colour_label_, colour_name_;
@@ -390,18 +385,12 @@ private:
     wm::Button ok_, cancel_, apply_;
 };
 
-DisplayDialog &dialog()
-{
-    static DisplayDialog d;
-    return d;
-}
-
 } // namespace
 
 void display_dialog()
 {
     const AsProgram as("Display");
-    dialog().show();
+    open_one<DisplayDialog>("Display");
 }
 
 void install_display()

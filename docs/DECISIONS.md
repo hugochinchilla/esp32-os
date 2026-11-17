@@ -228,15 +228,49 @@ Decided by the owner; the story is in
   no memory kept while closed (window, widgets and buffers created when it
   opens, given back when it closes); it reaches the desktop only through calls
   any program could make; its code is a file of its own.
-- Today every program is still one fixed object on the UI task, and closing it
-  frees nothing. "No memory kept while closed" needs backlog item 19 (program
-  lifecycle); until then a new dialog meets the other points, keeps no state
-  that must survive a close apart from its settings file, and says in its
-  journal entry that this point is owed. Backlog item 34 moves the existing
-  dialogs.
+- When this was decided every program was one fixed object on the UI task,
+  and closing it freed nothing. Since "Program lifecycle" below (backlog
+  items 19 and 34, the same day) no program or dialog is: all are made when
+  opened and destroyed when closed, so nothing is owed any more.
 - Not taken: a FreeRTOS task per dialog now (the stack costs more internal RAM
   than the dialog frees, and the widgets assume one task); waiting for
   loadable programs (item 27) before changing how dialogs are written.
+
+### Program lifecycle (2026-11-17)
+
+Backlog items 19 and 34. Chosen without asking first, under the owner's
+"work through the backlog" of 2026-11-16; each can be overruled. The options
+and reasons are in `docs/journal/2026-11-17-program-lifecycle.md`.
+
+- **A program's window is made when it opens and destroyed once it has
+  closed**, with its widgets and whatever buffers it asked for. No fixed
+  window objects are left in `core/src/shell/`. Of a closed program only the
+  code and, for one that runs once at a time, one pointer remain.
+- **The memory is external RAM**, through the Memory port
+  (`ports::Memory::allocate` and `release`). It is where the same objects
+  were as fixed ones since the day before, so internal RAM is not touched
+  and its heap is not cut up by programs coming and going.
+- **The window manager destroys a closed window at its safe point** (the end
+  of the event or tick, where process rows go and signals take effect), never
+  while the window's own code is running. `wm::Window::set_dispose` marks a
+  window for it; the shell's `make_window`, `one` and `open_one`
+  (`core/src/shell/internal.hpp`) are how programs use it. A new window or
+  dialog is written this way; it is no longer possible to "owe" the memory.
+- **The Editor can run several times** (four at most), each a process with
+  its own window, text and dialogs; a file already open in one comes to the
+  front. The File manager keeps its one process with up to three windows.
+  Every other program runs once at a time (`shell::App::many` switches it).
+- **Open, Save As and the text question are made per asker**; two programs
+  can each have one up. The message box stays one at a time.
+- **Settings tools are processes of their own** (Display, Screen Saver,
+  Network, Task Manager, and now Shut Down). **A dialog a program asks for**
+  (message box, Open, Save As, Options, the Wi-Fi password) is made and
+  destroyed the same way but belongs to the process that asked: "Save
+  changes?" is the Editor's, which End Task and Shut Down rely on.
+- **Closing a program ends it.** What should outlive that goes in its
+  settings file: Culebra's best score and speed, Cactus Patch's size. A game
+  half played, the Defragmenter's pretend disk and Task Manager's graph are
+  not kept.
 
 ## Rejected
 
@@ -1022,6 +1056,31 @@ Build and use: `README.md`, "Chinchilla as a desktop program".
   within 3 seconds leaves at once. Restart starts the program again.
 - The memory figures in Task Manager and the self-test are the simulator's
   pretend ones, not the PC's and not limits.
+
+### Chosen for the browser version (2026-11-17, to confirm)
+
+Backlog item 33, made by the agent under the owner's free hand. Journal:
+`docs/journal/2026-11-17-chinchilla-in-the-browser.md`. Build and use:
+`README.md`, "Chinchilla in a web browser".
+
+- One source for the PC and the browser: `host/desktop/main.cpp`, with the
+  differences marked `__EMSCRIPTEN__`. `web/` holds the Emscripten build
+  and the page. `core/` is not changed.
+- The start-up screens show as on the board. They wait in a loop, which a
+  browser allows only with Emscripten's Asyncify, so it is built in.
+- C: is kept in the visitor's browser (IndexedDB, through Emscripten's
+  IDBFS with `autoPersist`), read back before anything starts. Nothing
+  leaves the visitor's computer. In a private window it lasts until the
+  page closes.
+- The canvas is the whole page and the program scales the picture into it
+  with the same code as in a window.
+- The whole thing is one file, `index.html`, 1.7 MB: it can be put on any
+  server or sent as it is.
+- Publishing: GitHub Pages, built by a workflow on every change to `main`
+  (`ci/github-pages-workflow.yml`). Not active until the owner copies it
+  and turns Pages on, as with the build workflow. The built page is not
+  committed to the repository.
+- Restart loads the page again. F11 and F12 are the browser's.
 
 ### Chosen for painting each pixel once (2026-11-16, to confirm)
 

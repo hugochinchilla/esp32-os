@@ -239,12 +239,6 @@ private:
     wm::Button ok_, cancel_;
 };
 
-OptionsDialog &options()
-{
-    static OptionsDialog d;
-    return d;
-}
-
 const image::Dither kDithers[image::kDitherCount] = {
     image::Dither::None,           image::Dither::Bayer2,          image::Dither::Bayer4,
     image::Dither::Bayer8,         image::Dither::BlueNoise,       image::Dither::FloydSteinberg,
@@ -253,6 +247,10 @@ const image::Dither kDithers[image::kDitherCount] = {
 };
 
 void set_dither(image::Dither d);
+
+// Timings of the last picture, kept after its window has gone (see
+// picture_timings()).
+uint32_t g_timings[kPictureTimings] = {};
 
 class ViewerWindow : public wm::Window {
 public:
@@ -331,6 +329,14 @@ public:
 
     void closed() override { stop(); }
 
+    // The picture and the working memory go back with the window.
+    ~ViewerWindow()
+    {
+        decoder_.release(program_port());
+        converter_.release(program_port());
+        free_program_memory(shown_);
+    }
+
     // For tests and the debug link: decodes to the end at once.
     void finish()
     {
@@ -343,9 +349,9 @@ private:
     bool memory_ready()
     {
         if (shown_ == nullptr) {
-            shown_ = static_cast<uint8_t *>(memory().allocate(kMaxShown));
+            shown_ = static_cast<uint8_t *>(program_memory(kMaxShown));
         }
-        if (shown_ == nullptr || !converter_.ready(memory())) {
+        if (shown_ == nullptr || !converter_.ready(program_port())) {
             message_box("Picture viewer", "There is not enough memory for the Picture viewer.");
             return false;
         }
@@ -364,7 +370,7 @@ private:
     void start()
     {
         stop();
-        const image::Error e = decoder_.open(storage(), path_, memory(), info_, kBackgroundRgb);
+        const image::Error e = decoder_.open(storage(), path_, program_port(), info_, kBackgroundRgb);
         snprintf(title_, sizeof(title_), "%s - Picture viewer", fs::path::name(path_));
         set_title(title_);
         if (e != image::Error::None) {
@@ -397,7 +403,7 @@ private:
         view_.show(shown_, w, h);
         started_us_ = shell::manager().now_us();
         busy_us_ = 0;
-        timings_[0] = timings_[1] = timings_[2] = 0;
+        g_timings[0] = g_timings[1] = g_timings[2] = 0;
         timer_ = shell::manager().start_timer(0, kTickUs, &ViewerWindow::slice, this);
         status_.set_text("Loading...");
     }
@@ -419,8 +425,8 @@ private:
         }
         const uint32_t spent = static_cast<uint32_t>(wm.now_us() - start);
         v->busy_us_ += spent;
-        if (spent > v->timings_[2]) {
-            v->timings_[2] = spent;
+        if (spent > g_timings[2]) {
+            g_timings[2] = spent;
         }
         const int after = v->converter_.rows_done();
         if (after > before) {
@@ -435,8 +441,8 @@ private:
             return;
         }
         if (v->decoder_.done()) {
-            v->timings_[0] = v->busy_us_;
-            v->timings_[1] = static_cast<uint32_t>(wm.now_us() - v->started_us_);
+            g_timings[0] = v->busy_us_;
+            g_timings[1] = static_cast<uint32_t>(wm.now_us() - v->started_us_);
             v->stop();
             char text[120];
             snprintf(text, sizeof(text), "%s   %d x %d   %s%s", fs::path::name(v->path_), v->info_.width,
@@ -474,7 +480,9 @@ private:
     static void menu_options(void *c)
     {
         auto *v = static_cast<ViewerWindow *>(c);
-        options().show(v, v->dither_, &set_dither);
+        if (OptionsDialog *options = one<OptionsDialog>("Options")) {
+            options->show(v, v->dither_, &set_dither);
+        }
     }
 
 public:
@@ -486,7 +494,6 @@ public:
         again();
     }
 
-    uint32_t timings_[kPictureTimings] = {}; // see picture_timings()
     uint32_t busy_us_ = 0;
 
 private:
@@ -517,15 +524,11 @@ private:
     const wm::MenuBar bar_ = {entries_, 2};
 };
 
-ViewerWindow &viewer()
-{
-    static ViewerWindow w;
-    return w;
-}
-
 void set_dither(image::Dither d)
 {
-    viewer().use_dither(d);
+    if (ViewerWindow *viewer = the<ViewerWindow>()) {
+        viewer->use_dither(d);
+    }
 }
 
 } // namespace
@@ -533,17 +536,21 @@ void set_dither(image::Dither d)
 void open_picture(const char *path)
 {
     const AsProgram as("Picture viewer");
-    viewer().open_path(path);
+    if (ViewerWindow *viewer = one<ViewerWindow>("Picture viewer")) {
+        viewer->open_path(path);
+        if (!viewer->open()) {
+            discard(viewer); // no memory for the picture, or no room for the window
+        }
+    }
 }
 
 void finish_picture()
 {
-    viewer().finish();
+    if (ViewerWindow *viewer = the<ViewerWindow>()) {
+        viewer->finish();
+    }
 }
 
-const uint32_t *picture_timings()
-{
-    return viewer().timings_;
-}
+const uint32_t *picture_timings() { return g_timings; }
 
 } // namespace shell

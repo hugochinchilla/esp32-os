@@ -88,6 +88,7 @@ public:
         wm::Window *owner = shell::manager().active();
         set_modal(owner != this ? owner : nullptr);
         shell::manager().add(*this);
+        shell::manager().discard(*this); // if there was no room: gone, unanswered
     }
 
     bool layered() const override { return true; } // the picture over the face
@@ -166,10 +167,16 @@ private:
     void *context_ = nullptr;
 };
 
-MessageBox &message_window()
+// The one message box there can be at a time: made when a message is
+// shown, gone once it has closed. It belongs to the process that asks (a
+// program's question is the program's own window). nullptr: no memory even
+// for that, and nothing is shown.
+MessageBox *message_window()
 {
-    static MessageBox box;
-    return box;
+    if (the<MessageBox>() == nullptr) {
+        the<MessageBox>() = make_window<MessageBox>();
+    }
+    return the<MessageBox>();
 }
 
 /* ---- Shut Down dialog ----------------------------------------------------------- */
@@ -186,6 +193,7 @@ public:
     {
         set_dialog(true);
         set_modal(nullptr, true); // the whole desktop waits for an answer
+        set_frame(centred(shell::manager(), frame().w, frame().h));
         add(question_);
         add(detail_);
         add(shut_down_);
@@ -227,12 +235,6 @@ private:
     wm::Label question_, detail_;
     wm::Button shut_down_, restart_, cancel_;
 };
-
-ShutDownDialog &shut_down_window()
-{
-    static ShutDownDialog dialog;
-    return dialog;
-}
 
 /* ---- Start menu and desktop ------------------------------------------------------ */
 
@@ -517,10 +519,36 @@ void welcome_file()
 
 } // namespace
 
+void *program_memory(size_t bytes) { return g_memory != nullptr ? g_memory->allocate(bytes) : nullptr; }
+
+void free_program_memory(void *block)
+{
+    if (block != nullptr) {
+        g_memory->release(block);
+    }
+}
+
+ports::Memory &program_port()
+{
+    class Port : public ports::Memory {
+    public:
+        void *allocate(size_t bytes) override { return program_memory(bytes); }
+        void release(void *block) override { free_program_memory(block); }
+    };
+    static Port port;
+    return port;
+}
+
+void no_memory_for(const char *program)
+{
+    char text[96]; // the box keeps its own copy
+    snprintf(text, sizeof(text), "There is not enough memory to open\n%s.", program);
+    message_box("Chinchilla", text);
+}
+
 wm::Wm &manager() { return *g_wm; }
 ports::System &system_port() { return *g_system; }
 fs::Storage &storage() { return *g_storage; }
-ports::Memory &memory() { return *g_memory; }
 
 void show(wm::Window &w)
 {
@@ -540,22 +568,23 @@ gfx::Rect centred(const wm::Wm &wm, int w, int h)
 void message_box(const char *title, const char *text)
 {
     static const char *const ok[] = {"OK"};
-    message_window().ask(title, text, ok, 1, nullptr, nullptr);
+    if (MessageBox *box = message_window()) {
+        box->ask(title, text, ok, 1, nullptr, nullptr);
+    }
 }
 
 void ask(const char *title, const char *text, const char *const *buttons, int count, AnswerFn answer,
          void *context)
 {
-    message_window().ask(title, text, buttons, count, answer, context);
+    if (MessageBox *box = message_window()) {
+        box->ask(title, text, buttons, count, answer, context);
+    }
 }
 
 void shut_down_dialog()
 {
-    ShutDownDialog &d = shut_down_window();
-    if (!d.open()) {
-        d.set_frame(centred(manager(), d.frame().w, d.frame().h));
-    }
-    show(d);
+    const AsProgram as("Shut Down");
+    open_one<ShutDownDialog>("Shut Down");
 }
 
 void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memory &memory)

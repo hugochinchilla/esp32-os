@@ -2,7 +2,9 @@
 // window: the board, the score, the keys and the timer that moves the snake.
 // All of its art is drawn here, pixel by pixel, for this project.
 #include <cstdio>
+#include <cstring>
 
+#include "core/fs/ini.hpp"
 #include "core/games/snake.hpp"
 #include "core/gfx/art.hpp"
 #include "core/shell/shell.hpp"
@@ -262,7 +264,20 @@ public:
         help_items_[0] = {"&How to play", &CulebraWindow::menu_help, this, nullptr, nullptr, 0};
         help_items_[1] = {"&About Culebra", &CulebraWindow::menu_about, this, nullptr, nullptr, 0};
         set_menu_bar(&bar_);
-        show_score();
+        // What the game remembers between runs is in C:\.config\culebra.ini:
+        // the window itself is gone once it closes.
+        if (load_settings("culebra", settings_)) {
+            best_ = saved_best_ = settings_.get_int("game", "best", 0);
+            char name[16];
+            if (settings_.get("game", "speed", name, sizeof(name))) {
+                for (int i = 0; i < kSpeeds; i++) {
+                    if (strcmp(name, kSpeedKeys[i]) == 0) {
+                        speed_ = saved_speed_ = i;
+                    }
+                }
+            }
+        }
+        new_game();
     }
 
     const Snake &game() const { return game_; }
@@ -321,15 +336,21 @@ public:
 
     void closed() override
     {
-        // Closed in the middle of a game: it waits, paused, for next time.
+        // Closing ends the program and the game with it; the best score and
+        // the speed are kept in its settings file.
         stop_timer();
-        game_.pause();
+        if (best_ != saved_best_ || speed_ != saved_speed_) {
+            settings_.set_int("game", "best", best_);
+            settings_.set("game", "speed", kSpeedKeys[speed_]);
+            save_settings("culebra", settings_);
+        }
     }
 
 private:
     // Time between steps, and points for a berry, at each speed.
     static constexpr uint32_t kStepUs[kSpeeds] = {200000, 130000, 80000};
     static constexpr int kPoints[kSpeeds] = {5, 10, 20};
+    static constexpr const char *kSpeedKeys[kSpeeds] = {"slow", "normal", "fast"}; // in culebra.ini
 
     static CulebraWindow &self(void *context) { return *static_cast<CulebraWindow *>(context); }
     static void menu_new(void *context) { self(context).new_game(); }
@@ -436,6 +457,8 @@ private:
     Snake game_;
     int score_ = 0, best_ = 0;
     int speed_ = 1;
+    int saved_best_ = 0, saved_speed_ = 1;
+    fs::Ini settings_; // C:\.config\culebra.ini
     int timer_ = 0;
     uint32_t games_ = 0;
     char score_text_[24] = "";
@@ -453,24 +476,14 @@ private:
     const wm::MenuBar bar_ = {entries_, 2};
 };
 
-CulebraWindow &culebra()
-{
-    static CulebraWindow window;
-    return window;
-}
-
 } // namespace
 
 void open_culebra()
 {
     const AsProgram as("Culebra");
-    CulebraWindow &w = culebra();
-    if (!w.open() && w.game().state() != Snake::State::Paused) {
-        w.new_game(); // nothing was left half played
-    }
-    show(w);
+    open_one<CulebraWindow>("Culebra");
 }
 
-const games::Snake &culebra_game() { return culebra().game(); }
+const games::Snake &culebra_game() { return one<CulebraWindow>("Culebra")->game(); }
 
 } // namespace shell
