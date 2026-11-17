@@ -360,6 +360,21 @@ void test_editors()
     wait(10000);
     wait(10000);
     CHECK(processes_named("Editor") == 4 && memory.in_use() == four);
+    // The one that finds no memory says so, and the message stays when
+    // whoever started it has gone: asked for from the Run dialog, which
+    // closes at once, as the board did it (the message went with the dialog).
+    memory.limit = 64 * 1024;
+    shell::run_dialog();
+    desktop.text("editor");
+    key(wm::key::Enter);
+    wait(10000);
+    wait(10000);
+    CHECK(find("Run") == nullptr && strcmp(title(), "Editor") == 0 && processes_named("Editor") == 5);
+    key(wm::key::Enter);
+    wait(10000);
+    wait(10000);
+    CHECK(processes_named("Editor") == 4 && memory.in_use() == four);
+    memory.limit = 0;
 
     // Each has its own dialogs at the same time: Open in one, Save As in
     // another, the question about unsaved text in a third.
@@ -485,10 +500,16 @@ void test_dialogs()
     // The Task Manager's question about a program that will not close goes
     // with the Task Manager if that is closed first.
     shell::open_task_manager();
-    shell::ask("Question", "Still there?", yes_no, 2, [](int, void *) { answers = 100; }, nullptr);
+    {
+        // Asked by the Task Manager itself, as it is: a message another
+        // program put over its window would stay.
+        const proc::Scope as(&t, t.find_by_name("Task Manager"));
+        shell::ask("Question", "Still there?", yes_no, 2, [](int, void *) { answers = 100; }, nullptr);
+    }
     CHECK(desktop.window_count() == 2);
     desktop.close(*find("Task Manager"));
     wait(10000);
+    wait(10000); // the question goes at the first safe point, its process's row at the next
     CHECK(desktop.window_count() == 0 && answers == 100 && memory.in_use() == base && t.count() == 2);
 
     // The Picture viewer's Options and the Network panel's password dialog

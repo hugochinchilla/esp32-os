@@ -357,10 +357,20 @@ void Wm::dispose_closed()
             continue;
         }
         for (int z = count_ - 1; z >= 0; z--) {
-            if (stack_[z]->modal_owner_ == &w) {
-                close(*stack_[z]); // its closed() runs while `w` still exists
-                z = count_;
+            if (stack_[z]->modal_owner_ != &w) {
+                continue;
             }
+            if (stack_[z]->owner_ != w.owner_) {
+                // Another program's message that came up over this window
+                // (the Run dialog starts a program that has something to
+                // say, and is gone a moment later): it is not this
+                // window's to take along. It stands alone from here on.
+                stack_[z]->modal_owner_ = nullptr;
+                tell_panels(PanelNews::Windows);
+                continue;
+            }
+            close(*stack_[z]); // its closed() runs while `w` still exists
+            z = count_;
         }
         if (w.wm_ != nullptr || w.waiting_dispose_) {
             continue; // opened again by one of them, or closed again: later

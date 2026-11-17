@@ -263,6 +263,54 @@ closes; a fourth folder window opens among twenty-three windows. Gate: all
 passed (44 tests, pictures unchanged); the firmware compiles and links; not
 run on the board.
 
+## On the board, and a message that went missing (2026-11-17)
+
+The board thread ran 0e8bae8 (with `main`, where PR 44 now is) and did
+not merge it. Its figures, as the coordinator passed them on:
+
+- **The save's result is kept.** A 300 KB save with `fault slow` on the
+  Editor: afterwards the title is "big.txt" again, the window can be used,
+  the file is 303,798 bytes. On `main` the same leaves the window locked
+  with "big.txt*" for good.
+- **A hang and End Task during a save**: the Editor gone, no task left,
+  internal RAM exactly back, external 3.9 KB less (the taskbar's).
+- **More than twenty windows**, six Editors and five folder windows among
+  them; the taskbar's buttons shrink. With the Picture viewer closed, ten
+  Editors opened, with 232 KB of external RAM left.
+- **Cost**: a repaint with Culebra open 26.6 ms against 26.2 to 27.9 on
+  `main`; the UI task 2.0 % on both; no missed refills.
+- **The failure**: the eleventh and twelfth Editor opened nothing and said
+  nothing. No "not enough memory" box on the screen. The desktop went on
+  answering, and the memory came back when all were closed.
+
+**The cause** was not in this branch's work, but only this branch could
+show it: before, the fifth Editor was refused by the cap and never
+reached the end of the memory. The Editor does say "There is not enough
+memory for the Editor". A message box is made modal to the window in use
+at that moment, whoever's it is, and a window that is destroyed takes its
+dialogs with it. Started from the Run dialog, the Editor put its message
+over the Run dialog, and the Run dialog closes the moment it has started
+something: the message went with it, a fraction of a second after it
+appeared. From the Start menu the same message stays. It was reproduced
+on the PC only once the Editor was started the way the board thread
+starts programs.
+
+**The fix** (`Wm::dispose_closed`): a window that is destroyed closes the
+dialogs over it that are its own process's, as before. A dialog of
+another process is let go instead: it stands alone from then on. Tried
+first and dropped: making a message modal only to a window of the asker's
+own. It is the tidier rule, but it gave the Picture viewer's "damaged
+picture" message a taskbar button of its own (one reference picture
+changed), which nobody asked for.
+
+`test_lifecycle`: an Editor refused for lack of memory, started from the
+Run dialog: the dialog is gone, the message is there, and pressing OK
+ends the Editor's process with everything back. It failed before the
+fix. The test of the Task Manager's question now asks as the Task
+Manager, as the program does. Gate: all passed (44 tests, pictures
+unchanged). The firmware compiles and links. Not run on the board again
+yet.
+
 ## What is left
 
 - The board turn.
