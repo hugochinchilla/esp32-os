@@ -915,6 +915,66 @@ int main(int argc, char **argv)
         check(!shell::desktop_icons()->snap(), "and off again");
     }
 
+    // The themes (backlog item 47): each picked in Display, shown by Apply,
+    // kept by OK, and seen on the Start menu and the widget gallery. Escape
+    // takes back what Apply showed. Classic again at the end.
+    {
+        const auto check = [&](bool ok, const char *what) {
+            if (!ok) {
+                printf("Themes: %s\n", what);
+                failures++;
+            }
+        };
+        const auto pick = [&](int theme) {
+            shell::display_dialog();
+            key(0x17, true); // Alt+T: the list of themes
+            key(wm::key::Home);
+            for (int i = 0; i < theme; i++) {
+                key(wm::key::Down);
+            }
+        };
+        const auto kept = [&](const char *key_wanted) {
+            fs::Ini ini;
+            char value[32] = "";
+            return shell::load_settings("desktop", ini) && ini.get("look", "theme", value, sizeof(value)) &&
+                   strcmp(value, key_wanted) == 0;
+        };
+        check(gfx::theme_count() == 4 && gfx::theme_index() == 0, "four themes, the classic one in use");
+        pick(1);
+        check(gfx::theme_index() == 0, "nothing changes before Apply");
+        key(0x04, true); // Alt+A
+        check(gfx::theme_index() == 1, "Apply shows the theme");
+        key(wm::key::Escape);
+        check(gfx::theme_index() == 0, "Escape takes it back");
+        for (int theme = 1; theme < gfx::theme_count(); theme++) {
+            const std::string name = std::string("6") + char('0' + theme) + "-theme-" + gfx::theme_at(theme).key;
+            pick(theme);
+            key(0x04, true);
+            check(gfx::theme_index() == theme, "Apply shows the theme");
+            save((name + "-display").c_str());
+            key(wm::key::Enter); // OK
+            check(gfx::theme_index() == theme && kept(gfx::theme_at(theme).key), "OK keeps it, in desktop.ini");
+            centre_of(shell::taskbar()->button(-1), x, y);
+            click(x, y);
+            centre_of(desktop.popup_item(0, 0), x, y);
+            mouse(x, y, 0);
+            clock_.now += wm::Wm::kSubmenuDelayUs;
+            desktop.tick();
+            save((name + "-start-menu").c_str());
+            int gallery = 0;
+            while (std::string(shell::app(gallery).name) != "Widget gallery") {
+                gallery++;
+            }
+            centre_of(desktop.popup_item(1, gallery), x, y);
+            click(x, y);
+            save((name + "-widgets").c_str());
+            key(0x3D, true); // Alt+F4
+        }
+        pick(0);
+        key(wm::key::Enter);
+        check(gfx::theme_index() == 0 && kept("classic"), "and the classic one again");
+    }
+
     // Shut Down from the Start menu: Enter picks Shut Down, and the screen
     // says the power can go.
     centre_of(shell::taskbar()->button(-1), x, y);

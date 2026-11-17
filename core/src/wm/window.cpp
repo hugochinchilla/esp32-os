@@ -224,7 +224,7 @@ void Window::paint(gfx::Canvas &c)
         background.set({0, 0, c_rect.w, c_rect.h}); // too many pieces: the plain way
     }
     for (int i = 0; i < background.size(); i++) {
-        c.fill(background[i], gfx::kGrey);
+        c.fill(background[i], gfx::face());
     }
     for (int i = 0; i < widget_count_; i++) {
         Widget &w = *widgets_[i];

@@ -108,7 +108,7 @@ public:
                 n++;
             }
             line[n] = 0;
-            c.text(56, y, line, gfx::kBlack);
+            c.text(56, y, line, gfx::ink());
             p += n;
             if (*p == '\n') {
                 p++;

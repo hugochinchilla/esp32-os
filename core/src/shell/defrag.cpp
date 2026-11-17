@@ -314,7 +314,7 @@ public:
             return;
         }
         // What the colours mean.
-        c.fill({0, 0, kLegend.w, kLegend.h}, gfx::kGrey);
+        c.fill({0, 0, kLegend.w, kLegend.h}, gfx::face());
         int x = 0;
         const int y = (kLegend.h - 9) / 2;
         const auto entry = [&](const char *label, gfx::Colour a, gfx::Colour b, bool framed) {
@@ -326,7 +326,7 @@ public:
                 c.fill({x + 1, y + 1, 4, 7}, a);
                 c.fill({x + 5, y + 1, 3, 7}, b);
             }
-            x = c.text(x + 13, (kLegend.h - 12) / 2, label, gfx::kBlack) + 14;
+            x = c.text(x + 13, (kLegend.h - 12) / 2, label, gfx::ink()) + 14;
         };
         entry("Free", kFree, kFree, false);
         entry("Files", kFileColours[0], kFileColours[1], false);

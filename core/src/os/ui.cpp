@@ -95,10 +95,10 @@ public:
     void paint(gfx::Canvas &c) override
     {
         const int y = (rect.h - 12) / 2;
-        c.fill({0, 0, rect.w, y}, gfx::kGrey);
-        const int x = c.text_opaque(0, y, text_, gfx::kBlack, gfx::kGrey);
-        c.fill({x, y, rect.w - x, 12}, gfx::kGrey);
-        c.fill({0, y + 12, rect.w, rect.h - y - 12}, gfx::kGrey);
+        c.fill({0, 0, rect.w, y}, gfx::face());
+        const int x = c.text_opaque(0, y, text_, gfx::ink(), gfx::face());
+        c.fill({x, y, rect.w - x, 12}, gfx::face());
+        c.fill({0, y + 12, rect.w, rect.h - y - 12}, gfx::face());
     }
     ~PlainText() = default;
 
@@ -181,21 +181,21 @@ public:
 
     void paint(gfx::Canvas &c) override
     {
-        c.fill({0, 0, rect.w, rect.h}, gfx::kGrey);
+        c.fill({0, 0, rect.w, rect.h}, gfx::face());
         for (int i = 0; i < count_; i++) {
             const gfx::Rect r = cell(i);
             if (i == selected_) {
-                c.edge(r, gfx::kBlack, gfx::kBlack);
-                c.edge(r.inset(1), gfx::kWhite, gfx::kWhite);
+                c.edge(r, gfx::ink(), gfx::ink());
+                c.edge(r.inset(1), gfx::paper(), gfx::paper());
             }
             const gfx::Rect inner = r.inset(margin_);
-            c.edge(inner, gfx::kDarkGrey, gfx::kWhite);
+            c.dent(inner);
             paint_cell_(*this, c, inner.inset(1), i, context_);
             if (i == selected_ && margin_ < 3) {
                 // A tight grid: the mark goes over the cell's own edge.
-                c.edge(r, gfx::kBlack, gfx::kBlack);
-                c.edge(r.inset(1), gfx::kWhite, gfx::kWhite);
-                c.edge(r.inset(2), gfx::kBlack, gfx::kBlack);
+                c.edge(r, gfx::ink(), gfx::ink());
+                c.edge(r.inset(1), gfx::paper(), gfx::paper());
+                c.edge(r.inset(2), gfx::ink(), gfx::ink());
             }
         }
         if (has_focus() && selected_ >= 0) {
@@ -261,15 +261,15 @@ public:
         static const char *const kDownGlyph[] = {"XXXXXXX", " XXXXX ", "  XXX  ", "   X   "};
         const gfx::Rect r = {0, 0, rect.w, rect.h};
         c.sunken(r);
-        c.fill(r.inset(2), gfx::kWhite);
+        c.fill(r.inset(2), gfx::paper());
         gfx::Canvas inner = c.sub({2, 2, rect.w - 4 - 16, rect.h - 4});
         if (icon_ != nullptr) {
             inner.blit(*icon_, 2, (rect.h - 4 - 16) / 2);
         }
-        inner.text(icon_ != nullptr ? 22 : 4, (rect.h - 4 - 12) / 2, text_, gfx::kBlack);
+        inner.text(icon_ != nullptr ? 22 : 4, (rect.h - 4 - 12) / 2, text_, gfx::ink());
         const gfx::Rect b = {rect.w - 2 - 16, 2, 16, rect.h - 4};
         c.button(b, held_ ? gfx::ButtonLook::Pressed : gfx::ButtonLook::Raised);
-        c.pattern(b.x + 4 + held_, b.y + (b.h - 4) / 2 + held_, kDownGlyph, 4, gfx::kBlack);
+        c.pattern(b.x + 4 + held_, b.y + (b.h - 4) / 2 + held_, kDownGlyph, 4, gfx::ink());
     }
     bool wants_mouse() const override { return true; }
     void mouse(const wm::MouseMsg &m) override
@@ -325,11 +325,11 @@ public:
         int x = 0;
         for (int i = 0; x < w; i++) {
             const int bw = x + kBlock > w ? w - x : kBlock;
-            c.fill({2 + x, 2, bw, h}, i < lit_ ? colour_ : gfx::kWhite);
+            c.fill({2 + x, 2, bw, h}, i < lit_ ? colour_ : gfx::paper());
             x += bw;
             const int gw = x + kGap > w ? w - x : kGap;
             if (gw > 0) {
-                c.fill({2 + x, 2, gw, h}, gfx::kWhite);
+                c.fill({2 + x, 2, gw, h}, gfx::paper());
                 x += gw;
             }
         }
@@ -346,7 +346,6 @@ class IconView : public wm::Widget {
 public:
     using Callback = void (*)(IconView &view, void *context);
     static constexpr int kCellW = 76, kCellH = 66;
-    static constexpr gfx::Rgb kHighlight = {0, 0, 128};
 
     IconView(const gfx::Rect &r, Callback on_open, Callback on_select, Callback on_drag, void *context)
         : Widget(r), on_open_(on_open), on_select_(on_select), on_drag_(on_drag), context_(context),
@@ -424,7 +423,7 @@ public:
         const gfx::Rect r = {0, 0, rect.w, rect.h};
         c.sunken(r);
         const gfx::Rect area = {2, 2, rect.w - 4 - (bar_.maximum() > 0 ? wm::ScrollBar::kThickness : 0), rect.h - 4};
-        c.fill(area, gfx::kWhite);
+        c.fill(area, gfx::paper());
         gfx::Canvas inner = c.sub(area);
         const int cols = columns();
         for (int i = top_row_ * cols; i < count_; i++) {
@@ -448,9 +447,9 @@ public:
                 const int tw = gfx::Canvas::text_width(lines[l]);
                 const int tx = x + 38 - tw / 2, ty = y + 36 + l * 12;
                 if (chosen) {
-                    inner.fill_rgb({tx - 1, ty - 1, tw + 2, 13}, kHighlight);
+                    inner.fill_rgb({tx - 1, ty - 1, tw + 2, 13}, gfx::theme().select);
                 }
-                inner.text(tx, ty, lines[l], chosen ? gfx::kWhite : gfx::kBlack);
+                inner.text(tx, ty, lines[l], chosen ? gfx::theme().select_ink : gfx::ink());
             }
         }
         if (bar_.maximum() > 0) {
@@ -757,7 +756,7 @@ public:
                 g_drawings.end();
                 if (prog::runner().late(owner())) {
                     // Not responding: grey where it would have painted.
-                    c.fill(what == What::Cell ? part : gfx::Rect{0, 0, control.rect.w, control.rect.h}, gfx::kGrey);
+                    c.fill(what == What::Cell ? part : gfx::Rect{0, 0, control.rect.w, control.rect.h}, gfx::face());
                 }
             }
         }
@@ -1699,6 +1698,11 @@ void edge(Drawing on, const gfx::Rect &r, gfx::Colour tl, gfx::Colour br)
 {
     const prog::InCall in_call;
     DRAW(edge(r, tl, br))
+}
+void dent(Drawing on, const gfx::Rect &r)
+{
+    const prog::InCall in_call;
+    DRAW(dent(r))
 }
 void raised(Drawing on, const gfx::Rect &r)
 {

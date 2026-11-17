@@ -108,7 +108,7 @@ public:
         for (int i = 0; i < kSamples; i++) {
             int bar = (values_[i] * h + 50) / 100;
             bar = bar == 0 && values_[i] != 0 ? 1 : bar;
-            c.fill({2 + i * kColumn, 2, kColumn, h - bar}, gfx::kWhite);
+            c.fill({2 + i * kColumn, 2, kColumn, h - bar}, gfx::paper());
             c.fill({2 + i * kColumn, 2 + h - bar, kColumn, bar}, kNavy);
         }
     }

@@ -37,18 +37,18 @@ struct ToolButton {
     void paint(app::Canvas &c) const
     {
         const gfx::Rect r = {0, 0, place.w, place.h};
-        c.fill(r, gfx::kGrey);
+        c.fill(r, gfx::face());
         if (held && inside) {
-            c.edge(r, gfx::kDarkGrey, gfx::kWhite);
+            c.dent(r);
         }
         const int d = held && inside ? 1 : 0;
         c.blit(*icon, (place.w - 16) / 2 + d, 2 + d);
         const int tx = (place.w - app::Canvas::text_width(text)) / 2 + d;
         if (enabled) {
-            c.text(tx, 20 + d, text, gfx::kBlack);
+            c.text(tx, 20 + d, text, gfx::ink());
         } else {
-            c.text(tx + 1, 21, text, gfx::kWhite);
-            c.text(tx, 20, text, gfx::kDarkGrey);
+            c.text(tx + 1, 21, text, gfx::paper());
+            c.text(tx, 20, text, gfx::dim());
         }
     }
     // True: it was pressed and let go inside.
@@ -99,10 +99,10 @@ struct Panel {
         const gfx::Rect r = {0, 0, place.w, place.h};
         if (white) {
             c.sunken(r);
-            c.fill(r.inset(2), gfx::kWhite);
+            c.fill(r.inset(2), gfx::paper());
         } else {
-            c.fill(r, gfx::kGrey);
-            c.edge(r, gfx::kDarkGrey, gfx::kWhite);
+            c.fill(r, gfx::face());
+            c.dent(r);
         }
         app::Canvas inner = c.sub(r.inset(2));
         int x = 4;
@@ -110,7 +110,7 @@ struct Panel {
             inner.blit(*icon, 2, (place.h - 4 - 16) / 2);
             x = 22;
         }
-        inner.text(x, (place.h - 4 - 12) / 2, text, gfx::kBlack);
+        inner.text(x, (place.h - 4 - 12) / 2, text, gfx::ink());
     }
 };
 
@@ -118,8 +118,8 @@ struct Panel {
 // the window's grey is not painted under it first.
 void paint_groove(app::Canvas &c, int width)
 {
-    c.hline(0, 0, width, gfx::kDarkGrey);
-    c.hline(0, 1, width, gfx::kWhite);
+    c.hline(0, 0, width, gfx::dim());
+    c.hline(0, 1, width, gfx::paper());
 }
 
 // The pictures of a folder's entries, as the icon view takes them.

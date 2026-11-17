@@ -346,6 +346,12 @@ void set_backdrop(const wm::Wm::Backdrop &backdrop)
     g_kit.wm->set_backdrop(backdrop);
 }
 
+void set_theme(int index)
+{
+    const prog::InCall in_call;
+    g_kit.wm->set_theme(index);
+}
+
 void set_screen_saver(int animation, uint32_t wait_seconds)
 {
     const prog::InCall in_call;
