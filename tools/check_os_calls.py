@@ -28,6 +28,7 @@ MOVED = [
     "settings.cpp",
     "shutdown.cpp",
     "task_manager.cpp",
+    "terminal.cpp",
     "trash.cpp",
     "viewer.cpp",
 ]
@@ -41,6 +42,7 @@ SYSTEM = [
     "listing.cpp",
     "network_service.cpp",
     "power.cpp",
+    "sessions.cpp",
 ]
 
 # What a moved program may not write, and what to write instead.

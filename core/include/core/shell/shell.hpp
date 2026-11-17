@@ -11,7 +11,7 @@
 #include "core/games/snake.hpp"
 #include "core/gfx/canvas.hpp"
 #include "core/ports.hpp"
-#include "core/sh/sh.hpp"
+#include "core/sh/terminal_session.hpp"
 #include "core/wm/wm.hpp"
 
 namespace tty {
@@ -129,20 +129,15 @@ void open_picture(const char *path);
 void finish_picture();
 const uint32_t *picture_timings();
 constexpr int kPictureTimings = 3;
-// The Terminal: a command shell (core/sh) in a window. Every call opens
-// another one, up to three.
+// The Terminal: a terminal emulator in a window, the device of a session
+// that runs as a process of its own (`sh`). Every call opens another one,
+// up to three.
 void open_terminal();
-// What a Terminal's session needs to run on a task of its own, and the
-// portable code cannot make: a lock for its TTY and two things to sleep on.
-// The machine hands in a few (one per Terminal that may be open at once),
-// before any Terminal opens. With none, or without tasks (job::Jobs), a
-// Terminal's session runs on the UI task.
-struct SessionKit {
-    ports::Lock *lock = nullptr;
-    ports::Event *typed = nullptr;    // a line has been typed
-    ports::Event *answered = nullptr; // the UI task has done what was asked
-    bool in_use = false;
-};
+// What a terminal session needs to run on a task of its own (core/sh/
+// terminal_session.hpp). The machine hands in a few (one per Terminal that
+// may be open at once), before any Terminal opens. With none, or without
+// tasks (job::Jobs), a session runs on the UI task.
+using SessionKit = sh::SessionKit;
 void set_session_kits(SessionKit *kits, int count);
 // What a command-shell session that is not a Terminal window works with (a
 // telnet session): the same drives, process table, desktop and time zone.
