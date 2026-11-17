@@ -533,3 +533,65 @@ Each program exercised:
 `dbg.py misses` after both games and the Task Manager: none. The idle desktop
 against main: identical but for 20 pixels of the clock. VNC and telnet
 answered. Nothing was left changed on C:.
+
+
+## On the board, second tranche (added by the board thread, 2026-11-17)
+
+a1018a6 with main 039aae1 merged in: the same code as ce9ed0e (no difference
+outside docs). The PC build stopped on the laptop's GCC with
+`-Werror=overloaded-virtual`: in `core/src/shell/viewer.cpp` the static
+`chosen(const char *, void *)` hid `app::Window::chosen(Control)`. The board
+commit renames it `file_chosen` (two lines). Then `tools/gate.sh` passed (42
+tests, the pictures, check_os_calls; `dbg_tool` did not fail this time).
+Firmware 0x1697a0 (27 % free), flashed by cable, the app only. Main (039aae1)
+was measured on the board just before with the same scripts.
+
+Memory, free bytes against the idle desktop while open (internal /
+external), main / this; every one back to the byte when closed:
+
+| program | main | this |
+|---|---|---|
+| Terminal | -12,656 / -27,144 | -12,656 / -27,320 |
+| Editor | 0 / -609,700 | 0 / -610,136 |
+| File manager (C:\pictures) | 0 / -16,736 | 0 / -18,396 |
+| Picture viewer (earthrise.jpg) | 0 / -2,430,644 | 0 / -2,431,228 |
+| Trash window | 0 / -15,072 | 0 / -16,448 |
+
+Twenty open/close rounds of each: internal and external back (+0, once
++20), the largest free blocks unchanged (131,072 and 6,422,528).
+
+Speed, the UI task's processor time, four runs each, medians main / this:
+200 characters typed in the Editor 30 / 30 ms; the File manager, 80 files,
+Page Down ten times and Page Up ten times 39 / 41 ms; the Terminal, `type` of
+30 KB, 680 / 642 ms of UI time and 0.77 / 0.73 s until the next command ran.
+(A single first run had shown 33 / 42 and 42 / 60 ms; the repeats show that
+was noise.) A 300 KB `type`: 13.0 s on main's single run, 6.1 s here. A 300 KB
+Editor save: 3.8, 4.0, 3.9 s, the file right. The Picture viewer, decode /
+total: mascot.bmp 429 / 638 ms, test card.png 391 / 604, blue marble.png 649
+/ 1,187, earthrise.jpg 894 / 1,505 (main earlier today 449 / 641, 389 / 598,
+645 / 1,156, 892 / 1,440). Idle repaint 13.9 ms.
+
+Exercised:
+
+- Terminal: typing, three `help`s and Page Up, a corner resize, maximise,
+  `top` and `ted`; `ps` shows Terminal (parent 3) and sh (parent Terminal);
+  three open and a fourth refused.
+- Editor: a 300 KB file opened with `edit`, typing, Ctrl+Z, a line cut and
+  pasted twice, saved (the hourglass while saving); closing with a change
+  asks; four open and a fifth refused.
+- File manager: two folder windows, a file dragged from one into the other
+  (moved) and one onto the Trash (trashed); Up and Back in the toolbar;
+  Backspace goes up. The View menu has only "Show hidden files": there is no
+  large/small icons choice to test. A file dragged from a folder window onto
+  the desktop moved into C:\Documents\Desktop; that desktop icon dragged onto
+  a folder window moved the file into the folder.
+- Trash window: a file selected, File > Restore put it back in its folder;
+  File > Empty Trash asks, and Yes emptied it.
+- Picture viewer: BMP, PNG and JPEG; View > Actual size shows earthrise.jpg
+  full size with scroll bars and Fit to window brings it back; View >
+  Options... opens the dithering list, Escape closes only it.
+
+`dbg.py misses`: none. VNC and telnet answered. The idle desktop against main:
+identical but for 40 pixels of the clock. The test folders, the files and
+the icons.ini a desktop drop wrote were removed; the desktop and the Trash are
+empty, as found.
