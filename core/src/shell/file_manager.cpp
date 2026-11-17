@@ -381,7 +381,12 @@ public:
         address_.icon = trash ? &gfx::bin_icon_16() : &gfx::folder_icon_16();
         file_.items = trash ? trash_items_ : file_items_;
         file_.count = trash ? 10 : 9;
-        empty_.picture.place(trash ? kEmptyPlace : gfx::Rect{0, 0, 0, 0});
+        // Back and Up are not there in the Trash (the owner): it is a place
+        // of its own, not a folder to walk out of. Empty Trash takes theirs.
+        const gfx::Rect none = {0, 0, 0, 0};
+        back_.picture.place(trash ? none : back_.place);
+        up_.picture.place(trash ? none : up_.place);
+        empty_.picture.place(trash ? kEmptyPlace : none);
         empty_.set_enabled(listing_.count() > 0);
         back_.set_enabled(history_count_ > 0);
         up_.set_enabled(folder_[0] != 0);
@@ -391,7 +396,7 @@ public:
     }
 
 private:
-    static constexpr gfx::Rect kEmptyPlace = {96, 0, 72, 34}; // Empty Trash, after Up
+    static constexpr gfx::Rect kEmptyPlace = {4, 0, 72, 34}; // Empty Trash, where Back and Up are elsewhere
 
     // Showing the Trash itself (not a folder inside it).
     bool at_trash() const { return strcasecmp(folder_, kTrashFolder) == 0; }
@@ -404,7 +409,7 @@ private:
 
     void go_up()
     {
-        if (folder_[0] == 0) {
+        if (folder_[0] == 0 || at_trash()) {
             return;
         }
         char parent[fs::kMaxPath];
@@ -418,7 +423,7 @@ private:
 
     void go_back()
     {
-        if (history_count_ == 0) {
+        if (history_count_ == 0 || at_trash()) {
             return;
         }
         char to[fs::kMaxPath];
@@ -682,7 +687,7 @@ private:
     int width_ = 100; // of the client area
     app::IconView view_;
     ToolButton back_, up_;
-    ToolButton empty_; // the owner: Empty Trash in the toolbar too; hidden outside the Trash
+    ToolButton empty_; // the owner: Empty Trash in the toolbar too; only in the Trash
     app::Picture groove_;
     app::Label address_label_;
     Panel address_;

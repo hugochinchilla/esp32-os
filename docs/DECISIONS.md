@@ -2383,12 +2383,15 @@ is no Trash window of its own any more.
 
 - A folder window that shows `C:\.trash` is the Trash: titled "Trash", with
   the bin as its icon (title bar, taskbar, address bar), an Empty Trash
-  button after Back and Up, and Restore and Empty Trash in its File menu
+  button in the toolbar, and Restore and Empty Trash in its File menu
   where New Folder and Rename are elsewhere. Everything else is the folder
-  window's: toolbar, address bar, icon view, status bar, View menu, F5.
+  window's: address bar, icon view, status bar, View menu, F5.
+- The Trash has no Back and no Up (the owner, 2026-11-17: "hide them, or at
+  least disable them"; hidden was chosen): Empty Trash is alone in the
+  toolbar, and Backspace and Alt+Left do nothing there. Inside a folder of
+  the Trash they are there again, and Up returns to the Trash.
 - It is so however the window got there: the desktop's Trash icon, or a
-  folder window taken to `C:\.trash` with hidden files shown. Up leaves the
-  Trash for `C:\`; Back returns.
+  folder window taken to `C:\.trash` with hidden files shown.
 
 Chosen by the agent, to confirm:
 

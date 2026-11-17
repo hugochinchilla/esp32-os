@@ -272,11 +272,16 @@ void test_trash_view()
     shell::open_folder("C:\\.trash");
     CHECK(desktop.window_count() == 1);
 
-    // Up leaves the Trash and Back returns to it, in the same window.
-    key(wm::key::Backspace);
-    CHECK(strcmp(title(), "RAM disk (C:)") == 0 && icon() == &gfx::folder_icon_16());
-    key(wm::key::Left, 4);
+    // A folder window beside it is a folder window: its own icon, and the
+    // Trash is still the Trash when it is gone.
+    shell::open_folder("C:\\");
+    CHECK(desktop.window_count() == 2 && icon() == &gfx::folder_icon_16());
+    key(wm::key::F4, 4);
     CHECK(strcmp(title(), "Trash") == 0 && icon() == &gfx::bin_icon_16() && desktop.window_count() == 1);
+    // The Trash has no Back and no Up (the owner): their keys do nothing.
+    key(wm::key::Backspace);
+    key(wm::key::Left, 4);
+    CHECK(strcmp(title(), "Trash") == 0);
 
     // A folder in the Trash opens like any other; nothing is renamed or
     // made in there (F2, File > New Folder greyed).
@@ -291,8 +296,8 @@ void test_trash_view()
     key(wm::key::Enter); // New Folder..., greyed
     key(wm::key::Escape);
     CHECK(strcmp(title(), "trastos") == 0);
-    key(wm::key::Backspace);
-    CHECK(strcmp(title(), "Trash") == 0);
+    key(wm::key::Backspace); // Up, there again inside a folder of the Trash
+    CHECK(strcmp(title(), "Trash") == 0 && icon() == &gfx::bin_icon_16());
 
     // File > Restore puts the folder back where it was.
     key(wm::key::Home);

@@ -89,3 +89,25 @@ MB.
 
 A board turn: open the Trash from the desktop, restore, empty, walk into it
 from `C:\` with hidden files shown, and `tools/dbg.py misses`.
+
+## Later the same day: no Back and no Up in the Trash
+
+The board turn passed (PR 47 at `a0e241b`: every check, one File manager
+process, memory back on close, no missed refills). The owner then looked at
+the choices and changed one:
+
+> La papelera debe ocultar atrás y arriba, o al menos desactivarlas.
+
+The first version kept Back and Up in the Trash, with Up leading to `C:\`.
+Hidden was chosen over greyed out: two buttons that can never be pressed
+there are only noise, and Empty Trash goes back to the left edge where it
+was in the old window. Backspace and Alt+Left do nothing in the Trash
+either. Inside a folder of the Trash the two buttons are there again, since
+there has to be a way back up; Up from it ends in the Trash.
+
+A window walked into `C:\.trash` from `C:\` therefore cannot walk out
+again; it is closed, like the Trash opened from the desktop.
+
+Tested on the PC only (43 of 43; `test_trash_view` and the Trash pictures
+changed to match). This second commit has not been compiled for the board
+nor run on it.
