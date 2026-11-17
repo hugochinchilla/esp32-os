@@ -10,7 +10,7 @@ void TextScreen::clear()
 {
     for (auto &row : cells_) {
         for (auto &cell : row) {
-            cell = {' ', gfx::kBlack, static_cast<uint8_t>(kDirty | (cell.flags & kReserved))};
+            cell = {' ', gfx::kBlack, kDirty};
         }
     }
     row_ = column_ = 0;

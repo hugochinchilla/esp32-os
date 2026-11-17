@@ -1,11 +1,16 @@
 # Name,   Type, SubType,  Offset,   Size
-# The 4 MB app area holds two slots of 1.94 MB for updates over the network
-# (backlog item 25): the running system is in one, a new version is written
-# to the other, and otadata says which one starts. C: (LittleFS) is the
-# 12 MB above it and has not moved. See docs/DECISIONS.md.
+# The BIOS (firmware/bios) has the first megabyte of the app area, as an app
+# of subtype "test": our bootloader start file starts it after every reset,
+# and it restarts into the OS (docs/journal/2026-11-17-bios-second-stage.md).
+# The OS has two slots of 1.94 MB for updates over the network (backlog item
+# 25): the running system is in one, a new version is written to the other,
+# and otadata says which one starts. C: (LittleFS) is the 11 MB from
+# 0x500000. nvs has not moved, so the saved Wi-Fi networks stay.
+# See docs/DECISIONS.md.
 nvs,      data, nvs,      0x9000,   0x6000
 phy_init, data, phy,      0xf000,   0x1000
-ota_0,    app,  ota_0,    0x10000,  0x1f0000
-ota_1,    app,  ota_1,    0x200000, 0x1f0000
-otadata,  data, ota,      0x3f0000, 0x2000
-storage,  data, littlefs, 0x400000, 0xc00000
+bios,     app,  test,     0x10000,  0xf0000
+ota_0,    app,  ota_0,    0x100000, 0x1f0000
+ota_1,    app,  ota_1,    0x2f0000, 0x1f0000
+otadata,  data, ota,      0x4e0000, 0x2000
+storage,  data, littlefs, 0x500000, 0xb00000

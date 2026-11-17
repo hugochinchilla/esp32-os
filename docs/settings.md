@@ -53,6 +53,13 @@ Files so far:
 | `network.ini` | `[update]` | `enabled`: true lets `tools/ota.py` send a new version of the system over the network (port 3232, no password). Default false. Read at start-up |
 | `startup.txt` | (lines, not sections) | What init starts, from the top down, a line each as `WHAT:ACTION` (the form of a Unix inittab). WHAT is a part of the system (`desktop`, `taskbar`, `inetd` for the network services, `console` for the command shell on the serial port) or a program or a file as Start > Run... takes it. ACTION is `once` (started), `respawn` (started, and started again whenever it ends: the taskbar can be) or `off` (not started). `#` for a comment. The usual file: `desktop:once`, `taskbar:respawn`, `inetd:once`, `console:off`. The desktop and its taskbar start even with no line; with `taskbar:once` an ended taskbar stays away until `run taskbar`. Written with the usual lines if it is not there. Read at start-up |
 
+Since the BIOS (2026-11-17, `firmware/bios`): the self-test and its
+countdown are shown by the BIOS, which cannot read `boot.ini` and uses the
+built-in defaults until its settings move to NVS (backlog item 46, step 3).
+The `[boot]` keys for the self-test then only reach the OS's own screen,
+which shows when there is no BIOS in the flash. `splash_ms`, `crash_hold_s`
+and `[watchdog]` are the OS's and work as before.
+
 A one-shot fast start for debugging: `tools/dbg.py reboot --fast`, or
 `tools/dbg.py boot fast-next` before flashing, makes the next start behave as
 `fastboot = true` once (no self-test screen, no countdown, no monitor wait, no

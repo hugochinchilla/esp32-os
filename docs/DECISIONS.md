@@ -2400,3 +2400,53 @@ rounded corners (a window is a rectangle to the window manager).
 Journal: [first round](journal/2026-11-17-window-themes.md),
 [second round](journal/2026-11-17-window-themes-modern.md),
 [built](journal/2026-11-17-window-themes-built.md).
+
+### Chosen for the BIOS firmware (2026-11-17, to confirm)
+
+Step 2 of backlog item 46, compiled but not run on the board
+(`docs/journal/2026-11-17-bios-second-stage.md`).
+
+- The BIOS is the app partition `bios` (subtype `test`, 960 KB at 0x10000);
+  C: is 11 MB; `nvs` did not move.
+- Our bootloader file starts the BIOS at every start unless a word in the
+  reserved RTC memory asks for the OS. The BIOS writes the word and
+  restarts. With no good BIOS image in the flash the OS starts as before.
+- The OS started by the BIOS does not repeat the self-test. Until step 3
+  the OS keeps its own, for a flash with no BIOS.
+- An armed fast start (`tools/dbg.py reboot --fast`, after a cable flash)
+  passes the BIOS without a picture.
+- Any byte on serial counts as a key in the BIOS.
+- A "Boot device" line names the slot and checks its image; with nothing to
+  start the BIOS says so and stops.
+- The BIOS compiles the OS's `vga.c` and has small adapters of its own;
+  sharing the adapters is step 3.
+- The BIOS is flashed with `tools/flash-bios.sh`, never `idf.py flash` in
+  `firmware/bios`, which would write a bootloader without our file.
+
+### The BIOS's first screen (the owner, 2026-11-17)
+
+`docs/journal/2026-11-17-bios-first-screen.md`.
+
+- Before the self-test the BIOS shows a first screen (asked for as 2 or
+  3 s; held until 7 s after the reset, the owner's choice on a card, because the bench
+  monitor was measured to show a steady picture only 5.5 to 6 s after a
+  reset, for the BIOS and for `main` alike, not the 2.4 s recorded on
+  2026-11-16), as the PCs
+  of the nineties showed their BIOS maker's logo and an energy badge. It
+  covers the time the monitor takes to wake; nothing that matters is on it.
+- The badge is our own: a leaf with a lightning bolt in a round ring, the
+  name under it, and "Runs on a USB port". No square frame, no "no fan, no
+  noise" (the owner's changes to the first drawing). The real Energy Star
+  mark is not used.
+- The name "Energy Nibbler" is to confirm.
+- The BIOS is called "Rodent BIOS" on its screens, on serial and in the
+  docs from here on (the owner, 2026-11-17: so that not everything is
+  called Chinchilla). Earlier journal entries keep the words of their day.
+  The OS's own self-test screen, which still says "Chinchilla BIOS" and is
+  shown only without a BIOS or after an error, goes away in step 3.
+- The second drawing of the first screen is approved by the owner.
+- The memory count in the BIOS runs at the speed of the test, without the
+  pause between steps that the OS's self-test has.
+- After an error the OS restarts without the BIOS, and a reset by a
+  watchdog or a brownout starts the OS directly, until the BIOS shows the
+  error screen itself (step 3). To confirm.
