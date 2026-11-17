@@ -13,6 +13,15 @@
 // enter() until the UI task, with nothing else under way (serve()), lets it
 // run for a moment.
 //
+// What happens to a late program meanwhile waits for it in its queue of
+// events (backlog items 26 and 37): the calls that say they are to be kept
+// (proc::Keep: a key, a click, the result of a job, the answer to a
+// question) are copied into memory counted as the program's, and made in
+// order once it answers again, before anything new reaches it. What only
+// made sense at the time (a paint, a menu about to open) is dropped, and
+// where only the last one matters (where the mouse is) the last one is
+// kept. Without a Memory port nothing is kept.
+//
 // A machine without tasks (the browser build, the plain PC desktop, most
 // tests) has no ports::Tasks: no program gets a task, and every call is made
 // by the caller as it always was.
@@ -49,6 +58,10 @@ public:
     static constexpr uint32_t kLimitMs = 2000;
     // How long a late program is let run OS calls at a time (serve()).
     static constexpr uint32_t kSliceMs = 10;
+    // The most calls kept for one late program. Past it they are lost, as
+    // the keys were when a PC's keyboard buffer was full (the agent's
+    // figure, to confirm).
+    static constexpr int kMostKept = 32;
 
     explicit Runner(proc::Table &procs = proc::table());
     ~Runner();
@@ -59,6 +72,9 @@ public:
     // program gets a task of its own.
     void set_tasks(ports::Tasks *tasks, Kit *kits, int count);
     bool threaded() const { return tasks_ != nullptr && kit_count_ > 0; }
+    // Where the calls kept for a late program are put. Null (the default):
+    // none are kept.
+    void set_memory(ports::Memory *memory) { memory_ = memory; }
     // How long a caller waits for a program, in ms (kForever, the default:
     // as long as it takes).
     void set_limit(uint32_t ms) { limit_ms_ = ms; }
@@ -101,16 +117,21 @@ public:
     // copied for the program and copied back when it is done, so that a
     // late program is not left with a pointer into its caller's stack.
     // False if the call was not made, or not finished in time: the process
-    // is late.
+    // is late. A call for a late process that says so (`keep`) and is
+    // handed over by copy waits in the process's queue and is made when it
+    // answers again; the answer here is false all the same.
     //
     // A process whose task is already in the middle of a call (it asked for
     // something that calls back into it) is called here, so nothing waits
     // for itself.
-    bool call(proc::Pid pid, proc::CallFn fn, void *context, size_t size = 0);
+    bool call(proc::Pid pid, proc::CallFn fn, void *context, size_t size = 0, proc::Keep keep = proc::kDropped);
+    // Calls waiting for the process in its queue.
+    int kept(proc::Pid pid) const;
 
     // The UI task, with nothing else under way (once a round of its loop):
     // lets late programs that are waiting to make an OS call run for a
-    // moment, and takes back those that have finished.
+    // moment, takes back those that have finished and makes the calls that
+    // were kept for them.
     void serve();
     // Whether serve() has something to do.
     bool waiting() const;
@@ -123,6 +144,15 @@ public:
 
 private:
     enum State : int { Idle, Running, Done, Late, LateDone };
+    // A call kept for a late program: one block from the Memory port, the
+    // context's bytes after the header.
+    struct Kept {
+        Kept *next;
+        proc::CallFn fn;
+        proc::Keep keep;
+        uint32_t size;
+        alignas(std::max_align_t) unsigned char bytes[1];
+    };
     struct Slot {
         Runner *runner = nullptr;
         Kit kit;
@@ -132,6 +162,11 @@ private:
         void *context = nullptr;
         int depth = 0;     // calls of the process under way, here or nested
         bool used = false;
+        // Its queue, oldest first. The UI task's alone.
+        Kept *first = nullptr;
+        Kept *last = nullptr;
+        int kept = 0;
+        bool handing = false; // the queue is being handed out (hand_out)
         std::atomic<bool> quit{false}; // the process has ended: the task goes at the next safe point
         std::atomic<bool> gone{false}; // its task has left its loop for good
         std::atomic<int> state{Idle};
@@ -141,7 +176,12 @@ private:
     };
 
     static void task(void *slot);
-    static bool call_for_table(proc::Pid pid, proc::CallFn fn, void *context, size_t size, void *self);
+    static bool call_for_table(proc::Pid pid, proc::CallFn fn, void *context, size_t size, proc::Keep keep,
+                               void *self);
+    bool make(Slot *slot, proc::Pid pid, proc::CallFn fn, void *context, size_t size);
+    void keep_for(Slot &slot, proc::CallFn fn, const void *context, size_t size, proc::Keep keep);
+    void hand_out(Slot &slot);
+    void forget(Slot &slot);
     static void exited(proc::Pid pid, void *self);
     Slot *slot_of(proc::Pid pid);
     const Slot *slot_of(proc::Pid pid) const;
@@ -153,6 +193,7 @@ private:
     ports::Tasks *tasks_ = nullptr;
     Kit *kits_ = nullptr;
     int kit_count_ = 0;
+    ports::Memory *memory_ = nullptr;
     uint32_t limit_ms_ = kForever;
     NewsFn news_ = nullptr;
     void *news_context_ = nullptr;

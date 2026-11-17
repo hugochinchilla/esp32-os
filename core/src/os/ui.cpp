@@ -55,12 +55,63 @@ struct Drawings {
 };
 Drawings g_drawings;
 
-constexpr int kMaxWindows = 16; // ponytail: as many as the window manager shows
-
 // Every window made here, open or not yet. A window's number is the one
 // the window server knows it by (os::WindowId), taken when it is made.
+// There is no limit on how many (the owner's decision, 2026-11-17): the
+// list starts with room for sixteen and grows out of the machine's memory,
+// counted as nobody's; with none left, the next window is not made.
 class Behind;
-Behind *g_windows[kMaxWindows] = {};
+constexpr int kFirstWindows = 16;
+Behind *g_first_windows[kFirstWindows] = {};
+Behind **g_windows = g_first_windows;
+int g_window_room = kFirstWindows;
+Behind *behind(Window window);
+
+// A free place in the list, -1 if there is none and no memory for more.
+int free_window_slot()
+{
+    for (int i = 0; i < g_window_room; i++) {
+        if (g_windows[i] == nullptr) {
+            return i;
+        }
+    }
+    ports::Memory *memory = os::installed_kit().memory;
+    auto **more = memory != nullptr
+                      ? static_cast<Behind **>(memory->allocate(2 * g_window_room * sizeof(Behind *)))
+                      : nullptr;
+    if (more == nullptr) {
+        return -1;
+    }
+    for (int i = 0; i < 2 * g_window_room; i++) {
+        more[i] = i < g_window_room ? g_windows[i] : nullptr;
+    }
+    if (g_windows != g_first_windows) {
+        memory->release(g_windows);
+    }
+    g_windows = more;
+    g_window_room *= 2;
+    return g_window_room / 2;
+}
+
+// After a window has gone: with none left past the first sixteen places,
+// the longer list goes back.
+void forget_spare_slots()
+{
+    if (g_windows == g_first_windows) {
+        return;
+    }
+    for (int i = kFirstWindows; i < g_window_room; i++) {
+        if (g_windows[i] != nullptr) {
+            return;
+        }
+    }
+    for (int i = 0; i < kFirstWindows; i++) {
+        g_first_windows[i] = g_windows[i];
+    }
+    os::installed_kit().memory->release(g_windows);
+    g_windows = g_first_windows;
+    g_window_room = kFirstWindows;
+}
 
 enum class Kind : uint8_t {
     Label,
@@ -673,6 +724,7 @@ public:
             os::release(controls_[i]);
         }
         g_windows[slot_] = nullptr;
+        forget_spare_slots();
     }
 
     ui::Window handle() const { return id(); }
@@ -929,9 +981,11 @@ private:
             return events_(handle(), e, state_);
         }
         // Handed over whole, by copy: a program that does not come back in
-        // time is not left with pointers into this task's stack.
+        // time is not left with pointers into this task's stack. The window
+        // goes as its number: an event kept for a program that was not
+        // responding may be made after the window has gone.
         Told told;
-        told.window = this;
+        told.window = handle();
         told.event = e;
         if (e.key != nullptr) {
             told.key = *e.key;
@@ -942,11 +996,40 @@ private:
         if (e.text != nullptr) {
             snprintf(told.text, sizeof told.text, "%s", e.text);
         }
-        return proc::call_as(&proc::table(), owner(), told) && told.used;
+        return proc::call_as(&proc::table(), owner(), told, keep(e)) && told.used;
+    }
+
+    // What becomes of an event for a program that is not responding
+    // (proc::Keep): what the user did is kept for it; where only the last
+    // one matters (the mouse moving, a control's new value, the window's
+    // size) the last is kept; what was asked there and then (to paint, a
+    // menu about to open, whether a file may be dropped) is dropped, and so
+    // are Closing and Closed, since closing its window ends such a program.
+    proc::Keep keep(const Event &e) const
+    {
+        const uint32_t of = (static_cast<uint32_t>(handle()) << 12) + (static_cast<uint32_t>(e.control) << 2);
+        switch (e.what) {
+        case What::Command:
+        case What::Chosen:
+        case What::Key:
+        case What::Text:
+        case What::RightClick:
+        case What::Drag:
+        case What::Dropped:
+            return proc::kKept;
+        case What::Mouse:
+            return e.mouse != nullptr && e.mouse->kind == wm::MouseKind::Move ? proc::latest(of + 1) : proc::kKept;
+        case What::Changed:
+            return proc::latest(of + 2);
+        case What::Resized:
+            return proc::latest(of + 3);
+        default:
+            return proc::kDropped;
+        }
     }
 
     struct Told {
-        Behind *window;
+        int window; // its number
         Event event;
         wm::KeyMsg key;
         wm::MouseMsg mouse;
@@ -958,7 +1041,8 @@ private:
             e.key = event.key != nullptr ? &key : nullptr;
             e.mouse = event.mouse != nullptr ? &mouse : nullptr;
             e.text = event.text != nullptr ? text : nullptr;
-            used = window->events_(window->handle(), e, window->state_);
+            Behind *w = behind(window);
+            used = w != nullptr && w->events_(window, e, w->state_);
         }
     };
 
@@ -980,7 +1064,8 @@ private:
 
 Behind *behind(Window window)
 {
-    for (Behind *w : g_windows) {
+    for (int i = 0; i < g_window_room; i++) {
+        Behind *w = g_windows[i];
         // One that has closed is dead to the program at once, though its
         // memory goes back a moment later: the program's object went with
         // the Closed event.
@@ -1015,10 +1100,7 @@ template <class T> T *control_of(Window window, Control control, Kind kind)
 Window create(const Look &look, Events events, size_t state_bytes)
 {
     const prog::InCall in_call;
-    int slot = -1;
-    for (int i = 0; i < kMaxWindows && slot < 0; i++) {
-        slot = g_windows[i] == nullptr ? i : -1;
-    }
+    const int slot = events != nullptr ? free_window_slot() : -1;
     void *room = slot >= 0 && events != nullptr ? os::allocate(kAligned + state_bytes) : nullptr;
     if (room == nullptr) {
         return kNoWindow;

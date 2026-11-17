@@ -1638,7 +1638,9 @@ by the agent under the owner's "dejo a tu criterio" of 2026-11-16.
   `rmdir`. Each command expands them itself (the DOS way); there is no heap
   to hold a list. A star does not match names that start with a dot, so
   `del *` leaves `C:\.config` and `C:\.trash` alone.
-- `rm` deletes for good; it does not use the Trash. `rm -r` and `rmdir`
+- `rm` deletes for good; it does not use the Trash (**confirmed by the
+  owner, 2026-11-17**: "el comando RM no debe utilizar la papelera, borra
+  el archivo directamente"). `rm -r` and `rmdir`
   refuse the folder the session is in and a drive's root.
 - `mv` onto an existing file replaces it in one step. Between drives it
   copies and deletes, files only. `cp` writes the safe way (temporary file,
@@ -2177,7 +2179,7 @@ option of a card the owner has not answered yet.
 - All 17 programs are written with the thin classes, and since item 26
   About, Welcome and the widget gallery too (20 files). What is left on
   `core/wm`'s classes is the desktop itself and the message box.
-- Events through a queue: with item 26.
+- Events through a queue: with item 26 ("The queue of events" below).
 
 ### Chosen for background jobs (2026-11-17, to confirm)
 
@@ -2277,8 +2279,70 @@ The rest is the agent's, to confirm:
   turn (ESP-IDF's task watchdog watches them, 5 s).
 - A late program's task is taken away when it is ended; it is outside
   every OS call by then, so it holds no lock.
-- Not yet: the queue of events (what a late program missed is lost),
-  the other programs, programs that call each other's code directly.
+- The queue of events came after: "The queue of events" below. Still not
+  done: programs that call each other's code directly.
+
+### No window limit of the system's (the owner's decision, 2026-11-17)
+
+Asked whether the system should own one limit on open windows or each
+program keep its own cap, the owner chose neither kind of common limit: "creo
+que no tiene que haber un límite de ventanas común. Prefiero ver el sistema
+fallar por falta de memoria dado el caso. Me parece un caso divertido y de
+época."
+
+- **There is no limit on the windows open at once.** The window server's
+  two lists and the list of numbered windows (`os::ui`) begin with room for
+  sixteen and grow out of the Memory port, twice the room each time; the
+  block goes back when sixteen or fewer are left. Before, the seventeenth
+  window did not open.
+- **Running out of memory is how the machine says it has had enough**, and
+  that is accepted. A window that finds no memory does not open and
+  nothing of it is left ("There is not enough memory to open ...", when
+  there is memory for the message).
+- Left as they were, to confirm: the caps a program sets for itself for
+  what each copy costs (four Editors at 576 KB each, three File manager
+  windows), the 32 rows of the process table and the 8 program tasks
+  (a ninth program runs on the UI task). They are not limits on windows.
+- With very many windows the taskbar's buttons shrink to four pixels and
+  the last ones are off the bar. To confirm; nothing is drawn for it.
+
+### The queue of events (2026-11-17, with the owner on a card)
+
+Backlog items 26 and 37, the last part of both.
+[Journal](journal/2026-11-17-event-queue.md). Put to the owner on a card
+(2026-11-17); **built on the recommended option while the answer is
+awaited**, to be changed if he chooses otherwise.
+
+- **A queue only while a program is not responding** (recommended). The
+  server still waits for the program on every call, as the owner chose for
+  item 26. What happens to a program while it is late is no longer lost:
+  it waits in the program's queue and is handed to it, in order, when it
+  answers again, before anything new. The other options on the card: every
+  program takes its events from a queue with a loop of its own, as Win16
+  programs did, and the desktop waits only to paint (all twenty programs
+  rewritten, and locks around the OS calls, which item 26 rejected); and
+  leaving it as it was, mending only the lost result of a job.
+- What is kept, what is not (`proc::Keep`, said by whoever makes the
+  call): **kept in order**: keys, typed text, button presses, choices in
+  a list, clicks, drops, the result of a job, the answer to a question, a
+  message from another task, another program asking it to open something.
+  **The last one only**: where the mouse is, a control's new value, the
+  window's new size, "files changed". **Dropped**: a paint (the window is
+  painted whole when the program is back), a menu about to open, whether
+  a file may be dropped here, a menu's action, Closing and Closed (closing
+  the window of a program that does not answer ends it, as before).
+- **A timer** of a late program is not queued: it stays due and fires
+  once when the program is back. It does not keep the UI loop awake.
+- The queue holds **32 calls a program** at most, in external RAM counted
+  as the program's memory, a block a call, given back as each is handed
+  out and all at once if the program is ended. Past 32 they are lost, as
+  keys were when a PC's keyboard buffer was full. The figure is the
+  agent's, to confirm.
+- A key kept for the program has by then been seen by the window's own
+  controls (a text field takes the letters while its program is away):
+  the program hears of it after the controls, not before. To confirm.
+- An event names its window by number, so one that waited for a window
+  that has gone meanwhile is not made.
 
 ### Programs loaded from files (2026-11-17)
 

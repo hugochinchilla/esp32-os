@@ -73,7 +73,17 @@ using ExitFn = void (*)(Pid pid, void *context);
 // A call into a program's code, and whoever makes such calls on the
 // program's own task (see Table::call).
 using CallFn = void (*)(void *context);
-using CallerFn = bool (*)(Pid pid, CallFn fn, void *context, size_t size, void *self);
+// What becomes of a call for a program that is not responding (backlog
+// items 26 and 37, the queue of events): dropped, as a paint is; kept for
+// it in order, as a key is; or kept as the latest of its kind, as where the
+// mouse is: latest(of) takes the place of a waiting call with the same
+// `of`, if that one is the newest waiting. Only a call handed over by copy
+// can be kept.
+using Keep = uint32_t;
+constexpr Keep kDropped = 0;
+constexpr Keep kKept = 1;
+constexpr Keep latest(uint32_t of) { return 2 + of; }
+using CallerFn = bool (*)(Pid pid, CallFn fn, void *context, size_t size, Keep keep, void *self);
 // The most a call's context may be when it is handed over by copy.
 constexpr size_t kCallRoom = 384;
 
@@ -248,8 +258,10 @@ public:
     // has it made there; without a caller set, it is made here. With a
     // size, the context is that many bytes, copied for the program and back
     // (prog::Runner::call). False: not made, or not finished in time (the
-    // program is not responding).
-    bool call(Pid pid, CallFn fn, void *context, size_t size = 0);
+    // program is not responding). `keep` says whether a call that cannot
+    // be made now waits for the program in its queue: it is then made
+    // later, in order, and the answer here is still false.
+    bool call(Pid pid, CallFn fn, void *context, size_t size = 0, Keep keep = kDropped);
     void set_caller(CallerFn caller, void *self)
     {
         caller_ = caller;
@@ -350,8 +362,10 @@ private:
 // holds by value is safe from a program that does not come back in time,
 // and results it keeps in itself can be read afterwards (pass it by name).
 // What it holds by reference must outlive a late program. A null table
-// calls it here.
-template <class F> bool call_as(Table *table, Pid pid, F &&f)
+// calls it here. With `keep`, a callable that could not be called now is
+// called when the program answers again (Table::call), and whatever it
+// points at must still be there then.
+template <class F> bool call_as(Table *table, Pid pid, F &&f, Keep keep = kDropped)
 {
     using Fn = typename std::remove_const<typename std::remove_reference<F>::type>::type;
     static_assert(std::is_trivially_copyable<Fn>::value && sizeof(Fn) <= kCallRoom, "handed over by copy");
@@ -361,7 +375,7 @@ template <class F> bool call_as(Table *table, Pid pid, F &&f)
     }
     return table->call(
         pid, [](void *context) { (*static_cast<Fn *>(context))(); },
-        const_cast<void *>(static_cast<const void *>(&f)), sizeof(Fn));
+        const_cast<void *>(static_cast<const void *>(&f)), sizeof(Fn), keep);
 }
 
 // The figures as text, for whoever lists processes: processor time as

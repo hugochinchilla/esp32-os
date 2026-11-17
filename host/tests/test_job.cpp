@@ -17,6 +17,7 @@
 #include "core/job/job.hpp"
 #include "core/msg/queue.hpp"
 #include "core/proc/table.hpp"
+#include "core/prog/prog.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/wm.hpp"
 #include "../host_adapters.hpp"
@@ -345,6 +346,43 @@ struct Rig {
     }
 };
 
+// The owner of a job is not responding when the job finishes (the queue of
+// events, backlog items 26 and 37): the result waits for it. Before, it was
+// lost, and a save would never have been heard of again.
+void test_result_waits_for_a_late_owner()
+{
+    proc::Table procs;
+    const Pid root = procs.spawn("desktop", proc::kNone, proc::kSystem);
+    const Pid app = procs.spawn("app", root, proc::kWindowed);
+    job::Jobs jobs(procs); // without tasks: the work is done by whoever starts it
+    prog::Runner runner(procs);
+    host::ThreadTasks threads;
+    host::ThreadEvent events[2];
+    static host::ThreadEvent gate;
+    host::HostMemory room;
+    prog::Kit kits[1] = {{&events[0], &events[1]}};
+    runner.set_tasks(&threads, kits, 1);
+    runner.set_memory(&room);
+    runner.set_limit(30);
+    CHECK(runner.start(app));
+
+    Probe p;
+    p.procs = &procs;
+    CHECK(!proc::call_as(&procs, app, [] { gate.wait(0xFFFFFFFF); }) && runner.late(app));
+    {
+        const proc::Scope as(&procs, app);
+        CHECK(jobs.start(p.spec())); // worked, finished, and nobody there to tell
+    }
+    CHECK(p.worked == 1 && p.done == 0 && procs.jobs(app) == 0 && runner.kept(app) == 1);
+    gate.set();
+    for (int i = 0; i < 400 && runner.late(app); i++) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        runner.serve();
+    }
+    CHECK(p.done == 1 && p.result == 41 && p.done_as == app && runner.kept(app) == 0 && room.in_use() == 0);
+    CHECK(procs.exit(app) && runner.tasks() == 0);
+}
+
 void test_process_waits_for_jobs()
 {
     Rig r;
@@ -626,6 +664,7 @@ void test_editor_save()
 int main()
 {
     test_runner();
+    test_result_waits_for_a_late_owner();
     test_process_waits_for_jobs();
     test_locked_window();
 

@@ -544,8 +544,9 @@ void test_no_memory()
     CHECK(desktop.window_count() == 0 && t.count() == 2 && memory.in_use() == base);
     memory.limit = 0;
 
-    // The window manager full (16 windows): a program that finds no room is
-    // not left behind either.
+    // More windows than the lists of them begin with (16). There is no
+    // limit of the system's (the owner's decision): the lists grow, and
+    // go back when the windows have gone.
     static const char *const folders[] = {"C:\\", "C:\\Documents", "C:\\pictures"};
     for (const char *folder : folders) {
         shell::open_folder(folder);
@@ -559,15 +560,14 @@ void test_no_memory()
     shell::display_dialog();
     shell::screen_saver_dialog();
     shell::open_network();
-    CHECK(desktop.window_count() == wm::Wm::kMaxWindows);
+    const int many = desktop.window_count();
+    CHECK(many > wm::Wm::kFirstWindows);
     wait(10000);
-    const int full = memory.in_use();
     const int rows = t.count();
-    shell::open_task_manager();
-    shell::launch(*shell::find_app("Editor"));
-    shell::message_box("Note", "No room for this.");
+    shell::launch(*shell::find_app("Editor")); // the fourth
+    shell::message_box("Note", "There is room for this.");
     wait(10000);
-    CHECK(desktop.window_count() == wm::Wm::kMaxWindows && memory.in_use() == full && t.count() == rows);
+    CHECK(desktop.window_count() == many + 2 && t.count() == rows + 1);
     close_all();
     for (int i = 0; i < 4 && desktop.window_count() != 0; i++) {
         key(wm::key::Enter); // anything that asked

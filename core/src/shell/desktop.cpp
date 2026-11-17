@@ -160,7 +160,9 @@ private:
             const AnswerFn answer = answer_;
             void *context = context_;
             if (asker_ == proc::kNone || proc::table().alive(asker_)) {
-                proc::call_as(&proc::table(), asker_, [answer, choice, context] { answer(choice, context); });
+                // An asker that is not responding gets its answer when it is back.
+                proc::call_as(
+                    &proc::table(), asker_, [answer, choice, context] { answer(choice, context); }, proc::kKept);
             }
         }
     }
@@ -583,7 +585,8 @@ void files_changed()
     // The File manager's windows are the File manager's to touch.
     const proc::Pid files = proc::table().find_by_name("File manager");
     if (files != proc::kNone) {
-        enter_program(files, nullptr, [](void *) { refresh_folder_windows(); }, nullptr, 0);
+        // Once is enough for a File manager that was not responding.
+        in_process(files, nullptr, [] { refresh_folder_windows(); }, proc::latest(0));
     }
     refresh_desktop_files(false);
 }
@@ -916,6 +919,7 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
     g_wm = &wm;
     g_system = &system;
     g_storage = &storage;
+    wm.set_memory(&memory); // its lists of windows grow from there
     os::Kit kit;
     kit.wm = &wm;
     kit.system = &system;

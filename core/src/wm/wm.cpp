@@ -185,13 +185,41 @@ Window *Wm::topmost_visible() const
     return nullptr;
 }
 
+// Room in the two lists for another window: twice the room, in one block,
+// when they are full. False: there is no memory for it.
+bool Wm::room_for_one_more()
+{
+    if (count_ < room_) {
+        return true;
+    }
+    if (memory_ == nullptr) {
+        return false;
+    }
+    const int room = room_ * 2;
+    auto **block = static_cast<Window **>(memory_->allocate(2 * room * sizeof(Window *)));
+    if (block == nullptr) {
+        return false;
+    }
+    for (int i = 0; i < count_; i++) {
+        block[i] = stack_[i];
+        block[room + i] = order_[i];
+    }
+    if (stack_ != first_stack_) {
+        memory_->release(stack_);
+    }
+    stack_ = block;
+    order_ = block + room;
+    room_ = room;
+    return true;
+}
+
 void Wm::add(Window &w)
 {
     if (w.wm_ == this) {
         activate(w);
         return;
     }
-    if (count_ == kMaxWindows || w.wm_ != nullptr) {
+    if (w.wm_ != nullptr || !room_for_one_more()) {
         return;
     }
     keep(w); // open again before it was disposed of
@@ -232,6 +260,18 @@ void Wm::close(Window &w)
         }
     }
     count_--;
+    if (stack_ != first_stack_ && count_ <= kFirstWindows) {
+        // Few enough again for the lists it began with: the block goes back.
+        Window **block = stack_;
+        for (int i = 0; i < count_; i++) {
+            first_stack_[i] = stack_[i];
+            first_order_[i] = order_[i];
+        }
+        stack_ = first_stack_;
+        order_ = first_order_;
+        room_ = kFirstWindows;
+        memory_->release(block);
+    }
     if (drop_window_ == &w) {
         drop_window_ = nullptr;
     }
@@ -304,13 +344,16 @@ void Wm::dispose_closed()
 {
     // The windows of a process with a job running are left for a later safe
     // point: the job may be reading what they hold.
-    Window *held[kMaxWindows];
-    int held_count = 0;
+    Window *held = nullptr;
     while (closed_ != nullptr) {
         Window &w = *closed_;
         keep(w);
-        if (procs_ != nullptr && procs_->jobs(w.owner_) > 0 && held_count < kMaxWindows) {
-            held[held_count++] = &w;
+        if (procs_ != nullptr && procs_->jobs(w.owner_) > 0) {
+            if (!w.held_) { // once, though it may be opened and closed again meanwhile
+                w.held_ = true;
+                w.next_held_ = held;
+                held = &w;
+            }
             continue;
         }
         for (int z = count_ - 1; z >= 0; z--) {
@@ -332,8 +375,12 @@ void Wm::dispose_closed()
         }
         w.dispose_(w);
     }
-    for (int i = 0; i < held_count; i++) {
-        discard(*held[i]); // nothing happens to one that was opened again
+    while (held != nullptr) {
+        Window &w = *held;
+        held = w.next_held_;
+        w.next_held_ = nullptr;
+        w.held_ = false;
+        discard(w); // nothing happens to one that was opened again
     }
 }
 
@@ -482,19 +529,23 @@ bool Wm::deliver_signals()
 // TERM: the close button of every window of the process that has one.
 void Wm::ask_to_close(proc::Pid pid)
 {
-    Window *windows[kMaxWindows];
-    int n = 0;
-    for (int i = 0; i < count_; i++) {
-        Window *w = order_[i];
-        if (w->owner_ == pid && !(w->modal_ && w->modal_owner_ != nullptr)) {
-            windows[n++] = w;
+    // Those open now, oldest first, by their numbers: asking one may close
+    // others, or open new ones, which are not asked.
+    const int newest = next_id_;
+    for (int asked = 0;;) {
+        Window *next = nullptr;
+        for (int i = 0; i < count_; i++) {
+            Window *w = order_[i];
+            if (w->owner_ == pid && !(w->modal_ && w->modal_owner_ != nullptr) && w->id_ > asked && w->id_ < newest &&
+                (next == nullptr || w->id_ < next->id_)) {
+                next = w;
+            }
         }
-    }
-    for (int i = 0; i < n; i++) {
-        Window &w = *windows[i];
-        if (w.wm_ != this) {
-            continue; // closed by one asked before it
+        if (next == nullptr) {
+            break;
         }
+        Window &w = *next;
+        asked = w.id_;
         // As a click on the close button would, the window comes to the
         // front first: a question the program asks is then its own (a
         // message box belongs to the window in use). One busy with a dialog
@@ -528,7 +579,8 @@ void Wm::end_process(proc::Pid pid)
             break;
         }
     }
-    for (int tries = 0; tries < 2 * kMaxWindows; tries++) {
+    const int most = 2 * count_ + 2;
+    for (int tries = 0; tries < most; tries++) {
         Window *top = nullptr;
         for (int z = count_ - 1; z >= 0 && top == nullptr; z--) {
             top = stack_[z]->owner_ == pid ? stack_[z] : nullptr;
@@ -2422,6 +2474,9 @@ void Wm::tick()
         if (t.id == 0 || now < t.due) {
             continue;
         }
+        if (procs_ != nullptr && procs_->busy(t.owner)) {
+            continue; // not responding: its timer stays due and fires when it is back
+        }
         const TimerFn fn = t.fn;
         void *context = t.context;
         const proc::Scope as(procs_, t.owner);
@@ -2458,7 +2513,9 @@ uint32_t Wm::idle_us()
     const uint64_t now = now_us();
     uint64_t due = UINT64_MAX;
     for (const Timer &t : timers_) {
-        if (t.id != 0 && t.due < due) {
+        // The timer of a program that is not responding wakes nobody: the
+        // program does, when it is back.
+        if (t.id != 0 && t.due < due && !(procs_ != nullptr && procs_->busy(t.owner))) {
             due = t.due;
         }
     }

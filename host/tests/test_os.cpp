@@ -546,6 +546,7 @@ void test_ui()
 host::ThreadEvent sleepy_gate;
 std::atomic<int> sleepy_hangs{0}, sleepy_woke{0}, sleepy_paints{0};
 std::atomic<bool> sleepy_ended{false};
+char sleepy_keys[16] = ""; // the other keys it was handed, in order
 app::Number sleepy_number = app::kNone;
 constexpr gfx::Colour kSleepyInk = gfx::rgb(7, 0, 0);
 
@@ -554,6 +555,11 @@ public:
     Sleepy() : picture_(picture({10, 10, 60, 40})) {}
     bool key(const wm::KeyMsg &k) override
     {
+        if (k.pressed && k.usage != wm::key::A + 7 && k.usage >= wm::key::A && k.usage < wm::key::A + 26 &&
+            strlen(sleepy_keys) + 1 < sizeof(sleepy_keys)) {
+            sleepy_keys[strlen(sleepy_keys)] = static_cast<char>('A' + k.usage - wm::key::A);
+            return true;
+        }
         if (!k.pressed || k.usage != wm::key::A + 7) { // H: hang
             return false;
         }
@@ -661,17 +667,32 @@ void test_not_responding()
 
     // It hangs on a key. The key comes back unanswered after the limit and
     // the program is marked; its picture goes grey; the desktop goes on.
+    const uint32_t before = proc::table().find(pid)->memory;
     press(wm::key::A + 7);
     CHECK(sleepy_hangs == 1 && !os::responding(pid));
     wait(10000);
     CHECK(ink() == gfx::kGrey);
-    // Nothing more reaches it, and nothing waits for it.
+    // Nothing more reaches it now, and nothing waits for it. The keys
+    // typed meanwhile are kept for it (the queue of events), in memory
+    // counted as its own; the paints are not.
     const int paints = sleepy_paints;
-    press(wm::key::A + 7);
-    press(wm::key::Enter);
+    press(wm::key::A + 1);
+    press(wm::key::A + 2);
     desktop.repaint_all();
     wait(10000);
-    CHECK(sleepy_hangs == 1 && sleepy_paints == paints && ink() == gfx::kGrey);
+    // A timer of its own that comes due meanwhile is not lost and not
+    // fired without it: it stays due, and keeps nobody awake.
+    static std::atomic<int> rang{0};
+    {
+        const os::As as(pid);
+        os::start_timer(5000, 0, [](void *) { rang++; }, nullptr);
+    }
+    wait(10000);
+    wait(10000);
+    CHECK(rang == 0 && desktop.idle_us() > 100000);
+    CHECK(sleepy_hangs == 1 && sleepy_paints == paints && ink() == gfx::kGrey && sleepy_keys[0] == 0);
+    // B and C, down and up, after the H that it has not yet seen let go.
+    CHECK(prog::runner().kept(pid) == 5 && proc::table().find(pid)->memory > before);
     CHECK(proc::table().current() == proc::table().find_by_name("desktop"));
 
     // It wakes up: its OS call is let in when the desktop has nothing else
@@ -680,11 +701,18 @@ void test_not_responding()
     CHECK(soon([&] { return os::responding(pid); }));
     wait(10000);
     CHECK(sleepy_woke == 1 && ink() == kSleepyInk && sleepy_paints > paints);
+    // And it has been handed what it missed, in order.
+    CHECK(strcmp(sleepy_keys, "BC") == 0 && prog::runner().kept(pid) == 0);
+    CHECK(rang == 1);
+    wait(10000);
+    CHECK(rang == 1); // once
+    CHECK(proc::table().find(pid)->memory == before);
 
     // It hangs again and its window is closed: the program is ended without
     // its say, and what it held comes back.
     press(wm::key::A + 7);
     CHECK(sleepy_hangs == 2 && !os::responding(pid));
+    press(wm::key::A + 3); // waits for it, and goes with it
     sleepy_ended = true;
     desktop.close(*desktop.active());
     wait(10000);

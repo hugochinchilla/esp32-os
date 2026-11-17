@@ -78,6 +78,7 @@ Rect Taskbar::button(int index) const
     int w = kButtonW;
     if (shown > 0 && shown * (kButtonW + kButtonGap) > room) {
         w = room / shown - kButtonGap;
+        w = w < 4 ? 4 : w; // with very many windows the last buttons are off the bar
     }
     return {buttons_x() + index * (w + kButtonGap), ty + 4, w, 22};
 }

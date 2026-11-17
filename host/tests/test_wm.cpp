@@ -475,6 +475,52 @@ static void test_many_windows()
     }
 }
 
+// No limit on the windows open at once (the owner's decision, 2026-11-17):
+// past the sixteen the lists begin with they grow out of the Memory port,
+// and where there is no memory the next window does not open.
+static void test_no_window_limit()
+{
+    constexpr int kMany = 70;
+    static TestWindow *windows[kMany];
+    char titles[kMany][8];
+    Rig rig;
+    for (int i = 0; i < kMany; i++) {
+        snprintf(titles[i], sizeof(titles[i]), "W%d", i);
+        windows[i] = new TestWindow(titles[i], {10 + i * 7, 10 + i * 4, 120, 90}, static_cast<gfx::Colour>(i * 3 + 1));
+    }
+    // Without a port: sixteen, and the seventeenth stays closed.
+    for (int i = 0; i < 17; i++) {
+        rig.wm.add(*windows[i]);
+    }
+    rig.wm.start();
+    CHECK(rig.wm.window_count() == 16 && windows[15]->open() && !windows[16]->open());
+    // With one: all of them, in order, the last in front.
+    host::HostMemory memory;
+    rig.wm.set_memory(&memory);
+    for (int i = 16; i < kMany; i++) {
+        rig.wm.add(*windows[i]);
+    }
+    CHECK(rig.wm.window_count() == kMany && rig.wm.active() == windows[kMany - 1] && memory.in_use() == 1);
+    CHECK(rig.wm.taskbar_count() == kMany && rig.wm.taskbar_window(0) == windows[0] &&
+          rig.wm.taskbar_window(kMany - 1) == windows[kMany - 1]);
+    rig.wm.update();
+    CHECK(rig.no_stale_pixels());
+    rig.wm.activate(*windows[3]);
+    rig.wm.update();
+    CHECK(rig.wm.active() == windows[3] && rig.no_stale_pixels());
+    // Closed again: back to the lists it began with, and the block returned.
+    for (int i = kMany - 1; i >= 0; i--) {
+        windows[i]->close();
+        CHECK(rig.wm.window_count() == i);
+    }
+    CHECK(memory.in_use() == 0);
+    rig.wm.update();
+    CHECK(rig.no_stale_pixels());
+    for (TestWindow *w : windows) {
+        delete w;
+    }
+}
+
 
 /* ---- Resizing, shortcuts --------------------------------------------------------- */
 
@@ -1509,6 +1555,7 @@ int main()
     test_widget_capture();
     test_describe();
     test_many_windows();
+    test_no_window_limit();
     test_resize();
     test_shortcuts();
     test_menus();

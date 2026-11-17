@@ -91,7 +91,8 @@ void launch(const App &app)
         const_cast<App *>(&app), 0);
 }
 
-bool enter_program(proc::Pid pid, const char *program, proc::CallFn fn, void *context, size_t size)
+bool enter_program(proc::Pid pid, const char *program, proc::CallFn fn, void *context, size_t size,
+                   proc::Keep keep)
 {
     const prog::InCall in_call;
     const App *app = program != nullptr ? find_app(program) : nullptr;
@@ -99,7 +100,7 @@ bool enter_program(proc::Pid pid, const char *program, proc::CallFn fn, void *co
         // Without a task (none here, none left) it runs on the caller's.
         prog::runner().start(pid, app->stack);
     }
-    return proc::table().call(pid, fn, context, size);
+    return proc::table().call(pid, fn, context, size, keep);
 }
 
 proc::Pid process_for(const char *program)

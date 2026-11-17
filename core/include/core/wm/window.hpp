@@ -304,7 +304,9 @@ private:
     Widget *default_ = nullptr;
     DisposeFn dispose_ = nullptr;
     Window *next_closed_ = nullptr; // closed and waiting for dispose_
+    Window *next_held_ = nullptr;   // set aside by Wm::dispose_closed for a moment
     bool waiting_dispose_ = false;
+    bool held_ = false;
 };
 
 } // namespace wm

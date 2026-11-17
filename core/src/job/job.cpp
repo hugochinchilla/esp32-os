@@ -124,7 +124,10 @@ void Jobs::finish(Slot &slot)
     procs_.job_finished(owner);
     procs_.add_memory(owner, -static_cast<int32_t>(slot.stack));
     if (spec.done != nullptr && procs_.alive(owner)) {
-        proc::call_as(&procs_, owner, [spec, result, stopped] { spec.done(spec.context, result, stopped); });
+        // The result waits for an owner that is not responding: it is
+        // handed over when it answers again, after what it missed before.
+        proc::call_as(
+            &procs_, owner, [spec, result, stopped] { spec.done(spec.context, result, stopped); }, proc::kKept);
     }
 }
 

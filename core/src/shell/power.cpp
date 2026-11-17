@@ -102,22 +102,35 @@ bool power_down()
     // Every program is asked to close, as its close button would. One that
     // has a dialog open, or asks about unsaved changes, calls it off: the
     // question stays on screen, and Shut Down can be chosen again after it.
-    wm::Window *open[wm::Wm::kMaxWindows];
-    int n = 0;
     for (int i = 0; i < m.taskbar_count(); i++) {
-        open[n++] = m.taskbar_window(i);
-    }
-    for (int i = 0; i < n; i++) {
-        if (m.blocker(*open[i]) != nullptr || open[i]->locked()) {
-            m.activate(*open[i]); // brings its dialog forward; a locked one is still saving
+        wm::Window *w = m.taskbar_window(i);
+        if (m.blocker(*w) != nullptr || w->locked()) {
+            m.activate(*w); // brings its dialog forward; a locked one is still saving
             return false;
         }
     }
-    for (int i = 0; i < n; i++) {
+    // Those open now, oldest first, by their numbers: the list changes as
+    // they close, and a question one of them asks is not asked to close.
+    int newest = 0;
+    for (int i = 0; i < m.taskbar_count(); i++) {
+        newest = m.taskbar_window(i)->id() > newest ? m.taskbar_window(i)->id() : newest;
+    }
+    for (int asked = 0;;) {
+        wm::Window *next = nullptr;
+        for (int i = 0; i < m.taskbar_count(); i++) {
+            wm::Window *w = m.taskbar_window(i);
+            if (w->id() > asked && w->id() <= newest && (next == nullptr || w->id() < next->id())) {
+                next = w;
+            }
+        }
+        if (next == nullptr) {
+            break;
+        }
+        asked = next->id();
         // Its "save changes?" question is its own window, not the desktop's.
-        const proc::Scope as(&proc::table(), open[i]->owner());
-        if (open[i]->open() && open[i]->close_requested()) {
-            m.close(*open[i]);
+        const proc::Scope as(&proc::table(), next->owner());
+        if (next->close_requested()) {
+            m.close(*next);
         }
     }
     if (m.window_count() != 0) {
