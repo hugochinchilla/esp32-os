@@ -172,3 +172,27 @@ restart with that file; processes read with `ps` over telnet, the log with
 The single painted frame without the bar between an end and the restart was
 not filmed again in this turn; the earlier turn (the taskbar as a process)
 showed that restart is not visible to the eye.
+
+## The same day: the old form taken out
+
+Checked on the board and merged with the old lines still understood. The
+owner then wrote: do not support old formats, rewrite the file on my
+board; there are no releases, the board's data can be wiped whole, C:
+included; keep the saved Wi-Fi networks if that is free; simplify the
+parser.
+
+So the branch that read `start NAME` and `run WHAT` is gone from init:
+a line is `WHAT:ACTION` or it is not understood. One thing changes with
+it: a name init does not know is no longer "nothing here is called
+that" but a program to run, since the fields do not say which of the two
+a line means. The simulator's start-up text and the serial console test
+moved to the new form. The rule is in `CLAUDE.md` and `docs/DECISIONS.md`
+("No backward compatibility") for every thread.
+
+Tested: `test_init` with every line in the new form and `start desktop`
+as one of the lines that is not understood; all 41 PC tests pass, the
+pictures match. The firmware compiles and links (0x169640 bytes, with
+what `main` gained since). It has not run on the board. On the board the
+file has to be rewritten by hand or deleted, or the start-up box will
+count its lines: asked of the board thread.
+

@@ -402,7 +402,7 @@ int main(int argc, char **argv)
         },
         nullptr);
     // CHINCHILLA_STARTUP: a start-up file for this run, lines separated by
-    // semicolons ("start desktop;start console"), since the RAM disk is new
+    // semicolons ("desktop:once;console:once"), since the RAM disk is new
     // every time.
     if (const char *wanted = getenv("CHINCHILLA_STARTUP")) {
         std::string text(wanted);

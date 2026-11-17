@@ -348,27 +348,6 @@ bool Init::line(const char *text)
     if (*text == 0 || *text == '#') {
         return true;
     }
-    // The form from before the fields: "start NAME" and "run WHAT". Still
-    // understood, so a file written then goes on working.
-    char verb[8];
-    size_t n = 0;
-    while (text[n] != 0 && !is_space(text[n]) && text[n] != ':' && n < sizeof(verb) - 1) {
-        verb[n] = text[n];
-        n++;
-    }
-    verb[n] = 0;
-    const bool old_start = same(verb, "start"), old_run = same(verb, "run");
-    if ((old_start || old_run) && (text[n] == 0 || is_space(text[n]))) {
-        const char *rest = text + n;
-        while (is_space(*rest)) {
-            rest++;
-        }
-        if (*rest == 0) {
-            log("init: %s what? (%s)", verb, text);
-            return false;
-        }
-        return old_start ? part(rest, Action::Once) : program(rest);
-    }
     // WHAT:ACTION. The action is after the last colon: a path has its own.
     const char *colon = strrchr(text, ':');
     if (colon == nullptr) {

@@ -139,7 +139,7 @@ class Board:
         self.buffer = bytearray()
         self.hello = None
         self.pending = []  # frames read but not yet asked for
-        # The serial console (the board's `start console`): with a function
+        # The serial console (the board's `console:once`): with a function
         # here, what the board sends outside a frame is given to it as it
         # arrives, instead of waiting for the next frame's zero.
         self.console = None
@@ -883,7 +883,7 @@ def main(argv=None):
     p.add_argument("--password-stdin", action="store_true",
                    help="read the password from standard input instead of asking")
     sub.add_parser("monitor", help="show the board's log text until Ctrl+C")
-    sub.add_parser("console", help="the board's command shell on this wire (needs `start console` in "
+    sub.add_parser("console", help="the board's command shell on this wire (needs `console:once` in "
                                    "C:\\.config\\startup.txt); Ctrl+] leaves")
 
     p = sub.add_parser("screenshot", help="save the screen as a PNG")
