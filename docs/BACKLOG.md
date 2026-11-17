@@ -76,6 +76,7 @@ at the same time.
 | | **Memory** | | | | |
 | 35 | Our static objects in external RAM: the core's and the firmware's big ones, about 121 KB out of internal RAM | S | | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-statics-in-psram.md) |
 | 36 | The remote screen holds its 183 KB of buffers only while a viewer is connected | S | 8b | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-remote-screen-memory.md) |
+| 45 | The browser viewer can send the keys the viewing computer keeps for itself: buttons for Ctrl+Alt+Del, Alt+Tab, Alt+F4 and the logo key | S | | | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-viewer-system-keys.md) |
 | 38 | Missed video refills in the system log, told apart from the debug link's; `dbg.py dmesg` and `dbg.py misses` | S | | | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-missed-refill-log.md) |
 | | **Chinchilla off the board** | | | | |
 | 32 | Chinchilla as a desktop program for Linux: a window (SDL2) on the same `core/`, the real mouse and keyboard, sound, a folder of the PC as C:. Not an emulator of the ESP32: no real Wi-Fi, no memory limits, much faster than the board | M | | | done on the PC (2026-11-17): built, tested with a real mouse and keyboard on a virtual screen; not yet run on the owner's desktop. No sound: the core makes none yet. [The idea](journal/2026-11-17-chinchilla-on-a-pc.md), [the program](journal/2026-11-17-desktop-program.md) |

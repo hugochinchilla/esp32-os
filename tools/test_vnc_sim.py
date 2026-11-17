@@ -8,6 +8,7 @@ decodes must equal the screenshot from the debug link, pixel for pixel.
 import base64
 import hashlib
 import os
+import re
 import select
 import socket
 import struct
@@ -248,9 +249,53 @@ def http_get(port, path):
     return head.decode().split("\r\n"), body
 
 
+def check_system_keys(board, v, page):
+    """The page's buttons for the keys a browser never gets: the keys each
+    one names in the page, sent as the page sends them (down in order, up in
+    reverse), do on the board what the real keys do."""
+    buttons = dict((label, [int(k, 0) for k in keys.split()])
+                   for keys, label in re.findall(r'<button data-k="([^"]+)">([^<]+)</button>', page.decode()))
+    assert sorted(buttons) == ["Alt+F4", "Alt+Tab", "Ctrl+Alt+Del", "Start"], buttons
+
+    def press(label):
+        for k in buttons[label]:
+            v.key(k, 1)
+        for k in reversed(buttons[label]):
+            v.key(k, 0)
+        settle(board)
+
+    def titles():
+        return [w["title"] for w in board.windows()]
+
+    while len(titles()) > 0:  # whatever the checks before left open
+        before = titles()
+        press("Alt+F4")
+        assert len(titles()) == len(before) - 1, (before, titles())
+    press("Start")
+    assert board.request(dbg.WINDOWS).find(b'"start_menu":true') >= 0
+    press("Start")
+    assert board.request(dbg.WINDOWS).find(b'"start_menu":true') < 0
+    press("Ctrl+Alt+Del")
+    assert titles() == ["Task Manager"], titles()
+    for name in ["gui", "r"]:  # Start > Run, a second window
+        board.tap(name)
+    two = titles()
+    assert len(two) == 2 and two[0] == "Task Manager", two
+    press("Alt+Tab")
+    assert titles() == two[::-1], titles()
+    press("Alt+Tab")
+    assert titles() == two, titles()
+    press("Alt+F4")
+    assert titles() == ["Task Manager"], titles()
+    press("Alt+F4")
+    assert titles() == [], titles()
+    print("web: the page's Ctrl+Alt+Del, Alt+Tab, Alt+F4 and Start buttons work")
+
+
 def check_web(board, port, web, shot):
     """The web server: the viewer page, and VNC inside a WebSocket."""
     head, body = http_get(web, b"/")
+    page = body
     assert head[0] == "HTTP/1.1 200 OK" and "Content-Length: %d" % len(body) in head, head
     assert body.startswith(b"<!doctype html>") and b"WebSocket" in body and body.endswith(b"</html>\n")
     # The noVNC page was dropped (the owner, 2026-11-17): only / is served.
@@ -283,6 +328,8 @@ def check_web(board, port, web, shot):
     v.update()
     assert v.sock.pongs == [b"are you there"], v.sock.pongs
     assert bytes(v.pixels) == shot
+    check_system_keys(board, v, page)
+    _, _, shot = board.screenshot(pointer=False)
 
     # One viewer at a time, whichever door it came through.
     plain = Viewer(port)
