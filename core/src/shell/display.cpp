@@ -3,7 +3,7 @@
 // the desktop. Kept in C:\.config\desktop.ini, [background].
 //
 // The colour is one of a short list with names, or, through Other..., any
-// of the board's 256. All of the list but the first are colours the board
+// of the board's 256. All of the list but the second are colours the board
 // has exactly, so the desktop is one flat colour with no dither: that is
 // what a remote screen (VNC) packs best.
 #include <cstdio>
@@ -24,8 +24,8 @@ namespace {
 using gfx::Rect;
 using gfx::Rgb;
 
-// The colours offered. The first is the desktop as it always was. They are
-// kept in the settings by name.
+// The colours offered, kept in the settings by name. The first is the
+// default.
 struct NamedColour {
     const char *key;
     const char *name;
@@ -38,8 +38,10 @@ constexpr Rgb exact(unsigned r, unsigned g, unsigned b)
     return {k3[r], k3[g], kB[b]};
 }
 constexpr NamedColour kColours[] = {
+    // The first is the default (the owner's choice, 2026-11-17): the board
+    // colour nearest to the blue the desktop had until then, which is next.
+    {"steel-blue", "Steel blue", exact(2, 3, 2)},
     {"chinchilla-blue", "Chinchilla blue (dithered)", {58, 110, 165}}, // between board colours
-    {"steel-blue", "Steel blue", exact(2, 3, 2)}, // the nearest the board has to the first
     {"teal", "Teal", exact(0, 4, 2)},
     {"sea-green", "Sea green", exact(1, 4, 1)},
     {"forest", "Forest", exact(0, 3, 0)},
