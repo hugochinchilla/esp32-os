@@ -102,6 +102,22 @@ constexpr FileInfo file_info(const char *title, uint32_t stack, const char *cons
     info.has32 = 1;
     return info;
 }
+// A small picture for the program's own use while it runs (its window's
+// icon). The header is at the front of the file and is not in memory with
+// the program: a program must not read `app_info` (the board's loader
+// refuses one that does). It makes the pixels again, from the same rows:
+//   constexpr app::Icon16 kIcon = app::icon16(kSmall, kInks);
+//   const gfx::Bitmap picture = {16, 16, kIcon.pixels, app::kClearInk};
+struct Icon16 {
+    uint8_t pixels[16 * 16] = {};
+};
+template <int N> constexpr Icon16 icon16(const char *const (&rows)[16], const Ink (&inks)[N])
+{
+    Icon16 icon;
+    detail::paint(icon.pixels, rows, inks);
+    return icon;
+}
+
 // For a program that may run several copies at a time:
 //   APP_INFO(app::many(app::file_info(...)));
 constexpr FileInfo many(FileInfo info)

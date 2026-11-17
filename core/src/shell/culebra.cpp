@@ -485,9 +485,15 @@ app::Number g_window = app::kNone; // the one there may be: a number, dead once 
 APP_INFO(app::file_info("Culebra", 0, gfx::game_art::kSnake16, gfx::game_art::kSnake16Inks, gfx::game_art::kSnake32,
                         gfx::game_art::kSnake32Inks));
 
+namespace {
+// The window's icon: the header's own pixels are not in memory with the
+// program, so they are made again here from the same rows.
+constexpr app::Icon16 kWindowIcon = app::icon16(gfx::game_art::kSnake16, gfx::game_art::kSnake16Inks);
+} // namespace
+
 APP_MAIN(int, char **)
 {
-    static const gfx::Bitmap icon = {16, 16, app_info.icon16, app_info.clear};
+    static const gfx::Bitmap icon = {16, 16, kWindowIcon.pixels, app::kClearInk};
     return shell::open_window(&icon) != app::kNone ? 0 : 1;
 }
 #else

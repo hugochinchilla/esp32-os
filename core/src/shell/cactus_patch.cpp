@@ -626,9 +626,15 @@ CactusWindow &cactus_window() { return *app::program<CactusWindow>(g_window); }
 APP_INFO(app::file_info("Cactus Patch", 0, gfx::game_art::kCactus16, gfx::game_art::kCactus16Inks,
                         gfx::game_art::kCactus32, gfx::game_art::kCactus32Inks));
 
+namespace {
+// The window's icon: the header's own pixels are not in memory with the
+// program, so they are made again here from the same rows.
+constexpr app::Icon16 kWindowIcon = app::icon16(gfx::game_art::kCactus16, gfx::game_art::kCactus16Inks);
+} // namespace
+
 APP_MAIN(int, char **)
 {
-    static const gfx::Bitmap icon = {16, 16, app_info.icon16, app_info.clear};
+    static const gfx::Bitmap icon = {16, 16, kWindowIcon.pixels, app::kClearInk};
     return shell::open_window(&icon) != app::kNone ? 0 : 1;
 }
 #else
