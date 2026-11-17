@@ -109,6 +109,19 @@ public:
     bool take_interrupt();
     void on_interrupt(InterruptFn fn, void *context);
 
+    // For a device that takes bytes more slowly than a program writes them
+    // (a network connection). write() then hands the text over in pieces of
+    // at most kPiece bytes and calls `room` before each, with no lock held:
+    // it returns when the device can take a piece (twice kPiece bytes, since
+    // a line end becomes two). The device's sink itself never waits.
+    static constexpr size_t kPiece = 256;
+    using RoomFn = void (*)(void *context);
+    void on_room(RoomFn room, void *context)
+    {
+        room_fn_ = room;
+        room_context_ = context;
+    }
+
     bool hung_up() const { return hung_up_; }
     // True if read() can sleep until something is typed (the TTY was given
     // an Event). Without, a program must not wait for input in a loop.
@@ -188,6 +201,9 @@ private:
     int columns_ = 80, rows_ = 24;
 
     InterruptFn interrupt_fn_ = nullptr;
+    RoomFn room_fn_ = nullptr;
+    void *room_context_ = nullptr;
+    void write_piece(const char *data, size_t size);
     void *interrupt_context_ = nullptr;
 };
 

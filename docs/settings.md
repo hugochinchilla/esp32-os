@@ -46,6 +46,7 @@ Files so far:
 | `culebra.ini` | `[game]` | `best`: the best score. `speed`: slow, normal (default) or fast. Written when Culebra closes, if either changed |
 | `cactus.ini` | `[game]` | `size`: small (default), medium or large, the patch the next game starts with. Written when Cactus Patch closes, if it changed |
 | `network.ini` | `[wifi]` | `tx_power_dbm`: the radio's top transmit power, 2 to 20, default 2 (higher values put lines on the picture while connecting). `enabled`: false leaves the radio off, default true |
+| `network.ini` | `[telnet]` | `enabled`: true offers the command shell on port 23, with no password, to whoever connects (one session at a time). Default false. Read at start-up |
 
 A one-shot fast start for debugging: `tools/dbg.py reboot --fast`, or
 `tools/dbg.py boot fast-next` before flashing, makes the next start behave as

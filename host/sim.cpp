@@ -23,6 +23,7 @@
 #include "core/net/posix_tcp.hpp"
 #include "core/net/rfb.hpp"
 #include "core/net/services.hpp"
+#include "core/net/telnet.hpp"
 #include "core/net/web.hpp"
 #include "core/net/wifi.hpp"
 #include "core/proc/table.hpp"
@@ -99,7 +100,7 @@ private:
 
 } // namespace
 
-// ./sim [folder [vnc-port [web-port]]]: the folder, if given, is drive D:;
+// ./sim [folder [vnc-port [web-port [telnet-port]]]]: the folder, if given, is drive D:;
 // with a port, the remote screen (VNC) is offered on it, and with a second
 // one the viewer page for a browser (http://localhost:web-port/). Both to
 // this computer only.
@@ -238,7 +239,29 @@ int main(int argc, char **argv)
     static net::PosixWait sockets;
     static net::Services services(sockets, clock);
     services.add(remote);
-    if (vnc_port.listening() || web_port.listening()) {
+    // The command shell for `telnet localhost telnet-port`, as the board
+    // offers on port 23 when its settings file says so.
+    static net::PosixTcpListener telnet_port;
+    if (argc > 4) {
+        if (telnet_port.listen(atoi(argv[4]), true)) {
+            static host::ThreadLock telnet_lock;
+            static host::ThreadEvent telnet_typed, telnet_room, telnet_answered;
+            static host::ThreadTasks telnet_tasks;
+            static sh::QueueCall telnet_ui(queue, telnet_answered);
+            static net::TelnetKit kit;
+            kit.lock = &telnet_lock;
+            kit.typed = &telnet_typed;
+            kit.room = &telnet_room;
+            kit.tasks = &telnet_tasks;
+            const proc::Pid telnetd = proc::table().spawn_service("telnetd");
+            static net::Telnet telnet(shell::session_environment(&telnet_ui, telnetd), kit);
+            telnet.set_listener(&telnet_port);
+            services.add(telnet);
+        } else {
+            fprintf(stderr, "cannot listen on port %s\n", argv[4]);
+        }
+    }
+    if (vnc_port.listening() || web_port.listening() || telnet_port.listening()) {
         proc::table().spawn_service("inetd");
         std::thread([] {
             while (true) {

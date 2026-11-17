@@ -41,6 +41,7 @@
 #include "core/net/posix_tcp.hpp"
 #include "core/net/rfb.hpp"
 #include "core/net/services.hpp"
+#include "core/net/telnet.hpp"
 #include "core/net/web.hpp"
 #include "core/net/wifi.hpp"
 #include "core/proc/table.hpp"
@@ -775,11 +776,37 @@ void ui_task(void *)
     // started when there is nothing to listen on. Its stack is in internal
     // RAM, like every task's here; the Normal class, just under this task, so a
     // viewer that asks for a lot never holds the desktop back.
-    if (vnc_port.listening() || web_port.listening()) {
+    // Telnet: the command shell on port 23, with no password. Off unless
+    // C:\.config\network.ini says [telnet] enabled = true (the owner's
+    // choice, docs/DECISIONS.md). One session at a time, on a task of its
+    // own that exists while someone is connected.
+    static net::PosixTcpListener telnet_port;
+    net::Telnet *telnet = nullptr;
+    if (radio && network.get_bool("telnet", "enabled", false) && telnet_port.listen(net::Telnet::kPort)) {
+        static RtosMutex telnet_lock;
+        static RtosEvent telnet_typed, telnet_room, telnet_answered;
+        static RtosTasks telnet_tasks; // its own: start() is called from the services task
+        static sh::QueueCall telnet_ui(*s_queue, telnet_answered);
+        static net::TelnetKit telnet_kit;
+        telnet_kit.lock = &telnet_lock;
+        telnet_kit.typed = &telnet_typed;
+        telnet_kit.room = &telnet_room;
+        telnet_kit.tasks = &telnet_tasks;
+        const proc::Pid telnetd = proc::table().spawn_service("telnetd");
+        static EXT_RAM_BSS_ATTR net::Telnet service(shell::session_environment(&telnet_ui, telnetd), telnet_kit);
+        service.set_listener(&telnet_port);
+        telnet = &service;
+        ESP_LOGW(TAG, "telnet on port %d, no password", net::Telnet::kPort);
+    }
+
+    if (vnc_port.listening() || web_port.listening() || telnet != nullptr) {
         static net::PosixWait sockets;
         static net::Services services(sockets, clock);
         static ServicesTask context = {&services, &remote};
         services.add(remote);
+        if (telnet != nullptr) {
+            services.add(*telnet);
+        }
         s_remote_input = &remote_input;
         s_services = &services;
         if (xTaskCreate(services_task, "inetd", kServicesStack, &context, rtos_priority(ports::Priority::Normal), nullptr) ==

@@ -540,6 +540,21 @@ void open_terminal()
     discard(w); // not opened: the window manager was full
 }
 
+sh::Env session_environment(sh::UiCall *ui, proc::Pid owner)
+{
+    static SessionMemory memory;
+    memory.owner = owner;
+    sh::Env env;
+    env.storage = &storage();
+    env.procs = &proc::table();
+    env.system = &system_port();
+    env.ui = ui;
+    env.desktop = &desktop_for_sessions();
+    env.zone = network() != nullptr ? &network()->zone() : nullptr;
+    env.memory = &memory;
+    return env;
+}
+
 const tty::Screen *terminal_screen()
 {
     // The one the keyboard goes to, else any that is open.

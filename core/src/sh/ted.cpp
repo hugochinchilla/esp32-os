@@ -29,7 +29,9 @@ namespace {
 
 constexpr size_t kCapacity = 128 * 1024; // the largest file it opens
 constexpr int kTab = 4;                  // Tab puts spaces up to the next multiple
-constexpr int kMaxColumns = 160;
+constexpr int kMaxColumns = 160, kMaxRows = 64;
+// What it remembers of the terminal's screen, kept after the text.
+constexpr size_t kScreen = static_cast<size_t>(kMaxColumns) * kMaxRows;
 constexpr uint32_t kForever = 0xFFFFFFFF;
 // How long the rest of a key's escape sequence may take to arrive, ms.
 constexpr uint32_t kSequenceMs = 50;
@@ -63,7 +65,7 @@ struct Room {
 void take_room(void *context)
 {
     Room &r = *static_cast<Room *>(context);
-    r.block = r.memory->allocate(kCapacity);
+    r.block = r.memory->allocate(kCapacity + kScreen);
 }
 void give_room(void *context)
 {
@@ -427,16 +429,12 @@ bool Ted::load(const char *command, const char *typed)
 
 void Ted::say(const char *text) { snprintf(message_, sizeof message_, "%s", text); }
 
-// The terminal's size, within what the session's working room can remember
-// of it.
+// The terminal's size, within what ted has room to remember of it.
 void Ted::layout()
 {
     columns_ = tty_.columns() < 20 ? 20 : (tty_.columns() > kMaxColumns ? kMaxColumns : tty_.columns());
-    rows_ = tty_.rows() < 3 ? 3 : tty_.rows();
-    if (rows_ * columns_ > Session::kBufferSize) {
-        rows_ = Session::kBufferSize / columns_;
-    }
-    shown_ = s_.buffer();
+    rows_ = tty_.rows() < 3 ? 3 : (tty_.rows() > kMaxRows ? kMaxRows : tty_.rows());
+    shown_ = reinterpret_cast<char *>(text_) + kCapacity;
 }
 
 // One row of text as the screen shows it: `columns_` characters, spaces

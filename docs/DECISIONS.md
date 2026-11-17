@@ -1750,6 +1750,27 @@ Chosen by the agent under the owner's "dejo a tu criterio" of 2026-11-16.
 - In the Terminal window, Page Up and Page Down go to a program that has
   taken the keys (ted), and to the history otherwise.
 
+### Chosen for telnet (2026-11-17, to confirm)
+
+Backlog item 17. Journal: `docs/journal/2026-11-17-telnet.md`. Chosen by the
+agent under the owner's "dejo a tu criterio" of 2026-11-16; the default was
+put to the owner as a question and is his to turn round.
+
+- **Off until a settings file says otherwise**: `[telnet] enabled = true` in
+  `C:\.config\network.ini`, read at start-up. Port 23, no password (the
+  owner's rule: no users). Rejected for now: on by default, because a shell
+  that deletes files would appear on any network the board joins.
+- **One session at a time**; a second caller waits. Rejected: several, until
+  someone wants them.
+- **The socket work is on the services task and never waits; the session
+  runs on a task of its own**, started at connect and given back at leave.
+  Rejected: a task blocked on the socket.
+- **A program that writes faster than the network takes waits** (the TTY
+  asks for room before each 256-byte piece, `Tty::on_room`); typed bytes
+  keep arriving meanwhile, so Ctrl+C works. Rejected: dropping output.
+- The client is asked for character mode with our echo and for its window
+  size; nothing else.
+
 ### Chosen for background jobs (2026-11-17, to confirm)
 
 Backlog item 10. Journal: `docs/journal/2026-11-17-jobs.md`. Chosen by the

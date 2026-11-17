@@ -71,6 +71,22 @@ void Tty::echo(const char *latin1, size_t size)
 
 void Tty::write(const char *data, size_t size)
 {
+    if (room_fn_ == nullptr) {
+        write_piece(data, size);
+        return;
+    }
+    // A slow device: a piece at a time, waiting for room outside the lock,
+    // so what is typed (a Ctrl+C) still gets in between the pieces.
+    for (size_t done = 0; done < size;) {
+        const size_t piece = size - done < kPiece ? size - done : kPiece;
+        room_fn_(room_context_);
+        write_piece(data + done, piece);
+        done += piece;
+    }
+}
+
+void Tty::write_piece(const char *data, size_t size)
+{
     const Hold hold(lock_);
     if (interrupted_) {
         return; // see the header: nothing after the ^C until the program has taken notice

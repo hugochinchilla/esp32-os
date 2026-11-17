@@ -11,6 +11,7 @@
 #include "core/games/snake.hpp"
 #include "core/gfx/canvas.hpp"
 #include "core/ports.hpp"
+#include "core/sh/sh.hpp"
 #include "core/wm/wm.hpp"
 
 namespace tty {
@@ -133,6 +134,11 @@ struct SessionKit {
     bool in_use = false;
 };
 void set_session_kits(SessionKit *kits, int count);
+// What a command-shell session that is not a Terminal window works with (a
+// telnet session): the same drives, process table, desktop and time zone.
+// `ui` reaches the UI task from the session's own; large memory (ted's
+// text) is counted as `owner`'s. After start(). One such session at a time.
+sh::Env session_environment(sh::UiCall *ui, proc::Pid owner);
 // Tests: the grid of the Terminal in front (nullptr: none is open).
 const tty::Screen *terminal_screen();
 

@@ -31,6 +31,7 @@ set(CORE_SRCS
     src/net/deflate.cpp
     src/net/rfb.cpp
     src/net/services.cpp
+    src/net/telnet.cpp
     src/net/viewer_page.cpp
     src/net/web.cpp
     src/net/wifi.cpp

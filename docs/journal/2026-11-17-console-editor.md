@@ -60,8 +60,9 @@ confirm" in `docs/DECISIONS.md`.
 - *Chosen: it remembers what each row of the terminal shows and sends
   only the rows that changed.* A typed letter costs one line of text, which
   matters on a serial line (a full screen is 2,000 characters, a sixth of a
-  second at 115,200 baud). What it remembers fits the session's 2 KB (80 by
-  25 is 2,000).
+  second at 115,200 baud). What it remembers is kept after the text, in the
+  same block of memory (at first it was in the session's 2 KB, which is 80
+  by 25 and no more; changed with telnet, whose windows are bigger).
 - Not chosen: *redraw everything at every key.* Simplest; fine in the
   Terminal window, sluggish on a wire.
 - Not chosen: *insert and delete line sequences* for scrolling. Faster
