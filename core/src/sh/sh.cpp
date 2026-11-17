@@ -210,6 +210,7 @@ const Command kCommands[] = {
     {"start", &cmd_open, nullptr, ""},
     {"run", &cmd_run, "run [PROGRAM]", "Start a program; alone, list them"},
     {"edit", &cmd_edit, "edit [FILE...]", "Open the Editor, with a file if one is named"},
+    {"ted", &cmd_ted, "ted [FILE]", "Edit a text file here, in the terminal"},
     {"cls", &cmd_cls, "cls", "Clear the screen"},
     {"clear", &cmd_cls, nullptr, ""},
     {"help", &cmd_help, "help [NAME]", "Show this list, or how one command is written"},

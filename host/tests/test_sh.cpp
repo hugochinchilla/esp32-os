@@ -15,6 +15,7 @@
 #include "core/msg/queue.hpp"
 #include "core/net/wifi.hpp"
 #include "core/proc/table.hpp"
+#include "core/tty/screen.hpp"
 #include "core/sh/sh.hpp"
 #include "core/shell/boot.hpp"
 #include "core/tty/tty.hpp"
@@ -91,6 +92,7 @@ struct Machine {
         env.storage = &storage;
         env.procs = &procs;
         env.system = &system;
+        env.memory = &memory;
     }
     void file(const char *path, const std::string &text)
     {
@@ -116,6 +118,7 @@ struct Machine {
     fs::Storage storage;
     proc::Table procs;
     host::HostSystem system;
+    host::HostMemory memory;
     Capture screen;
     tty::Tty terminal;
     sh::Env env;
@@ -374,6 +377,8 @@ void test_desktop_commands()
     CHECK_TEXT(run(m, s, "open a.txt", 1), "open: there is no desktop here to open it on\n");
     CHECK_TEXT(run(m, s, "run editor", 1), "run: there is no desktop here to open it on\n");
     CHECK_TEXT(run(m, s, "edit", 1), "edit: there is no desktop here to open it on\n");
+    // ted takes the keys one by one: not on a terminal that cannot be waited on.
+    CHECK_TEXT(run(m, s, "ted a.txt", 1), "ted: it needs a terminal it can wait on for keys\n");
 
     FakeDesktop desktop;
     m.env.desktop = &desktop;
@@ -963,6 +968,142 @@ void test_session_on_a_thread()
     wait_for("desktop\n");
     terminal.input("\x03");
     wait_for("C:\\> ");
+
+    // ted, the console's text editor. What it writes is followed on a
+    // grid, as a terminal would show it: 24 rows here, the last its status.
+    {
+        static tty::Screen grid;
+        const auto see = [&](const char *until) {
+            const std::string seen = wait_for(until);
+            grid.write(seen.c_str());
+            return seen;
+        };
+        const auto row = [&](int r) {
+            std::string text(reinterpret_cast<const char *>(grid.row(r)), tty::Screen::kColumns);
+            while (!text.empty() && text.back() == ' ') {
+                text.pop_back();
+            }
+            return text;
+        };
+        const auto status = [&] { return row(23); };
+
+        // A file with CR LF line ends: shown as plain lines.
+        m.file("C:\\poem.txt", "uno\r\ndos\r\ntres\r\n");
+        terminal.input("ted poem.txt\r");
+        see("Ln 1, Col 1");
+        CHECK(row(0) == "uno" && row(1) == "dos" && row(2) == "tres" && row(3).empty());
+        CHECK(status().rfind(" poem.txt  ^S save  ^Q leave", 0) == 0);
+        // Typing goes in at the cursor, and the name gets its star.
+        terminal.input("X");
+        see("Ln 1, Col 2");
+        CHECK(row(0) == "Xuno" && status().rfind(" poem.txt*  ", 0) == 0);
+        // Down, End, a character; Enter and a word with a letter of Spain.
+        terminal.input("\x1b[B\x1b[F");
+        see("Ln 2, Col 4");
+        terminal.input("!");
+        see("Ln 2, Col 5");
+        CHECK(row(1) == "dos!");
+        terminal.input("\ra\xC3\xB1" "adido");
+        see("Ln 3, Col 8");
+        CHECK(row(2) == "a\xF1" "adido" && row(3) == "tres");
+        // Down keeps to the end of a shorter line; Ctrl+K cuts the line out.
+        terminal.input("\x1b[B");
+        see("Ln 4, Col 5");
+        terminal.input("\x0b");
+        see("Ln 4, Col 1");
+        CHECK(row(3).empty() && row(2) == "a\xF1" "adido");
+        // Ctrl+S saves, with the line ends the file came with.
+        terminal.input("\x13");
+        see("Saved");
+        CHECK(status().rfind(" poem.txt  Saved", 0) == 0);
+        CHECK(m.contents("C:\\poem.txt") == "Xuno\r\ndos!\r\na\xF1" "adido\r\n");
+        // Find, in either case; a second time finds nothing new and stays.
+        terminal.input("\x06");
+        see("Find: ");
+        terminal.input("DOS\r");
+        see("Ln 2, Col 1");
+        terminal.input("\x06zebra\r");
+        see("\"zebra\" is not in the text");
+        // Backspace at the start of a line joins it to the one above.
+        terminal.input("\x7f");
+        see("Ln 1, Col 5");
+        CHECK(row(0) == "Xunodos!" && row(1) == "a\xF1" "adido");
+        // Ctrl+Q with changes asks. Esc goes on editing; Ctrl+C does not
+        // throw the text away either; "n" leaves without saving.
+        terminal.input("\x11");
+        see("Save the changes?");
+        terminal.input("\x1b");
+        see("^S save");
+        terminal.input("\x03");
+        see("Ctrl+Q leaves");
+        CHECK(row(0) == "Xunodos!");
+        terminal.input("\x11");
+        see("Save the changes?");
+        terminal.input("n");
+        see("C:\\> ");
+        CHECK(m.contents("C:\\poem.txt") == "Xuno\r\ndos!\r\na\xF1" "adido\r\n");
+
+        // Without a name it asks for one when it saves.
+        terminal.input("ted\r");
+        see("(no name)");
+        terminal.input("hola\tya");
+        see("Ln 1, Col 11");
+        CHECK(row(0) == "hola    ya"); // Tab: spaces to the next fourth column
+        terminal.input("\x13");
+        see("Save as: ");
+        terminal.input("nuevo.txt\r");
+        see("Saved");
+        CHECK(status().rfind(" nuevo.txt  Saved", 0) == 0);
+        terminal.input("\x18"); // Ctrl+X leaves too; nothing to ask
+        see("C:\\> ");
+        CHECK(m.contents("C:\\nuevo.txt") == "hola    ya");
+
+        // A name that is not there yet: a new file, not made unless saved.
+        terminal.input("ted later.txt\r");
+        see("A new file");
+        terminal.input("\x11");
+        see("C:\\> ");
+        CHECK(!m.exists("C:\\later.txt"));
+        // "y" at the question saves and leaves.
+        terminal.input("ted later.txt\r");
+        see("A new file");
+        terminal.input("si\x11");
+        see("Save the changes?");
+        terminal.input("y");
+        see("C:\\> ");
+        CHECK(m.contents("C:\\later.txt") == "si");
+
+        // A file longer than the screen: Page Down moves 22 lines, and the
+        // text moves up to keep the cursor in view. Page Up goes back.
+        terminal.input("ted many.txt\r");
+        see("Ln 1, Col 1");
+        CHECK(row(0) == "row 1" && row(22) == "row 23");
+        terminal.input("\x1b[6~");
+        see("Ln 23, Col 1");
+        CHECK(row(0) == "row 1" && row(22) == "row 23");
+        terminal.input("\x1b[6~");
+        see("Ln 45, Col 1");
+        CHECK(row(0) == "row 23" && row(22) == "row 45");
+        terminal.input("\x1b[5~\x1b[5~\x1b[5~");
+        see("Ln 1, Col 1");
+        CHECK(row(0) == "row 1");
+        terminal.input("\x11");
+        see("C:\\> ");
+
+        // On a console with no desktop, edit is ted.
+        terminal.input("edit poem.txt\r");
+        see("Ln 1, Col 1");
+        CHECK(status().rfind(" poem.txt  ", 0) == 0);
+        terminal.input("\x11");
+        see("C:\\> ");
+
+        // What it will not open.
+        terminal.input("ted C:\\\rted a b\r");
+        const std::string said = see("ted: it edits one file at a time\nC:\\> ");
+        CHECK(said.find("ted: C:\\: it is a folder\n") != std::string::npos);
+        // The text's memory went back every time.
+        CHECK(m.memory.in_use() == 0);
+    }
 
     terminal.input("exit\r");
     session.join();

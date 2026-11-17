@@ -4,6 +4,7 @@
 // screen is what a full repaint would give.
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 
@@ -543,6 +544,53 @@ void test_terminal_on_a_task()
     // queue: one more round of the loop and the screen must be right.
     settle([] { return true; });
     CHECK(no_stale_pixels());
+
+    // ted in the window: a program that draws the whole screen from the
+    // session's task. Its text is the Terminal's memory while it is open.
+    // Page Up and Page Down are the program's while it has the keys, not
+    // the history's.
+    {
+        const proc::Pid pid = desktop.active()->owner();
+        const uint32_t before = proc::table().find(pid)->memory;
+        storage.write_file("C:\\ted.txt", "one\ntwo\n", 8);
+        enter("ted ted.txt");
+        CHECK(settle([] { return locked_row(0) == "one" && on_screen("Ln 1, Col 1"); }));
+        CHECK(proc::table().find(pid)->memory >= before + 128 * 1024);
+        key(wm::key::Down);
+        type("2: ");
+        CHECK(settle([] { return locked_row(1) == "2: two" && on_screen("ted.txt*") && on_screen("Ln 2, Col 4"); }));
+        // For the record (docs/look/ted/): CHINCHILLA_SHOT=file writes the
+        // screen as it is now, one byte a pixel.
+        if (const char *shot = getenv("CHINCHILLA_SHOT")) {
+            settle([] { return true; });
+            if (FILE *f = fopen(shot, "wb")) {
+                fwrite(display.pixels(), 1, 640 * 480, f);
+                fclose(f);
+            }
+        }
+        key(wm::key::PageDown);
+        CHECK(settle([] { return on_screen("Ln 3, Col 1"); }));
+        CHECK(shell::terminal_screen()->scrolled() == 0);
+        key(wm::key::PageUp);
+        // Up and down keep to the column the cursor last chose.
+        CHECK(settle([] { return on_screen("Ln 1, Col 4"); }));
+        settle([] { return true; });
+        CHECK(no_stale_pixels());
+        key(static_cast<uint16_t>(wm::key::A + ('s' - 'a')), wm::key::LeftCtrl);
+        CHECK(settle([] { return on_screen("Saved"); }));
+        key(static_cast<uint16_t>(wm::key::A + ('q' - 'a')), wm::key::LeftCtrl);
+        CHECK(settle([] { return locked_row(0) == "C:\\>"; })); // a clean screen and the prompt
+        char back[32] = {};
+        size_t size = 0;
+        CHECK(storage.read_file("C:\\ted.txt", back, sizeof back, size) == fs::FsError::Ok &&
+              std::string(back, size) == "one\n2: two\n");
+        CHECK(proc::table().find(pid)->memory == before);
+        // Back at the prompt the keys are the history's again.
+        enter("echo after ted");
+        CHECK(settle([] { return answered("after ted"); }));
+        settle([] { return true; });
+        CHECK(no_stale_pixels());
+    }
 
     // exit: the session ends, its task returns, the window goes and the
     // process with it; the kit and the memory are back.

@@ -43,6 +43,7 @@ set(CORE_SRCS
     src/sh/path.cpp
     src/sh/sh.cpp
     src/sh/system.cpp
+    src/sh/ted.cpp
     src/sys/crash.cpp
     src/shell/apps.cpp
     src/shell/boot.cpp

@@ -47,7 +47,7 @@ board or the merge), `done`.
 | 20 | A defined set of OS calls, moved to app by app | L | 2 | | todo |
 | 21 | Split the window manager into window server and desktop shell. The taskbar becomes a process that restarts when killed | L | 18, 20 | Yes | todo |
 | | **Later** | | | | |
-| 22 | Console text editor | M | 13 | | todo |
+| 22 | Console text editor | M | 13 | | on a branch (`claude/project-thread-8q7ksu`): `ted`; PC tests pass, firmware compiles, not run on the board. [Journal](journal/2026-11-17-console-editor.md) |
 | 23 | Pipes and redirection | M | 13 | | on a branch (`claude/project-thread-8q7ksu`), PC tests pass, firmware compiles; not run on the board. [Journal](journal/2026-11-17-pipes.md) |
 | 24 | File dates | S to M | | Yes | on a branch (`claude/project-thread-8q7ksu`): PC tests pass, firmware compiles, not run on the board. A Details view in the File manager is left. [Journal](journal/2026-11-17-file-dates.md) |
 | 25 | Updates over Wi-Fi | M | | Yes | todo |

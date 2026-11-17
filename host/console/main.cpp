@@ -100,6 +100,8 @@ int main(int argc, char **argv)
     env.storage = &storage;
     env.procs = &procs; // nothing else touches it here, so the session calls straight in
     env.system = &system;
+    static host::HostMemory memory; // ted's text
+    env.memory = &memory;
     static sh::Session session(terminal, env);
     std::atomic<bool> over{false};
     std::thread task([&] {
