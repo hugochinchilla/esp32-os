@@ -256,6 +256,10 @@ picture every time, for 3.5 to 3.9 s; the video signal is back 0.76 s after
 the reset and the display needs about 3 s more. So the handover from the
 BIOS to the OS is a blank of about 3.8 s that ends on the desktop, and a
 splash would have to stay about 4 s to be seen.
+The bootloader hook was confirmed by reading ESP-IDF v5.5's source (not
+compiled): our own copy of `bootloader_start.c` starts an app of subtype
+`test`, the BIOS, unless the reserved RTC memory
+(`CONFIG_BOOTLOADER_CUSTOM_RESERVE_RTC`) says it has just run.
 
 ### BIOS screen font (2026-11-17)
 

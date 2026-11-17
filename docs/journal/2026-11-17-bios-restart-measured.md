@@ -68,11 +68,37 @@ A normal restart: the self-test takes 11,259 ms, the desktop at about 11.6 s.
 - What the screen showed before the restart (desktop, white) made no
   difference to the blank.
 
+## The bootloader hook, read in ESP-IDF's source
+
+The discussion recommended a small hook in the bootloader, "from memory, to
+be checked against v5.5". Checked by reading the `release/v5.5` source on
+GitHub; nothing was compiled.
+
+- `components/bootloader/subproject/main/bootloader_start.c` chooses the
+  partition in `selected_boot_partition()`, which ends with a comment
+  "Customer implementation" at the place where a project is meant to put its
+  own rule. It already knows a third kind of app besides the factory app and
+  the update slots: the `test` subtype, started by returning
+  `TEST_APP_INDEX` (today only when a pin is held, with
+  `CONFIG_BOOTLOADER_APP_TEST`).
+- A project replaces that file with its own copy in a `bootloader_components`
+  folder (`examples/custom_bootloader/bootloader_override`).
+- `CONFIG_BOOTLOADER_CUSTOM_RESERVE_RTC` reserves a few bytes of RTC memory
+  at a fixed address, "valid when rebooted, except for power loss", that the
+  bootloader and the app can both read (`rtc_retain_mem_t`). It also keeps a
+  count of restarts, which is what a boot loop guard needs.
+
+So the plan holds: the BIOS is an app of subtype `test` in its own
+partition; our copy of `bootloader_start.c` returns `TEST_APP_INDEX` unless
+the reserved RTC memory says the BIOS has just run, and otherwise leaves the
+choice between the update slots as it is. Whether the reset after flashing
+clears this memory as it cleared our own RTC variable does not matter here:
+a cleared flag means "run the BIOS", which is right after a flash.
+
 ## What is left
 
 - The owner's answer on whether a blank of about 3.8 s is acceptable.
-- Check against ESP-IDF v5.5 that a bootloader hook can choose the partition
-  from a flag in RTC memory.
+- The hook is only read, not built: compile it, and try it on the board.
 - The clips are in the laptop session's scratchpad, for the film:
   `bios-desktop-fast-1..3.mkv`, `bios-desktop-normal-1..3.mkv`,
   `bios-white-fast-1.mkv`, `bios-black-fast-1.mkv`.
