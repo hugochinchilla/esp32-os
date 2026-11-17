@@ -40,8 +40,10 @@ constexpr uint32_t kForever = 0xFFFFFFFF;
 class Runner {
 public:
     static constexpr int kMaxTasks = 8;
-    // ponytail: one size for every program; to be measured on the board.
-    static constexpr uint32_t kStackBytes = 8 * 1024;
+    // The owner's choice (2026-11-17), after the board saw Culebra use at
+    // most about 2.8 KB. ponytail: one size for every program; a program
+    // that needs more will need a size of its own in the program table.
+    static constexpr uint32_t kStackBytes = 4 * 1024;
     // How long the machine waits for a program before it goes on without
     // it (set_limit; the board and the simulator use it).
     static constexpr uint32_t kLimitMs = 2000;

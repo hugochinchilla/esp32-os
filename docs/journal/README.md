@@ -109,4 +109,8 @@ Plain words, real numbers, no summaries of summaries.
 | 2026-11-17 | [The first run of the Pages workflow](2026-11-17-pages-first-run.md) | It failed on a warning only Clang gives, in code written overnight with GCC; the browser build no longer treats the core's warnings as errors |
 | 2026-11-17 | [Windows and controls by number](2026-11-17-ui-handles.md) | Backlog item 37: the owner chose windows and widgets wholly by number. What item 27 expects of windows, his question about a versioned DLL, the first cut of `os::ui` and Shut Down rewritten on it, the same to the pixel |
 | 2026-11-17 | [Pages was not turned on](2026-11-17-pages-not-enabled.md) | The page built and still was not published: the repository's Pages setting, which no workflow can change, and the README's "Try it in the browser" link |
+<<<<<<< HEAD
 | 2026-11-17 | [Programs on tasks of their own](2026-11-17-program-tasks.md) | Backlog item 26, first step: the question of how a program paints from another task, the hand-over that waits (as Win16's SendMessage), the one way into a program's code, and Culebra as the first program with a task. What it does not do yet: the limit on the wait |
+=======
+| 2026-11-17 | [A BIOS before the OS: the discussion so far](2026-11-17-bios-stage.md) | The owner's idea of a separate BIOS stage that runs the self-test and starts the OS partition: the three places it could live, what it costs in flash, time and a blank monitor, plain text on the serial port, a text screen with the mascot on top, five fonts drawn and Spleen chosen, and the owner's choice of a partition of its own once a restart has been measured. Five details still open; nothing built |
+>>>>>>> origin/main

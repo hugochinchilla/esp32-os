@@ -199,3 +199,13 @@ closing its window ends it, with all its memory back. PC gate passes
 (42 of 42, pictures, OS-call check). The limit is switched on in the
 firmware and the simulator; the tests that do not ask for it wait for
 ever, as before.
+
+## The owner's answer on the cost (2026-11-17)
+
+On the board thread's card (merge as is; merge with a 4 KB stack; not
+yet) the owner chose **"Merge with a 4 KB stack"**, as that thread
+reported it here. The 7 % while playing is accepted. `kStackBytes` is
+4 KB: the board saw at most about 2.8 KB used, which leaves about
+1.2 KB; the board thread checks the headroom in the deepest paths (the
+hang and the three ways of ending it) before merging. One size for
+every program still: a program that needs more will need its own.

@@ -236,6 +236,31 @@ Decided by the owner; the story is in
   than the dialog frees, and the widgets assume one task); waiting for
   loadable programs (item 27) before changing how dialogs are written.
 
+### A BIOS stage in its own partition (2026-11-17)
+
+Decided by the owner: the self-test moves to a BIOS, a small firmware of its
+own in its own app partition, which ends by restarting into the OS; init
+then shows the splash. First a restart is measured on the board (what the
+monitor does, how long a second start takes), with no change to the flash.
+Recommended and to be checked against ESP-IDF v5.5: a small hook in the
+bootloader starts the BIOS unless a flag in RTC memory says the BIOS has
+just run. Not chosen: one image with two logical stages (nothing would
+really be separate); the BIOS inside the bootloader (about 32 KB, no
+drivers, no PSRAM). Nothing is built. The details still open are under
+Still open; the whole conversation is in
+`docs/journal/2026-11-17-bios-stage.md`.
+
+### BIOS screen font (2026-11-17)
+
+Decided by the owner: the BIOS's screen is a true text screen, 80 by 30 characters of 8x16 on
+640x480, in Spleen 8x16 (already in the repo and the firmware), chosen from
+five free fonts drawn in `docs/look/bios-text/`. The mascot sits on top as a
+picture over cells left empty, so the serial port can mirror the text
+exactly. That the text screen replaces the earlier drawing
+(`docs/look/boot/boot-b-self-test.png`) is the agent's reading of the font
+choice, to be confirmed. Not chosen: Terminus, Unscii (the agent's
+recommendation), Tamzen, GNU Unifont.
+
 ### Watchdog, crash record and error screen (2026-11-17)
 
 Backlog item 7. Chosen by the agent under the owner's go-ahead to work
@@ -362,6 +387,7 @@ and reasons are in `docs/journal/2026-11-17-program-lifecycle.md`.
 | A PC build of the desktop for testing | Yes, no | Decided: yes. See Decided |
 | How the PC build shows the screen | SDL window, image files only | Open |
 | Clock chip | DS3231 module, another I2C chip | DS3231 |
+| Details of the BIOS stage (`docs/journal/2026-11-17-bios-stage.md`) | How the app area is split (a small BIOS and two smaller update slots, or a larger BIOS and one OS slot); the blank monitor at the handover; settings in NVS or `boot.ini`; an OS image over serial; who shows the crash screen | Small BIOS and two slots; the splash covers the blank; NVS; yes, later; the BIOS |
 
 ## Ideas kept for later
 
@@ -2184,8 +2210,12 @@ The rest is the agent's, to confirm:
   caller is. Rejected: letting the two wait for each other.
 - Which programs: a mark in the program table, one program at a time.
   Culebra first.
-- 8 KB of stack from internal memory, counted as the program's; to be
-  measured.
+- **4 KB of stack** from internal memory, counted as the program's, and
+  **the cost is accepted** (the owner's choice on the board thread's
+  card, 2026-11-17: "Merge with a 4 KB stack"; merging as it was with
+  8 KB, and not yet, were the others). Measured on the board: about 7 %
+  more processor time while playing, and at most about 2.8 KB of stack
+  used.
 - The limit is two seconds. A program that has not answered by then is
   late: calls for it are dropped until it has finished, what it paints
   is grey, the Task Manager says "Not responding", and closing its
