@@ -121,3 +121,24 @@ and a phone were not tried.
 - The check on the board, from the owner's own browser.
 - Ctrl+W, Ctrl+T and Ctrl+N still close and open the browser's tabs
   instead of reaching the board. No program on the board uses them today.
+
+
+## On the board (added by the board thread, 2026-11-17)
+
+PR 34 at 37f4ac3 (only docs differ from 83311b2) with main 9195c4c merged
+in; only the journal index conflicted, and item 45 does not clash with the
+Terminal split's 44. PC tests 42 of 42, the first ESP32 build (0x165900),
+flashed by cable, the app only. The page grew from 9,376 to 10,919 bytes.
+
+Driven with the laptop's headless Chromium (a throwaway profile, not the
+owner's browser), real mouse clicks on the buttons through the DevTools
+protocol, with Culebra and an Editor open on the board:
+
+1. The page shows the four buttons: Ctrl+Alt+Del, Alt+Tab, Alt+F4, Start.
+2. Alt+Tab: the focus went from the Editor to Culebra.
+3. Alt+F4: Culebra closed, the Editor stayed.
+4. Ctrl+Alt+Del: the Task Manager opened.
+5. Start: the Start menu opened; a second press closed it.
+6. Then "a" and "b" typed in the page arrived in the Editor as plain "ab":
+   no modifier was left held down after the buttons.
+7. `dbg.py misses`: none. VNC and telnet answered.
