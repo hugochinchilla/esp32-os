@@ -160,6 +160,7 @@ void Wm::add(Window &w)
     if (count_ == kMaxWindows || w.wm_ != nullptr) {
         return;
     }
+    keep(w); // open again before it was disposed of
     w.wm_ = this;
     w.id_ = next_id_++;
     w.owner_ = current_pid();
@@ -228,6 +229,64 @@ void Wm::close(Window &w)
             procs_->set_state(w.owner_, proc::State::Exiting);
         }
     }
+    // A window that lives only while open is destroyed at the safe point,
+    // unless closed() has opened it again.
+    discard(w);
+}
+
+void Wm::discard(Window &w)
+{
+    if (w.dispose_ != nullptr && w.wm_ == nullptr && !w.waiting_dispose_) {
+        w.waiting_dispose_ = true;
+        w.next_closed_ = closed_;
+        closed_ = &w;
+    }
+}
+
+// Takes a window off the list of those waiting to be destroyed.
+void Wm::keep(Window &w)
+{
+    if (!w.waiting_dispose_) {
+        return;
+    }
+    for (Window **at = &closed_; *at != nullptr; at = &(*at)->next_closed_) {
+        if (*at == &w) {
+            *at = w.next_closed_;
+            break;
+        }
+    }
+    w.next_closed_ = nullptr;
+    w.waiting_dispose_ = false;
+}
+
+// Destroys the closed windows that asked for it (Window::set_dispose). Only
+// from the safe point. Nothing here may still point at one afterwards: the
+// dialogs that belonged to it are closed first, a free-standing menu of its
+// process goes, and so do timers that would call back into it.
+void Wm::dispose_closed()
+{
+    while (closed_ != nullptr) {
+        Window &w = *closed_;
+        keep(w);
+        for (int z = count_ - 1; z >= 0; z--) {
+            if (stack_[z]->modal_owner_ == &w) {
+                close(*stack_[z]); // its closed() runs while `w` still exists
+                z = count_;
+            }
+        }
+        if (w.wm_ != nullptr || w.waiting_dispose_) {
+            continue; // opened again by one of them, or closed again: later
+        }
+        if (popup_count_ > 0 && !start_open_ && menu_window_ == nullptr && popups_[0].owner == w.owner_) {
+            close_menus();
+        }
+        for (Timer &t : timers_) {
+            if (t.id != 0 && t.context == &w) {
+                t.id = 0;
+            }
+        }
+        w.dispose_(w);
+    }
 }
 
 /* ---- Processes ----------------------------------------------------------- */
@@ -282,6 +341,7 @@ Window *Wm::main_window_of(proc::Pid pid) const
 void Wm::reap()
 {
     if (procs_ == nullptr) {
+        dispose_closed();
         return;
     }
     const bool signalled = deliver_signals();
@@ -292,6 +352,7 @@ void Wm::reap()
         }
         end_process(p.pid);
     }
+    dispose_closed();
     const bool restarted = procs_->restart_due() != 0;
     if (signalled || restarted) {
         update(); // the event's own painting is done: show what changed
@@ -358,8 +419,8 @@ void Wm::ask_to_close(proc::Pid pid)
 // KILL, and also how a window program leaves once its last window is gone.
 // Windows go from the top of the stack down, so dialogs go before the
 // windows they belong to. A window is closed without close_requested(), but
-// closed() still runs: the window objects are used again by the next launch
-// and must be told. A program that opens a window from there has it closed
+// closed() still runs: a program tidies up there (its timers, its settings).
+// A program that opens a window from there has it closed
 // too; the bound keeps a stubborn one from holding the desktop.
 void Wm::end_process(proc::Pid pid)
 {

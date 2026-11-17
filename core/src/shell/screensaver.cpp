@@ -109,19 +109,13 @@ public:
         add(cancel_);
         ok_.set_default(true);
         set_default(&ok_);
-    }
-
-    void show()
-    {
-        if (!open()) {
-            char text[8];
-            snprintf(text, sizeof(text), "%d", g_minutes);
-            wait_.set(text);
-            list_.select(g_choice);
-            set_frame(centred(shell::manager(), frame().w, frame().h));
-            set_focus(&list_);
-        }
-        shell::show(*this);
+        // What is in force now, to start from.
+        char text[8];
+        snprintf(text, sizeof(text), "%d", g_minutes);
+        wait_.set(text);
+        list_.select(g_choice);
+        set_frame(centred(shell::manager(), frame().w, frame().h));
+        set_focus(&list_);
     }
 
     void paint(gfx::Canvas &c) override
@@ -196,18 +190,12 @@ private:
     wm::Button ok_, cancel_;
 };
 
-SaverDialog &dialog()
-{
-    static SaverDialog d;
-    return d;
-}
-
 } // namespace
 
 void screen_saver_dialog()
 {
     const AsProgram as("Screen Saver");
-    dialog().show();
+    open_one<SaverDialog>("Screen Saver");
 }
 
 void install_screen_saver()

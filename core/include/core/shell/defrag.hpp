@@ -52,6 +52,13 @@ private:
     void touch(int cell);
     int find(int file, int piece) const;
 
+    // scramble()'s working list: runs of blocks to lay out.
+    struct Piece {
+        uint8_t file; // 0: free blocks
+        uint8_t length;
+        uint16_t first;
+    };
+    Piece pieces_[kCells];
     uint8_t owner_[kCells];
     uint16_t piece_[kCells]; // which block of its file this is
     Mark mark_[kCells];

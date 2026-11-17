@@ -220,6 +220,14 @@ public:
     // Closes the window (the manager forgets it).
     void close();
 
+    // For a window that lives only while it is open (its program made it
+    // when it opened): once it has closed, the manager calls `dispose` at
+    // the next safe point, the end of the event or tick, when none of the
+    // window's code is running any more. dispose destroys the object and
+    // gives its memory back. A window opened again before then is kept.
+    using DisposeFn = void (*)(Window &w);
+    void set_dispose(DisposeFn dispose) { dispose_ = dispose; }
+
     // Paints the client area, (0, 0) at its top left. The default fills it
     // with the face colour and paints the widgets.
     virtual void paint(gfx::Canvas &c);
@@ -280,6 +288,9 @@ private:
     Widget *captured_ = nullptr;
     Widget *focus_ = nullptr;
     Widget *default_ = nullptr;
+    DisposeFn dispose_ = nullptr;
+    Window *next_closed_ = nullptr; // closed and waiting for dispose_
+    bool waiting_dispose_ = false;
 };
 
 } // namespace wm
