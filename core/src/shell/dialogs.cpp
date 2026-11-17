@@ -2,10 +2,10 @@
 #include <cstdio>
 #include <cstring>
 
+#include "core/app/app.hpp"
 #include "core/gfx/art.hpp"
 #include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
-#include "core/wm/widgets.hpp"
 #include "internal.hpp"
 #include "listing.hpp"
 
@@ -13,102 +13,66 @@ namespace shell {
 
 namespace {
 
-const char *const kDownGlyph[] = {"XXXXXXX", " XXXXX ", "  XXX  ", "   X   "};
-
-// A box showing a value with a drop-down arrow, as the 98 "Look in" box.
-class DropDown : public wm::Widget {
-public:
-    using Callback = void (*)(void *context);
-    DropDown(const gfx::Rect &r, Callback on_click, void *context)
-        : Widget(r), on_click_(on_click), context_(context)
-    {
-    }
-    void set_text(const char *text)
-    {
-        text_ = text;
-        invalidate();
-    }
-    void paint(gfx::Canvas &c) override
-    {
-        const gfx::Rect r = {0, 0, rect.w, rect.h};
-        c.sunken(r);
-        c.fill(r.inset(2), gfx::kWhite);
-        gfx::Canvas inner = c.sub({2, 2, rect.w - 4 - 16, rect.h - 4});
-        inner.blit(gfx::folder_icon_16(), 2, (rect.h - 4 - 16) / 2);
-        inner.text(22, (rect.h - 4 - 12) / 2, text_, gfx::kBlack);
-        const gfx::Rect b = {rect.w - 2 - 16, 2, 16, rect.h - 4};
-        c.button(b, held_ ? gfx::ButtonLook::Pressed : gfx::ButtonLook::Raised);
-        c.pattern(b.x + 4 + held_, b.y + (b.h - 4) / 2 + held_, kDownGlyph, 4, gfx::kBlack);
-    }
-    bool wants_mouse() const override { return true; }
-    void mouse(const wm::MouseMsg &m) override
-    {
-        if (m.kind == wm::MouseKind::Down) {
-            held_ = 1;
-            invalidate();
-            on_click_(context_);
-        } else if (m.kind == wm::MouseKind::Up) {
-            held_ = 0;
-            invalidate();
-        }
-    }
-
-private:
-    const char *text_ = "";
-    Callback on_click_;
-    void *context_;
-    int held_ = 0;
-};
-
 /* ---- Open and Save As ---------------------------------------------------------- */
 
-class FileDialog : public wm::Window {
+class FileDialog : public app::Window {
 public:
-    FileDialog()
-        : Window("Open", {0, 0, 428, 284}, nullptr),
-          look_label_({8, 12, 56, 14}, "Look &in:"),
-          look_({64, 8, 270, 22}, &FileDialog::look_in, this),
-          up_({340, 8, 72, 22}, "&Up", &FileDialog::up, this),
-          list_({8, 38, 404, 150}, nullptr, 0, &FileDialog::selected, this),
-          name_label_({8, 202, 70, 14}, "File &name:"),
-          name_({80, 198, 244, 21}),
-          ok_({332, 196, 80, 23}, "&Open", &FileDialog::ok, this),
-          cancel_({332, 224, 80, 23}, "Cancel", &FileDialog::cancel, this)
+    FileDialog(bool save, const char *folder, const char *name, PathFn chosen, void *context)
+        : save_(save), chosen_(chosen), context_(context),
+          look_label_(label({8, 12, 56, 14}, "Look &in:")),
+          look_(drop_down(&gfx::folder_icon_16(), {64, 8, 270, 22})),
+          up_(button({340, 8, 72, 22}, "&Up")),
+          list_(list({8, 38, 404, 150}, nullptr, 0)),
+          name_label_(label({8, 202, 70, 14}, "File &name:")),
+          name_(text_field({80, 198, 244, 21}, name != nullptr ? name : "")),
+          ok_(button({332, 196, 80, 23}, save ? "&Save" : "&Open")),
+          cancel_(button({332, 224, 80, 23}, "Cancel"))
     {
-        set_dialog(true);
-        add(look_label_);
-        add(look_);
-        add(up_);
-        add(list_);
-        add(name_label_);
-        add(name_);
-        add(ok_);
-        add(cancel_);
-        list_.set_icons(&FileDialog::icon);
-        list_.set_on_activate(&FileDialog::activated);
-        ok_.set_default(true);
-        set_default(&ok_);
+        set_default(ok_);
+        snprintf(folder_, sizeof(folder_), "%s", folder != nullptr && folder[0] ? folder : "C:\\");
+        refresh();
+        set_focus(name_);
+        name_.select_all();
     }
 
-    void show(bool save, wm::Window *owner, const char *folder, const char *name, PathFn chosen,
-              void *context)
+    void command(app::Control which) override
     {
-        if (open()) {
+        if (which == ok_) {
+            try_name();
+        } else if (which == cancel_) {
             close();
+        } else if (which == up_) {
+            go_up();
+        } else if (which == look_) {
+            look_in();
         }
-        save_ = save;
-        chosen_ = chosen;
-        context_ = context;
-        set_title(save ? "Save As" : "Open");
-        ok_.set_label(save ? "&Save" : "&Open");
-        set_modal(owner);
-        snprintf(folder_, sizeof(folder_), "%s", folder != nullptr && folder[0] ? folder : "C:\\");
-        name_.set(name != nullptr ? name : "");
-        refresh();
-        set_frame(os::centred(frame().w, frame().h));
-        os::show(*this);
-        set_focus(&name_);
-        name_.select_all();
+    }
+
+    // A row was picked: a file's name goes to the field.
+    void changed(app::Control) override
+    {
+        const int i = list_.selected();
+        if (i >= 0 && !listing_.item(i).folder) {
+            name_.set(listing_.item(i).name);
+        }
+    }
+
+    // Enter or a double click on a row: into the folder, or that file.
+    bool chosen(app::Control) override
+    {
+        const int i = list_.selected();
+        if (i < 0) {
+            return true;
+        }
+        char path[fs::kMaxPath];
+        fs::path::join(folder_, listing_.item(i).name, path, sizeof(path));
+        if (listing_.item(i).folder) {
+            go_to(path);
+        } else {
+            name_.set(listing_.item(i).name);
+            try_name();
+        }
+        return true;
     }
 
     bool key(const wm::KeyMsg &k) override
@@ -117,11 +81,11 @@ public:
             close();
             return true;
         }
-        if (k.pressed && k.usage == wm::key::Backspace && focus() == &list_) {
+        if (k.pressed && k.usage == wm::key::Backspace && focus() == list_) {
             go_up();
             return true;
         }
-        return Window::key(k);
+        return false;
     }
 
 private:
@@ -132,7 +96,10 @@ private:
             snprintf(folder_, sizeof(folder_), "C:\\"); // gone: back to the start
         }
         listing_.read(folder_);
-        list_.set_items(listing_.names(), listing_.count());
+        for (int i = 0; i < listing_.count(); i++) {
+            icons_[i] = listing_.icon(i, false);
+        }
+        list_.set_items(listing_.names(), listing_.count(), icons_);
         look_.set_text(folder_);
     }
 
@@ -212,66 +179,30 @@ private:
         }
     }
 
-    static void ok(wm::Button &, void *context) { static_cast<FileDialog *>(context)->try_name(); }
-    static void cancel(wm::Button &, void *context) { static_cast<FileDialog *>(context)->close(); }
-    static void up(wm::Button &, void *context) { static_cast<FileDialog *>(context)->go_up(); }
-
-    static void selected(wm::ListBox &list, void *context)
-    {
-        auto *d = static_cast<FileDialog *>(context);
-        const int i = list.selected();
-        if (i >= 0 && !d->listing_.item(i).folder) {
-            d->name_.set(d->listing_.item(i).name);
-        }
-    }
-
-    static void activated(wm::ListBox &list, void *context)
-    {
-        auto *d = static_cast<FileDialog *>(context);
-        const int i = list.selected();
-        if (i < 0) {
-            return;
-        }
-        char path[fs::kMaxPath];
-        fs::path::join(d->folder_, d->listing_.item(i).name, path, sizeof(path));
-        if (d->listing_.item(i).folder) {
-            d->go_to(path);
-        } else {
-            d->name_.set(d->listing_.item(i).name);
-            d->try_name();
-        }
-    }
-
-    static const gfx::Bitmap *icon(int index, void *context)
-    {
-        return static_cast<FileDialog *>(context)->listing_.icon(index, false);
-    }
-
     // The Look in list: the drives, then each folder down to this one.
-    static void look_in(void *context)
+    void look_in()
     {
-        auto *d = static_cast<FileDialog *>(context);
         int n = 0;
         char letters[fs::Storage::kMaxDrives];
         const int drives = os::file::drives(letters, fs::Storage::kMaxDrives);
         for (int i = 0; i < drives && n < kLookMax; i++) {
-            snprintf(d->look_paths_[n], sizeof(d->look_paths_[n]), "%c:\\", letters[i]);
-            snprintf(d->look_labels_[n], sizeof(d->look_labels_[n]), "%c:\\", letters[i]);
+            snprintf(look_paths_[n], sizeof(look_paths_[n]), "%c:\\", letters[i]);
+            snprintf(look_labels_[n], sizeof(look_labels_[n]), "%c:\\", letters[i]);
             n++;
-            if (letters[i] != fs::path::drive(d->folder_)) {
+            if (letters[i] != fs::path::drive(folder_)) {
                 continue;
             }
             // The folders of the current path, indented.
-            const char *rel = fs::path::relative(d->folder_);
+            const char *rel = fs::path::relative(folder_);
             int depth = 1;
             for (const char *p = rel; *p != 0 && n < kLookMax;) {
                 const char *end = p;
                 while (*end != 0 && *end != '\\') {
                     end++;
                 }
-                const int upto = static_cast<int>(end - d->folder_);
-                snprintf(d->look_paths_[n], sizeof(d->look_paths_[n]), "%.*s", upto, d->folder_);
-                snprintf(d->look_labels_[n], sizeof(d->look_labels_[n]), "%*s%.*s", depth * 2, "",
+                const int upto = static_cast<int>(end - folder_);
+                snprintf(look_paths_[n], sizeof(look_paths_[n]), "%.*s", upto, folder_);
+                snprintf(look_labels_[n], sizeof(look_labels_[n]), "%*s%.*s", depth * 2, "",
                          static_cast<int>(end - p), p);
                 n++;
                 depth++;
@@ -279,13 +210,11 @@ private:
             }
         }
         for (int i = 0; i < n; i++) {
-            d->look_items_[i] = {d->look_labels_[i], &FileDialog::look_chosen, &d->look_context_[i], nullptr,
-                                 nullptr, 0};
-            d->look_context_[i] = {d, i};
+            look_items_[i] = {look_labels_[i], &FileDialog::look_chosen, &look_context_[i], nullptr, nullptr, 0};
+            look_context_[i] = {this, i};
         }
-        d->look_menu_.count = n;
-        const gfx::Rect c = d->client();
-        os::open_menu(d->look_menu_, c.x + d->look_.rect.x, c.y + d->look_.rect.bottom());
+        look_menu_.count = n;
+        look_.menu(look_menu_);
     }
 
     struct LookContext {
@@ -300,66 +229,62 @@ private:
     }
 
     static constexpr int kLookMax = 8;
-    bool save_ = false;
-    PathFn chosen_ = nullptr;
-    void *context_ = nullptr;
+    bool save_;
+    PathFn chosen_;
+    void *context_;
     char folder_[fs::kMaxPath] = "C:\\";
     char pending_[fs::kMaxPath] = "";
     char result_[fs::kMaxPath] = "";
     Listing listing_;
+    const gfx::Bitmap *icons_[Listing::kMax] = {};
     char look_paths_[kLookMax][fs::kMaxPath];
     char look_labels_[kLookMax][48];
     LookContext look_context_[kLookMax];
     wm::MenuItem look_items_[kLookMax];
     wm::Menu look_menu_ = {look_items_, 0};
 
-    wm::Label look_label_;
-    DropDown look_;
-    wm::Button up_;
-    wm::ListBox list_;
-    wm::Label name_label_;
-    wm::TextField name_;
-    wm::Button ok_, cancel_;
+    app::Label look_label_;
+    app::DropDown look_;
+    app::Button up_;
+    app::ListBox list_;
+    app::Label name_label_;
+    app::TextField name_;
+    app::Button ok_, cancel_;
 };
 
 /* ---- Input dialog ---------------------------------------------------------------- */
 
-class InputDialog : public wm::Window {
+class InputDialog : public app::Window {
 public:
-    InputDialog()
-        : Window("", {0, 0, 320, 120}, nullptr),
-          prompt_({8, 10, 296, 14}, ""),
-          field_({8, 30, 296, 21}),
-          ok_({148, 62, 75, 23}, "OK", &InputDialog::ok, this),
-          cancel_({229, 62, 75, 23}, "Cancel", &InputDialog::cancel, this)
+    InputDialog(const char *title, const char *prompt, const char *initial, TextFn done, void *context)
+        : done_(done), context_(context),
+          prompt_(label({8, 10, 296, 14}, prompt_text_)),
+          field_(text_field({8, 30, 296, 21}, initial)),
+          ok_(button({148, 62, 75, 23}, "OK")),
+          cancel_(button({229, 62, 75, 23}, "Cancel"))
     {
-        set_dialog(true);
-        add(prompt_);
-        add(field_);
-        add(ok_);
-        add(cancel_);
-        ok_.set_default(true);
-        set_default(&ok_);
-    }
-
-    void show(wm::Window *owner, const char *title, const char *prompt, const char *initial, TextFn done,
-              void *context)
-    {
-        if (open()) {
-            close();
-        }
+        // The texts are the caller's: kept here for as long as the window is.
         snprintf(title_, sizeof(title_), "%s", title);
         snprintf(prompt_text_, sizeof(prompt_text_), "%s", prompt);
-        done_ = done;
-        context_ = context;
         set_title(title_);
-        prompt_.set_text(prompt_text_);
-        field_.set(initial);
-        set_modal(owner);
-        set_frame(os::centred(frame().w, frame().h));
-        os::show(*this);
-        set_focus(&field_);
+        set_default(ok_);
+        set_focus(field_);
         field_.select_all();
+    }
+
+    void command(app::Control which) override
+    {
+        if (which == ok_) {
+            field_.get(answer_, sizeof(answer_));
+            TextFn done = done_;
+            void *ctx = context_;
+            close();
+            if (done != nullptr) {
+                done(answer_, ctx);
+            }
+        } else if (which == cancel_) {
+            close();
+        }
     }
 
     bool key(const wm::KeyMsg &k) override
@@ -368,31 +293,18 @@ public:
             close();
             return true;
         }
-        return Window::key(k);
+        return false;
     }
 
 private:
-    static void ok(wm::Button &, void *context)
-    {
-        auto *d = static_cast<InputDialog *>(context);
-        d->field_.get(d->answer_, sizeof(d->answer_));
-        TextFn done = d->done_;
-        void *ctx = d->context_;
-        d->close();
-        if (done != nullptr) {
-            done(d->answer_, ctx);
-        }
-    }
-    static void cancel(wm::Button &, void *context) { static_cast<InputDialog *>(context)->close(); }
-
     char title_[48] = "";
     char prompt_text_[96] = "";
     char answer_[160] = "";
-    TextFn done_ = nullptr;
-    void *context_ = nullptr;
-    wm::Label prompt_;
-    wm::TextField field_;
-    wm::Button ok_, cancel_;
+    TextFn done_;
+    void *context_;
+    app::Label prompt_;
+    app::TextField field_;
+    app::Button ok_, cancel_;
 };
 
 // Each dialog is made when it is asked for and gone once it has closed, so
@@ -403,11 +315,14 @@ void file_dialog(bool save, int owner, const char *folder, const char *name, Pat
     if (has_dialog(owner)) {
         return;
     }
-    if (FileDialog *d = make_window<FileDialog>()) {
-        d->show(save, window_numbered(owner), folder, name, chosen, context);
-        discard(d); // if the window manager had no room for it
-    } else {
-        no_memory_for(save ? "Save As" : "Open");
+    app::Look look;
+    look.title = save ? "Save As" : "Open";
+    look.width = 428;
+    look.height = 284;
+    look.flags = app::kDialog;
+    look.over = owner;
+    if (app::open<FileDialog>(look, save, folder, name, chosen, context) == app::kNone) {
+        no_memory_for(look.title);
     }
 }
 
@@ -429,10 +344,12 @@ void input_dialog(int owner, const char *title, const char *prompt, const char *
     if (has_dialog(owner)) {
         return;
     }
-    if (InputDialog *d = make_window<InputDialog>()) {
-        d->show(window_numbered(owner), title, prompt, initial, done, context);
-        discard(d); // if the window manager had no room for it
-    } else {
+    app::Look look;
+    look.width = 320;
+    look.height = 120;
+    look.flags = app::kDialog;
+    look.over = owner;
+    if (app::open<InputDialog>(look, title, prompt, initial, done, context) == app::kNone) {
         no_memory_for(title);
     }
 }

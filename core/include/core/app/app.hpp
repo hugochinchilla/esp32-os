@@ -217,6 +217,15 @@ public:
     void redraw() const { os::ui::redraw_control(window_, number_); }
 };
 
+// A box showing a text and a picture, with an arrow to press
+// (Window::command); menu() opens the program's menu under it.
+class DropDown : public Control {
+public:
+    using Control::Control;
+    void set_text(const char *text) const { os::ui::set_text(window_, number_, text); } // must stay valid
+    void menu(wm::Menu &menu) const { os::ui::menu_under(window_, number_, menu); }
+};
+
 class GroupFrame : public Control {
 public:
     using Control::Control;
@@ -290,6 +299,10 @@ protected:
     {
         return {number_, os::ui::list(number_, place, items, count)};
     }
+    DropDown drop_down(const gfx::Bitmap *icon, const gfx::Rect &place)
+    {
+        return {number_, os::ui::drop_down(number_, icon, place)};
+    }
     Picture picture(const gfx::Rect &place) { return {number_, os::ui::picture(number_, place)}; }
     Grid grid(const gfx::Rect &place, int columns, int count, int cell_w, int cell_h, int margin = 3)
     {
@@ -305,6 +318,8 @@ protected:
     }
     void set_default(const Button &button) { os::ui::set_default(number_, button.number()); }
     void set_focus(const Control &control) { os::ui::set_focus(number_, control.number()); }
+    Control focus() const { return {number_, os::ui::focus(number_)}; }
+    void set_title(const char *title) { os::ui::set_title(number_, title); } // must stay valid
     int radio_value(int group) const { return os::ui::radio_value(number_, group); }
     void set_radio_value(int group, int value) { os::ui::set_radio_value(number_, group, value); }
 

@@ -262,3 +262,20 @@ and the pattern are `plain` texts now.
 
 PC tests pass (41 of 41) and the pictures match: both dialogs are
 pixel-identical. Firmware not compiled since, and not run.
+
+## The same day: Open, Save As and the input dialog
+
+Programs seven and eight (`dialogs.cpp`). New in the system for them:
+
+- `drop_down`: the "Look in" box, which was a widget of the file dialog's
+  own. The program hears Command when its arrow is pressed and opens its
+  menu under it (`menu_under`). The menu is still the program's table of
+  texts and functions; menus by number wait for the programs with a menu
+  bar.
+- `set_title` (the input dialog's title is the caller's text) and
+  `focus` (Backspace goes up a folder only while the list has the keys).
+- The pictures of the rows are a table the dialog fills from the folder's
+  listing, where the old list asked a function row by row.
+
+PC tests pass (41 of 41), the pictures match. Firmware not compiled
+since, and not run.

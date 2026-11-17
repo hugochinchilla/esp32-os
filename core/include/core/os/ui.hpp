@@ -86,6 +86,7 @@ Window create(const Look &look, Events events, size_t state_bytes = 0);
 void *state(Window window);
 bool alive(Window window);
 bool on_screen(Window window); // shown, and not closed
+void set_title(Window window, const char *title); // the text must stay valid
 // Asks for a part of the client area to be painted again.
 void redraw(Window window, const gfx::Rect &part);
 
@@ -118,7 +119,15 @@ void redraw_control(Window window, Control control);
 // nobody, and -1 leaves none picked.
 Control grid(Window window, const gfx::Rect &place, int columns, int count, int cell_w, int cell_h, int margin = 3);
 
-// What a control shows: a label, a button, a text area, a text field.
+// A box showing a text and a picture, with an arrow to press (Command):
+// what a "Look in" box is. The program opens what drops (menu_under).
+Control drop_down(Window window, const gfx::Bitmap *icon, const gfx::Rect &place);
+// A menu of the program's just under a control. The menu and its items
+// are the program's and must stay valid while it is open.
+void menu_under(Window window, Control control, wm::Menu &menu);
+
+// What a control shows: a label, a button, a text area, a text field, a
+// drop-down box (whose text must stay valid, as a label's).
 void set_text(Window window, Control control, const char *text);
 // What is in a text field, as UTF-8.
 void get_text(Window window, Control control, char *out, int capacity);
@@ -141,6 +150,7 @@ void set_items(Window window, Control list, const char *const *items, int count,
 int selected(Window window, Control list); // -1: none. A grid's too
 void select(Window window, Control list, int index);
 // Which control the keys go to.
+Control focus(Window window); // kNoControl: none
 void set_focus(Window window, Control control);
 // The button Enter presses.
 void set_default(Window window, Control button);

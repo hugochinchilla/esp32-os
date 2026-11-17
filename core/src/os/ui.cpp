@@ -71,6 +71,7 @@ enum class Kind : uint8_t {
     TextArea,
     Picture,
     Grid,
+    DropDown,
 };
 
 // A line of text exactly as given, kept by the control.
@@ -212,6 +213,56 @@ private:
     int selected_ = 0;
 };
 
+// A box showing a value with a drop-down arrow, as the 98 "Look in" box.
+class DropDown : public wm::Widget {
+public:
+    using Callback = void (*)(DropDown &box, void *context);
+    DropDown(const gfx::Rect &r, const gfx::Bitmap *icon, Callback on_click, void *context)
+        : Widget(r), icon_(icon), on_click_(on_click), context_(context)
+    {
+    }
+    ~DropDown() = default;
+    void set_text(const char *text)
+    {
+        text_ = text;
+        invalidate();
+    }
+    void paint(gfx::Canvas &c) override
+    {
+        static const char *const kDownGlyph[] = {"XXXXXXX", " XXXXX ", "  XXX  ", "   X   "};
+        const gfx::Rect r = {0, 0, rect.w, rect.h};
+        c.sunken(r);
+        c.fill(r.inset(2), gfx::kWhite);
+        gfx::Canvas inner = c.sub({2, 2, rect.w - 4 - 16, rect.h - 4});
+        if (icon_ != nullptr) {
+            inner.blit(*icon_, 2, (rect.h - 4 - 16) / 2);
+        }
+        inner.text(icon_ != nullptr ? 22 : 4, (rect.h - 4 - 12) / 2, text_, gfx::kBlack);
+        const gfx::Rect b = {rect.w - 2 - 16, 2, 16, rect.h - 4};
+        c.button(b, held_ ? gfx::ButtonLook::Pressed : gfx::ButtonLook::Raised);
+        c.pattern(b.x + 4 + held_, b.y + (b.h - 4) / 2 + held_, kDownGlyph, 4, gfx::kBlack);
+    }
+    bool wants_mouse() const override { return true; }
+    void mouse(const wm::MouseMsg &m) override
+    {
+        if (m.kind == wm::MouseKind::Down) {
+            held_ = 1;
+            invalidate();
+            on_click_(*this, context_);
+        } else if (m.kind == wm::MouseKind::Up) {
+            held_ = 0;
+            invalidate();
+        }
+    }
+
+private:
+    const char *text_ = "";
+    const gfx::Bitmap *icon_;
+    Callback on_click_;
+    void *context_;
+    int held_ = 0;
+};
+
 // The frame for a client area of this size.
 gfx::Rect frame_for(const Look &look)
 {
@@ -258,6 +309,7 @@ public:
             case Kind::TextArea: static_cast<wm::TextArea *>(controls_[i])->~TextArea(); break;
             case Kind::Picture: static_cast<Picture *>(controls_[i])->~Picture(); break;
             case Kind::Grid: static_cast<Grid *>(controls_[i])->~Grid(); break;
+            case Kind::DropDown: static_cast<DropDown *>(controls_[i])->~DropDown(); break;
             }
             os::release(controls_[i]);
         }
@@ -352,6 +404,17 @@ public:
     static void paint_cell(Grid &g, gfx::Canvas &c, const gfx::Rect &cell, int index, void *context)
     {
         static_cast<Behind *>(context)->paint_control(g, c, What::Cell, index, cell);
+    }
+    static void arrow_pressed(DropDown &d, void *context) { static_cast<Behind *>(context)->from(d, What::Command); }
+    // The number of the control the keys go to.
+    Control focused() const
+    {
+        for (int i = 0; i < count_; i++) {
+            if (controls_[i] == focus()) {
+                return i + 1;
+            }
+        }
+        return kNoControl;
     }
     static void cell_picked(Grid &g, void *context) { static_cast<Behind *>(context)->from(g, What::Changed); }
 
@@ -544,6 +607,34 @@ Control grid(Window window, const gfx::Rect &place, int columns, int count, int 
                         : kNoControl;
 }
 
+Control drop_down(Window window, const gfx::Bitmap *icon, const gfx::Rect &place)
+{
+    Behind *w = behind(window);
+    return w != nullptr ? w->make<DropDown>(Kind::DropDown, place, icon, &Behind::arrow_pressed, w) : kNoControl;
+}
+
+void menu_under(Window window, Control control, wm::Menu &menu)
+{
+    Behind *w = behind(window);
+    if (const wm::Widget *c = w != nullptr ? w->any(control) : nullptr) {
+        const gfx::Rect client = w->client();
+        os::open_menu(menu, client.x + c->rect.x, client.y + c->rect.bottom());
+    }
+}
+
+void set_title(Window window, const char *title)
+{
+    if (Behind *w = behind(window)) {
+        w->set_title(title);
+    }
+}
+
+Control focus(Window window)
+{
+    Behind *w = behind(window);
+    return w != nullptr ? w->focused() : kNoControl;
+}
+
 void set_text(Window window, Control control, const char *text)
 {
     Behind *w = behind(window);
@@ -556,6 +647,7 @@ void set_text(Window window, Control control, const char *text)
     case Kind::Button: w->button(control)->set_label(text); break;
     case Kind::TextArea: w->as<wm::TextArea>(control, Kind::TextArea)->set_text(text); break;
     case Kind::TextField: w->as<wm::TextField>(control, Kind::TextField)->set(text); break;
+    case Kind::DropDown: w->as<DropDown>(control, Kind::DropDown)->set_text(text); break;
     default: break;
     }
 }
