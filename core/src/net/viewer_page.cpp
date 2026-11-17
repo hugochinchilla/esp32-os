@@ -4,6 +4,10 @@
 // 64x64 (or plain pixels where the browser cannot unpack zlib), and the
 // pointer's shape as the browser's cursor. The VNC bytes travel in a
 // WebSocket to the same address (core/net/web.hpp).
+//
+// The buttons send the keys a page never sees, because the viewing computer
+// keeps them for itself: Ctrl+Alt+Del, Alt+Tab, Alt+F4 and the logo key
+// (docs/journal/2026-11-17-viewer-system-keys.md).
 #include "core/net/web.hpp"
 
 namespace net {
@@ -19,11 +23,25 @@ html,body{margin:0;height:100%;background:#202020;overflow:hidden}
 body{display:flex;align-items:center;justify-content:center}
 canvas{image-rendering:pixelated;outline:none;touch-action:none;background:#000}
 #s{position:fixed;left:0;right:0;bottom:8px;text-align:center;font:13px sans-serif;color:#bbb}
+#k{position:fixed;top:0;right:0;display:flex;gap:4px;padding:4px;justify-content:center}
+#k button{font:12px sans-serif;color:#ddd;background:#3a3a3a;border:1px solid #666;border-radius:3px;
+  padding:4px 8px;cursor:pointer;white-space:nowrap}
+#k button:hover{background:#505050}
+#k button:active{background:#707070}
+#k.over{opacity:.4}
+#k.over:hover{opacity:1}
 </style></head><body>
 <canvas id="c" width="640" height="480" tabindex="0"></canvas><div id="s">Connecting...</div>
+<div id="k" title="Keys this computer keeps for itself">
+<button data-k="0xFFE3 0xFFE9 0xFFFF">Ctrl+Alt+Del</button>
+<button data-k="0xFFE9 0xFF09">Alt+Tab</button>
+<button data-k="0xFFE9 0xFFC1">Alt+F4</button>
+<button data-k="0xFFEB">Start</button>
+</div>
 <script>
 'use strict';
 const cv = document.getElementById('c'), ctx = cv.getContext('2d'), note = document.getElementById('s');
+const bar = document.getElementById('k');
 let ws = null, live = false, W = 640, H = 480, pal = new Uint32Array(256), idx = new Uint8Array(W * H);
 let mask = 0;
 const held = new Map();
@@ -57,6 +75,13 @@ function fit() {
   if (k >= 1) k = Math.floor(k);
   cv.style.width = W * k + 'px';
   cv.style.height = H * k + 'px';
+  // The buttons go where the picture leaves more room: down the right edge
+  // or along the top. Where they must lie on the picture they are faint
+  // until the pointer is on them.
+  const beside = (innerWidth - W * k) / 2, above = (innerHeight - H * k) / 2, side = beside >= above;
+  bar.style.flexDirection = side ? 'column' : 'row';
+  bar.style.left = side ? 'auto' : '0';
+  bar.classList.toggle('over', side ? beside < bar.offsetWidth : above < bar.offsetHeight);
 }
 addEventListener('resize', fit);
 
@@ -240,6 +265,17 @@ addEventListener('keyup', e => {
   e.preventDefault();
 });
 addEventListener('blur', () => { for (const sym of held.values()) key(sym, 0); held.clear(); });
+// The buttons: their keys go down in order and come up in reverse. The
+// keyboard stays with the picture.
+for (const b of bar.children) {
+  b.tabIndex = -1;
+  b.addEventListener('mousedown', e => e.preventDefault());
+  b.addEventListener('click', () => {
+    const syms = b.dataset.k.split(' ').map(Number);
+    for (const sym of syms) key(sym, 1);
+    for (const sym of syms.reverse()) key(sym, 0);
+  });
+}
 
 fit();
 start();
