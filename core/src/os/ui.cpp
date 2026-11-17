@@ -4,6 +4,8 @@
 // for the program.
 #include "core/os/ui.hpp"
 
+#include <cstdio>
+#include <cstring>
 #include <new>
 
 #include "core/os/os.hpp"
@@ -22,7 +24,32 @@ constexpr int kMaxWindows = 16; // ponytail: as many as the window manager shows
 class Behind;
 Behind *g_windows[kMaxWindows] = {};
 
-enum class Kind : uint8_t { Label, Button, CheckBox, Radio, TextField, ScrollBar, List, Group, TextArea };
+enum class Kind : uint8_t { Label, Plain, Button, CheckBox, Radio, TextField, ScrollBar, List, Group, TextArea };
+
+// A line of text exactly as given, kept by the control.
+class PlainText : public wm::Widget {
+public:
+    explicit PlainText(const gfx::Rect &r) : Widget(r) {}
+    void set(const char *text)
+    {
+        if (strcmp(text, text_) != 0) {
+            snprintf(text_, sizeof(text_), "%.*s", static_cast<int>(sizeof(text_) - 1), text); // longer text is cut
+            invalidate();
+        }
+    }
+    void paint(gfx::Canvas &c) override
+    {
+        const int y = (rect.h - 12) / 2;
+        c.fill({0, 0, rect.w, y}, gfx::kGrey);
+        const int x = c.text_opaque(0, y, text_, gfx::kBlack, gfx::kGrey);
+        c.fill({x, y, rect.w - x, 12}, gfx::kGrey);
+        c.fill({0, y + 12, rect.w, rect.h - y - 12}, gfx::kGrey);
+    }
+    ~PlainText() = default;
+
+private:
+    char text_[96] = "";
+};
 
 class Behind : public wm::Window {
 public:
@@ -51,6 +78,7 @@ public:
         for (int i = 0; i < count_; i++) {
             switch (kinds_[i]) {
             case Kind::Label: static_cast<wm::Label *>(controls_[i])->~Label(); break;
+            case Kind::Plain: static_cast<PlainText *>(controls_[i])->~PlainText(); break;
             case Kind::Button: static_cast<wm::Button *>(controls_[i])->~Button(); break;
             case Kind::CheckBox: static_cast<wm::CheckBox *>(controls_[i])->~CheckBox(); break;
             case Kind::Radio: static_cast<wm::RadioButton *>(controls_[i])->~RadioButton(); break;
@@ -96,6 +124,13 @@ public:
         return control >= 1 && control <= count_ ? controls_[control - 1] : nullptr;
     }
     Kind kind(Control control) const { return kinds_[control - 1]; }
+    // The pictures of the rows of the window's list that has them.
+    void set_row_icons(const gfx::Bitmap *const *icons) { row_icons_ = icons; }
+    static const gfx::Bitmap *row_icon(int index, void *context)
+    {
+        const auto *w = static_cast<Behind *>(context);
+        return w->row_icons_ != nullptr ? w->row_icons_[index] : nullptr;
+    }
     int *radio_group(int group) { return group >= 0 && group < kGroups ? &groups_[group] : nullptr; }
 
     // A control says something happened: which one, as an event.
@@ -157,6 +192,7 @@ private:
     void *state_;
     uint8_t flags_;
     bool told_closed_ = false;
+    const gfx::Bitmap *const *row_icons_ = nullptr;
     static constexpr int kGroups = 4;
     int groups_[kGroups] = {};
     wm::Widget *controls_[kMaxWidgets] = {};
@@ -210,6 +246,25 @@ void *state(Window window)
 }
 
 bool alive(Window window) { return behind(window) != nullptr; }
+
+bool on_screen(Window window)
+{
+    Behind *w = behind(window);
+    return w != nullptr && w->open();
+}
+
+void redraw(Window window, const gfx::Rect &part)
+{
+    if (Behind *w = behind(window)) {
+        w->invalidate_client(part);
+    }
+}
+
+Control plain(Window window, const gfx::Rect &place)
+{
+    Behind *w = behind(window);
+    return w != nullptr ? w->make<PlainText>(Kind::Plain, place) : kNoControl;
+}
 
 Control label(Window window, const gfx::Rect &place, const char *text)
 {
@@ -278,6 +333,7 @@ void set_text(Window window, Control control, const char *text)
     }
     switch (w->kind(control)) {
     case Kind::Label: w->as<wm::Label>(control, Kind::Label)->set_text(text); break;
+    case Kind::Plain: w->as<PlainText>(control, Kind::Plain)->set(text); break;
     case Kind::Button: w->button(control)->set_label(text); break;
     case Kind::TextArea: w->as<wm::TextArea>(control, Kind::TextArea)->set_text(text); break;
     case Kind::TextField: w->as<wm::TextField>(control, Kind::TextField)->set(text); break;
@@ -373,9 +429,14 @@ void set_value(Window window, Control control, int value)
     }
 }
 
-void set_items(Window window, Control control, const char *const *items, int count)
+void set_items(Window window, Control control, const char *const *items, int count,
+               const gfx::Bitmap *const *icons)
 {
     if (auto *l = control_of<wm::ListBox>(window, control, Kind::List)) {
+        if (icons != nullptr) {
+            behind(window)->set_row_icons(icons);
+            l->set_icons(&Behind::row_icon);
+        }
         l->set_items(items, count);
     }
 }

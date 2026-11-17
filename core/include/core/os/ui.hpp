@@ -76,10 +76,17 @@ struct Look {
 Window create(const Look &look, Events events, size_t state_bytes = 0);
 void *state(Window window);
 bool alive(Window window);
+bool on_screen(Window window); // shown, and not closed
+// Asks for a part of the client area to be painted again.
+void redraw(Window window, const gfx::Rect &part);
 
 // Controls, in the window's client area. kNoControl: no room (24 a window).
 Control label(Window window, const gfx::Rect &place, const char *text);
 Control button(Window window, const gfx::Rect &place, const char *text);
+// A line of text shown exactly as given ('&' is not an access letter), of
+// which the control keeps its own copy (95 bytes at most): for text made
+// up as the program runs, a name read from somewhere.
+Control plain(Window window, const gfx::Rect &place);
 Control check_box(Window window, const gfx::Rect &place, const char *text, bool checked = false);
 // One of a group of which one is chosen. `group` is 0 to 3, the window's
 // own; `value` is what radio_value() answers while this one is chosen.
@@ -107,7 +114,10 @@ void set_range(Window window, Control scroll_bar, int maximum, int page);
 int value(Window window, Control scroll_bar);
 void set_value(Window window, Control scroll_bar, int value); // no Changed for it
 // A list.
-void set_items(Window window, Control list, const char *const *items, int count);
+// `icons`: a picture for each row, or nullptr for none. One list with
+// pictures a window.
+void set_items(Window window, Control list, const char *const *items, int count,
+               const gfx::Bitmap *const *icons = nullptr);
 int selected(Window window, Control list); // -1: none
 void select(Window window, Control list, int index);
 // Which control the keys go to.

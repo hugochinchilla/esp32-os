@@ -64,6 +64,13 @@ public:
     void set_text(const char *text) const { os::ui::set_text(window_, number_, text); }
 };
 
+// A line of text shown exactly as given, of which the control keeps a copy.
+class Plain : public Control {
+public:
+    using Control::Control;
+    void set(const char *text) const { os::ui::set_text(window_, number_, text); }
+};
+
 class Button : public Control {
 public:
     using Control::Control;
@@ -106,7 +113,11 @@ public:
 class ListBox : public Control {
 public:
     using Control::Control;
-    void set_items(const char *const *items, int count) const { os::ui::set_items(window_, number_, items, count); }
+    // `icons`: a picture for each row (one list with pictures a window).
+    void set_items(const char *const *items, int count, const gfx::Bitmap *const *icons = nullptr) const
+    {
+        os::ui::set_items(window_, number_, items, count, icons);
+    }
     int selected() const { return os::ui::selected(window_, number_); }
     void select(int index) const { os::ui::select(window_, number_, index); }
 };
@@ -126,6 +137,9 @@ class Window {
 public:
     Number number() const { return number_; }
     void close() { os::ui::close(number_); }
+    bool on_screen() const { return os::ui::on_screen(number_); }
+    // Asks for a part of the client area to be painted again.
+    void redraw(const gfx::Rect &part) { os::ui::redraw(number_, part); }
 
     // What happens in the window. A button was pressed:
     virtual void command(Control /*which*/) {}
@@ -151,6 +165,7 @@ protected:
     virtual ~Window() = default;
 
     Label label(const gfx::Rect &place, const char *text) { return {number_, os::ui::label(number_, place, text)}; }
+    Plain plain(const gfx::Rect &place) { return {number_, os::ui::plain(number_, place)}; }
     Button button(const gfx::Rect &place, const char *text)
     {
         return {number_, os::ui::button(number_, place, text)};

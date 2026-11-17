@@ -171,3 +171,26 @@ their output. What they had found:
 - `test_os`: a count of blocks that had to follow the dialog's new shape.
 
 Fixed in the next commit; 41 of 41 pass, pictures match.
+
+## The same day: the Network panel
+
+The Network panel is the fourth program on the thin classes (4 of 17),
+and the first with a list that shows pictures and with texts that change
+while it is open. What it needed from the system:
+
+- `plain`: a line of text that keeps its own copy (the status lines),
+  where a label points at a text the program must keep alive.
+- `set_items` with a picture for each row (the signal bars and the lock).
+- `on_screen` and `redraw`: the panel's timer skips its work while the
+  window is hidden, and repaints only what changed.
+
+The password and the "other network" dialogs were two classes with their
+own widgets; they are one `JoinDialog` now, opened over the panel by its
+number. The panel's private `Plain` widget is gone: the system has one.
+
+PC tests pass (41 of 41), the pictures and the network scenes match.
+
+The owner chose how programs that paint will draw: by numbered calls,
+with a thin `app::Canvas` in the shape of today's `gfx::Canvas`, rather
+than keeping the system's canvas object for now. It comes next, before
+the programs that draw (the Terminal, the games, the viewer).
