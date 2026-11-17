@@ -2294,11 +2294,12 @@ The rest is the agent's, to confirm:
 - A program file is `name.app`: an ELF shared object for the ESP32-S3,
   built from the same thin classes as the built-in programs
   (`programs/`, `tools/build_programs.sh`), with `APP_MAIN` as its way in.
-- It reaches the system **by name**: the loader fills in the calls from a
-  table written out of the firmware's core library at build time
-  (`tools/gen_exports.py`). Only the OS calls, the pictures, the shell's
-  dialogs and a short list of libc are in it. The other way, a table of
-  calls by number, is the next question for the owner.
+- It reaches the system **by name** (the owner's choice on a card,
+  2026-11-17: "Por nombre (como está hecho)"; a table of calls by number
+  was the other): the loader fills in the calls from a table written out
+  of the firmware's core library at build time (`tools/gen_exports.py`).
+  Only the OS calls, the pictures, the shell's dialogs and a short list
+  of libc are in it.
 - The loader on the board is Espressif's `elf_loader` (2.1.0, Apache 2.0)
   behind `ports::Loader`; its own symbol tables are off.
 - A loaded program is a process named after its file, windowed like the

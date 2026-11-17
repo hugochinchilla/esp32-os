@@ -101,9 +101,14 @@ loaded into PSRAM runs at all with this firmware's memory set-up
 
 - The board: load and run `hello.app`; memory before and after; missed
   refills while loading.
-- The owner's choice of how a program reaches the calls (above).
 - A loaded program on a task of its own (item 26's runner takes a pid, so
   it is a mark in the file or a rule: to decide).
 - Its memory counted as the process's; an icon of its own in the File
   manager; programs in the Programs menu from a folder.
 - Moving built-in programs out of the firmware into files.
+
+## The owner's answer on names (2026-11-17)
+
+Asked on a card how a loaded program reaches the OS calls, the owner
+chose **"Por nombre (como está hecho)"**: by name, as built. By number, in
+a table handed to the program, was the other option.
