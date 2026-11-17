@@ -61,6 +61,14 @@ public:
     // The task is asleep for good after its function (see run()), or about
     // to be: deleting it from here gives its stack back.
     void end(ports::TaskId task) override { vTaskDelete(static_cast<TaskHandle_t>(task)); }
+    ports::TaskId current() override { return xTaskGetCurrentTaskHandle(); }
+    // A program that hangs: the caller has made sure it is not inside an OS
+    // call, so it holds no lock.
+    bool kill(ports::TaskId task) override
+    {
+        vTaskDelete(static_cast<TaskHandle_t>(task));
+        return true;
+    }
 
     // What the scheduler has counted for the task, in µs, as set up for the
     // task statistics (backlog item 1). For a task that is running this

@@ -18,7 +18,7 @@ bool Inbox::deliver()
             continue;
         }
         if (procs_ != nullptr && m.to != proc::kNone) {
-            proc::call_as(procs_, m.to, [&m] { m.fn(m); }); // on the program's own task, if it has one
+            proc::call_as(procs_, m.to, [m] { m.fn(m); }); // on the program's own task, if it has one
         } else {
             const proc::Scope as(procs_, m.to);
             m.fn(m);

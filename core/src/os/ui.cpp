@@ -924,10 +924,39 @@ private:
         if (owner() == proc::kNone) {
             return events_(handle(), e, state_);
         }
-        bool used = false;
-        proc::call_as(&proc::table(), owner(), [&] { used = events_(handle(), e, state_); });
-        return used;
+        // Handed over whole, by copy: a program that does not come back in
+        // time is not left with pointers into this task's stack.
+        Told told;
+        told.window = this;
+        told.event = e;
+        if (e.key != nullptr) {
+            told.key = *e.key;
+        }
+        if (e.mouse != nullptr) {
+            told.mouse = *e.mouse;
+        }
+        if (e.text != nullptr) {
+            snprintf(told.text, sizeof told.text, "%s", e.text);
+        }
+        return proc::call_as(&proc::table(), owner(), told) && told.used;
     }
+
+    struct Told {
+        Behind *window;
+        Event event;
+        wm::KeyMsg key;
+        wm::MouseMsg mouse;
+        char text[fs::kMaxPath + 1];
+        bool used;
+        void operator()()
+        {
+            Event e = event;
+            e.key = event.key != nullptr ? &key : nullptr;
+            e.mouse = event.mouse != nullptr ? &mouse : nullptr;
+            e.text = event.text != nullptr ? text : nullptr;
+            used = window->events_(window->handle(), e, window->state_);
+        }
+    };
 
     int slot_;
     Events events_;

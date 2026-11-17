@@ -1,6 +1,8 @@
 // Programs on tasks of their own (backlog item 26): the runner by itself.
 // The "UI task" is the test's main thread; program tasks are real threads.
 // (Culebra played on a task of its own is in test_snake.cpp.)
+#include <atomic>
+#include <chrono>
 #include <cstdio>
 #include <thread>
 
@@ -15,6 +17,142 @@ static int failures = 0;
             failures++;                                                    \
         }                                                                  \
     } while (0)
+
+namespace {
+
+// What a program that takes too long does, step by step, as the test lets it.
+struct Slow {
+    host::ThreadEvent *gate;    // it sleeps here: "hung"
+    std::atomic<int> *touched;  // counts its OS calls that got in
+    prog::Runner *runner;
+    int in, out;
+    bool calls = true;
+    void operator()()
+    {
+        out = in + 1;
+        gate->wait(0xFFFFFFFF);
+        if (!calls) {
+            return;
+        }
+        runner->enter(); // an OS call
+        ++*touched;
+        runner->leave();
+    }
+};
+
+struct News {
+    int stopped = 0, back = 0;
+    proc::Pid last = proc::kNone;
+    static void told(proc::Pid pid, bool responding, void *context)
+    {
+        auto *n = static_cast<News *>(context);
+        (responding ? n->back : n->stopped)++;
+        n->last = pid;
+    }
+};
+
+template <class F> bool soon(F &&f)
+{
+    for (int i = 0; i < 400 && !f(); i++) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    return f();
+}
+
+// The limit on the wait: a program that does not come back.
+void test_late()
+{
+    using proc::Pid;
+    const std::thread::id ui = std::this_thread::get_id();
+    proc::Table procs;
+    const Pid root = procs.spawn("desktop", proc::kNone);
+    const Pid a = procs.spawn("a", root, proc::kWindowed);
+    prog::Runner runner(procs);
+    host::ThreadTasks tasks;
+    host::ThreadEvent events[2], gate;
+    prog::Kit kits[1] = {{&events[0], &events[1]}};
+    runner.set_tasks(&tasks, kits, 1);
+    News news;
+    runner.set_news(&News::told, &news);
+    std::atomic<int> touched{0};
+    CHECK(runner.start(a));
+
+    // In time: what the callable keeps in itself comes back, and its OS
+    // calls go straight in.
+    runner.set_limit(2000);
+    {
+        gate.set();
+        Slow slow{&gate, &touched, &runner, 41, 0};
+        CHECK(proc::call_as(&procs, a, slow));
+        CHECK(slow.out == 42 && touched == 1 && !runner.late(a) && news.stopped == 0);
+    }
+
+    // Too long: the caller goes on without it, as itself again.
+    runner.set_limit(30);
+    {
+        Slow slow{&gate, &touched, &runner, 1, 0};
+        CHECK(!proc::call_as(&procs, a, slow));
+        CHECK(slow.out == 0); // nothing is copied back from a call that did not finish
+        CHECK(runner.late(a) && news.stopped == 1 && news.last == a && procs.current() == proc::kNone);
+        CHECK(!runner.waiting());
+    }
+    // While it is late no call is made for it: not there, and not here.
+    {
+        bool made = false;
+        bool *flag = &made;
+        CHECK(!proc::call_as(&procs, a, [flag] { *flag = true; }));
+        CHECK(!made);
+    }
+    // It wakes up and wants an OS call. The desktop has gone on, so it is
+    // kept out until the UI task has nothing else under way.
+    gate.set();
+    CHECK(soon([&] { return runner.waiting(); }));
+    std::this_thread::sleep_for(std::chrono::milliseconds(30));
+    CHECK(touched == 1 && runner.late(a));
+    runner.serve();
+    CHECK(touched == 2);
+    // And then it has finished: taken back, and called again as before.
+    CHECK(soon([&] {
+        runner.serve();
+        return !runner.late(a);
+    }));
+    CHECK(news.back == 1 && !runner.waiting() && procs.current() == proc::kNone);
+    {
+        runner.set_limit(2000);
+        gate.set();
+        Slow slow{&gate, &touched, &runner, 7, 0};
+        CHECK(proc::call_as(&procs, a, slow) && slow.out == 8 && touched == 3);
+        std::thread::id on;
+        std::thread::id *where = &on;
+        CHECK(proc::call_as(&procs, a, [where] { *where = std::this_thread::get_id(); }) && on != ui);
+    }
+
+    // Ended while it hangs. A thread of the PC cannot be taken away, so its
+    // task stays until it returns by itself; the process is gone at once.
+    runner.set_limit(30);
+    {
+        Slow slow{&gate, &touched, &runner, 1, 0, false};
+        CHECK(!proc::call_as(&procs, a, slow) && runner.late(a));
+        CHECK(procs.exit(a));
+        CHECK(!procs.alive(a) && !runner.has_task(a) && runner.tasks() == 1);
+        gate.set();
+        CHECK(soon([&] {
+            runner.serve();
+            return runner.tasks() == 0;
+        }));
+        CHECK(news.back == 1); // nobody is told it is back
+    }
+    // The kit is free again.
+    const Pid b = procs.spawn("b", root, proc::kWindowed);
+    runner.set_limit(2000);
+    CHECK(runner.start(b));
+    int n = 0;
+    int *count = &n;
+    CHECK(proc::call_as(&procs, b, [count] { ++*count; }) && n == 1);
+    CHECK(procs.exit(b) && runner.tasks() == 0);
+}
+
+} // namespace
 
 int main()
 {
@@ -116,6 +254,8 @@ int main()
     tasks.refuse = false;
     CHECK(runner.start(c) && runner.tasks() == 1);
     CHECK(procs.exit(c) && runner.tasks() == 0);
+
+    test_late();
 
     if (failures == 0) {
         printf("all tests passed\n");

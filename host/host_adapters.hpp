@@ -238,6 +238,7 @@ public:
         return r;
     }
     void end(ports::TaskId) override { ended++; }
+    ports::TaskId current() override { return current_record(); }
     // Live while the thread runs; what it had used at its end afterwards.
     uint64_t run_time_us(ports::TaskId task) override
     {
@@ -294,10 +295,16 @@ private:
     {
         return static_cast<uint64_t>(t.tv_sec) * 1000000u + static_cast<uint64_t>(t.tv_nsec) / 1000u;
     }
+    static Record *&current_record()
+    {
+        static thread_local Record *record = nullptr;
+        return record;
+    }
     static void run(Record &r)
     {
         r.started = true;
         r.thread = std::thread([&r] {
+            current_record() = &r;
             r.fn(r.context);
             timespec t = {};
             clock_gettime(CLOCK_THREAD_CPUTIME_ID, &t);
