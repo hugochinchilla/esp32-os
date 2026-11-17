@@ -332,6 +332,7 @@ enum class Fault : uint8_t {
     Hang = 0,       // the calling task spins for ever
     BadPointer = 1, // a write through a null pointer
     Abort = 2,      // abort()
+    Slow = 3,       // the calling task spins for five seconds, then carries on
 };
 
 class System {

@@ -339,3 +339,14 @@ Three pins were checked before this one was merged.
 
 Merged on the owner's earlier acceptance of the first step's cost; what is
 left over beyond it is the 0.4 ms of repaint with Culebra open.
+
+## A fault that is only slow (2026-11-17)
+
+Both steps are in `main` (the board thread's results are above). One
+check could not be made from outside: a program that is late and then
+answers again. `dbg.py fault slow --pid N` makes one: the program's
+task is busy for five seconds and then carries on, so with the
+two-second limit it is "not responding" for three seconds and must
+come back by itself, at its own priority, painted again. Without a PID
+(or for a program without a task) the desktop itself is busy for five
+seconds, under the watchdog's fifteen.

@@ -87,7 +87,7 @@ and the same sequence number. Every reply payload starts with a status byte:
 | 0x12 | Boot screen | One byte: 0 the self-test again, 1 the splash, 2 nothing shown but the next start is a fast one, once, 3 the error screen after a crash (the crash reported at this start, or a made-up one) | None. Repaint brings the desktop back |
 | 0x13 | Memory report | None | Text: heaps and video timing (task stacks are in Tasks, which holds the kernel lock about 0.8 ms per call) |
 | 0x14 | Tasks | None | The kernel's tasks, see below. Unknown command when the firmware keeps no run-time statistics |
-| 0x15 | Fault | Kind (1): 0 hang (the UI task spins for ever), 1 a write through a null pointer, 2 abort. Then optionally a PID (2) to charge it to | None. The board replies, then fails on purpose: the watchdog or the panic handler writes the crash record and restarts it, and the next start shows the error screen. Bad arguments for a PID that is not running |
+| 0x15 | Fault | Kind (1): 0 hang (the UI task spins for ever), 1 a write through a null pointer, 2 abort, 3 slow (busy for five seconds, then it carries on; nothing fails). Then optionally a PID (2) to charge it to | None. The board replies, then fails on purpose: the watchdog or the panic handler writes the crash record and restarts it, and the next start shows the error screen. Bad arguments for a PID that is not running |
 | 0x16 | Log read | From (8): bytes since start, 0 for the oldest text kept | Where the next piece starts (8), then up to 1000 bytes of the system log (what `dmesg` prints). Text pushed out of the 16 KB ring meanwhile is skipped. `tools/dbg.py dmesg` prints it all |
 
 - The board replies to Key, Mouse and Text before acting on them, so an event
