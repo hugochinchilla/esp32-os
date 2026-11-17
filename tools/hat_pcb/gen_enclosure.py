@@ -43,7 +43,7 @@ def cutouts(board):
         ("back", "Audio jack", gen_pcb.JACK_X, 7.0, 3.0, 7.0),
         ("front", "USB-A x2 (stacked)", usb2_c, 15.0, 7.8, 16.0),
         ("left", "microSD slot", sd_y, 13.0, 1.0, 2.5),
-        ("right", "DevKitC-1 USB-C x2", devy, 30.0, 14.2, 5.0),
+        ("right", "DevKitC-1 USB-C x2", devy, 30.0, 14.2, 7.5),
     ]
 
 

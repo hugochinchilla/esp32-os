@@ -32,7 +32,7 @@
 <rect x="636.0" y="170.20000000000002" width="8" height="180.0" fill="#7d3c98"/>
 <text x="648.0" y="250.20000000000005" fill="#7d3c98">DevKitC-1 USB-C x2</text>
 <text x="648.0" y="264.20000000000005" fill="#7d3c98">y = 36.7, 30 wide</text>
-<text x="648.0" y="278.20000000000005" fill="#7d3c98">z = 14.2, 5 tall</text>
+<text x="648.0" y="278.20000000000005" fill="#7d3c98">z = 14.2, 7.5 tall</text>
 <text x="40" y="614.0" font-size="15" font-weight="bold">Back wall seen from outside (z = height above the hat's top surface)</text>
 <line x1="40.0" y1="772.0" x2="640.0" y2="772.0" stroke="black" stroke-width="2"/>
 <text x="644.0" y="776.0">z = 0 (board top)</text>

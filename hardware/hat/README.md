@@ -87,7 +87,7 @@ corner.
 
 Everything is generated from one parts table by the scripts in
 `tools/hat_pcb/` (`parts.py` is the netlist and BOM; `gen_sch.py`,
-`gen_pcb.py`, `gen_outputs.py` and `gen_enclosure.py` write the files). Change `parts.py` and run
+`gen_pcb.py`, `gen_outputs.py`, `gen_enclosure.py` and `gen_case.py` write the files). Change `parts.py` and run
 them again rather than editing the netlist by hand in two places. The
 schematic netlist is checked against `parts.py` when it is generated. Once
 the board is edited by hand in KiCad, the KiCad files become the source and
@@ -148,7 +148,7 @@ corner (as in the drawing); heights are above the board's top surface.
 | Back | Audio jack | x = 85.5 | 7 x 7 | 3.0 |
 | Front | Second stacked USB-A pair | x = 70.2 | 15 x 16 | 7.8 |
 | Left | microSD slot (the card sticks out about 2.5 mm) | y = 15.5 | 13 x 2.5 | 1.0 |
-| Right | Dev board USB-C pair, one slot for both | y = 36.7 | 30 x 5 | 14.2 |
+| Right | Dev board USB-C pair, one slot for both, tall enough for a plug's body | y = 36.7 | 30 x 7.5 | 14.2 |
 
 - Board 100 x 78 mm, 1.6 mm thick, 2 mm corner radius. M3 holes at
   (4, 3.8), (96, 3.8), (4, 74.2) and (96, 74.2).
@@ -164,6 +164,28 @@ corner (as in the drawing); heights are above the board's top surface.
   first.
 - `tools/hat_pcb/gen_enclosure.py` redraws this from the board file if the
   layout changes.
+
+### First case model
+
+| Board | Case, back | Exploded |
+| --- | --- | --- |
+| ![board](case/board-back.png) | ![case back](case/case-back.png) | ![exploded](case/case-exploded.png) |
+
+`case/hat-case.scad` (OpenSCAD) is a first two-part case built from the
+table above, with `case/hat-case-base.stl` and `case/hat-case-lid.stl` ready
+to slice. More views are in `case/`. Outside size 105 x 83 x 27.6 mm.
+
+- The tray has four 4 mm standoffs and walls up to the board's top surface.
+- The lid carries the walls. Its slots are open at the bottom, so it drops
+  over the sockets after the board and dev board are in. Four posts press the
+  board onto the standoffs.
+- Four M3 x 25 screws go through the roof, the posts and the board into the
+  standoffs (2.8 mm holes for self-tapping; drill out for heat-set inserts).
+- The VGA slot is 31.5 mm wide so the D shell and both screw posts pass.
+- The parts on the board model are plain blocks sized from typical datasheet
+  values. It is a fit check, not a tested print: nothing has been printed.
+- `python3 tools/hat_pcb/gen_case.py render` rebuilds the model, the views
+  and the STL files from the board (needs OpenSCAD and `xvfb-run`).
 
 ## Firmware notes
 
