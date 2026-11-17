@@ -39,7 +39,7 @@ board or the merge), `done`.
 | 14 | Serial console sharing the wire with the debug link | M | 12, 13 | Yes, with care | todo |
 | 15 | Terminal window on the desktop | M | 12, 13 | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-terminal-window.md) |
 | 16 | `top`, `dmesg`, `edit`, `open`, `run`, and the Run... dialog | S | 3, 13 | | in part: Run..., `open`, `run`, `edit` and `top` done (checked on the board 2026-11-17); `dmesg` waits for a log. [Journal](journal/2026-11-17-run.md) |
-| 17 | Telnet server, no password. Ask the owner first: on by default, or switched on in a settings file | S | 13 | Yes | on a branch (`claude/project-thread-8q7ksu`): off until `[telnet] enabled = true` in `network.ini` (the owner asked, answer pending); PC tests pass, firmware compiles, not run on the board. [Journal](journal/2026-11-17-telnet.md) |
+| 17 | Telnet server, no password. Ask the owner first: on by default, or switched on in a settings file | S | 13 | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-telnet.md) |
 | | **Phase 4: structure** | | | | |
 | 18 | init as PID 1 with a start-up file. Services start after the desktop | M | 2, 8 | Yes | todo |
 | 19 | Program lifecycle: created at launch, destroyed at exit, memory returned, more than one instance | L | 2 | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-program-lifecycle.md) |
@@ -47,7 +47,7 @@ board or the merge), `done`.
 | 20 | A defined set of OS calls, moved to app by app | L | 2 | | todo |
 | 21 | Split the window manager into window server and desktop shell. The taskbar becomes a process that restarts when killed | L | 18, 20 | Yes | todo |
 | | **Later** | | | | |
-| 22 | Console text editor | M | 13 | | on a branch (`claude/project-thread-8q7ksu`): `ted`; PC tests pass, firmware compiles, not run on the board. [Journal](journal/2026-11-17-console-editor.md) |
+| 22 | Console text editor | M | 13 | | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-console-editor.md) |
 | 23 | Pipes and redirection | M | 13 | | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-pipes.md) |
 | 24 | File dates | S to M | | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-file-dates.md) |
 | 25 | Updates over Wi-Fi | M | | Yes | todo |
@@ -63,7 +63,7 @@ at the same time.
 | | **The look** | | | | |
 | 28 | Taskbar without the dead quick-launch icons; Back and Up with their own icons in the File manager | S | | | done (checked on the board 2026-11-16). [Journal](journal/2026-11-16-icons.md) |
 | 29 | Refined icons for every program, at 32x32 and 16x16. The owner picks from drawn proposals | M | | | done (checked on the board 2026-11-17). [Journal](journal/2026-11-16-icon-proposals.md) |
-| 30 | Quick-launch icons by the Start button that launch something | S | 29 | | on a branch (`claude/project-thread-8q7ksu`): File manager, Editor, Terminal; PC tests pass, firmware compiles, not run on the board. [Journal](journal/2026-11-17-quick-launch.md) |
+| 30 | Quick-launch icons by the Start button that launch something | S | 29 | | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-quick-launch.md) |
 | 31 | Desktop background: 16 colours and 10 patterns, chosen in a Display dialog (Start > Settings, or a right click on the desktop) | S | | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-desktop-background.md) |
 | | **Memory** | | | | |
 | 35 | Our static objects in external RAM: the core's and the firmware's big ones, about 121 KB out of internal RAM | S | | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-statics-in-psram.md) |
