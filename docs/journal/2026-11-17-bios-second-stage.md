@@ -355,3 +355,42 @@ decide once the cause is known: a longer wait costs time at every start.
 
 Both firmwares compile (bootloader 22,176 bytes, BIOS 301,280, OS
 1,488,288); the PC tests pass. Not run on the board.
+
+## Fifth try: every check passes; the monitor is still late
+
+With fe550f4 (and `main` merged in on the laptop) the board passed all the
+checks, 44 gate tests included:
+
+- `fault abort`, `fault hang` (the watchdog after 15.5 s) and `fault
+  pointer`: the bootloader says "the OS stopped on an error: starting the
+  OS without the BIOS" and the error screen shows the whole record again.
+- An update over Wi-Fi broken on purpose, `fault abort` 2 s into its trial:
+  the board goes back to the old version in `ota_0`, without the BIOS.
+- No "Video: N refills missed" line, and no misses counted.
+
+What spoils the error record is now half known. Around a restart from the
+Start menu after an error screen, the bootloader printed the start of RTC
+slow memory with the record's remains before the BIOS ran, and six zero
+words after it. So the BIOS run leaves RTC slow memory zeroed, all of it or
+at least its start; which code does it is not found. It matters for step 3,
+where the BIOS is to read that record: it will have to be read at the very
+start, or kept elsewhere. Open.
+
+The monitor, from the webcam: after a restart by software the screen is
+black until about 6.25 s, the BIOS shows from 6.25 to 11.5 s, 3.6 s of
+black, the desktop at 15.1 s. After a reset by the EN pin the BIOS shows
+from about 5.75 s. So the BIOS is seen only from "Booting in 5" either
+way, it is not the restart, and it is not missed refills.
+
+One difference from the OS was found in the BIOS's build: it lacked the two
+settings the OS has for the video, code run from PSRAM
+(`CONFIG_SPIRAM_XIP_FROM_PSRAM`) and the video interrupt in internal RAM
+(`CONFIG_LCD_RGB_ISR_IRAM_SAFE`). Without them every look at the flash
+(the "Boot device" check reads the whole OS image) stops the video
+interrupt for a moment. They are added, since the BIOS runs the OS's video
+code and should run it the same way. Whether this is why the monitor is
+late is not known: the checks that read the flash come after the wait, not
+during it. Compiled (BIOS 302,928 bytes); not run.
+
+Not tested on the board, and cannot be from the laptop: the physical
+button and a real power cut.

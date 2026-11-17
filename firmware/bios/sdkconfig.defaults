@@ -26,3 +26,8 @@ CONFIG_BOOTLOADER_CUSTOM_RESERVE_RTC=y
 CONFIG_BOOTLOADER_CUSTOM_RESERVE_RTC_SIZE=0x8
 # Static objects may live in external RAM (core/linker.lf puts the core's there).
 CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY=y
+# The video as the OS has it (the same vga.c): code and constants run from
+# PSRAM and the video interrupt from internal RAM, so reading the flash does
+# not hold the picture up. Delete the sdkconfig file after changing this.
+CONFIG_SPIRAM_XIP_FROM_PSRAM=y
+CONFIG_LCD_RGB_ISR_IRAM_SAFE=y
