@@ -97,3 +97,41 @@ Network: the panel follows a connect and a disconnect while open, a wrong
 password is told once, the tray icon changes with the panel closed. Shut
 Down from the Start menu and from the Task Manager, Restart, and
 Ctrl+Alt+Del on the night screen.
+
+
+## On the board (added by the board thread, 2026-11-17)
+
+Checked together with the window server split (cut 2) at 657a022, with main ebe84b0 (the missed-refill
+log) merged in; only the journal index conflicted. PC tests 41 of 41
+(`serial_console` passed), the firmware built at 0x161600 and was flashed by
+cable, the app only. A Firefox tab on the owner's laptop had the web page
+viewer open during part of the turn.
+
+1. Display: a colour chosen and Apply changes the background with the
+   dialog open; Cancel puts the old one back. A colour and a pattern with
+   OK are written to C:\.config\desktop.ini and are kept over a restart. At
+   the end Chinchilla blue and no pattern were put back with the dialog (the
+   file is again 114 bytes, as before the turn).
+2. Screen Saver: Starfield with Preview fills the screen and a mouse move
+   ends it, the dialog still open. Starfield and 1 minute with OK: kept over a
+   restart (the dialog showed them), and after 66 s without input the screen
+   was the starfield; a mouse move ended it. "(None)" with OK writes
+   `saver = none`. At the end Flying Chinchillas and 5 minutes were put back;
+   the file is byte for byte as before the turn.
+3. Network, without the owner's password: with the panel open, a disconnect
+   (`dbg.py`) showed "Not connected" and a connect with the remembered
+   password showed it connected again. A made-up password, not remembered,
+   was told once: "Could not connect ...: the password is not right." in one
+   box, which stayed one box. The board then rejoined with the remembered
+   password and still has its one remembered network. With the panel closed
+   the tray icon changed on a disconnect and came back on the connect. The
+   clock is set from the network ("Clock: from network" in the panel).
+4. Shut Down from the Start menu: the dialog, then Shut Down gives the night
+   screen; Ctrl+Alt+Del on it started the board again. From the Task
+   Manager, Shut Down... opens the same dialog and Restart restarted the
+   board.
+5. Memory: Display and Screen Saver opened and closed, three rounds: internal
+   and external RAM back to the byte. With the Network panel in the rounds,
+   internal back to the byte and external 1.2 to 1.6 KB lower, not growing
+   from round to round. Main shows the same with the Network panel (1.3 to
+   1.6 KB), so it is not this change.
