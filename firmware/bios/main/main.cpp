@@ -44,23 +44,7 @@ const uart_port_t kSerial = UART_NUM_0;
 [[noreturn]] void start_os()
 {
     const uint32_t word = CHINCHILLA_START_OS;
-    rtc_retain_mem_t *block = bootloader_common_get_rtc_retain_mem();
-    char line[200];
-    const uint32_t *raw = reinterpret_cast<const uint32_t *>(block);
-    // To find why the word was lost on the board: the block before and
-    // after the write, and a second copy in RTC slow memory that the
-    // bootloader prints but does not use.
-    int n = snprintf(line, sizeof(line), "\r\nhandover: block at %p before %08x %08x %08x %08x %08x %08x\r\n", raw,
-                     (unsigned)raw[0], (unsigned)raw[1], (unsigned)raw[2], (unsigned)raw[3], (unsigned)raw[4],
-                     (unsigned)raw[5]);
-    uart_write_bytes(kSerial, line, n);
-    memcpy(block->custom, &word, sizeof(word));
-    *reinterpret_cast<volatile uint32_t *>(CHINCHILLA_SLOW_COPY_ADDRESS) = word;
-    n = snprintf(line, sizeof(line), "handover: word at %p after  %08x %08x %08x %08x %08x %08x, slow copy %08x\r\n",
-                 block->custom, (unsigned)raw[0], (unsigned)raw[1], (unsigned)raw[2], (unsigned)raw[3],
-                 (unsigned)raw[4], (unsigned)raw[5],
-                 (unsigned)*reinterpret_cast<volatile uint32_t *>(CHINCHILLA_SLOW_COPY_ADDRESS));
-    uart_write_bytes(kSerial, line, n);
+    memcpy(bootloader_common_get_rtc_retain_mem()->custom, &word, sizeof(word));
     uart_wait_tx_done(kSerial, pdMS_TO_TICKS(200));
     esp_restart();
     while (true) {

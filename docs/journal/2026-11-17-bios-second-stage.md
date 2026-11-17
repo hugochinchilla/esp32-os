@@ -244,3 +244,44 @@ instead of guessing (the board thread's suggestion):
   way out.
 
 The handover itself is unchanged. Compiled; not run.
+
+## Third try: the cause, in the board's own words
+
+The diagnostic build (88a8d47) printed, after a power-on and then at every
+loop:
+
+```
+chinchilla: reset reason 1, block at 0x600fffe8 NOT valid: 16879b54 a5131b2c 1c3bbf25 143e40a3 1a6a6b2d 29f150a3, slow copy 84a20258
+handover: block at 0x600fffe8 before 00000000 00000000 00000000 00000000 00000000 ffffffff
+handover: word at 0x600ffff4 after  00000000 00000000 00000000 534f4843 00000000 ffffffff, slow copy 534f4843
+rst:0xc (RTC_SW_CPU_RST),boot:0x8 (SPI_FAST_FLASH_BOOT)
+chinchilla: reset reason 12, block at 0x600fffe8 NOT valid: 00000000 00000000 00000000 534f4843 00000000 ffffffff, slow copy 534f4843
+```
+
+So the memory keeps the word across the restart ("534f4843" is "CHOS"),
+in both places. What loses it is the checksum, the last word. After a
+power-on our bootloader file cleared the block to zeros and had the
+checksum computed. The checksum of twelve zero bytes, the way the chip's
+ROM computes it, is 0xffffffff, and ESP-IDF reads exactly that value as
+"no checksum": `crc != UINT32_MAX` in `is_retain_mem_valid()`. So at the
+next start the block was "not valid" again, and our own repair cleared it,
+the word included, before reading it. Checked on the PC:
+`zlib.crc32(bytes(12), 0xffffffff)` is 0xffffffff.
+
+Espressif's code never meets this because it counts each start in the
+block before computing the checksum, so the block is never all zeros. The
+BIOS is started as the "test" app, a path that does not count.
+
+The fix: when the block is not valid, the bootloader file now repairs it
+the way Espressif does, counting the start (`reboot_counter` becomes 1;
+the checksum is then 0x4743989a). The count stops at 65,535 and never
+returns to zero. The copy in RTC slow memory and the BIOS's two "handover"
+lines are removed; the bootloader keeps one line with the reset reason and
+the block, which costs nothing and would have shown this at once.
+
+The board thread found the cause from the same lines at the same time and
+named three other ways past it (read the word before the repair, have the
+BIOS write a checksum, use RTC slow memory). Not taken: the first would
+read rubbish after a power-on unless guarded by the reset reason; the
+second puts Espressif's checksum rule into our BIOS; the third uses memory
+nothing reserves for us.

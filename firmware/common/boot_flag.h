@@ -20,11 +20,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/* Diagnosis only (2026-11-17): the last word of RTC slow memory, where the
- * BIOS leaves a second copy of the word and the bootloader prints it. Nothing
- * else of ours uses RTC slow memory. To be removed once the handover works. */
-#define CHINCHILLA_SLOW_COPY_ADDRESS 0x50001ffcu
-
 /* The bootloader's choice, as a function so the PC tests can run it:
  * whether to start the BIOS, and the word to leave behind. `bios_present`:
  * there is a BIOS in the flash and its image verifies. */
