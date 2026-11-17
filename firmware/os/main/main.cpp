@@ -617,6 +617,18 @@ void boot_idle(void *context)
     }
 }
 
+// The same, waiting up to one tick (10 ms) for bytes, so the task sleeps and
+// the idle tasks run: looking without a pause starved IDLE0 and made the task
+// watchdog warn during the start-up screens.
+void boot_nap(void *context)
+{
+    static uint8_t buffer[256];
+    const int got = uart_read_bytes(kDebugUart, buffer, sizeof(buffer), 1);
+    if (got > 0) {
+        static_cast<dbg::Protocol *>(context)->feed(buffer, static_cast<size_t>(got));
+    }
+}
+
 void boot_log(const char *line, void *) { ESP_LOGI(TAG, "%s", line); }
 
 // The debug link asks for a start-up screen again (dbg.py boot).
@@ -743,6 +755,7 @@ void ui_task(void *)
     boot_io.hold_s = boot.hold_s;
     boot_io.crash_hold_s = boot.crash_hold_s;
     boot_io.skip = [](void *) { return input.skip; };
+    boot_io.nap = &boot_nap;
     pointer.set_visible(false);
     // The last session ended in a crash: the report goes into C:\crash.txt
     // and on the screen, before anything else (also on a fast start). The

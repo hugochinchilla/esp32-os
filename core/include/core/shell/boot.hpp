@@ -61,6 +61,11 @@ struct BootIo {
     // True once a key or mouse button asks to skip the screens (may be nullptr).
     bool (*skip)(void *context) = nullptr;
     bool skipped = false; // set when that happened: the splash is skipped too
+    // Like idle, but may sleep a short while (on the board one 10 ms tick)
+    // so other tasks run. Used while more than kNapMarginUs of a wait is
+    // left; the rest is done with idle so the wait does not overshoot.
+    void (*nap)(void *context) = nullptr;
+    static constexpr uint32_t kNapMarginUs = 20000;
 };
 
 // C:\.config\boot.ini, [boot] section (docs/settings.md).

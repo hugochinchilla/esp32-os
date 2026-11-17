@@ -300,7 +300,6 @@ struct DesktopFile {
 };
 DesktopFile g_files[wm::Wm::kMaxIcons - kSystemIcons];
 uint32_t g_files_signature = 0;
-int g_file_timer = 0;
 proc::Pid g_taskbar = proc::kNone; // the taskbar's process while it runs
 bool g_taskbar_up = false;
 
@@ -601,7 +600,6 @@ void stop_taskbar(proc::Pid pid, proc::Signal, void *)
     wm::Wm &wm = manager();
     g_taskbar_up = false;
     g_taskbar = proc::kNone;
-    g_file_timer = 0;
     wm.set_start_menu(nullptr, nullptr);
     wm.set_quick_launch(nullptr, 0);
     wm.set_desktop_icons(nullptr, 0);
@@ -671,7 +669,7 @@ void start_taskbar(void *)
     wm.set_desktop_drop(&drop_on_desktop, nullptr);
     g_taskbar_up = true;
     refresh_desktop_files(true);
-    g_file_timer = wm.start_timer(2000000, 2000000, &desktop_files_tick, nullptr);
+    wm.start_timer(2000000, 2000000, &desktop_files_tick, nullptr);
     wm.set_desktop_menu(&desktop_menu, nullptr);
     wm.set_shell(pid != proc::kNone ? pid : desktop);
 }
