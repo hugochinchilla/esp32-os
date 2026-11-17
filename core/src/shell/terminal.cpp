@@ -1,8 +1,10 @@
 // The Terminal: the command shell in a window (backlog item 15;
 // docs/journal/2026-11-17-terminal-window.md). The window is the device of
 // a TTY: keys go in as the bytes a terminal sends, and what the TTY shows is
-// written into a grid of 80 by 25 characters (tty::Screen) that the window
-// paints. The session (sh::Session) is the same one the serial console and
+// written into a grid of characters (tty::Screen), 80 by 25 at first, that
+// the window paints. The window can be made larger or maximised: the grid
+// then has as many columns and rows as fit, and the TTY is told. A scroll
+// bar down the right goes back over what has left the top. The session (sh::Session) is the same one the serial console and
 // telnet will run.
 //
 // Where the machine has tasks, the session is a job of the Terminal's
@@ -93,9 +95,11 @@ public:
         cursor_column_ = column;
     }
 
-    static gfx::Rect rows_rect(int first, int last)
+    // Rows of the grid, in the widget. The size of the grid changes only on
+    // the UI task (TerminalWindow::layout), so it is read without the lock.
+    gfx::Rect rows_rect(int first, int last) const
     {
-        return {kPad, kPad + first * kCellH, Screen::kColumns * kCellW, (last - first + 1) * kCellH};
+        return {kPad, kPad + first * kCellH, screen_.columns() * kCellW, (last - first + 1) * kCellH};
     }
 
     bool focusable() const override { return true; }
@@ -111,7 +115,7 @@ public:
     void paint(gfx::Canvas &c) override
     {
         const gfx::Rect whole = {0, 0, rect.w, rect.h};
-        c.fill_around(whole, rows_rect(0, Screen::kRows - 1), kPaper);
+        c.fill_around(whole, rows_rect(0, screen_.rows() - 1), kPaper);
         const gfx::Rect limit = c.limit().offset(-c.origin_x(), -c.origin_y());
         // The session's task may be writing: the grid is read under the
         // TTY's lock, and the cursor is where the grid says it is now.
@@ -121,14 +125,15 @@ public:
                                     ? gfx::Rect{0, 0, 0, 0}
                                     : gfx::Rect{kPad + screen_.cursor_column() * kCellW, kPad + cursor_row * kCellH,
                                                 kCellW, kCellH};
-        for (int row = 0; row < Screen::kRows; row++) {
+        const int columns = screen_.columns();
+        for (int row = 0; row < screen_.rows(); row++) {
             const gfx::Rect r = rows_rect(row, row);
             if (!r.overlaps(limit)) {
                 continue;
             }
             const uint8_t *cells = screen_.row(row);
             if (caret.w == 0 || caret.y != r.y) {
-                run(c, cells, 0, Screen::kColumns, r.y, kInk, kPaper);
+                run(c, cells, 0, columns, r.y, kInk, kPaper);
                 continue;
             }
             // The row with the cursor: the text before it, the cursor's own
@@ -144,7 +149,7 @@ public:
                 c.sub({caret.x, caret.y, kCellW, kCellH - 1}).text_opaque(0, 0, one(cells[at]), kInk, kPaper);
                 c.hline(caret.x, caret.y + kCellH - 1, kCellW, kInk);
             }
-            run(c, cells, at + 1, Screen::kColumns, r.y, kInk, kPaper);
+            run(c, cells, at + 1, columns, r.y, kInk, kPaper);
         }
     }
 
@@ -173,7 +178,7 @@ private:
         if (from >= to) {
             return;
         }
-        char text[2 * Screen::kColumns + 1];
+        char text[2 * Screen::kMaxColumns + 1];
         int used = 0;
         for (int i = from; i < to; i++) {
             if (cells[i] < 0x80) {
@@ -250,17 +255,20 @@ public:
     // nullptr for a session on the UI task.
     TerminalWindow(int place, SessionKit *kit)
         : Window("Terminal",
-                 {40 + place * 22, 30 + place * 22, TerminalView::kWidth + 2 * kBorder,
+                 {40 + place * 22, 30 + place * 22, TerminalView::kWidth + wm::ScrollBar::kThickness + 2 * kBorder,
                   TerminalView::kHeight + kClientTop + kBorder},
                  &gfx::terminal_icon_16()),
           kit_(kit), shown_(screen_),
           view_({0, 0, TerminalView::kWidth, TerminalView::kHeight}, *this, screen_, lock()),
+          bar_({TerminalView::kWidth, 0, wm::ScrollBar::kThickness, TerminalView::kHeight}, true,
+               &TerminalWindow::bar_moved, this),
           tty_(shown_, lock(), kit != nullptr ? kit->typed : nullptr), session_(tty_, environment())
     {
-        set_resizable(false);
         add(view_);
+        add(bar_);
         set_focus(&view_);
         tty_.set_size(Screen::kColumns, Screen::kRows);
+        show_history();
         memory_.owner = proc::table().current(); // the Terminal being opened
     }
 
@@ -323,12 +331,36 @@ public:
         show_changes();
     }
 
+    const wm::ScrollBar &scroll_bar() const { return bar_; }
+
     // However the window went (its close button, End Task): the session is
     // told that its terminal is gone. A command that is running is stopped
     // as Ctrl+C would stop it. The window is off the screen at once; the
     // object and the process stay until the session's task has returned
     // (job::Jobs), which is a moment.
     void closed() override { leave(); }
+
+    // Made larger or smaller, or maximised: the grid takes as many columns
+    // and rows as fit, and the TTY is told, so what runs next (ls, more,
+    // ted, top) uses the new size. A program already on the screen keeps
+    // the size it started with.
+    void resized() override
+    {
+        const gfx::Rect c = client();
+        const int bar = wm::ScrollBar::kThickness;
+        view_.rect = {0, 0, c.w - bar, c.h};
+        bar_.rect = {c.w - bar, 0, bar, c.h};
+        int columns, rows;
+        {
+            const Hold hold(lock());
+            screen_.set_size((view_.rect.w - 2 * kPad) / kCellW, (view_.rect.h - 2 * kPad) / kCellH);
+            columns = screen_.columns();
+            rows = screen_.rows();
+        }
+        tty_.set_size(columns, rows);
+        view_.invalidate();
+        show_changes();
+    }
 
     const Screen &screen() const { return screen_; }
 
@@ -389,6 +421,28 @@ private:
     }
     static void look(void *context) { static_cast<TerminalWindow *>(context)->show_changes(); }
 
+    // The scroll bar: its top is the oldest line kept, its bottom the
+    // screen itself.
+    static void bar_moved(wm::ScrollBar &bar, void *context)
+    {
+        auto *w = static_cast<TerminalWindow *>(context);
+        int back;
+        {
+            const Hold hold(w->lock());
+            back = w->screen_.history() - bar.value() - w->screen_.scrolled();
+        }
+        w->look_back(back);
+        w->set_focus(&w->view_); // the keys stay with the grid
+    }
+    void show_history()
+    {
+        if (history_ != bar_.maximum() || rows_ != shown_rows_) {
+            bar_.set_range(history_, rows_);
+            shown_rows_ = rows_;
+        }
+        bar_.set_value_quietly(history_ - scrolled_);
+    }
+
     // Runs what has been typed: every finished line, then the prompt for
     // the next one. Only for a session on the UI task.
     void pump()
@@ -408,7 +462,11 @@ private:
             changed = screen_.take_changes(first, last);
             screen_.take_bells(); // no sound yet
             view_.set_cursor(screen_.cursor_row(), screen_.cursor_column());
+            history_ = screen_.history();
+            scrolled_ = screen_.scrolled();
+            rows_ = screen_.rows();
         }
+        show_history();
         wm::Wm *m = manager();
         if (m == nullptr) {
             return; // closed, and waiting for its session
@@ -417,7 +475,7 @@ private:
             safety_ = m->start_timer(1000000, 1000000, &TerminalWindow::look, this);
         }
         if (changed) {
-            view_.invalidate_part(TerminalView::rows_rect(first, last));
+            view_.invalidate_part(view_.rows_rect(first, last));
         }
         m->caret_moved(); // the cursor is shown at once where it now is
     }
@@ -430,6 +488,8 @@ private:
     Screen screen_;
     Shown shown_;
     TerminalView view_;
+    wm::ScrollBar bar_;
+    int history_ = 0, scrolled_ = 0, rows_ = Screen::kRows, shown_rows_ = 0; // as last seen under the lock
     tty::Tty tty_;
     sh::Session session_;
 };
@@ -467,13 +527,13 @@ bool TerminalView::key(const wm::KeyMsg &k)
         if (owner_.program_has_keys()) {
             return send("\x1b[5~");
         }
-        owner_.look_back(Screen::kRows - 1);
+        owner_.look_back(screen_.rows() - 1);
         return true;
     case wm::key::PageDown:
         if (owner_.program_has_keys()) {
             return send("\x1b[6~");
         }
-        owner_.look_back(-(Screen::kRows - 1));
+        owner_.look_back(-(screen_.rows() - 1));
         return true;
     default: return false; // a character: it comes back through text()
     }

@@ -676,10 +676,51 @@ void test_grid()
     CHECK(s.history() == 0);
 }
 
+// A grid that changes size: taller brings lines back from the history,
+// shorter sends lines into it so the cursor stays on the screen.
+void test_grid_size()
+{
+    using tty::Screen;
+    static Screen s;
+    s.write("line 0");
+    for (int i = 1; i < 30; i++) {
+        char line[24];
+        snprintf(line, sizeof line, "\r\nline %d", i);
+        s.write(line);
+    }
+    CHECK(s.columns() == 80 && s.rows() == 25 && s.history() == 5 && grid_row(s, 0) == "line 5");
+    s.set_size(100, 30);
+    CHECK(s.columns() == 100 && s.rows() == 30 && s.history() == 0);
+    CHECK(grid_row(s, 0) == "line 0" && grid_row(s, 29) == "line 29" && s.cursor_row() == 29);
+    int first = -1, last = -1;
+    CHECK(s.take_changes(first, last) && first == 0 && last == 29);
+    // Taller than there are lines to bring back: empty rows at the bottom.
+    s.set_size(100, 36);
+    CHECK(s.rows() == 36 && grid_row(s, 0) == "line 0" && grid_row(s, 30) == "" && s.cursor_row() == 29);
+    // 100 characters fit on one row now.
+    s.write("\r\n");
+    for (int i = 0; i < 100; i++) {
+        s.write("w");
+    }
+    CHECK(s.cursor_row() == 30 && std::string(reinterpret_cast<const char *>(s.row(30)), 100) == std::string(100, 'w'));
+    // Shorter: the top goes into the history.
+    s.set_size(40, 10);
+    CHECK(s.rows() == 10 && s.columns() == 40 && s.cursor_row() == 9 && s.history() == 21);
+    CHECK(grid_row(s, 8) == "line 29" && s.cursor_column() <= 39);
+    s.scroll_view(21);
+    CHECK(grid_row(s, 0) == "line 0");
+    // Out of range sizes are brought within the limits.
+    s.set_size(1000, 1000);
+    CHECK(s.columns() == Screen::kMaxColumns && s.rows() == Screen::kMaxRows);
+    s.set_size(1, 1);
+    CHECK(s.columns() == Screen::kMinColumns && s.rows() == Screen::kMinRows);
+}
+
 } // namespace
 
 int main()
 {
+    test_grid_size();
     test_echo_and_lines();
     test_editing();
     test_utf8();

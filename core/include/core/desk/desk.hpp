@@ -81,7 +81,10 @@ private:
 
 /* ---- The icons on the desktop -----------------------------------------------
  *
- * In columns down the left of the work area, behind the windows. */
+ * Behind the windows. An icon without a place of its own goes in columns
+ * down the left of the work area, in the first cell of an unseen grid that
+ * no other icon is on; one that has been dragged stays where it was let go
+ * (or in the nearest free cell, while snapping is on). */
 
 // An icon on the desktop: a 32x32 picture with a label under it.
 struct Icon {
@@ -93,11 +96,16 @@ struct Icon {
     const char *path = nullptr;
     // Takes a dragged file let go on the icon; nullptr: not a drop target.
     void (*drop)(const char *path, void *context) = nullptr;
+    // The corner of its place on the desktop; x < 0: none of its own yet.
+    int x = -1, y = -1;
 };
 
 class Icons final : public wm::Panel {
 public:
-    static constexpr int kMax = 24; // in columns, top to bottom, then left to right
+    static constexpr int kMax = 24;
+    // What a dragged icon that stands for no file is called while it is
+    // dragged: this and its label. No file's path starts so.
+    static constexpr char kOwnDrag = '*';
 
     explicit Icons(wm::Wm &wm) : wm_(wm) {}
     ~Icons() { detach(); }
@@ -116,12 +124,27 @@ public:
         menu_ = menu;
         menu_context_ = context;
     }
-    // Files let go on the desktop away from the icons go to `drop`.
-    void set_drop(void (*drop)(const char *path, void *context), void *context)
+    // Files let go on the desktop that are not its own icons go to `drop`,
+    // with the corner of the place their icon would get there.
+    void set_drop(void (*drop)(const char *path, int x, int y, void *context), void *context)
     {
         drop_ = drop;
         drop_context_ = context;
     }
+    // Called after icons were given new places (one dragged, or realign()):
+    // icon_rect() has them, and whoever keeps them writes them down.
+    void set_moved(void (*moved)(void *context), void *context)
+    {
+        moved_ = moved;
+        moved_context_ = context;
+    }
+    // While on, an icon let go takes the nearest free cell of the grid. The
+    // icons already there stay where they are.
+    void set_snap(bool on) { snap_ = on; }
+    bool snap() const { return snap_; }
+    // Every icon into the grid, columns top to bottom from the left, in the
+    // order they are in now on the screen.
+    void realign();
 
     Rect icon_rect(int index) const;
     int selected_icon() const { return selected_; }
@@ -137,6 +160,14 @@ public:
 private:
     int icon_at(int x, int y) const;
     void set_drop_icon(int icon);
+    void layout();
+    Rect cell(int index) const;
+    int cells() const;
+    bool free_cell(int index, int but) const;
+    int own(const char *name) const;
+    int target(const char *name, int x, int y) const;
+    Rect place_at(int x, int y, int but) const;
+    void drag_name(int icon, char *out, size_t capacity) const;
 
     wm::Wm &wm_;
     bool attached_ = false;
@@ -149,8 +180,12 @@ private:
     int drop_icon_ = -1;
     void (*menu_)(int x, int y, void *context) = nullptr;
     void *menu_context_ = nullptr;
-    void (*drop_)(const char *path, void *context) = nullptr;
+    void (*drop_)(const char *path, int x, int y, void *context) = nullptr;
     void *drop_context_ = nullptr;
+    void (*moved_)(void *context) = nullptr;
+    void *moved_context_ = nullptr;
+    bool snap_ = false;
+    Rect rects_[kMax] = {};
 };
 
 } // namespace desk

@@ -1,6 +1,12 @@
 // The Display dialog: the desktop's colour and the pattern over it, with a
 // preview. Opened from Start > Settings > Display and by a right click on
 // the desktop. Kept in C:\.config\desktop.ini, [background].
+//
+// The colour is one of a short list with names, or, through Other..., any
+// of the board's 256. All of the list but the first are colours the board
+// has exactly, so the desktop is one flat colour with no dither: that is
+// what a remote screen (VNC) packs best.
+#include <cstdio>
 #include <cstring>
 
 #include "core/fs/ini.hpp"
@@ -9,6 +15,7 @@
 #include "core/shell/shell.hpp"
 #include "core/wm/widgets.hpp"
 #include "internal.hpp"
+#include "picker.hpp"
 
 namespace shell {
 
@@ -24,23 +31,29 @@ struct NamedColour {
     const char *name;
     Rgb rgb;
 };
+// A colour the board has: red and green 0..7, blue 0..3.
+constexpr Rgb exact(unsigned r, unsigned g, unsigned b)
+{
+    constexpr uint8_t k3[8] = {0, 36, 73, 109, 146, 182, 219, 255}, kB[4] = {0, 73, 182, 255};
+    return {k3[r], k3[g], kB[b]};
+}
 constexpr NamedColour kColours[] = {
-    {"chinchilla-blue", "Chinchilla blue", {58, 110, 165}},
-    {"teal", "Teal", {0, 128, 128}},
-    {"sea-green", "Sea green", {46, 139, 87}},
-    {"forest", "Forest", {0, 96, 48}},
-    {"navy", "Navy", {0, 0, 128}},
-    {"purple", "Purple", {96, 48, 144}},
-    {"plum", "Plum", {128, 0, 72}},
-    {"brick", "Brick", {168, 64, 48}},
-    {"olive", "Olive", {128, 128, 0}},
-    {"sand", "Sand", {208, 184, 128}},
-    {"sky", "Sky", {128, 176, 224}},
-    {"lilac", "Lilac", {176, 160, 208}},
-    {"rose", "Rose", {224, 152, 176}},
-    {"silver", "Silver", {192, 192, 192}},
-    {"slate", "Slate", {80, 96, 112}},
-    {"black", "Black", {0, 0, 0}},
+    {"chinchilla-blue", "Chinchilla blue (dithered)", {58, 110, 165}}, // between board colours
+    {"steel-blue", "Steel blue", exact(2, 3, 2)}, // the nearest the board has to the first
+    {"teal", "Teal", exact(0, 4, 2)},
+    {"sea-green", "Sea green", exact(1, 4, 1)},
+    {"forest", "Forest", exact(0, 3, 0)},
+    {"navy", "Navy", exact(0, 0, 1)},
+    {"purple", "Purple", exact(3, 1, 2)},
+    {"plum", "Plum", exact(4, 0, 1)},
+    {"brick", "Brick", exact(5, 2, 1)},
+    {"olive", "Olive", exact(4, 4, 0)},
+    {"sand", "Sand", exact(6, 5, 1)},
+    {"sky", "Sky", exact(4, 5, 3)},
+    {"rose", "Rose", exact(7, 4, 2)},
+    {"silver", "Silver", exact(5, 5, 2)},
+    {"slate", "Slate", exact(2, 2, 1)},
+    {"black", "Black", exact(0, 0, 0)},
 };
 constexpr int kColourCount = sizeof(kColours) / sizeof(kColours[0]);
 
@@ -64,10 +77,26 @@ constexpr NamedPattern kPatterns[] = {
 };
 constexpr int kPatternCount = sizeof(kPatterns) / sizeof(kPatterns[0]);
 
-// What the desktop shows: places in the two tables above. Nothing is kept
-// in memory while the dialog is closed; the settings file has it.
+bool same(Rgb a, Rgb b) { return a.r == b.r && a.g == b.g && a.b == b.b; }
+// Whether the board has this colour (it is then shown with no dither).
+bool is_exact(Rgb c) { return same(gfx::shown(gfx::nearest(c)), c); }
+// Its place in the list of names; -1: it is not one of them.
+int named(Rgb c)
+{
+    for (int i = 0; i < kColourCount; i++) {
+        if (same(kColours[i].rgb, c)) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// What the desktop shows: a colour, and a place in the table of patterns.
+// Nothing is kept in memory while the dialog is closed; the settings file
+// has it.
 struct Choice {
-    int colour = 0, pattern = 0;
+    Rgb colour = kColours[0].rgb;
+    int pattern = 0;
 };
 
 // The pattern's ink: the colour a good deal darker, or lighter when the
@@ -80,14 +109,34 @@ Rgb ink_for(Rgb c)
     return {static_cast<uint8_t>(c.r * 5 / 8), static_cast<uint8_t>(c.g * 5 / 8), static_cast<uint8_t>(c.b * 5 / 8)};
 }
 
-wm::Wm::Backdrop backdrop_for(int colour, int pattern)
+wm::Wm::Backdrop backdrop_for(Rgb colour, int pattern)
 {
-    wm::Wm::Backdrop b = {kColours[colour].rgb, ink_for(kColours[colour].rgb), {}};
+    Rgb ink = ink_for(colour);
+    if (is_exact(colour)) {
+        // A flat colour gets a flat ink: the nearest the board has, and if
+        // that is the colour itself (blue has few levels), white or black.
+        ink = gfx::shown(gfx::nearest(ink));
+        if (same(ink, colour)) {
+            ink = colour.r + colour.g + colour.b < 384 ? Rgb{255, 255, 255} : Rgb{0, 0, 0};
+        }
+    }
+    wm::Wm::Backdrop b = {colour, ink, {}};
     memcpy(b.pattern, kPatterns[pattern].rows, 8);
     return b;
 }
 
 void apply(const Choice &c) { os::set_backdrop(backdrop_for(c.colour, c.pattern)); }
+
+// "#RRGGBB", as a colour that has no name is kept.
+bool from_hex(const char *text, Rgb &out)
+{
+    unsigned r, g, b;
+    if (text[0] != '#' || strlen(text) != 7 || sscanf(text + 1, "%2x%2x%2x", &r, &g, &b) != 3) {
+        return false;
+    }
+    out = {static_cast<uint8_t>(r), static_cast<uint8_t>(g), static_cast<uint8_t>(b)};
+    return true;
+}
 
 // `ini` is the caller's (2 KB, too much for the stack this deep).
 Choice read_settings(fs::Ini &ini)
@@ -100,9 +149,10 @@ Choice read_settings(fs::Ini &ini)
     if (ini.get("background", "colour", value, sizeof(value))) {
         for (int i = 0; i < kColourCount; i++) {
             if (strcmp(value, kColours[i].key) == 0) {
-                c.colour = i;
+                c.colour = kColours[i].rgb;
             }
         }
+        from_hex(value, c.colour); // a colour with no name
     }
     if (ini.get("background", "pattern", value, sizeof(value))) {
         for (int i = 0; i < kPatternCount; i++) {
@@ -118,105 +168,19 @@ void write_settings(fs::Ini &ini, const Choice &c)
 {
     // Read again first: the desktop keeps other things in the same file.
     load_settings("desktop", ini);
-    ini.set("background", "colour", kColours[c.colour].key);
+    char hex[8];
+    snprintf(hex, sizeof(hex), "#%02X%02X%02X", c.colour.r, c.colour.g, c.colour.b);
+    ini.set("background", "colour", named(c.colour) >= 0 ? kColours[named(c.colour)].key : hex);
     ini.set("background", "pattern", kPatterns[c.pattern].key);
     save_settings("desktop", ini);
 }
-
-// A grid of cells to pick one from: the colours, or the patterns. The cell
-// chosen has a black and white frame; arrows move it when it has the focus.
-class Picker : public wm::Widget {
-public:
-    using PaintFn = void (*)(gfx::Canvas &c, const Rect &cell, int index, void *context);
-    using ChangeFn = void (*)(void *context);
-
-    Picker(const Rect &r, int columns, int count, int cell_w, int cell_h, PaintFn paint_cell, ChangeFn changed,
-           void *context)
-        : Widget(r), columns_(columns), count_(count), cell_w_(cell_w), cell_h_(cell_h), paint_cell_(paint_cell),
-          changed_(changed), context_(context)
-    {
-    }
-
-    int selected() const { return selected_; }
-    void select(int index)
-    {
-        if (index < 0 || index >= count_ || index == selected_) {
-            return;
-        }
-        selected_ = index;
-        invalidate();
-        if (changed_ != nullptr) {
-            changed_(context_);
-        }
-    }
-    Rect cell(int index) const
-    {
-        return {(index % columns_) * cell_w_, (index / columns_) * cell_h_, cell_w_, cell_h_};
-    }
-
-    void paint(gfx::Canvas &c) override
-    {
-        c.fill({0, 0, rect.w, rect.h}, gfx::kGrey);
-        for (int i = 0; i < count_; i++) {
-            const Rect r = cell(i);
-            if (i == selected_) {
-                c.edge(r, gfx::kBlack, gfx::kBlack);
-                c.edge(r.inset(1), gfx::kWhite, gfx::kWhite);
-            }
-            const Rect inner = r.inset(3);
-            c.edge(inner, gfx::kDarkGrey, gfx::kWhite);
-            paint_cell_(c, inner.inset(1), i, context_);
-        }
-        if (has_focus() && selected_ >= 0) {
-            c.focus_rect(cell(selected_).inset(2));
-        }
-    }
-    bool wants_mouse() const override { return true; }
-    void mouse(const wm::MouseMsg &m) override
-    {
-        if (m.kind != wm::MouseKind::Down || m.x < 0 || m.y < 0 || m.x >= columns_ * cell_w_) {
-            return;
-        }
-        select(m.y / cell_h_ * columns_ + m.x / cell_w_);
-    }
-    bool focusable() const override { return true; }
-    bool key(const wm::KeyMsg &k) override
-    {
-        if (!k.pressed) {
-            return false;
-        }
-        switch (k.usage) {
-        case wm::key::Left:
-            select(selected_ - 1);
-            return true;
-        case wm::key::Right:
-            select(selected_ + 1);
-            return true;
-        case wm::key::Up:
-            select(selected_ - columns_);
-            return true;
-        case wm::key::Down:
-            select(selected_ + columns_);
-            return true;
-        default:
-            return false;
-        }
-    }
-
-private:
-    int columns_, count_, cell_w_, cell_h_;
-    PaintFn paint_cell_;
-    ChangeFn changed_;
-    void *context_;
-    int selected_ = 0;
-};
 
 // The preview: a small screen with the colour and pattern picked, a window
 // and a taskbar on it.
 class Preview : public wm::Widget {
 public:
     explicit Preview(const Rect &r) : Widget(r) {}
-    void set(int colour, int pattern)
+    void set(Rgb colour, int pattern)
     {
         colour_ = colour;
         pattern_ = pattern;
@@ -251,7 +215,8 @@ public:
     }
 
 private:
-    int colour_ = 0, pattern_ = 0;
+    Rgb colour_ = {0, 0, 0};
+    int pattern_ = 0;
 };
 
 class DisplayDialog : public wm::Window {
@@ -261,9 +226,10 @@ public:
           preview_({8, 8, 348, 114}),
           group_({8, 128, 348, 190}, "Desktop background"),
           colour_label_({18, 148, 60, 14}, "&Colour:"),
-          colour_name_({80, 148, 266, 14}, colour_text_),
-          colours_({18, 164, 328, 52}, 8, kColourCount, 41, 26, &DisplayDialog::paint_colour, &DisplayDialog::changed,
-                   this),
+          colour_name_({80, 148, 180, 14}, colour_text_),
+          colours_({18, 164, 328, 52}, 8, kColourCount, 41, 26, &DisplayDialog::paint_colour,
+                   &DisplayDialog::colour_changed, this),
+          other_({271, 143, 75, 21}, "&Other...", &DisplayDialog::other, this),
           pattern_label_({18, 222, 60, 14}, "&Pattern:"),
           pattern_name_({80, 222, 266, 14}, pattern_text_),
           patterns_({18, 238, 328, 72}, 5, kPatternCount, 65, 36, &DisplayDialog::paint_pattern,
@@ -278,6 +244,7 @@ public:
         add(colour_label_);
         add(colour_name_);
         add(colours_);
+        add(other_);
         add(pattern_label_);
         add(pattern_name_);
         add(patterns_);
@@ -288,8 +255,9 @@ public:
         set_default(&ok_);
         // What the desktop shows now, to start from and to go back to.
         before_ = read_settings(settings_);
-        colours_.select(before_.colour);
-        patterns_.select(before_.pattern);
+        colour_ = before_.colour;
+        show_colour();
+        patterns_.select_quietly(before_.pattern);
         sync();
         set_frame(os::centred(frame().w, frame().h));
         set_focus(&colours_);
@@ -305,6 +273,10 @@ public:
             const char letter = wm::key::letter(k.usage);
             if (letter == 'c' || letter == 'C') {
                 set_focus(&colours_);
+                return true;
+            }
+            if (letter == 'o' || letter == 'O') {
+                other_.click();
                 return true;
             }
             if (letter == 'p' || letter == 'P') {
@@ -330,24 +302,59 @@ private:
     static void paint_pattern(gfx::Canvas &c, const Rect &cell, int index, void *context)
     {
         auto *d = static_cast<DisplayDialog *>(context);
-        const wm::Wm::Backdrop b = backdrop_for(d->colours_.selected(), index);
+        const wm::Wm::Backdrop b = backdrop_for(d->colour_, index);
         if (index == 0) {
             c.fill_rgb(cell, b.colour);
         } else {
             c.fill_pattern(cell, b.colour, b.ink, b.pattern);
         }
     }
+    // A cell of the list was picked.
+    static void colour_changed(void *context)
+    {
+        auto *d = static_cast<DisplayDialog *>(context);
+        d->colour_ = kColours[d->colours_.selected()].rgb;
+        d->sync();
+    }
     static void changed(void *context) { static_cast<DisplayDialog *>(context)->sync(); }
+    // Other...: the 256 colours, in the colour dialog that any program can
+    // ask for (colour_dialog.cpp), over this one.
+    static void other(wm::Button &, void *context)
+    {
+        auto *d = static_cast<DisplayDialog *>(context);
+        colour_dialog(d, gfx::nearest(d->colour_), &DisplayDialog::other_picked, d);
+    }
+    static void other_picked(gfx::Colour colour, void *context)
+    {
+        auto *d = static_cast<DisplayDialog *>(context);
+        d->colour_ = gfx::shown(colour);
+        d->show_colour();
+        d->sync();
+    }
+    // The list shows the colour if it is one of its own, else no cell.
+    void show_colour()
+    {
+        if (named(colour_) >= 0) {
+            colours_.select_quietly(named(colour_));
+        } else {
+            colours_.clear();
+        }
+    }
     void sync()
     {
-        strncpy(colour_text_, kColours[colours_.selected()].name, sizeof(colour_text_) - 1);
-        strncpy(pattern_text_, kPatterns[patterns_.selected()].name, sizeof(pattern_text_) - 1);
+        if (named(colour_) >= 0) {
+            snprintf(colour_text_, sizeof(colour_text_), "%s", kColours[named(colour_)].name);
+        } else {
+            snprintf(colour_text_, sizeof(colour_text_), "#%02X%02X%02X%s", colour_.r, colour_.g, colour_.b,
+                     is_exact(colour_) ? "" : " (dithered)");
+        }
+        snprintf(pattern_text_, sizeof(pattern_text_), "%s", kPatterns[patterns_.selected()].name);
         colour_name_.invalidate();
         pattern_name_.invalidate();
         patterns_.invalidate(); // the patterns are shown in the colour picked
-        preview_.set(colours_.selected(), patterns_.selected());
+        preview_.set(colour_, patterns_.selected());
     }
-    Choice picked() const { return {colours_.selected(), patterns_.selected()}; }
+    Choice picked() const { return {colour_, patterns_.selected()}; }
     static void ok(wm::Button &, void *context)
     {
         auto *d = static_cast<DisplayDialog *>(context);
@@ -362,7 +369,8 @@ private:
         apply(static_cast<DisplayDialog *>(context)->picked());
     }
 
-    char colour_text_[24] = "";
+    char colour_text_[32] = "";
+    Rgb colour_ = kColours[0].rgb;
     char pattern_text_[24] = "";
     Choice before_; // what the settings file holds
     fs::Ini settings_;
@@ -370,6 +378,7 @@ private:
     wm::GroupFrame group_;
     wm::Label colour_label_, colour_name_;
     Picker colours_;
+    wm::Button other_;
     wm::Label pattern_label_, pattern_name_;
     Picker patterns_;
     wm::Button ok_, cancel_, apply_;

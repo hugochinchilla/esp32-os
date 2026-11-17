@@ -18,6 +18,7 @@
 #include "core/shell/boot.hpp"
 #include "core/shell/shell.hpp"
 #include "core/tty/screen.hpp"
+#include "core/wm/widgets.hpp"
 #include "core/wm/wm.hpp"
 #include "../host_adapters.hpp"
 #include "../thread_queue.hpp"
@@ -301,6 +302,64 @@ void close_everything()
         desktop.close(*desktop.active());
     }
     wait(20000);
+}
+
+void click(int x, int y)
+{
+    for (uint8_t buttons : {0, 1, 0}) {
+        clock_.now += 300000;
+        desktop.mouse({true, static_cast<int16_t>(x), static_cast<int16_t>(y), buttons, 0});
+    }
+}
+
+// Maximised, the grid has as many columns and rows as fit and the TTY knows;
+// the scroll bar goes back over what has left the top.
+void test_size_and_scroll_bar()
+{
+    close_everything();
+    shell::launch(*shell::find_app("Terminal"));
+    wm::Window *w = desktop.active();
+    CHECK(w != nullptr && w->resizable());
+    const tty::Screen *s = shell::terminal_screen();
+    CHECK(s != nullptr && s->columns() == 80 && s->rows() == 25);
+    desktop.toggle_maximize(*w);
+    wait(20000);
+    const gfx::Rect c = w->client();
+    const int columns = (c.w - wm::ScrollBar::kThickness - 4) / 6, rows = (c.h - 4) / 12;
+    CHECK(columns > 80 && rows > 25);
+    CHECK(s->columns() == columns && s->rows() == rows);
+    // A line as wide as the new grid stays on one row.
+    type("echo ");
+    for (int i = 0; i < columns - 16; i++) {
+        type("w");
+    }
+    key(wm::key::Enter);
+    const std::string wide = [&] {
+        std::string text(reinterpret_cast<const char *>(s->row(s->cursor_row() - 1)), columns);
+        return text;
+    }();
+    CHECK(wide.find(' ') == std::string::npos || wide.find_first_not_of('w') >= static_cast<size_t>(columns - 16));
+    // Fill more than a screen, then the bar's top arrow goes one line back
+    // and its bottom arrow returns.
+    for (int i = 0; i < rows + 5; i++) {
+        enter("echo more");
+    }
+    CHECK(s->history() > 0 && s->scrolled() == 0);
+    const int bar_x = c.right() - wm::ScrollBar::kThickness / 2;
+    click(bar_x, c.y + 6);
+    wait(20000);
+    CHECK(s->scrolled() == 1);
+    click(bar_x, c.bottom() - 6);
+    wait(20000);
+    CHECK(s->scrolled() == 0);
+    // The keys are still the grid's after a click on the bar.
+    enter("echo after");
+    CHECK(row(s->cursor_row() - 1) == "after");
+    // Back to its first size: 80 by 25 again, the cursor still on it.
+    desktop.toggle_maximize(*w);
+    wait(20000);
+    CHECK(s->columns() == 80 && s->rows() == 25 && s->cursor_row() >= 0 && s->cursor_row() <= 24);
+    close_everything();
 }
 
 void test_run()
@@ -651,6 +710,7 @@ int main()
         desktop.close(*desktop.active());
     }
     test_terminal();
+    test_size_and_scroll_bar();
     test_run();
     test_terminal_on_a_task();
     if (failures != 0) {

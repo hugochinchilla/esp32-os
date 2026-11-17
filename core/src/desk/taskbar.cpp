@@ -14,7 +14,7 @@ using gfx::Canvas;
 namespace {
 
 // Layout (tools/mockup/desktop.py).
-constexpr int kStartW = 58;
+constexpr int kStartW = 60; // two pixels clear on each side of the mascot and "Start"
 constexpr int kButtonsX = 72; // first window button, after a groove (further right with quick-launch icons)
 constexpr int kQuickW = 22;   // a quick-launch icon: 16x16 in a 22x22 button with no edge
 // What index_at() and the held button call the quick-launch icons, so they

@@ -941,6 +941,114 @@ private:
 };
 constexpr const char *WidgetWindow::kItems[20];
 
+// Desktop icons stay where they are dragged to (backlog item 41).
+static int g_moves = 0;
+static char g_dropped[64] = "";
+static int g_drop_x = 0, g_drop_y = 0;
+static void test_icon_places()
+{
+    Rig rig;
+    static const char *const labels[4] = {"One", "Two", "Three", "File"};
+    desk::Icon icons[4] = {{labels[0], nullptr, &run1, nullptr},
+                           {labels[1], nullptr, &run2, nullptr},
+                           {labels[2], nullptr, &run1, nullptr},
+                           {labels[3], nullptr, &run1, nullptr, "C:\\Documents\\Desktop\\file.txt"}};
+    rig.desk_icons.set_icons(icons, 4);
+    rig.desk_icons.set_moved([](void *) { g_moves++; }, nullptr);
+    rig.desk_icons.set_drop(
+        [](const char *path, int x, int y, void *) {
+            snprintf(g_dropped, sizeof(g_dropped), "%s", path);
+            g_drop_x = x;
+            g_drop_y = y;
+        },
+        nullptr);
+    rig.wm.start();
+    const auto drag = [&](int from_x, int from_y, int to_x, int to_y) {
+        rig.move(from_x, from_y, 0);
+        rig.move(from_x, from_y, 1);
+        rig.move(from_x + 8, from_y + 8, 1);
+        rig.move(to_x, to_y, 1);
+        rig.move(to_x, to_y, 0);
+    };
+    // Nothing placed: a column down the left, as always.
+    const Rect one = rig.desk_icons.icon_rect(0), two = rig.desk_icons.icon_rect(1);
+    CHECK(one.x == 2 && one.y == 8 && two.x == 2 && two.y == 78);
+    CHECK(rig.desk_icons.icon_rect(4).empty());
+
+    // An icon that stands for no file is dragged to where it is let go:
+    // its picture under the pointer. The others stay.
+    drag(one.x + 30, one.y + 20, 300, 200);
+    CHECK(rig.desk_icons.icon_rect(0).x == 300 - 36 && rig.desk_icons.icon_rect(0).y == 200 - 16);
+    CHECK(rig.desk_icons.icon_rect(1).x == two.x && rig.desk_icons.icon_rect(1).y == two.y);
+    CHECK(g_moves == 1 && g_dropped[0] == 0);
+    CHECK(rig.no_stale_pixels());
+    // Never off the screen or under the taskbar.
+    drag(300, 200, 639, 450);
+    CHECK(rig.desk_icons.icon_rect(0).right() == 640 && rig.desk_icons.icon_rect(0).bottom() == 452);
+    drag(620, 430, 300, 200);
+    // A press without a move is not a move.
+    rig.click(300, 200);
+    CHECK(g_moves == 3 && rig.desk_icons.selected_icon() == 0);
+
+    // It is not offered to a window, nor to an icon that takes files.
+    TestWindow a("A", {350, 100, 200, 150}, 0x1C);
+    rig.wm.add(a);
+    drag(300, 200, 450, 180);
+    CHECK(rig.desk_icons.icon_rect(0).x == 300 - 36 && g_moves == 3);
+    rig.wm.close(a);
+
+    // A file's icon moves the same way; a file from somewhere else goes to
+    // whoever takes those, with the place its icon would get.
+    const Rect file = rig.desk_icons.icon_rect(3);
+    drag(file.x + 30, file.y + 20, 500, 100);
+    CHECK(rig.desk_icons.icon_rect(3).x == 500 - 36 && g_moves == 4 && g_dropped[0] == 0);
+    rig.move(400, 400, 1);
+    rig.wm.begin_drag("C:\\other.txt");
+    rig.move(410, 300, 1);
+    rig.move(410, 300, 0);
+    CHECK(strcmp(g_dropped, "C:\\other.txt") == 0 && g_drop_x == 410 - 36 && g_drop_y == 300 - 16 && g_moves == 4);
+
+    // Snap on: nothing moves by itself; the next icon let go takes the
+    // nearest cell of the grid, or the nearest free one.
+    rig.desk_icons.set_snap(true);
+    CHECK(rig.desk_icons.icon_rect(0).x == 300 - 36 && rig.desk_icons.icon_rect(3).x == 500 - 36);
+    drag(two.x + 30, two.y + 20, 2 + 5 * 76 + 40, 8 + 2 * 70 + 20);
+    CHECK(rig.desk_icons.icon_rect(1).x == 2 + 5 * 76 && rig.desk_icons.icon_rect(1).y == 8 + 2 * 70);
+    const Rect three = rig.desk_icons.icon_rect(2);
+    drag(three.x + 30, three.y + 20, 2 + 5 * 76 + 36, 8 + 2 * 70 + 16); // on Two's cell
+    const Rect near = rig.desk_icons.icon_rect(2);
+    CHECK(!near.overlaps(rig.desk_icons.icon_rect(1)) && (near.x - 2) % 76 == 0 && (near.y - 8) % 70 == 0);
+    CHECK(abs(near.x - (2 + 5 * 76)) + abs(near.y - (8 + 2 * 70)) <= 76);
+
+    // Realign: all into the grid from the top left, in the order they are
+    // in on the screen (by column, then down).
+    rig.desk_icons.set_snap(false);
+    drag(rig.desk_icons.icon_rect(0).x + 30, rig.desk_icons.icon_rect(0).y + 20, 60, 300);
+    const int before = g_moves;
+    rig.desk_icons.realign();
+    rig.move(600, 300, 0); // an event, so the screen is painted
+    CHECK(g_moves == before + 1);
+    int at[4];
+    for (int i = 0; i < 4; i++) {
+        const Rect r = rig.desk_icons.icon_rect(i);
+        CHECK(r.x == 2 && (r.y - 8) % 70 == 0);
+        at[i] = (r.y - 8) / 70;
+    }
+    CHECK(at[0] == 0);                      // One was alone in the first column
+    CHECK(at[1] + at[2] + at[3] == 1 + 2 + 3 && at[3] == 3); // File was furthest right
+    CHECK(rig.no_stale_pixels());
+
+    // Places given with the icons are used; an icon without one takes the
+    // first cell nothing is on.
+    icons[0].x = 2;
+    icons[0].y = 8 + 70;
+    icons[1].x = 400;
+    icons[1].y = 30;
+    rig.desk_icons.set_icons(icons, 3);
+    CHECK(rig.desk_icons.icon_rect(0).y == 78 && rig.desk_icons.icon_rect(1).x == 400);
+    CHECK(rig.desk_icons.icon_rect(2).x == 2 && rig.desk_icons.icon_rect(2).y == 8);
+}
+
 // Quick launch: icons by the Start button that do something when clicked.
 static void test_quick_launch()
 {
@@ -1408,6 +1516,7 @@ int main()
     test_submenu_switches_at_once();
     test_slow_key_does_not_repeat();
     test_start_menu_and_icons();
+    test_icon_places();
     test_quick_launch();
     test_widgets();
     test_timers_and_clock();

@@ -61,6 +61,7 @@ set(CORE_SRCS
     src/shell/defrag.cpp
     src/shell/desktop.cpp
     src/shell/display.cpp
+    src/shell/colour_dialog.cpp
     src/shell/dialogs.cpp
     src/shell/editor.cpp
     src/shell/file_manager.cpp

@@ -512,6 +512,15 @@ int main(int argc, char **argv)
     desktop.text("help");
     key(wm::key::Enter);
     save("46-terminal-help");
+    // Maximised: as many columns and rows as fit, and the scroll bar a
+    // few lines back.
+    desktop.toggle_maximize(*desktop.active());
+    desktop.text("dir");
+    key(wm::key::Enter);
+    key(wm::key::PageUp);
+    save("46b-terminal-maximized");
+    key(wm::key::PageDown);
+    desktop.toggle_maximize(*desktop.active());
     key(wm::key::F4, true);
 
     // Start > Run...: a program of its own, with a name typed.
@@ -587,10 +596,11 @@ int main(int argc, char **argv)
         mouse(400, 300, 0);
         check(desktop.menu_open(), "a right click on the desktop opens its menu");
         save("37p-desktop-menu");
-        centre_of(desktop.popup_item(0, 0), x, y);
+        centre_of(desktop.popup_item(0, 3), x, y);
         click(x, y);
         check(desktop.active() != nullptr && strcmp(desktop.active()->title(), "Display") == 0, "the dialog opens");
         save("37q-display-dialog");
+        key(wm::key::Right);
         key(wm::key::Right);            // Teal
         key(0x13, true);                // Alt+P: the patterns
         for (int i = 0; i < 4; i++) {
@@ -599,20 +609,20 @@ int main(int argc, char **argv)
         save("37r-display-teal-bricks");
         check(desktop.backdrop().colour.r == 58, "nothing changes before Apply");
         key(0x04, true);                // Alt+A: Apply
-        check(desktop.backdrop().colour.g == 128 && desktop.backdrop().pattern[0] == 0xFF, "Apply shows it");
+        check(desktop.backdrop().colour.g == 146 && desktop.backdrop().pattern[0] == 0xFF, "Apply shows it");
         save("37s-display-applied");
         key(wm::key::Escape);
         check(desktop.backdrop().colour.r == 58 && desktop.backdrop().pattern[0] == 0, "Escape takes it back");
         // Kept by OK, in desktop.ini.
         shell::display_dialog();
-        for (int i = 0; i < 9; i++) {
+        for (int i = 0; i < 10; i++) {
             key(wm::key::Right);        // Sand
         }
         key(0x13, true);
         key(wm::key::Down);
         key(wm::key::Right);            // Diamonds
         key(wm::key::Enter);
-        check(desktop.backdrop().colour.r == 208 && desktop.backdrop().pattern[0] == 0x10, "OK keeps it");
+        check(desktop.backdrop().colour.r == 219 && desktop.backdrop().pattern[0] == 0x10, "OK keeps it");
         fs::Ini ini;
         char value[32] = "";
         check(shell::load_settings("desktop", ini) && ini.get("background", "colour", value, sizeof(value)) &&
@@ -623,7 +633,7 @@ int main(int argc, char **argv)
         save("37t-desktop-sand-diamonds");
         // Back to how it was, for the pictures that follow.
         shell::display_dialog();
-        for (int i = 0; i < 9; i++) {
+        for (int i = 0; i < 10; i++) {
             key(wm::key::Left);
         }
         key(0x13, true);
@@ -631,6 +641,41 @@ int main(int argc, char **argv)
         key(wm::key::Left);
         key(wm::key::Enter);
         check(desktop.backdrop().colour.r == 58 && desktop.backdrop().pattern[0] == 0, "and back");
+        // Other...: any of the board's 256 colours, in a dialog of its own.
+        shell::display_dialog();
+        key(0x12, true);                // Alt+O
+        check(desktop.active() != nullptr && strcmp(desktop.active()->title(), "Colour") == 0,
+              "Other... opens the colours");
+        save("37u-colour-dialog");
+        key(wm::key::Escape);
+        check(desktop.active() != nullptr && strcmp(desktop.active()->title(), "Display") == 0,
+              "Escape closes only the colours");
+        key(0x12, true);
+        for (int i = 0; i < 3; i++) {
+            key(wm::key::Left);
+            key(wm::key::Up);
+        }
+        save("37v-colour-picked");
+        key(wm::key::Enter);
+        check(desktop.active() != nullptr && strcmp(desktop.active()->title(), "Display") == 0,
+              "OK gives the colour to Display");
+        save("37w-display-other-colour");
+        key(wm::key::Enter);
+        const gfx::Rgb custom = desktop.backdrop().colour;
+        check(gfx::shown(gfx::nearest(custom)).r == custom.r && gfx::shown(gfx::nearest(custom)).g == custom.g &&
+                  gfx::shown(gfx::nearest(custom)).b == custom.b && custom.r != 58,
+              "the desktop has a board colour");
+        char hex[8];
+        snprintf(hex, sizeof(hex), "#%02X%02X%02X", custom.r, custom.g, custom.b);
+        check(shell::load_settings("desktop", ini) && ini.get("background", "colour", value, sizeof(value)) &&
+                  strcmp(value, hex) == 0,
+              "a colour without a name is in desktop.ini as #RRGGBB");
+        // Opened again it shows that colour, with no cell of the list chosen.
+        shell::display_dialog();
+        save("37x-display-reopened");
+        key(wm::key::Right);            // the first of the list
+        key(wm::key::Enter);
+        check(desktop.backdrop().colour.r == 58 && desktop.backdrop().pattern[0] == 0, "and back again");
     }
 
     // The Trash. Empty at first, from its desktop icon.
@@ -808,6 +853,66 @@ int main(int argc, char **argv)
     }
     while (desktop.active() != nullptr) {
         desktop.close(*desktop.active());
+    }
+
+    // The icons stay where they are dragged to (backlog item 41): My Board
+    // let go in the open; with "Snap icons to grid" on, Documents let go
+    // near a cell takes it; Realign puts them all back in columns. The
+    // places are in icons.ini.
+    {
+        const auto check = [&](bool ok, const char *what) {
+            if (!ok) {
+                printf("Icons: %s\n", what);
+                failures++;
+            }
+        };
+        const auto drag = [&](int icon, int to_x, int to_y) {
+            int ix, iy;
+            centre_of(shell::desktop_icons()->icon_rect(icon), ix, iy);
+            mouse(ix, iy, 0);
+            mouse(ix, iy, 1);
+            mouse(ix + 8, iy + 8, 1);
+            mouse(to_x, to_y, 1);
+        };
+        const auto desktop_menu_item = [&](int item) {
+            mouse(300, 400, 0);
+            mouse(300, 400, 2);
+            mouse(300, 400, 0);
+            centre_of(desktop.popup_item(0, item), x, y);
+        };
+        drag(0, 250, 140);
+        save("39a-icon-dragged");
+        mouse(250, 140, 0);
+        check(shell::desktop_icons()->icon_rect(0).x == 250 - 36 && shell::desktop_icons()->icon_rect(0).y == 140 - 16,
+              "My Board stays where it was let go");
+        save("39b-icon-placed");
+        fs::Ini ini;
+        char value[32] = "";
+        check(shell::load_settings("icons", ini) && ini.get("system", "My Board", value, sizeof(value)) &&
+                  strcmp(value, "214,124") == 0,
+              "its place is in icons.ini");
+        desktop_menu_item(0);
+        click(x, y); // Snap icons to grid
+        check(shell::desktop_icons()->snap() && shell::desktop_icons()->icon_rect(0).x == 214,
+              "snapping on moves nothing");
+        check(shell::load_settings("desktop", ini) && ini.get_bool("icons", "snap", false), "snap is in desktop.ini");
+        drag(1, 2 + 4 * 76 + 50, 8 + 3 * 70 + 30);
+        mouse(2 + 4 * 76 + 50, 8 + 3 * 70 + 30, 0);
+        check(shell::desktop_icons()->icon_rect(1).x == 2 + 4 * 76 && shell::desktop_icons()->icon_rect(1).y == 8 + 3 * 70,
+              "Documents snaps to the grid");
+        desktop_menu_item(0);
+        save("39c-icons-menu-snap");
+        key(wm::key::Escape);
+        desktop_menu_item(1);
+        click(x, y); // Realign icons
+        save("39d-icons-realigned");
+        for (int i = 0; !shell::desktop_icons()->icon_rect(i).empty(); i++) {
+            const gfx::Rect r = shell::desktop_icons()->icon_rect(i);
+            check((r.x - 2) % 76 == 0 && (r.y - 8) % 70 == 0, "Realign puts every icon in the grid");
+        }
+        desktop_menu_item(0);
+        click(x, y); // snapping off again
+        check(!shell::desktop_icons()->snap(), "and off again");
     }
 
     // Shut Down from the Start menu: Enter picks Shut Down, and the screen
