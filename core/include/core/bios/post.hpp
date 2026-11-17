@@ -27,7 +27,10 @@ constexpr gfx::Colour kLeaf = gfx::rgb(1, 6, 1);
 constexpr gfx::Colour kLeafDark = gfx::rgb(1, 3, 0);
 
 // The first screen: how long it stays, counted from the start of the video.
-constexpr uint32_t kSplashMs = 3000;
+// The bench monitor shows a steady picture 5.5 s after the video starts,
+// whatever is on it (measured, docs/journal/2026-11-17-bios-first-screen.md):
+// this leaves it seen for about a second.
+constexpr uint32_t kSplashMs = 6500;
 
 struct Post {
     shell::BootIo &io;
@@ -55,7 +58,7 @@ void paint_frame(gfx::Canvas &c, TextScreen &screen);
 // energy badge: the mascot, a badge of our own, the version. It stays until
 // `ms` after the video started (a key ends it), which is when a monitor is
 // still waking, so nothing that matters is on it. Nothing goes to serial.
-// The self-test's own wait for the monitor then counts from its end.
+// The self-test's own wait for the monitor, if any, then counts from its end.
 void run_splash(Post &post, uint32_t ms = kSplashMs);
 // The same picture with given words (for the PC test against the drawing).
 void draw_splash(gfx::Canvas &c, TextScreen &screen, const char *version, const char *id);

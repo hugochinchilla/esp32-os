@@ -190,6 +190,10 @@ template <typename Draw> void matches(const char *look_folder, const char *file,
 void test_matches_reference(const char *look_folder)
 {
     matches(look_folder, "bios-post.png", [](gfx::Canvas &c, bios::TextScreen &s) {
+        // After the first screen, as on the board: what that screen kept
+        // free for its pictures must be text again. (On the board every
+        // line had a hole where the big mascot had been.)
+        bios::draw_splash(c, s, "v0.3", "");
         bios::draw_post(c, s,
                         {"v0.3", "ESP32-S3 dual core, 240 MHz", 8192, 376, "VGA 640x480, 256 colours",
                          "11 MB flash disk", "serial debug link", "none", "ota_0, 1.4 MB, image OK", 5,
@@ -252,6 +256,8 @@ void test_splash()
     io.hold_s = 0;
     bios::run_post(post, false);
     CHECK(row(s, 12).empty() && row(s, 7).find("Energy Nibbler") == std::string::npos);
+    CHECK(row(s, bios::kTitleRow + 1) == "  Copyleft 2026, built on nine resistors");
+    CHECK(row(s, bios::kProcessorRow) == "  Main Processor : ESP32-S3 dual core, 240 MHz (simulated)");
 
     // A key during it: over at once.
     SteppingClock clock2;

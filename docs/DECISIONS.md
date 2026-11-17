@@ -2351,7 +2351,11 @@ Step 2 of backlog item 46, compiled but not run on the board
 
 `docs/journal/2026-11-17-bios-first-screen.md`.
 
-- Before the self-test the BIOS shows a first screen for 3 s, as the PCs
+- Before the self-test the BIOS shows a first screen (asked for as 2 or
+  3 s; held until 7 s after the reset, to confirm, because the bench
+  monitor was measured to show a steady picture only 5.5 to 6 s after a
+  reset, for the BIOS and for `main` alike, not the 2.4 s recorded on
+  2026-11-16), as the PCs
   of the nineties showed their BIOS maker's logo and an energy badge. It
   covers the time the monitor takes to wake; nothing that matters is on it.
 - The badge is our own: a leaf with a lightning bolt in a round ring, the

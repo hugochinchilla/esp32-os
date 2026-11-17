@@ -27,7 +27,8 @@ public:
         out_context_ = context;
     }
 
-    // Every cell empty, the cursor at the top left. Nothing is sent.
+    // Every cell empty and free for text again (what reserve() set aside is
+    // given back), the cursor at the top left. Nothing is sent.
     void clear();
 
     // Cells no text is ever painted on: a picture sits there (the mascot).

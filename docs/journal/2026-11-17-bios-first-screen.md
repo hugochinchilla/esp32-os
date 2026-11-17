@@ -127,3 +127,53 @@ first screen for 10 s and the self-test's header for another 10 s, so the
 webcam shows how long the monitor takes on a still picture from the BIOS
 and whether the change of screen makes it start again. `main`'s start is
 to be filmed the same way, to see whether 2.4 s still holds.
+
+## Measured: the monitor takes 5.5 s, whatever is on it
+
+The measuring build (6feca43), after a reset by the EN pin: the first
+screen's first image at about 5.5 s, steady at about 6.0 s and whole (the
+monitor's "no signal" box from 3.0 to 3.5 s). The change of screen at
+about 10 s keeps the picture: no black, no new search. The self-test's
+lines were all seen from about 20 s. `main`, filmed the same way: first
+image at about 5.5 s too, desktop at 11.5 s.
+
+So the guess of the last entry was wrong, and so is the "2.4 s" the
+project has carried since 2026-11-16: today this monitor takes about 5.5 s
+from a reset to a picture, for the BIOS and for `main` alike, and a change
+of screen does not make it start again. The first image at 6.5 s with the
+3 s first screen was the monitor's usual time plus the half-shown frames
+of a screen that had just changed. (After a restart by software the film
+showed the first screen from 3.0 to 7.5 s and then 2 s of black; not
+understood, and to be looked at again with the real times.) The monitor's
+make could not be read from the webcam; the owner has been asked.
+
+A fault of the first-screen build was also seen: on the self-test screen
+every line had a hole ("Co      lt on nine resistors"), from column 4 to
+19 in rows 2 to 9. That is where the first screen's big mascot is. The
+text screen keeps cells free for pictures, and `clear()` kept them free,
+so the self-test's text there was stored and sent to serial but never
+painted. The PC tests missed it: they checked the text of the rows, which
+was right, and compared the self-test's picture only on a fresh screen.
+`clear()` now gives the cells back, and the picture test draws the first
+screen before the self-test, as the board does; with the fault put back it
+fails by 1,706 pixels.
+
+## The times, from the measurement
+
+Options:
+
+- A. First screen 3 s as asked, then the self-test's header for another
+  3.5 s before its lines. The first screen is never seen on this monitor.
+- B. First screen until 7 s after the reset, so it is seen steady for
+  about a second, then the self-test's lines at once.
+- C. No first screen: the self-test's header until 7 s.
+
+Chosen: B, to confirm with the owner. The three take the same time, and
+only B shows both the screen he asked for and the self-test from its first
+line. Built: `kSplashMs` is 6,500 (the video starts 0.5 s after the
+reset) and the BIOS's own wait before the lines is 0. From reset: first
+screen until 7.0 s, lines until about 8.5 s, countdown until 13.5 s. A key
+still ends each wait. Both times belong in Setup one day: another monitor
+will want less.
+
+Compiled (BIOS 304,128 bytes), all 42 PC tests pass. Not run on the board.
