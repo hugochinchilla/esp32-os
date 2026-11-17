@@ -53,6 +53,7 @@ static volatile uint64_t s_fill_cycles;
 #define CYCLES_PER_US (CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ)
 #define PERIOD_CYCLES (10 * 800 * CYCLES_PER_US / 25)
 static volatile vga_scan_stats_t s_scan;
+static volatile uint32_t s_missed_total, s_missed_worst_cycles, s_missed_pos;
 static uint32_t s_last_start;
 static int s_last_pos = -1;
 
@@ -106,6 +107,11 @@ static IRAM_ATTR bool on_bounce_empty(esp_lcd_panel_handle_t panel, void *bounce
         }
         if (late + (int32_t)fill > (int32_t)PERIOD_CYCLES) {
             s_scan.missed++; /* not done when the DMA needed it: stale lines shown */
+            s_missed_total++;
+            s_missed_pos = (uint32_t)pos_px;
+            if (late > 0 && (uint32_t)late > s_missed_worst_cycles) {
+                s_missed_worst_cycles = (uint32_t)late;
+            }
         }
     }
     return false;
@@ -187,6 +193,14 @@ void vga_start(void)
 void vga_set_line_hook(vga_line_hook_t hook)
 {
     s_line_hook = hook;
+}
+
+void vga_missed_total(uint32_t *missed, uint32_t *worst_us, uint32_t *line)
+{
+    *missed = s_missed_total;
+    *worst_us = s_missed_worst_cycles / CYCLES_PER_US;
+    s_missed_worst_cycles = 0; /* a miss landing between these two lines loses only its lateness */
+    *line = s_missed_pos / VGA_WIDTH;
 }
 
 void vga_scan_stats(vga_scan_stats_t *out, bool reset)

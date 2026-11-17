@@ -22,8 +22,11 @@ import binascii
 import getpass
 import json
 import os
+import queue
+import re
 import struct
 import sys
+import threading
 import time
 import zlib
 
@@ -36,6 +39,7 @@ BOOT_SCREEN = 18
 MEMORY_REPORT = 19
 TASKS = 20
 FAULT = 21
+LOG_READ = 22
 WIFI = 0x20
 MAX_REQUEST = 1024  # largest request payload the board takes
 LOG, HELLO, SHOT_DATA, SHOT_END = 0x70, 0x71, 0x72, 0x73
@@ -151,11 +155,76 @@ class Board:
         self.serial.timeout = 0.05
         self.serial.dsrdtr = True
         self.serial.open()
+        # The port is read on a thread of its own, all the time. The link has
+        # no flow control: while this program was busy with something else
+        # (decoding a screenshot, waiting on a file) and did not read, the
+        # PC's buffer filled and console text was lost on the way (backlog
+        # item 14b). What is read waits in a queue of any length; a byte in
+        # the pipe for each piece lets select() wait for it with the keyboard.
+        self.arrived = queue.Queue()
+        self.wake_read, self.wake_write = os.pipe()
+        self.closing = False
+        self.gone = False
+        self.reader = threading.Thread(target=self._pump, daemon=True)
+        self.reader.start()
         if reset:
             self.reset()
 
     def close(self):
+        self.closing = True
+        self.reader.join(1.0)
+        self.gone = True
         self.serial.close()
+        for end in (self.wake_read, self.wake_write):
+            try:
+                os.close(end)
+            except OSError:
+                pass
+
+    # The reader thread: bytes from the port to the queue, nothing else.
+    def _pump(self):
+        try:
+            while not self.closing:
+                data = self.serial.read(1)
+                waiting = self.serial.in_waiting
+                if waiting:
+                    data += self.serial.read(waiting)
+                if data:
+                    self.arrived.put(data)
+                    os.write(self.wake_write, b".")
+        except Exception:
+            pass
+        # The port went away (or the tool is closing): say so, once.
+        self.arrived.put(None)
+        try:
+            os.write(self.wake_write, b".")
+        except OSError:
+            pass
+
+    def fileno(self):
+        """Readable when something has arrived: for select() beside the keyboard."""
+        return self.wake_read
+
+    # What has arrived: waits up to `wait` seconds for the first piece, then
+    # takes every other piece that is already there.
+    def _arrived(self, wait=0.05):
+        if self.gone:
+            raise PortClosed("the serial port went away")
+        data = bytearray()
+        try:
+            piece = self.arrived.get(timeout=wait)
+            while True:
+                os.read(self.wake_read, 1)
+                if piece is None:
+                    self.gone = True
+                    break
+                data += piece
+                piece = self.arrived.get_nowait()
+        except queue.Empty:
+            pass
+        if self.gone and not data:
+            raise PortClosed("the serial port went away")
+        return bytes(data)
 
     def reset(self):
         """Restarts the board through the port's control lines."""
@@ -179,15 +248,7 @@ class Board:
     # Reads what has arrived. Log frames and text outside frames are printed
     # if asked for; other frames are queued for _wait.
     def _read(self):
-        try:
-            # Wait for the first byte (up to the timeout), then take whatever
-            # else has arrived, so a reply is handled as soon as it is in.
-            data = self.serial.read(1)
-            waiting = self.serial.in_waiting
-            if waiting:
-                data += self.serial.read(waiting)
-        except Exception:
-            raise PortClosed("the serial port went away")
+        data = self._arrived()
         shown = bytearray()
         for byte in data:
             if self.console is not None and not self.in_frame:
@@ -358,6 +419,32 @@ class Board:
                           "stack_free": stack_free, "stack": "psram" if flags & 1 else "internal"})
             at += size
         return {"clock_us": clock_us, "cores": cores, "left_out": left_out}, tasks
+
+    def log_text(self):
+        """The system log the board keeps (what `dmesg` prints), oldest first."""
+        out, at = bytearray(), 0
+        while True:
+            body = self.request(LOG_READ, struct.pack("<Q", at))
+            nxt = struct.unpack_from("<Q", body)[0]
+            out += body[8:]
+            if len(body) <= 8 or nxt == at:
+                break
+            at = nxt
+        return out.decode("utf-8", "replace")
+
+    MISS_LINE = re.compile(r"video: (\d+) refills? missed( \((all|\d+) during a debug task list\))?")
+
+    def missed_refills(self):
+        """The missed-refill lines in the log, as (line, misses not caused by
+        the debug link's task list)."""
+        found = []
+        for line in self.log_text().splitlines():
+            m = self.MISS_LINE.search(line)
+            if m:
+                total = int(m.group(1))
+                debug = total if m.group(3) == "all" else int(m.group(3) or 0)
+                found.append((line, total - debug))
+        return found
 
     def boot_screen(self, which):
         """Shows a start-up screen again ("selftest" runs the checks again,
@@ -569,7 +656,7 @@ def run_console(board):
             tty.setraw(keyboard)
         board.console_send(b"\r")  # a new prompt
         while True:
-            ready = select.select([keyboard, board.serial.fileno()], [], [], 0.2)[0]
+            ready = select.select([keyboard, board.fileno()], [], [], 0.2)[0]
             if keyboard in ready:
                 keys = os.read(keyboard, 256)
                 if not keys or b"\x1d" in keys:
@@ -771,6 +858,9 @@ def main(argv=None):
     p.add_argument("state", choices=["on", "off"])
     sub.add_parser("repaint", help="paint the whole screen again and time it")
     sub.add_parser("memory", help="where the memory goes: heaps and video timing (stacks: tasks)")
+    sub.add_parser("dmesg", help="the system log the board keeps, oldest first")
+    p = sub.add_parser("misses", help="missed video refills in the log not caused by the debug link; exits 1 if any")
+    p.add_argument("--all", action="store_true", help="also the lines caused only by dbg.py tasks")
     p = sub.add_parser("tasks", help="the kernel's tasks: state, priority, core, processor time, unused stack")
     p.add_argument("--interval", type=float, default=1.0,
                    help="seconds between the two readings behind the %%NOW column (default 1; 0: one reading)")
@@ -834,6 +924,7 @@ def main(argv=None):
     except Exception as error:  # the port could not be opened
         sys.exit("error: %s" % error)
 
+    exit_code = 0
     try:
         if args.command == "ping":
             print("answered in %.0f ms" % (board.ping() * 1000))
@@ -886,6 +977,18 @@ def main(argv=None):
             print("repainted in %d us" % board.repaint())
         elif args.command == "memory":
             print(board.memory_report(), end="")
+        elif args.command == "dmesg":
+            print(board.log_text(), end="")
+        elif args.command == "misses":
+            lines = board.missed_refills()
+            own = [(line, n) for line, n in lines if n > 0]
+            for line, _ in (lines if args.all else own):
+                print(line)
+            debug = sum(1 for _, n in lines if n == 0)
+            print("%d missed-refill line(s) not caused by the debug link; %d caused only by it (dbg.py tasks)" %
+                  (len(own), debug), file=sys.stderr)
+            if own:
+                exit_code = 1
         elif args.command == "tasks":
             earlier = None
             if args.interval > 0:
@@ -949,6 +1052,8 @@ def main(argv=None):
         pass
     finally:
         board.close()
+    if exit_code:
+        sys.exit(exit_code)
 
 
 if __name__ == "__main__":

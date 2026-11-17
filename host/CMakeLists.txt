@@ -134,6 +134,8 @@ add_test(NAME ota_tool
          COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/test_ota_sim.py $<TARGET_FILE:sim>)
 add_test(NAME serial_console
          COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/test_serial_console.py $<TARGET_FILE:sim>)
+add_test(NAME dbg_reader
+         COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/test_dbg_reader.py)
 # Programs made when opened and destroyed when closed (backlog 19 and 34).
 add_executable(test_lifecycle tests/test_lifecycle.cpp)
 target_link_libraries(test_lifecycle PRIVATE core)
@@ -181,6 +183,9 @@ add_test(NAME telnet COMMAND test_telnet)
 add_executable(test_crash tests/test_crash.cpp)
 target_link_libraries(test_crash PRIVATE core)
 add_test(NAME crash COMMAND test_crash)
+add_executable(test_missed_refills tests/test_missed_refills.cpp)
+target_link_libraries(test_missed_refills PRIVATE core)
+add_test(NAME missed_refills COMMAND test_missed_refills)
 
 # Chinchilla as a desktop program (backlog item 32): the same core in an SDL2
 # window. Its parts that need no window are tested everywhere; the program

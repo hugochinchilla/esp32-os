@@ -45,6 +45,7 @@ enum FrameType : uint8_t {
     kMemoryReport = 0x13, // text: heaps and task stacks // draw a start-up screen now (0 self-test, 1 splash); Repaint brings the desktop back
     kTasks = 0x14,        // the kernel's tasks: state, priority, core, run time, stack
     kFault = 0x15,        // a fault on purpose: hang, bad pointer or abort, charged to a process
+    kLogRead = 0x16,      // a piece of the system log (dmesg) from a position
     kWifi = 0x20,       // Wi-Fi: status, scan, list, connect, disconnect, forget
     // Sent by the board without being asked.
     kLog = 0x70,
