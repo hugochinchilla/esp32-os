@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "core/ports.hpp"
+#include "core/proc/table.hpp"
 
 namespace host {
 
@@ -279,6 +280,13 @@ public:
         out.frames_shown = out.uptime_ms * 60 / 1000;
     }
     void reboot() override { reboot_requested = true; }
+    // The PC does not fail on purpose: it notes what was asked, and for
+    // which process.
+    void fault(ports::Fault kind) override
+    {
+        fault_requested = static_cast<int>(kind);
+        fault_pid = proc::table().current();
+    }
     // The kernel's tasks: `task_list` as it is (tests fill it), or with
     // `pretend_tasks` a made-up list that moves with the clock, so the
     // simulator has something to show. Neither: not available.
@@ -345,6 +353,8 @@ public:
     }
 
     bool reboot_requested = false;
+    int fault_requested = -1; // the last ports::Fault asked for
+    proc::Pid fault_pid = proc::kNone;
     // Plausible figures for the task manager (the board's after start-up);
     // tests change them.
     uint32_t free_internal_ram = 311u << 10;

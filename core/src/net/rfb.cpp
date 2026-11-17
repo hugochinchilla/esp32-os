@@ -9,6 +9,43 @@ namespace rfb {
 
 namespace {
 
+// The lock for a block, if there is one.
+class Hold {
+public:
+    explicit Hold(ports::Lock *lock) : lock_(lock)
+    {
+        if (lock_ != nullptr) {
+            lock_->lock();
+        }
+    }
+    ~Hold()
+    {
+        if (lock_ != nullptr) {
+            lock_->unlock();
+        }
+    }
+    Hold(const Hold &) = delete;
+    Hold &operator=(const Hold &) = delete;
+
+private:
+    ports::Lock *lock_;
+};
+
+uint32_t stamp_of(const video::PointerShape &shape)
+{
+    uint32_t h = 2166136261u;
+    const auto mix = [&h](uint8_t v) { h = (h ^ v) * 16777619u; };
+    mix(shape.width);
+    mix(shape.height);
+    mix(shape.hot_x);
+    mix(shape.hot_y);
+    const int count = shape.width * shape.height;
+    for (int i = 0; i < count && i < static_cast<int>(sizeof(shape.pixels)); i++) {
+        mix(shape.pixels[i]);
+    }
+    return h | 2;
+}
+
 constexpr uint32_t kEncodingRaw = 0, kEncodingZrle = 16, kEncodingCursor = 0xFFFFFF11; // -239
 const char kName[] = "Chinchilla";
 
@@ -125,6 +162,7 @@ void Server::start(net::Stream *stream)
         }
         deflater_.init(work);
     }
+    collect(false);
     stream_ = stream;
     state_ = State::Version;
     stats_.connections++;
@@ -152,6 +190,7 @@ void Server::drop()
     stream_ = nullptr;
     state_ = State::Idle;
     stats_.connected = false;
+    collect(false);
     // Keys and buttons the viewer was holding are let go.
     for (Held &h : held_) {
         if (h.usage != 0) {
@@ -161,8 +200,7 @@ void Server::drop()
     }
     if (buttons_ != 0) {
         buttons_ = 0;
-        const video::PointerState p = pointer_.state();
-        input_.mouse({true, p.x, p.y, 0, 0});
+        input_.mouse({true, last_x_, last_y_, 0, 0});
     }
 }
 
@@ -199,9 +237,29 @@ void Server::put32(uint32_t v)
 
 void Server::damage(const gfx::Rect &r)
 {
-    if (state_ != State::Running) {
+    const Hold hold(lock_);
+    if (!collecting_) {
         return; // a new viewer starts with the whole screen
     }
+    mark(r);
+}
+
+bool Server::anything_dirty()
+{
+    const Hold hold(lock_);
+    return any_dirty_;
+}
+
+void Server::collect(bool on)
+{
+    const Hold hold(lock_);
+    memset(dirty_, 0, sizeof(dirty_));
+    any_dirty_ = false;
+    collecting_ = on;
+}
+
+void Server::mark(const gfx::Rect &r)
+{
     const gfx::Rect c = r.intersect({0, 0, width_, height_});
     if (c.empty()) {
         return;
@@ -246,7 +304,7 @@ void Server::poll()
             if (cursor_ && requested_) {
                 shape_due_ = shape_stamp() != sent_shape_;
             }
-            if (!requested_ || !(any_dirty_ || shape_due_)) {
+            if (!requested_ || !(anything_dirty() || shape_due_)) {
                 return;
             }
             begin_update();
@@ -267,21 +325,36 @@ void Server::poll()
     }
 }
 
-uint32_t Server::poll_interval_us() const
+uint32_t Server::watch(net::Watch &watch)
 {
-    if (state_ != State::Idle) {
-        return kBusyPollUs;
-    }
-    uint32_t interval = kNever;
+    uint32_t sleep_us = kNever;
     for (const net::Listener *listener : listeners_) {
-        if (listener != nullptr) {
-            if (listener->busy()) {
-                return kBusyPollUs;
-            }
-            interval = kListenPollUs;
+        if (listener != nullptr && !listener->watch(watch)) {
+            const uint32_t by_clock = listener->busy() ? kBusyPollUs : kListenPollUs;
+            sleep_us = by_clock < sleep_us ? by_clock : sleep_us;
         }
     }
-    return interval;
+    if (state_ == State::Idle) {
+        return sleep_us;
+    }
+    const int handle = stream_->handle();
+    if (handle < 0) {
+        return kBusyPollUs;
+    }
+    const bool unsent = out_sent_ < out_size_;
+    watch.add(handle, true, unsent);
+    if (unsent || state_ != State::Running) {
+        return sleep_us; // until the network takes more, or the viewer speaks
+    }
+    if (updating_) {
+        return 0; // the budget ran out in the middle of an update
+    }
+    if (!requested_) {
+        return sleep_us; // the viewer has what it asked for; it will ask again
+    }
+    // The viewer waits for the screen to change, and that comes from the UI
+    // task, which has no way to end this sleep.
+    return kBusyPollUs;
 }
 
 /* ---- What the viewer sends -------------------------------------------------------- */
@@ -381,8 +454,7 @@ size_t Server::message(const uint8_t *m, size_t size)
         put32(sizeof(kName) - 1);
         memcpy(out_ + out_size_, kName, sizeof(kName) - 1);
         out_size_ += sizeof(kName) - 1;
-        memset(dirty_, 0, sizeof(dirty_));
-        any_dirty_ = false;
+        collect(true);
         state_ = State::Running;
         return 1;
     }
@@ -413,10 +485,8 @@ size_t Server::message(const uint8_t *m, size_t size)
         }
         requested_ = true;
         if (m[1] == 0) { // not incremental: all of that part again
-            const State s = state_;
-            state_ = State::Running;
-            damage({get16(m + 2), get16(m + 4), get16(m + 6), get16(m + 8)});
-            state_ = s;
+            const Hold hold(lock_);
+            mark({get16(m + 2), get16(m + 4), get16(m + 6), get16(m + 8)});
         }
         return 10;
     }
@@ -584,6 +654,8 @@ void Server::pointer_event(uint8_t mask, int x, int y)
     buttons_ = buttons;
     x = x >= width_ ? width_ - 1 : x;
     y = y >= height_ ? height_ - 1 : y;
+    last_x_ = static_cast<int16_t>(x);
+    last_y_ = static_cast<int16_t>(y);
     input_.mouse({true, static_cast<int16_t>(x), static_cast<int16_t>(y), buttons, wheel});
 }
 
@@ -613,22 +685,16 @@ gfx::Rect Server::block_damage(const uint8_t *grid, int index) const
     return r.intersect({0, 0, width_, height_});
 }
 
+// The pointer's shape as it is now, to compare with what was sent. It may be
+// read while the UI task changes it; a wrong answer then only sends the
+// shape once more.
 uint32_t Server::shape_stamp() const
 {
     const video::PointerState p = pointer_.state();
     if (p.shape == nullptr || !p.visible) {
         return 1;
     }
-    uint32_t h = 2166136261u;
-    const auto mix = [&h](uint8_t v) { h = (h ^ v) * 16777619u; };
-    mix(p.shape->width);
-    mix(p.shape->height);
-    mix(p.shape->hot_x);
-    mix(p.shape->hot_y);
-    for (int i = 0; i < p.shape->width * p.shape->height; i++) {
-        mix(p.shape->pixels[i]);
-    }
-    return h | 2;
+    return stamp_of(*p.shape);
 }
 
 void Server::begin_update()
@@ -637,9 +703,14 @@ void Server::begin_update()
         map_due_ = false;
         send_colour_map();
     }
-    memcpy(sending_, dirty_, static_cast<size_t>(cells_x_ * cells_y_));
-    memset(dirty_, 0, static_cast<size_t>(cells_x_ * cells_y_));
-    any_dirty_ = false;
+    {
+        // What is marked from here on is for the next update: the blocks of
+        // this one are read from the screen after this moment.
+        const Hold hold(lock_);
+        memcpy(sending_, dirty_, static_cast<size_t>(cells_x_ * cells_y_));
+        memset(dirty_, 0, static_cast<size_t>(cells_x_ * cells_y_));
+        any_dirty_ = false;
+    }
     int count = shape_due_ ? 1 : 0;
     for (int b = 0; b < blocks_x_ * blocks_y_; b++) {
         count += block_damage(sending_, b).empty() ? 0 : 1;
@@ -783,24 +854,29 @@ void Server::send_block(int index)
 void Server::send_pointer_shape()
 {
     const video::PointerState p = pointer_.state();
-    sent_shape_ = shape_stamp();
-    shape_due_ = false;
     const bool shown = p.shape != nullptr && p.visible;
-    const int w = shown ? p.shape->width : 0, h = shown ? p.shape->height : 0;
-    put16(shown ? p.shape->hot_x : 0);
-    put16(shown ? p.shape->hot_y : 0);
+    if (shown) {
+        shape_ = *p.shape;
+        shape_.width = shape_.width > video::kMaxPointerSize ? video::kMaxPointerSize : shape_.width;
+        shape_.height = shape_.height > video::kMaxPointerSize ? video::kMaxPointerSize : shape_.height;
+    }
+    sent_shape_ = shown ? stamp_of(shape_) : 1;
+    shape_due_ = false;
+    const int w = shown ? shape_.width : 0, h = shown ? shape_.height : 0;
+    put16(shown ? shape_.hot_x : 0);
+    put16(shown ? shape_.hot_y : 0);
     put16(static_cast<uint16_t>(w));
     put16(static_cast<uint16_t>(h));
     put32(kEncodingCursor);
     for (int i = 0; i < w * h; i++) {
-        const bool white = p.shape->pixels[i] == video::kPointerWhite;
+        const bool white = shape_.pixels[i] == video::kPointerWhite;
         out_size_ += static_cast<size_t>(put_pixel(out_ + out_size_, table_[white ? gfx::kWhite : gfx::kBlack]));
     }
     for (int y = 0; y < h; y++) {
         for (int x = 0; x < w; x += 8) {
             uint8_t bits = 0;
             for (int i = 0; i < 8 && x + i < w; i++) {
-                if (p.shape->pixels[y * w + x + i] != video::kPointerClear) {
+                if (shape_.pixels[y * w + x + i] != video::kPointerClear) {
                     bits |= static_cast<uint8_t>(0x80 >> i);
                 }
             }

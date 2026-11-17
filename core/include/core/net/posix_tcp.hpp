@@ -1,7 +1,9 @@
 // A listening TCP port through the POSIX socket calls: the PC's in the
 // simulator, lwIP's on the board (ESP-IDF offers the same calls). Only POSIX
 // headers, no ESP-IDF ones. PosixTcpListener has one connection at a time (a
-// new one replaces the old); PosixTcpPool has several. Nothing here waits.
+// new one replaces the old); PosixTcpPool has several. Neither waits.
+// PosixWait is what does: select() on everything a round of the services
+// loop was told to watch (core/net/services.hpp).
 #pragma once
 
 #include <cerrno>
@@ -9,12 +11,25 @@
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include "core/net/services.hpp"
 #include "core/net/stream.hpp"
 
 namespace net {
+
+// The port a listening socket has, 0 if none.
+inline int bound_port(int fd)
+{
+    sockaddr_in address = {};
+    socklen_t size = sizeof(address);
+    if (fd < 0 || getsockname(fd, reinterpret_cast<sockaddr *>(&address), &size) != 0) {
+        return 0;
+    }
+    return ntohs(address.sin_port);
+}
 
 class PosixTcpListener : public Listener, private Stream {
 public:
@@ -53,6 +68,8 @@ public:
     }
 
     bool listening() const { return listening_ >= 0; }
+    // The port it listens on (the one the machine chose, after listen(0)).
+    int port() const { return bound_port(listening_); }
 
     Stream *accept() override
     {
@@ -75,7 +92,17 @@ public:
         return this;
     }
 
+    bool watch(Watch &watch) const override
+    {
+        if (listening_ >= 0) {
+            watch.add(listening_, true, false);
+        }
+        return true;
+    }
+
 private:
+    int handle() const override { return connection_; }
+
     static bool no_waiting(int fd)
     {
         const int flags = fcntl(fd, F_GETFL, 0);
@@ -166,6 +193,7 @@ public:
     }
 
     bool listening() const { return listening_ >= 0; }
+    int port() const { return bound_port(listening_); }
 
     Stream *accept() override
     {
@@ -197,8 +225,24 @@ public:
         return spare;
     }
 
+    // Someone knocking only counts while there is a place for them:
+    // accept() would leave them at the door, and the sleep would end again
+    // and again for nothing.
+    bool watch(Watch &watch) const override
+    {
+        bool room = false;
+        for (const One &one : streams_) {
+            room = room || one.fd < 0;
+        }
+        if (listening_ >= 0 && room) {
+            watch.add(listening_, true, false);
+        }
+        return true;
+    }
+
 private:
     struct One : Stream {
+        int handle() const override { return fd; }
         int read(uint8_t *out, size_t capacity) override
         {
             if (fd < 0) {
@@ -238,6 +282,46 @@ private:
 
     int listening_ = -1;
     One streams_[kStreams];
+};
+
+// The sleep of the services loop: select() on the sockets it was given.
+class PosixWait : public Wait {
+public:
+    void clear() override
+    {
+        FD_ZERO(&read_);
+        FD_ZERO(&write_);
+        highest_ = -1;
+    }
+
+    void add(int handle, bool readable, bool writable) override
+    {
+        if (handle < 0 || handle >= FD_SETSIZE || !(readable || writable)) {
+            return;
+        }
+        if (readable) {
+            FD_SET(handle, &read_);
+        }
+        if (writable) {
+            FD_SET(handle, &write_);
+        }
+        highest_ = handle > highest_ ? handle : highest_;
+    }
+
+    bool sleep(uint32_t max_us) override
+    {
+        if (highest_ < 0 && max_us == kNever) {
+            max_us = kNothingToWatchUs; // nothing could ever end this sleep
+        }
+        timeval time = {static_cast<decltype(time.tv_sec)>(max_us / 1000000),
+                        static_cast<decltype(time.tv_usec)>(max_us % 1000000)};
+        return ::select(highest_ + 1, &read_, &write_, nullptr, max_us == kNever ? nullptr : &time) > 0;
+    }
+
+private:
+    static constexpr uint32_t kNothingToWatchUs = 1000000;
+    fd_set read_ = {}, write_ = {};
+    int highest_ = -1;
 };
 
 } // namespace net

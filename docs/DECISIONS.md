@@ -236,6 +236,54 @@ Decided by the owner; the story is in
   than the dialog frees, and the widgets assume one task); waiting for
   loadable programs (item 27) before changing how dialogs are written.
 
+### Watchdog, crash record and error screen (2026-11-17)
+
+Backlog item 7. Chosen by the agent under the owner's go-ahead to work
+through the backlog; the options and reasons are in
+`docs/journal/2026-11-17-watchdog.md`. Each is easy to change. Built and
+tested on the PC, compiled for the board; not yet run on the board.
+
+- **The watchdog is a heartbeat**: the UI loop reports each time it comes
+  round, and a supervisor checks once a second how old the last report is.
+  This catches a program that spins and one that waits for ever. The
+  supervisor is a callback on ESP-IDF's timer task (priority 22, core 0): no
+  task and no stack of its own, nothing added to the video interrupt, the
+  Wi-Fi task or the network task. ESP-IDF's own task watchdog stays as it
+  was (a warning on the serial port, no restart).
+- **15 seconds** of silence, `[watchdog] timeout_s` in `C:\.config\boot.ini`
+  (5 to 600; 0: off). The start-up, before the loop runs, is not watched.
+  `sys::Watchdog` has room for four tasks; only `ui` is watched today.
+- **After a hang the machine restarts at once**, without the shutdown
+  handlers (they could wait on what the stuck task holds).
+- **Crashes** (bad pointer, `abort()`, assert, stack overflow, interrupt
+  watchdog) are caught by wrapping ESP-IDF's `esp_panic_handler` at link
+  time; ESP-IDF's own handler runs afterwards as before, so the serial
+  report is unchanged.
+- **The crash record** is 188 bytes in memory a restart does not clear
+  (`RTC_NOINIT_ATTR`), checked by magic word, version and checksum, reported
+  once. It names the program (from the process table, when the failing task
+  is the UI task), the task, running or waiting, the uptime, and for a crash
+  the reason, the addresses and up to 16 return addresses. For a hang it
+  does not say where the program was stuck. Nothing is written to flash at
+  the moment of the crash. With no record, an abnormal reset reason from the
+  chip (brownout, hardware watchdog) is reported instead.
+- **The error screen** is a full screen at the next start, before the
+  self-test and also on a fast start, in the self-test's style with the
+  mascot on its back (own design). It counts down 15 seconds and goes on by
+  itself (`[boot] crash_hold_s`; 0 waits for a key), because a bare board has
+  nothing to press a key on; a key or mouse button ends it. The debug link
+  answers while it shows.
+- **Reports are kept** in `C:\crash.txt`, added to at the start after the
+  crash; the file starts again past 16 KB.
+- **Testing**: `tools/dbg.py fault hang|pointer|abort [--pid N]` makes the
+  board fail on purpose, charged to a program if asked; `tools/dbg.py boot
+  crash` draws the screen.
+- Not taken: ESP-IDF's task watchdog with panic switched on (it would make
+  every 5 s of honest work fatal and names no program); a supervisor task of
+  its own (a stack for nothing); a core dump partition (can be added
+  later); a message box on the desktop instead of the screen; a longer limit
+  while the hourglass shows.
+
 ### Program lifecycle (2026-11-17)
 
 Backlog items 19 and 34. Chosen without asking first, under the owner's
@@ -1164,9 +1212,9 @@ Journal: `docs/journal/2026-11-16-safe-saves-and-hourglass.md`.
 - Remote screen (compiled and linked for the board, never run there): a VNC
   viewer connects to the board's address, and a browser opens
   `http://<address>/`; the picture is right; keys and mouse work; how long a full-screen update takes and how the desktop feels
-  meanwhile; the VGA picture stays stable with a viewer connected. If
-  updates are slow, the UI loop's 10 ms pace (FreeRTOS at 100 ticks a
-  second) is the first thing to look at.
+  meanwhile; the VGA picture stays stable with a viewer connected. (The
+  remote screen runs on the services task since item 8b; the UI loop's pace
+  no longer limits it.)
 - Finding by name (compiled and linked, never run on the board): the log
   says `answers to chinchilla.local (mDNS)`; `ping chinchilla.local` from
   the laptop answers; `http://chinchilla.local/` opens the viewer; the two
@@ -1308,14 +1356,58 @@ and not yet run on it. The options and the reasons are in
   next timer (`Wm::idle_us()`), one second at most. Serial bytes wake it
   through the serial driver's notification hook. Timers are as exact as
   before: one kernel tick, 10 ms.
-- The network is still looked at by the clock, since nothing can wake the
+- **Replaced 2026-11-17 by the services loop** (next section): the network
+  was still looked at by the clock, since nothing can wake the
   loop for a socket: every 10 ms while a viewer is connected or a web page
   is being sent, every 50 ms while only waiting for a connection, never
   with no port open. The other option was a watcher task (about 3 KB of
   internal RAM); it goes away by itself when the VNC server becomes a task.
   **Confirmed by the owner, 2026-11-16** ("Ok", after asking who would own
   the watcher: nobody does today, the UI task looks at the network itself).
+  For now only: the owner found it odd that the UI looks after the network
+  (a board with no monitor might not run the UI at all) and chose, on a card,
+  a **services loop** as its own backlog item (8b): one task shared by the
+  network services, asleep on all their sockets, that reaches the desktop
+  only by messages. The other options were to build it in the same change or
+  to leave the network in the UI loop.
 - The UI task runs at most 16 messages per round, then timers and painting.
+
+### Chosen for the services loop (2026-11-17, to confirm)
+
+Backlog item 8b, built on a branch, tested on the PC, compiled for the board
+and not yet run on it. The owner chose the services loop itself (above); he
+was away for the rest, so the points below are the agent's and his to
+change. The options and the reasons are in
+`docs/journal/2026-11-17-services-loop.md`.
+
+- One task, `inetd`, runs every network service: the remote screen (VNC) and
+  its web page today, the telnet listener next. 4 KB of stack in internal
+  RAM, priority 4, just under the UI task. It is started after the desktop,
+  and only if a port could be opened. It has a row in the process table
+  (system flag), one row for the one task; `vncd` and `httpd` stay unused
+  names. The other options were a task per service, or leaving the network
+  in the UI loop.
+- It sleeps in `select()` on all the services' sockets (`net::Services`,
+  `net::PosixWait`). Each service says what it waits for (`watch()`); the
+  loop knows nothing of VNC. With nobody connected it does not wake at all.
+  The UI loop no longer looks at the network.
+- The services task never touches windows, timers or the process table. A
+  viewer's keys, mouse and typed text reach the window manager as messages
+  (`msg::PostedInput`); when the queue is full the sender waits a second,
+  then the event is lost and counted. Anything a later service needs from
+  the process table also goes through `msg::post()`.
+- The grid of what was painted, written by the UI task and read by the
+  services task, has a lock (a `ports::Lock`). The screen's pixels have
+  none: a block read while it is being painted is sent again, because the
+  window manager reports a rectangle after painting it. The other option
+  was a lock around painting.
+- While a viewer waits for the screen to change, the services task looks
+  every 10 ms, since the UI task cannot end a `select()`. The other option,
+  an event the UI task signals (ESP-IDF's `eventfd`), is left for later.
+- A service with work left comes straight back; after 40 ms without a sleep
+  the loop rests 10 ms, so lower tasks and the idle task always run.
+- A departing viewer's held buttons are released where that viewer last had
+  the pointer.
 
 ### Chosen for signals and flags (2026-11-16, to confirm)
 
@@ -1392,7 +1484,8 @@ confusing". The story is in `docs/journal/2026-11-16-only-real-tasks.md`.
   manager's timer is the desktop's. Before any program starts the table is
   `desktop` 1.
 - A service gets its row, with the name planned for it, in the change that
-  makes it a task (items 14, 18 and 26).
+  makes it a task (items 14, 18 and 26). The first: the network services
+  became one task with one row, `inetd`, in item 8b (2026-11-17).
 - There is no `init` row either, until init is a real program (item 18).
   **The owner's decision, 2026-11-16**: "make desktop pid 1 for now". The
   first process made is the root of the tree, PID 1, and today that is the

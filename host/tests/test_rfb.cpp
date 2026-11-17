@@ -222,7 +222,9 @@ void test_pointer()
     pipe_.open = false;
     server.poll();
     CHECK(!server.stats().connected);
-    CHECK(desktop.take() == "-04 m0,0,0,0 ");
+    // The button where the viewer last had the pointer: the server does not
+    // ask the screen where it is now (that belongs to another task).
+    CHECK(desktop.take() == "-04 m10,10,0,0 ");
 }
 
 void test_bad_input()

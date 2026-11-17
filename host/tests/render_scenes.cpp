@@ -166,6 +166,39 @@ int main(int argc, char **argv)
     save("00a-boot-self-test", false);
     shell::show_splash(boot, false);
     save("00b-boot-splash", false);
+    // The error screen at the start after a crash: a program that hung, and
+    // one that used a bad pointer.
+    {
+        sys::CrashRecord r;
+        sys::crash_begin(r, sys::CrashKind::Hang);
+        r.pid = 7;
+        r.uptime_ms = 754000;
+        r.waited_ms = 15400;
+        r.core = 1;
+        sys::crash_text(r.program, sizeof(r.program), "Editor");
+        sys::crash_text(r.task, sizeof(r.task), "ui");
+        sys::crash_seal(r);
+        boot.crash_hold_s = 15;
+        gfx::RectList all;
+        all.set({0, 0, 640, 480});
+        gfx::Canvas c(display.pixels(), 640, 480, all, {0, 0, 640, 480});
+        shell::draw_crash_screen(c, 640, 480, r, true, 15);
+        save("00d-crash-hang", false);
+        sys::crash_begin(r, sys::CrashKind::Panic);
+        r.pid = 12;
+        r.uptime_ms = 3723000;
+        r.pc = 0x4200ABCD;
+        r.trace_count = 8;
+        for (int i = 0; i < 8; i++) {
+            r.trace[i] = 0x42001000u + static_cast<uint32_t>(i) * 0x111;
+        }
+        sys::crash_text(r.program, sizeof(r.program), "Cactus Patch");
+        sys::crash_text(r.task, sizeof(r.task), "ui");
+        sys::crash_text(r.reason, sizeof(r.reason), "StoreProhibited");
+        sys::crash_seal(r);
+        shell::draw_crash_screen(c, 640, 480, r, true, 9);
+        save("00e-crash-panic", false);
+    }
 
     shell::start(desktop, system_, storage, memory);
     desktop.start();

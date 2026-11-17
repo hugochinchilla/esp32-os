@@ -10,7 +10,8 @@
 // browsers. One WebSocket at a time: a new one ends the earlier one.
 //
 // Nothing here waits. Everything happens inside accept(), which the VNC
-// server calls at each of its polls.
+// server calls at each of its polls; watch() says what should bring the
+// next one.
 #pragma once
 
 #include <cstddef>
@@ -59,6 +60,9 @@ public:
         return false;
     }
 
+    // New connections, requests still arriving, answers still leaving.
+    bool watch(Watch &watch) const override;
+
     uint32_t pages_served() const { return pages_served_; }
 
 private:
@@ -89,6 +93,7 @@ private:
     int read(uint8_t *out, size_t capacity) override;
     int write(const uint8_t *data, size_t size) override;
     void close() override;
+    int handle() const override { return socket_ != nullptr ? socket_->handle() : -1; }
     int flush_pending(); // 1 nothing left, 0 not all sent yet, -1 broken
 
     Listener *port_ = nullptr;

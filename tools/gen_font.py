@@ -89,7 +89,7 @@ def main_wide(src, out, name, chars):
         f.write('#include "core/gfx/font.hpp"\n\nnamespace gfx {\n\nnamespace {\n\n')
         f.write("const uint8_t kGlyphs[] = {\n%s\n};\n\n} // namespace\n\n" % "\n".join(data))
         f.write('const WideFont %s = {%d, %d, %d, "%s", kGlyphs};\n\n} // namespace gfx\n'
-                % (name, width, height, per_row, chars))
+                % (name, width, height, per_row, chars.replace("\\", "\\\\").replace('"', '\\"')))
 
 
 def main():

@@ -277,6 +277,14 @@ struct TaskTotals {
     uint8_t left_out;  // tasks that did not fit in the list
 };
 
+// Faults made on purpose, to try the watchdog and the crash record
+// (tools/dbg.py fault). None of them returns on the board.
+enum class Fault : uint8_t {
+    Hang = 0,       // the calling task spins for ever
+    BadPointer = 1, // a write through a null pointer
+    Abort = 2,      // abort()
+};
+
 class System {
 public:
     virtual void stats(SystemStats &out) = 0;
@@ -307,6 +315,8 @@ public:
         return false;
     }
     virtual void reboot() = 0;
+    // Makes the fault happen in the calling task, now.
+    virtual void fault(Fault kind) { (void)kind; }
     // The next start is a fast one (no start-up screens), once.
     virtual void arm_fast_boot() {}
 

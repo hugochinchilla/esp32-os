@@ -26,9 +26,10 @@ board or the merge), `done`.
 | 5b | TERM and KILL for services: each gets a stop function, so ending one really stops it. Waits until a service is a real task with a row (their label-only rows were removed, [journal](journal/2026-11-16-only-real-tasks.md)) | S | 5, 18 | Yes | todo |
 | 6 | Atomic saves: temporary file, then rename | S | | Yes | done (checked on the board 2026-11-16) |
 | 6b | Hourglass pointer while a program makes the user wait, first of all during a save (own art) | S | | Yes | done (checked on the board 2026-11-16) |
-| 7 | Watchdog, crash record, and an error screen on the next start | M | 2 | Yes | todo |
+| 7 | Watchdog, crash record, and an error screen on the next start | M | 2 | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-watchdog.md) |
 | | **Phase 2: work off the UI task** | | | | |
 | 8 | Message queue into the UI task. The loop sleeps until there is work | M | | Yes | done (checked on the board 2026-11-16). [Journal](journal/2026-11-16-message-queue.md) |
+| 8b | Services loop: one task for the network services (VNC, the web viewer, later the telnet listener) that sleeps on all their sockets and reaches the desktop only by messages. The network leaves the UI loop | M | 8 | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-services-loop.md) |
 | 9 | Lock on the file system | S | | | done (checked on the board 2026-11-16). [Journal](journal/2026-11-16-file-system-lock.md) |
 | 10 | Jobs owned by a process, and "cannot exit until jobs finish". The Editor saves through a job, its window locked meanwhile | M | 2, 8, 9 | Yes | on a branch (`claude/project-thread-8q7ksu`), PC tests pass, firmware compiles; not run on the board. [Journal](journal/2026-11-17-jobs.md) |
 | 11 | Three priority classes (Low, Normal, High) for jobs and services | S | 10 | Yes | todo |

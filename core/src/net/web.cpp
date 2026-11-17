@@ -165,6 +165,27 @@ Stream *WebGate::accept()
     return opened ? this : nullptr;
 }
 
+bool WebGate::watch(Watch &watch) const
+{
+    if (port_ == nullptr) {
+        return true; // nothing can come
+    }
+    if (!port_->watch(watch)) {
+        return false;
+    }
+    for (const Request &r : requests_) {
+        if (r.stream == nullptr) {
+            continue;
+        }
+        const int handle = r.stream->handle();
+        if (handle < 0) {
+            return false;
+        }
+        watch.add(handle, !r.answering, r.answering);
+    }
+    return true;
+}
+
 void WebGate::take_new()
 {
     while (Stream *s = port_->accept()) {

@@ -30,10 +30,12 @@ set(CORE_SRCS
     src/saver/starfield.cpp
     src/net/deflate.cpp
     src/net/rfb.cpp
+    src/net/services.cpp
     src/net/viewer_page.cpp
     src/net/web.cpp
     src/net/wifi.cpp
     src/job/job.cpp
+    src/msg/input.cpp
     src/msg/queue.cpp
     src/proc/table.cpp
     src/sh/files.cpp
@@ -41,6 +43,7 @@ set(CORE_SRCS
     src/sh/path.cpp
     src/sh/sh.cpp
     src/sh/system.cpp
+    src/sys/crash.cpp
     src/shell/apps.cpp
     src/shell/boot.cpp
     src/shell/cactus_patch.cpp
