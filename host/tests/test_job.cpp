@@ -10,6 +10,8 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <thread>
+#include <chrono>
 
 #include "core/fs/memory_volume.hpp"
 #include "core/job/job.hpp"
@@ -145,6 +147,74 @@ void test_runner()
         tasks.join();
         inbox.deliver();
         CHECK(p.done == 3 && p.result == 43 && jobs.running() == 0 && procs.jobs(app) == 0);
+    }
+
+    // Every task that was started has been given back, once its job was over.
+    CHECK(tasks.started == 3 && tasks.ended == 3);
+
+    // The priority class goes with the job to whoever makes the task: Normal
+    // unless the program says otherwise.
+    {
+        Probe p;
+        p.procs = &procs;
+        const proc::Scope as(&procs, app);
+        CHECK(jobs.start(p.spec()) && tasks.last_priority == ports::Priority::Normal);
+        job::Spec low = p.spec();
+        low.priority = ports::Priority::Low;
+        CHECK(jobs.start(low) && tasks.last_priority == ports::Priority::Low);
+        job::Spec high = p.spec();
+        high.priority = ports::Priority::High;
+        CHECK(jobs.start(high) && tasks.last_priority == ports::Priority::High);
+        tasks.join();
+        inbox.deliver();
+        CHECK(p.done == 3 && tasks.ended == tasks.started);
+    }
+
+    // A job that is still running: its task's processor time reaches the
+    // owner's row whenever the figures are brought up to date, not only at
+    // the end, and none of it is counted twice.
+    {
+        struct Busy {
+            std::atomic<bool> go_on{true};
+            std::atomic<uint32_t> turns{0};
+            static uint32_t work(const job::Job &, void *context)
+            {
+                auto *b = static_cast<Busy *>(context);
+                while (b->go_on) {
+                    b->turns++;
+                }
+                return 0;
+            }
+        } busy;
+        job::Spec spec;
+        spec.work = &Busy::work;
+        spec.context = &busy;
+        const uint64_t before = procs.find(app)->cpu_us;
+        const auto began = std::chrono::steady_clock::now();
+        {
+            const proc::Scope as(&procs, app);
+            CHECK(jobs.start(spec));
+        }
+        uint64_t during = 0;
+        for (int i = 0; i < 2000 && during < 2000; i++) { // until it has used 2 ms
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            procs.bring_up_to_date();
+            during = procs.find(app)->cpu_us - before;
+        }
+        CHECK(during >= 2000 && jobs.running(app) == 1);
+        procs.bring_up_to_date();
+        const uint64_t again = procs.find(app)->cpu_us - before;
+        CHECK(again >= during);
+        busy.go_on = false;
+        tasks.join();
+        inbox.deliver();
+        const uint64_t whole = procs.find(app)->cpu_us - before;
+        CHECK(jobs.running() == 0 && whole >= again);
+        procs.bring_up_to_date(); // nothing running: nothing more
+        CHECK(procs.find(app)->cpu_us - before == whole);
+        // Not twice: the thread cannot have used more than the time that passed.
+        const auto passed = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - began);
+        CHECK(whole <= static_cast<uint64_t>(passed.count()) + 1000);
     }
 
     // A KILL for a process with jobs: the jobs are told, once, the work can

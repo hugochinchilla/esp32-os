@@ -247,6 +247,19 @@ void Table::set_current(Pid pid)
     current_ = pid;
 }
 
+void Table::set_figures_source(void (*source)(void *context), void *context)
+{
+    figures_source_ = source;
+    figures_context_ = context;
+}
+
+void Table::bring_up_to_date()
+{
+    if (figures_source_ != nullptr) {
+        figures_source_(figures_context_);
+    }
+}
+
 void Table::add_cpu(Pid pid, uint64_t us)
 {
     if (Process *p = row(pid)) {

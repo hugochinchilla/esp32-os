@@ -176,6 +176,11 @@ public:
     // Memory taken (bytes > 0) or given back (bytes < 0). A process that has
     // gone is ignored: what it held is given back after its row.
     void add_memory(Pid pid, int32_t bytes);
+    // Whoever keeps figures of its own until asked (the job runner, for jobs
+    // still running) says so here; whoever is about to show the figures
+    // calls bring_up_to_date() first. The UI task.
+    void set_figures_source(void (*source)(void *context), void *context);
+    void bring_up_to_date();
 
     // Tests: an empty table that counts from 1 again.
     void reset();
@@ -191,6 +196,8 @@ private:
     Pid current_ = kNone;
     uint32_t changes_ = 0;
     int waiting_ = 0; // rows with a signal pending
+    void (*figures_source_)(void *context) = nullptr;
+    void *figures_context_ = nullptr;
     uint32_t (*micros_)(void *context) = nullptr;
     void *micros_context_ = nullptr;
     uint32_t since_ = 0; // when current_ was set

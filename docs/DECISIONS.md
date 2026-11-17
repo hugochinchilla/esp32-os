@@ -1659,7 +1659,8 @@ owner's "dejo a tu criterio" of 2026-11-16.
 
 - **Processor time** is the UI task's time while the process was current
   (the table has a clock and charges each change of the current process),
-  plus the run time of its jobs' tasks, added when each job ends. Time with
+  plus the run time of its jobs' tasks, added whenever the figures are
+  shown (item 11) and when each job ends. Time with
   no process current is the OS's and is in no row. Rejected: a task per
   program (a different architecture), and sampling (coarse).
 - **Memory** is what the process's windows asked the Memory port for and
@@ -1672,6 +1673,26 @@ owner's "dejo a tu criterio" of 2026-11-16.
 - **`top`** sorts by share of one core since its last look, every two
   seconds, until `q` or Ctrl+C; `-n N` for N screens. Without a key to wait
   for, or into a file or a pipe, it prints one table of totals and returns.
+
+### Chosen for the priority classes (2026-11-17, to confirm)
+
+Backlog item 11. Journal: `docs/journal/2026-11-17-priorities.md`. Chosen by
+the agent under the owner's "dejo a tu criterio" of 2026-11-16.
+
+- **Low 3, Normal 4, High 5** as FreeRTOS priorities; the desktop's task has
+  5, the video 10. Low and Normal never keep the desktop from an event;
+  High takes turns with it. Rejected: High above the desktop (a busy job
+  would freeze it).
+- **A class per job** (`job::Spec::priority`, Normal by default), named in
+  the portable code as `ports::Priority` and turned into a number by the
+  adapter. The services' task (`inetd`) is Normal by the same function.
+  Rejected: a priority per process set from the Task Manager (the windows
+  share the desktop's task, so it would only reach the jobs).
+- **A task does not delete itself.** When its function returns it sleeps,
+  and the job runner deletes it once the result has reached the UI task. So
+  a running job's processor time can be read safely, and the Task Manager,
+  `ps` and `top` show it while the job runs
+  (`proc::Table::bring_up_to_date()`).
 
 ### Chosen for background jobs (2026-11-17, to confirm)
 
@@ -1705,5 +1726,5 @@ architecture" above already says about saves and signals.
 - On a machine without tasks (the browser, the PC desktop program, most
   tests) there is no `ports::Tasks` and the caller does the work inside
   `start()`, under the whole-desktop hourglass, as before.
-- On the board a job's task has priority 4, one below the UI task; the
-  three classes are item 11.
+- On the board a job's task has priority 4, one below the UI task: the
+  Normal class of item 11 ("Chosen for the priority classes").

@@ -68,6 +68,9 @@ struct Spec {
     Stop stop = nullptr;      // may be null
     void *context = nullptr;
     uint32_t stack_bytes = 6144;
+    // Normal for nearly everything. Low for work nobody is waiting for;
+    // High only for work that must keep pace with the desktop.
+    ports::Priority priority = ports::Priority::Normal;
 };
 
 class Jobs {
@@ -108,7 +111,8 @@ private:
         Spec spec;
         proc::Pid owner = proc::kNone;
         uint32_t result = 0;
-        uint64_t cpu_us = 0; // what its task used, read by the task as it ends
+        ports::TaskId task = nullptr;
+        uint64_t charged = 0; // what of its task's processor time the owner's row already has
         uint32_t stack = 0;  // charged to the owner as memory while it runs
         bool used = false;
         bool told = false; // spec.stop has been called
@@ -117,6 +121,8 @@ private:
     static void task(void *slot);
     static void finished(const msg::Message &m);
     void finish(Slot &slot);
+    void charge(Slot &slot);
+    static void charge_all(void *self);
     static void stop_for_table(proc::Pid pid, void *self);
 
     proc::Table &procs_;

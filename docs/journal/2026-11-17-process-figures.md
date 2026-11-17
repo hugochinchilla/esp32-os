@@ -116,7 +116,8 @@ The firmware compiles and links in the cloud; it has not run on the board.
   ends. The Terminal's session is one long job, so the Terminal's row shows
   the time of its window only until it closes. Reading a live task's time
   from another task needs its handle kept per job; small, and worth doing
-  with the priority classes of item 11, which touch the same code.
+  with the priority classes of item 11, which touch the same code. (Done
+  there: `2026-11-17-priorities.md`.)
 - On the board the running task's counter is only brought up to date when
   it is switched out, so a job's figure can be a few milliseconds under.
 - The services (the debug server, VNC, the web server) are rows without

@@ -6,6 +6,8 @@
 #include <condition_variable>
 #include <mutex>
 #include <thread>
+#include <memory>
+#include <pthread.h>
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
@@ -219,40 +221,53 @@ public:
         release();
         join();
     }
-    bool start(const char *, ports::TaskFn fn, void *context, uint32_t) override
+    ports::TaskId start(const char *, ports::TaskFn fn, void *context, uint32_t, ports::Priority priority) override
     {
         if (refuse) {
-            return false;
+            return nullptr;
         }
         started++;
-        if (held_) {
-            waiting_.push_back({fn, context});
-        } else {
-            threads_.emplace_back(fn, context);
+        last_priority = priority;
+        records_.push_back(std::make_unique<Record>());
+        Record *r = records_.back().get();
+        r->fn = fn;
+        r->context = context;
+        if (!held_) {
+            run(*r);
         }
-        return true;
+        return r;
     }
-    uint64_t run_time_us() override
+    void end(ports::TaskId) override { ended++; }
+    // Live while the thread runs; what it had used at its end afterwards.
+    uint64_t run_time_us(ports::TaskId task) override
     {
-        timespec t = {};
-        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &t);
-        return static_cast<uint64_t>(t.tv_sec) * 1000000u + static_cast<uint64_t>(t.tv_nsec) / 1000u;
+        Record &r = *static_cast<Record *>(task);
+        if (!r.over && r.thread.joinable()) {
+            clockid_t clock;
+            timespec t = {};
+            if (pthread_getcpuclockid(r.thread.native_handle(), &clock) == 0 && clock_gettime(clock, &t) == 0) {
+                return micros(t);
+            }
+        }
+        return r.used;
     }
     void hold() { held_ = true; }
     void release()
     {
         held_ = false;
-        for (const Waiting &w : waiting_) {
-            threads_.emplace_back(w.fn, w.context);
+        for (auto &r : records_) {
+            if (!r->started) {
+                run(*r);
+            }
         }
-        waiting_.clear();
     }
     void join()
     {
-        for (std::thread &t : threads_) {
-            t.join();
+        for (auto &r : records_) {
+            if (r->thread.joinable()) {
+                r->thread.join();
+            }
         }
-        threads_.clear();
     }
     // release() and join(): the held tasks run to their end.
     void finish()
@@ -263,15 +278,36 @@ public:
 
     bool refuse = false; // "no memory for the stack"
     int started = 0;
+    int ended = 0; // end() calls: one for every task, once its job is over
+    ports::Priority last_priority = ports::Priority::Normal;
 
 private:
-    struct Waiting {
-        ports::TaskFn fn;
-        void *context;
+    struct Record {
+        ports::TaskFn fn = nullptr;
+        void *context = nullptr;
+        bool started = false;
+        std::atomic<bool> over{false};
+        std::atomic<uint64_t> used{0};
+        std::thread thread;
     };
+    static uint64_t micros(const timespec &t)
+    {
+        return static_cast<uint64_t>(t.tv_sec) * 1000000u + static_cast<uint64_t>(t.tv_nsec) / 1000u;
+    }
+    static void run(Record &r)
+    {
+        r.started = true;
+        r.thread = std::thread([&r] {
+            r.fn(r.context);
+            timespec t = {};
+            clock_gettime(CLOCK_THREAD_CPUTIME_ID, &t);
+            r.used = micros(t);
+            r.over = true;
+        });
+    }
     bool held_ = false;
-    std::vector<Waiting> waiting_;
-    std::vector<std::thread> threads_;
+    // Kept to the end: a TaskId is a pointer to one of these.
+    std::vector<std::unique_ptr<Record>> records_;
 };
 
 class HostSystem : public ports::System {

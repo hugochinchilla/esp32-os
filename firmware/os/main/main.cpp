@@ -764,7 +764,7 @@ void ui_task(void *)
 
     // The network services, after the desktop: one task for all of them. Not
     // started when there is nothing to listen on. Its stack is in internal
-    // RAM, like every task's here; priority just under this task's, so a
+    // RAM, like every task's here; the Normal class, just under this task, so a
     // viewer that asks for a lot never holds the desktop back.
     if (vnc_port.listening() || web_port.listening()) {
         static net::PosixWait sockets;
@@ -773,7 +773,8 @@ void ui_task(void *)
         services.add(remote);
         s_remote_input = &remote_input;
         s_services = &services;
-        if (xTaskCreate(services_task, "inetd", kServicesStack, &context, 4, nullptr) == pdPASS) {
+        if (xTaskCreate(services_task, "inetd", kServicesStack, &context, rtos_priority(ports::Priority::Normal), nullptr) ==
+            pdPASS) {
             proc::table().spawn_service("inetd");
             ESP_LOGI(TAG, "network services (inetd) started");
         } else {

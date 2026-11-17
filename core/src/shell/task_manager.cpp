@@ -303,6 +303,7 @@ private:
     void refresh_programs()
     {
         wm::Wm &m = shell::manager();
+        proc::table().bring_up_to_date(); // the time of jobs still running
         const proc::Table &table = proc::table();
         const bool all = all_.checked();
         proc::Pid now[kMaxRows];

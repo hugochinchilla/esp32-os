@@ -23,6 +23,7 @@ struct ListJob {
 void list_processes(void *context)
 {
     const ListJob &job = *static_cast<const ListJob *>(context);
+    job.table->bring_up_to_date(); // the time of jobs still running
     int at = snprintf(job.out, static_cast<size_t>(job.capacity), "  PID  PPID  FLAGS     TIME    MEM  NAME\n");
     for (int i = 0; i < job.table->count() && at < job.capacity - 1; i++) {
         const proc::Process &p = job.table->at(i);
@@ -175,6 +176,7 @@ struct Readings {
 void read_processes(void *context)
 {
     Readings &r = *static_cast<Readings *>(context);
+    r.table->bring_up_to_date(); // the jobs still running
     r.count = 0;
     for (int i = 0; i < r.table->count(); i++) {
         const proc::Process &p = r.table->at(i);
