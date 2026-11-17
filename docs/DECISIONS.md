@@ -250,6 +250,13 @@ drivers, no PSRAM). Nothing is built. The details still open are under
 Still open; the whole conversation is in
 `docs/journal/2026-11-17-bios-stage.md`.
 
+Measured on the board the same day
+(`docs/journal/2026-11-17-bios-restart-measured.md`): a restart loses the
+picture every time, for 3.5 to 3.9 s; the video signal is back 0.76 s after
+the reset and the display needs about 3 s more. So the handover from the
+BIOS to the OS is a blank of about 3.8 s that ends on the desktop, and a
+splash would have to stay about 4 s to be seen.
+
 ### BIOS screen font (2026-11-17)
 
 Decided by the owner: the BIOS's screen is a true text screen, 80 by 30 characters of 8x16 on
