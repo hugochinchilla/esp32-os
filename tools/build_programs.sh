@@ -31,11 +31,15 @@ for dir in "$HERE"/programs/*/; do
     "$CXX" -std=gnu++17 -Os -Wall -Wextra -Werror -mlongcalls -fno-exceptions -fno-rtti \
         -fPIC -shared -nostartfiles -nostdlib -e app_main \
         -fdata-sections -ffunction-sections -Wl,--gc-sections -fvisibility=hidden \
+        -Wl,-T,"$HERE/tools/program.ld" \
         -I"$HERE/core/include" "$dir"*.cpp -o "$OUT/$name.elf"
     "$STRIP" --strip-unneeded --remove-section=.comment --remove-section=.xt.lit \
         --remove-section=.xt.prop --remove-section=.xtensa.info "$OUT/$name.elf"
     # The file: the program's header, then the code.
     "$HERE/tools/pack_app.sh" "$OBJCOPY" "$OUT/$name.elf" "$OUT/$name.app"
+    # What tools/program.ld is for: no read-only data in the last word of
+    # the code.
+    python3 "$HERE/tools/check_program_elf.py" "${READELF:-xtensa-esp32s3-elf-readelf}" "$OUT/$name.elf"
     echo "$OUT/$name.app: $(wc -c < "$OUT/$name.app") bytes"
     built="$built $OUT/$name.elf"
 done

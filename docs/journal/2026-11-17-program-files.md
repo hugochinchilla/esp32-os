@@ -127,3 +127,35 @@ before this step began, on the first step's commit.
   to keep pixels).
 - Moving built-in programs out of the firmware into files, and with it how
   programs reach a board whose C: has been wiped: to put to the owner.
+
+## The board's first answer (the same day)
+
+The board turn asked for on the first step's commit came back: **loaded
+code runs from external RAM.** The table of 294 names was taken, `hello.app`
+opened with its window, its labels and its buttons. Then the first press of
+"Press me" stopped the board, twice of twice: `LoadStoreError` in
+`_svfprintf_r`, called by `snprintf`, called by the loaded program, reading
+0x421ED179, an address in instruction space.
+
+What was found, reading the loader (Espressif's `elf_loader` 2.1.0,
+`esp_elf_map_sym` in `src/esp_elf.c`): on the ESP32-S3 it keeps the code
+and the data apart, and decides whether an address of the file is code by
+`.text`'s size **rounded up to a whole word**. `hello`'s `.text` was 0x4d1
+bytes and its `.rodata` began on the very next byte, so the first three
+bytes of read-only data counted as code. The first string there was the
+format `"Pressed %d time%s"`: `snprintf` was handed its address in
+instruction space, which cannot be read a byte at a time. The address
+fits: 0x421ED179 less 0x4d1 is 0x421ECCA8, a whole word, where the code
+began. Nothing else of the program was wrong, which is why the window and
+its fixed labels (strings further on) were fine.
+
+Options: change the loader (a copy of ours to keep in step with
+Espressif's), or build programs so that the case cannot arise. The second
+was done: `tools/program.ld`, added to the linker's own script, starts
+`.rodata` on a word of its own, and `tools/check_program_elf.py`, run by
+`tools/build_programs.sh` on every program, refuses one in which any
+section begins inside the last word of `.text`. `hello`'s `.rodata` is now
+at 0xa34. Not run on the board yet; a new turn is asked for.
+
+The loader's own serial lines were not captured and `C:\crash.txt` was
+lost in that turn; the next one asks for both.
