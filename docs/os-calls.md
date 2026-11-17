@@ -36,7 +36,8 @@ The journal entry with the reasons is
 | | `os::work_area()`, `os::centred(w, h)` | The screen without the taskbar; a frame in the middle of it |
 | | `os::menu_open()` | A menu is open (a game pauses) |
 | | `os::open_menu(menu, x, y)` | A free-standing menu |
-| | `os::blocker(window)`, `os::in_front(window)`, `os::main_window(pid)` | The dialog in a window's way; whether it is the one in use; a process's main window |
+| | `os::blocker(window)`, `os::in_front(window)` | The dialog in a window's way; whether it is the one in use |
+| | `os::main_window(pid)`, `os::window_title(id)`, `os::window_icon(id)`, `os::bring_forward(id)` | Another process's window, as a number (`os::WindowId`) and never as its object: its title and icon, and bringing it or its dialog to the front. A closed window's number answers nothing |
 | | `os::caret_moved()` | The text cursor of the window in use has moved: shown at once (the Terminal) |
 | | `os::begin_drag(path)` | A file starts being dragged |
 | | `os::Busy busy;` | The hourglass until the end of the block |
@@ -47,11 +48,11 @@ The journal entry with the reasons is
 | Network | `os::network()` | The Wi-Fi service, or nothing on a board with no radio; asked for each time, not kept |
 | Sessions | `os::open_session(device, why)` | A command shell on a TTY of its own, as a process `sh`, child of the one asking, which is its device (the Terminal). `nullptr` and the reason if it cannot start |
 | Files | `os::file::stat`, `entry`, `make_folder`, `remove`, `rename` | Folders and names |
-| | `os::file::open`, `read`, `write`, `close` | A file a piece at a time |
-| | `os::file::begin_save`, `finish_save` | Saving without putting the old file at risk |
+| | `os::file::open`, `read`, `write`, `seek`, `close` | A file a piece at a time, by its handle: a number. The system knows which process holds it and closes it if the process ends. Two per process, six in all |
+| | `os::file::begin_save`, `finish_save` | Saving without putting the old file at risk, by a handle too; thrown away if the process ends first |
+| | `os::file::open_files(pid)` | How many a process holds |
 | | `os::file::read_file`, `write_file` | Whole files |
 | | `os::file::has_drive`, `drives`, `drive_info` | The drives |
-| | `os::file::storage()` | The drives themselves, only to pass to library code that reads a file on its own (the picture decoder) |
 | Settings | `os::load_settings(program, ini)`, `os::save_settings(program, ini)` | `C:\.config\<program>.ini` |
 | Machine | `os::restart()` | |
 | | `os::stats(out)`, `os::fact(which, ...)`, `os::busy_us()` | Figures and facts for the tools that show them |

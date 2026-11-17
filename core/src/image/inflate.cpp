@@ -10,10 +10,9 @@ namespace image {
 
 /* ---- Reader ------------------------------------------------------------------ */
 
-void Reader::attach(const fs::Storage &storage, fs::File &file)
+void Reader::attach(Source &source)
 {
-    storage_ = &storage;
-    file_ = &file;
+    source_ = &source;
     filled_ = at_ = 0;
     pos_ = 0;
     ended_ = false;
@@ -22,7 +21,7 @@ void Reader::attach(const fs::Storage &storage, fs::File &file)
 bool Reader::fill()
 {
     size_t got = 0;
-    if (storage_->read(*file_, buf_, sizeof(buf_), got) != ports::FsError::Ok) {
+    if (!source_->read(buf_, sizeof(buf_), got)) {
         got = 0;
     }
     filled_ = got;
@@ -95,7 +94,7 @@ bool Reader::seek(uint32_t offset)
 {
     filled_ = at_ = 0;
     pos_ = offset;
-    if (storage_->seek(*file_, offset) != ports::FsError::Ok) {
+    if (!source_->seek(offset)) {
         ended_ = true;
         return false;
     }

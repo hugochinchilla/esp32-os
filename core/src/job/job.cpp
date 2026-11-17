@@ -38,6 +38,7 @@ bool Jobs::start(const Spec &spec)
     slot->job.stop_.store(false);
     slot->spec = spec;
     slot->owner = owner;
+    slot->job.owner_ = owner;
     slot->result = 0;
     slot->charged = 0;
     slot->stack = 0;

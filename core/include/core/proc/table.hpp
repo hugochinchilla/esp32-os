@@ -64,6 +64,9 @@ using StopJobsFn = void (*)(Pid pid, void *context);
 // Ends a service: a process without windows (see Table::set_stop).
 using StopFn = void (*)(Pid pid, Signal signal, void *context);
 
+// Told of every process that ends (see Table::on_exit).
+using ExitFn = void (*)(Pid pid, void *context);
+
 struct Process;
 
 // Whoever looks after what ends (see Table::set_supervisor): init. The
@@ -174,6 +177,13 @@ public:
         stop_jobs_context_ = context;
     }
 
+    // Whoever keeps something for processes (the open files of core/os) is
+    // told when one ends, from inside exit(), after its row has gone: it
+    // gives back what the process left. Asking twice with the same function
+    // changes its context.
+    static constexpr int kMaxExitFns = 4;
+    void on_exit(ExitFn fn, void *context);
+
     // Starting again what ends is not the table's work: it tells the
     // supervisor (init, core/init) of every ending, and passes on the two
     // questions the window manager asks at its safe points. With no
@@ -244,6 +254,10 @@ private:
     void *stop_jobs_context_ = nullptr;
 
     Supervisor *supervisor_ = nullptr;
+    struct {
+        ExitFn fn = nullptr;
+        void *context = nullptr;
+    } exit_fns_[kMaxExitFns];
 };
 
 // Makes `pid` the current process until the end of the block, then puts the

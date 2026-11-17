@@ -54,12 +54,28 @@ constexpr size_t kPoolBytes = 384 * 1024;
 
 class FormatDecoder; // one per format, inside
 
+// Where a picture's bytes come from: something that is read in order and
+// can be put at a place. A program hands in one over a file it has opened
+// through the OS calls; open() with a path makes one over the drives.
+class Source {
+public:
+    // Up to `size` bytes; `got` 0 at the end. False if it could not be read.
+    virtual bool read(void *data, size_t size, size_t &got) = 0;
+    virtual bool seek(uint32_t offset) = 0;
+
+protected:
+    ~Source() = default;
+};
+
 class Decoder {
 public:
     // Opens a picture and reads its header. Transparent parts of PNGs are
     // shown over `background` (RGB).
     Error open(const fs::Storage &storage, const char *path, ports::Memory &memory, Info &info,
                const uint8_t background[3] = nullptr);
+    // The same from a source the caller keeps until close(): the decoder
+    // reads from it and does not close it.
+    Error open(Source &source, ports::Memory &memory, Info &info, const uint8_t background[3] = nullptr);
     // Decodes up to `rows` more rows into `sink`. Error::None until done or
     // failed; check done().
     Error step(RowSink &sink, int rows);
@@ -74,8 +90,18 @@ public:
     void *allocate(size_t bytes);
 
 private:
-    fs::File file_;
-    const fs::Storage *storage_ = nullptr;
+    // A file on the drives, for open() with a path.
+    class OwnFile : public Source {
+    public:
+        bool read(void *data, size_t size, size_t &got) override
+        {
+            return storage->read(file, data, size, got) == ports::FsError::Ok;
+        }
+        bool seek(uint32_t offset) override { return storage->seek(file, offset) == ports::FsError::Ok; }
+        fs::File file;
+        const fs::Storage *storage = nullptr;
+    };
+    OwnFile own_;
     uint8_t *pool_ = nullptr;
     size_t used_ = 0;
     FormatDecoder *format_ = nullptr;
