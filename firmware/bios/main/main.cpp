@@ -250,26 +250,11 @@ const char *identity()
     return text;
 }
 
-} // namespace
-
-extern "C" void app_main(void)
+// The self-test and the handover. A task of its own with the stack the OS
+// gives the same self-test (16 KB): the main task's 3.5 KB overflowed on the
+// board in the memory test (docs/journal/2026-11-17-bios-second-stage.md).
+void bios_task(void *)
 {
-    // The speed is already set by the console; the driver adds buffered
-    // reading and writing.
-    ESP_ERROR_CHECK(uart_driver_install(kSerial, 2048, 2048, 0, nullptr, 0));
-
-    if (fast_start_armed()) {
-        static const char line[] = "\r\nChinchilla BIOS: fast start asked for, no self-test\r\n";
-        uart_write_bytes(kSerial, line, sizeof(line) - 1);
-        start_os();
-    }
-
-    // The video from core 1, as in the OS.
-    static StaticSemaphore_t done_buffer;
-    SemaphoreHandle_t done = xSemaphoreCreateBinaryStatic(&done_buffer);
-    xTaskCreatePinnedToCore(video_task, "video", 4096, done, 10, nullptr, 1);
-    xSemaphoreTake(done, portMAX_DELAY);
-
     static VgaDisplay display;
     static BiosSystem system;
     static BiosMemory memory;
@@ -299,4 +284,27 @@ extern "C" void app_main(void)
         }
     }
     start_os();
+}
+
+} // namespace
+
+extern "C" void app_main(void)
+{
+    // The speed is already set by the console; the driver adds buffered
+    // reading and writing.
+    ESP_ERROR_CHECK(uart_driver_install(kSerial, 2048, 2048, 0, nullptr, 0));
+
+    if (fast_start_armed()) {
+        static const char line[] = "\r\nChinchilla BIOS: fast start asked for, no self-test\r\n";
+        uart_write_bytes(kSerial, line, sizeof(line) - 1);
+        start_os();
+    }
+
+    // The video from core 1, as in the OS.
+    static StaticSemaphore_t done_buffer;
+    SemaphoreHandle_t done = xSemaphoreCreateBinaryStatic(&done_buffer);
+    xTaskCreatePinnedToCore(video_task, "video", 4096, done, 10, nullptr, 1);
+    xSemaphoreTake(done, portMAX_DELAY);
+
+    xTaskCreate(bios_task, "bios", 16384, nullptr, 5, nullptr);
 }

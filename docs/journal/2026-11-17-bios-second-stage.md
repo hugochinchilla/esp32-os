@@ -175,3 +175,20 @@ programs: the video, the text screen, the self-test and the mascot.
   the crash screen in the BIOS; the OS's self-test removed; the adapters
   shared.
 - Later: Setup, the boot loop guard, an OS image over serial.
+
+## First try on the board: a stack overflow
+
+The first flash of the BIOS (commit 1bf5acd) restarted about every 5 s with
+"stack overflow in task main", right after the external memory test. The
+handover was not reached, so it was not the word in RTC memory.
+
+The cause: the BIOS ran the self-test in ESP-IDF's main task, which has a
+3.5 KB stack. The OS runs the same self-test in its `ui` task, with 16 KB.
+The cloud can only compile and link, so it could not show this.
+
+The fix: the BIOS starts a task of its own, `bios`, with 16 KB, for the
+self-test and the handover; the main task only starts the serial driver
+and the video. Raising the main task's stack in `sdkconfig.defaults` would
+also work, but only if the old `sdkconfig` is deleted first, and a task in
+the code cannot be forgotten. Compiled; BIOS 301,088 bytes. Not yet run on
+the board.
