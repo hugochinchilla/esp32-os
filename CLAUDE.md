@@ -58,6 +58,12 @@ in the same change whenever a decision is made or reversed.
   `docs/os-calls.md`; backlog item 20). A new program uses only those and
   goes on the `MOVED` list of `tools/check_os_calls.py`; if a call is
   missing, add it there rather than reaching for `manager()` or `storage()`.
+- The desktop has themes (backlog item 47, `core/gfx/theme.hpp`). Code that
+  draws a part of the user interface asks the theme for its colours
+  (`gfx::face()`, `ink()`, `paper()`, `dim()`, `gfx::theme().select`) and
+  its edges (`raised`, `sunken`, `button`, `dent`); it does not name
+  `gfx::kGrey`, `kBlack` or `kWhite`, which are for drawings that keep
+  their colours. Look at a new window in every theme.
 - No backward compatibility (the owner's rule, 2026-11-17): there are no
   releases and no users, and everything on the board may be wiped at any
   time, C: included. When a file format or a setting changes, read only the

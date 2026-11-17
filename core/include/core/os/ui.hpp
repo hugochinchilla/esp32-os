@@ -289,6 +289,7 @@ void fill_fade(Drawing on, const gfx::Rect &r, gfx::Rgb from, gfx::Rgb to, bool 
 void focus_rect(Drawing on, const gfx::Rect &r);
 void checker(Drawing on, const gfx::Rect &r);
 void edge(Drawing on, const gfx::Rect &r, gfx::Colour tl, gfx::Colour br);
+void dent(Drawing on, const gfx::Rect &r);
 void raised(Drawing on, const gfx::Rect &r);
 void sunken(Drawing on, const gfx::Rect &r);
 void button(Drawing on, const gfx::Rect &r, gfx::ButtonLook look);

@@ -63,6 +63,7 @@ public:
     void focus_rect(const gfx::Rect &r) { os::ui::draw::focus_rect(number_, r); }
     void checker(const gfx::Rect &r) { os::ui::draw::checker(number_, r); }
     void edge(const gfx::Rect &r, gfx::Colour tl, gfx::Colour br) { os::ui::draw::edge(number_, r, tl, br); }
+    void dent(const gfx::Rect &r) { os::ui::draw::dent(number_, r); }
     void raised(const gfx::Rect &r) { os::ui::draw::raised(number_, r); }
     void sunken(const gfx::Rect &r) { os::ui::draw::sunken(number_, r); }
     void button(const gfx::Rect &r, gfx::ButtonLook look) { os::ui::draw::button(number_, r, look); }

@@ -15,11 +15,10 @@ using gfx::RectList;
 
 namespace {
 
-// Colours from tools/mockup/desktop.py (98 style).
-constexpr Rgb kActiveFrom = {0, 0, 128}, kActiveTo = {16, 132, 208};
-constexpr Rgb kInactiveFrom = {128, 128, 128}, kInactiveTo = {192, 192, 192};
-constexpr Rgb kHighlight = {0, 0, 128};                         // chosen menu item
-constexpr Rgb kBannerTop = {0, 0, 48}, kBannerBottom = {16, 100, 190}; // Start menu
+// The fade of the Start menu's banner in the classic look (from
+// tools/mockup/desktop.py, 98 style). The title bars' colours are the
+// theme's (core/gfx/theme.hpp).
+constexpr Rgb kBannerTop = {0, 0, 48}, kBannerBottom = {16, 100, 190};
 
 const char *const kCloseGlyph[] = {"XX    XX", " XX  XX ", "  XXXX  ", "   XX   ",
                                    "  XXXX  ", " XX  XX ", "XX    XX"};
@@ -29,6 +28,13 @@ const char *const kRestoreGlyph[] = {"  XXXXXX", "  XXXXXX", "  X    X", "XXXXXX
                                      "X    XXX", "X    X  ", "X    X  ", "XXXXXX  "};
 const char *const kMinGlyph[] = {"      ", "      ", "      ", "      ",
                                  "      ", "      ", "XXXXXX", "XXXXXX"};
+// The same three for the flat themes, lighter: they sit on the bar or on a
+// small tile with no button under them.
+const char *const kFlatMaxGlyph[] = {"XXXXXXXXX", "XXXXXXXXX", "X       X", "X       X",
+                                     "X       X", "X       X", "X       X", "XXXXXXXXX"};
+const char *const kFlatRestoreGlyph[] = {"  XXXXXXX", "  X     X", "XXXXXXX X", "X     X X", "X     X X",
+                                         "X     XXX", "X     X  ", "XXXXXXX  "};
+const char *const kFlatMinGlyph[] = {"XXXXXXX", "XXXXXXX"};
 const char *const kCheckGlyph[] = {"      X", "     XX", "X   XXX", "XX XXX ",
                                    "XXXXX  ", " XXX   ", "  X    "};
 const char *const kArrowGlyph[] = {"X   ", "XX  ", "XXX ", "XXXX", "XXX ", "XX  ", "X   "};
@@ -2083,6 +2089,14 @@ void Wm::set_backdrop(const Backdrop &backdrop)
     invalidate({0, 0, width_, height_});
 }
 
+void Wm::set_theme(int index)
+{
+    if (index != gfx::theme_index()) {
+        gfx::use_theme(index);
+        invalidate({0, 0, width_, height_});
+    }
+}
+
 void Wm::fill_backdrop(Canvas &c, const Rect &r) const
 {
     bool plain = true;
@@ -2128,32 +2142,45 @@ void Wm::paint_window(Window &w, const RectList &clip)
 
 void Wm::paint_frame(Canvas &c, Window &w)
 {
+    const gfx::Theme &t = gfx::theme();
     const Rect &f = w.frame_;
     const int b = Window::kBorder;
     const Rect title = {f.x + b, f.y + b, f.w - 2 * b, Window::kTitleHeight};
-    // Each pixel once: the grey border inside the two-pixel edge, around the
+    const bool active = active_ == &w;
+    // Each pixel once: the border inside the two-pixel edge, around the
     // title bar, client area and menu bar; the fade around the buttons.
     static RectList parts; // ponytail: one UI task
     parts.set(f.inset(2));
     parts.subtract(w.client());
     parts.subtract(title);
     parts.subtract(w.menu_bar_rect());
+    if (t.flat()) {
+        // One line around the window, the rest of the border in the
+        // frame's colour.
+        const gfx::Colour frame = active ? t.frame_on : t.frame_off, rim = active ? t.rim_on : t.rim_off;
+        for (int i = 0; i < parts.size(); i++) {
+            c.fill(parts[i], frame);
+        }
+        c.edge(f, rim, rim);
+        c.edge(f.inset(1), frame, frame);
+        c.layered(title, [&](Canvas &c) { paint_flat_title(c, w, title, active); });
+        return;
+    }
     for (int i = 0; i < parts.size(); i++) {
-        c.fill(parts[i], gfx::kGrey);
+        c.fill(parts[i], t.face);
     }
     c.raised(f);
 
-    const bool active = active_ == &w;
     // The title bar in one pass: fade, icon, title and buttons layered in a
     // scratch band, each screen pixel written once.
     c.layered(title, [&](Canvas &c) {
-    c.fill_fade(title, active ? kActiveFrom : kInactiveFrom, active ? kActiveTo : kInactiveTo);
+    c.fill_fade(title, active ? t.title_from : t.title_off_from, active ? t.title_to : t.title_off_to);
     if (w.icon_ != nullptr) {
         c.blit(*w.icon_, f.x + 5, f.y + 6);
     }
     const Rect first = title_button(w, w.dialog_ ? Part::Close : Part::Minimize);
     Canvas text = c.sub({title.x, title.y, first.x - 2 - title.x, title.h});
-    text.text(22, 3, w.title_, active ? gfx::kWhite : gfx::kGrey, true);
+    text.text(22, 3, w.title_, active ? t.title_ink_on : t.title_ink_off, true);
 
     for (Part p : {Part::Close, Part::Maximize, Part::Minimize}) {
         const Rect r = title_button(w, p);
@@ -2165,7 +2192,7 @@ void Wm::paint_frame(Canvas &c, Window &w)
         c.button(r, held ? ButtonLook::Pressed : ButtonLook::Raised);
         const int d = held ? 1 : 0;
         // A window that cannot be resized shows its maximise button greyed.
-        const gfx::Colour ink = (p == Part::Maximize && !w.resizable_) ? gfx::kDarkGrey : gfx::kBlack;
+        const gfx::Colour ink = (p == Part::Maximize && !w.resizable_) ? t.title_dim : t.ink;
         if (p == Part::Close) {
             c.pattern(r.x + 4 + d, r.y + 3 + d, kCloseGlyph, 7, ink);
         } else if (p == Part::Maximize) {
@@ -2173,7 +2200,7 @@ void Wm::paint_frame(Canvas &c, Window &w)
                 c.pattern(r.x + 4 + d, r.y + 3 + d, kRestoreGlyph, 9, ink);
             } else {
                 if (!w.resizable_) {
-                    c.pattern(r.x + 5, r.y + 4, kMaxGlyph, 9, gfx::kWhite);
+                    c.pattern(r.x + 5, r.y + 4, kMaxGlyph, 9, t.paper);
                 }
                 c.pattern(r.x + 4 + d, r.y + 3 + d, kMaxGlyph, 9, ink);
             }
@@ -2184,19 +2211,88 @@ void Wm::paint_frame(Canvas &c, Window &w)
     });
 }
 
+// The title bar of a flat theme, into the scratch band: the bar (one colour,
+// or a fade from top to bottom), the icon, the title, and the buttons as
+// small tiles or as bare shapes. The buttons are where title_button() says,
+// as in every theme.
+void Wm::paint_flat_title(Canvas &c, Window &w, const Rect &title, bool active)
+{
+    const gfx::Theme &t = gfx::theme();
+    const Rect &f = w.frame_;
+    const gfx::Colour bar = active ? t.frame_on : t.frame_off;
+    const gfx::Colour ink = active ? t.title_ink_on : t.title_ink_off;
+    if (t.title_bar == gfx::TitleBar::FadeDown && active) {
+        // The fade runs a little past the bar, so its ends are not the
+        // fade's extremes.
+        const Rect span = {title.x, title.y - 3, title.w, title.h + 6};
+        c.fill_fade(title, t.title_from, t.title_to, true, &span);
+    } else {
+        c.fill(title, bar);
+    }
+    if (t.title_rule) {
+        c.hline(title.x, title.bottom() - 1, title.w, active ? t.rim_on : t.rim_off);
+    }
+    if (w.icon_ != nullptr) {
+        c.blit(*w.icon_, f.x + 5, f.y + 5);
+    }
+    const Rect first = title_button(w, w.dialog_ ? Part::Close : Part::Minimize);
+    Canvas text = c.sub({title.x, title.y, first.x - 4 - title.x, title.h});
+    if (t.title_bar == gfx::TitleBar::FadeDown) {
+        text.text(23, 4, w.title_, t.title_shadow, true);
+    }
+    text.text(22, 3, w.title_, ink, true);
+
+    for (Part p : {Part::Close, Part::Maximize, Part::Minimize}) {
+        const Rect r = title_button(w, p);
+        if (r.empty()) {
+            continue;
+        }
+        const bool held = capture_ == Capture::TitleButton && captured_ == &w &&
+                          captured_part_ == p && captured_inside_;
+        const bool greyed = p == Part::Maximize && !w.resizable_;
+        const Rect box = {r.x, title.y + 2, 15, 14};
+        gfx::Colour shape = greyed ? t.title_dim : ink;
+        if (t.title_buttons == gfx::TitleButtons::Tiles) {
+            // A tile with a light rim, its corners left to the bar; the
+            // close one in its own colour. Held: the outline's colour.
+            const gfx::Colour tile = held ? t.outline
+                                     : p == Part::Close ? (active ? t.close_on : t.close_off)
+                                                        : (active ? t.tile_on : t.tile_off);
+            c.fill(box.inset(1), tile);
+            c.hline(box.x + 1, box.y, box.w - 2, t.tile_rim);
+            c.hline(box.x + 1, box.bottom() - 1, box.w - 2, t.tile_rim);
+            c.vline(box.x, box.y + 1, box.h - 2, t.tile_rim);
+            c.vline(box.right() - 1, box.y + 1, box.h - 2, t.tile_rim);
+            shape = greyed ? t.title_dim : t.tile_ink;
+        } else if (held) {
+            // A bare shape, held: the colours change places.
+            c.fill(box, ink);
+            shape = bar;
+        }
+        if (p == Part::Close) {
+            c.pattern(box.x + 4, box.y + 4, kCloseGlyph, 7, shape);
+        } else if (p == Part::Maximize) {
+            const bool restore = w.state_ == WindowState::Maximized;
+            c.pattern(box.x + 3, box.y + 3, restore ? kFlatRestoreGlyph : kFlatMaxGlyph, 8, shape);
+        } else {
+            c.pattern(box.x + 4, box.y + 9, kFlatMinGlyph, 2, shape);
+        }
+    }
+}
+
 void Wm::paint_menu_bar(Canvas &c, Window &w)
 {
     const Rect bar = w.menu_bar_rect();
     c.layered(bar, [&](Canvas &c) {
-    c.fill(bar, gfx::kGrey);
+    c.fill(bar, gfx::face());
     for (int i = 0; i < w.menu_bar_->count; i++) {
         const Rect r = menu_bar_entry(w, i);
         const bool open = menu_window_ == &w && menu_entry_ == i;
         if (open) {
-            c.edge({r.x, r.y + 1, r.w, r.h - 1}, gfx::kDarkGrey, gfx::kWhite);
+            c.dent({r.x, r.y + 1, r.w, r.h - 1});
         }
         const int d = open ? 1 : 0;
-        draw_label(c, r.x + 6 + d, r.y + 2 + d, w.menu_bar_->entries[i].label, gfx::kBlack);
+        draw_label(c, r.x + 6 + d, r.y + 2 + d, w.menu_bar_->entries[i].label, gfx::ink());
     }
     });
 }
@@ -2207,27 +2303,32 @@ void Wm::paint_popup(int level, const RectList &clip)
     const Rect &r = p.rect;
     Canvas screen(display_.pixels(), width_, height_, clip, r);
     screen.layered(r, [&](Canvas &c) {
-    c.fill(r, gfx::kGrey);
+    c.fill(r, gfx::face());
     c.raised(r);
     if (p.start) {
         const Rect banner = {r.x + kMenuEdge, r.y + kMenuEdge, kBannerW, r.h - 2 * kMenuEdge};
-        c.fill_fade(banner, kBannerTop, kBannerBottom, true);
-        c.text_up(banner.x + (kBannerW - 12) / 2, banner.bottom() - 6, start_banner_, gfx::kWhite, true);
+        const gfx::Theme &t = gfx::theme();
+        if (t.flat()) {
+            c.fill_rgb(banner, t.select);
+        } else {
+            c.fill_fade(banner, kBannerTop, kBannerBottom, true);
+        }
+        c.text_up(banner.x + (kBannerW - 12) / 2, banner.bottom() - 6, start_banner_, t.select_ink, true);
     }
     for (int i = 0; i < p.menu->count; i++) {
         const MenuItem &item = p.menu->items[i];
         const Rect ir = popup_item(level, i);
         if (!selectable(item)) {
-            c.hline(ir.x + 1, ir.y + 3, ir.w - 2, gfx::kDarkGrey);
-            c.hline(ir.x + 1, ir.y + 4, ir.w - 2, gfx::kWhite);
+            c.hline(ir.x + 1, ir.y + 3, ir.w - 2, gfx::dim());
+            c.hline(ir.x + 1, ir.y + 4, ir.w - 2, gfx::paper());
             continue;
         }
         const bool hover = i == p.hover;
         const bool disabled = item.flags & kMenuDisabled;
         if (hover) {
-            c.fill_rgb(ir, kHighlight);
+            c.fill_rgb(ir, gfx::theme().select);
         }
-        const gfx::Colour ink = hover ? (disabled ? gfx::kGrey : gfx::kWhite) : gfx::kBlack;
+        const gfx::Colour ink = hover ? (disabled ? gfx::face() : gfx::theme().select_ink) : gfx::ink();
         const bool icons = p.start || has_icons(*p.menu);
         const int tx = icons ? ir.x + 26 : ir.x + 17;
         const int ty = ir.y + (ir.h - 12) / 2;
@@ -2235,17 +2336,17 @@ void Wm::paint_popup(int level, const RectList &clip)
             c.blit(*item.icon, ir.x + 4, ir.y + (ir.h - 16) / 2);
         }
         if (item.flags & kMenuChecked) {
-            c.pattern(ir.x + 5, ir.y + (ir.h - 7) / 2, kCheckGlyph, 7, disabled && !hover ? gfx::kDarkGrey : ink);
+            c.pattern(ir.x + 5, ir.y + (ir.h - 7) / 2, kCheckGlyph, 7, disabled && !hover ? gfx::dim() : ink);
         }
         if (disabled && !hover) {
-            draw_label(c, tx + 1, ty + 1, item.label, gfx::kWhite);
-            draw_label(c, tx, ty, item.label, gfx::kDarkGrey);
+            draw_label(c, tx + 1, ty + 1, item.label, gfx::paper());
+            draw_label(c, tx, ty, item.label, gfx::dim());
         } else {
             draw_label(c, tx, ty, item.label, ink);
         }
         if (item.submenu != nullptr) {
             c.pattern(ir.right() - 10, ir.y + (ir.h - 7) / 2, kArrowGlyph, 7,
-                      disabled && !hover ? gfx::kDarkGrey : ink);
+                      disabled && !hover ? gfx::dim() : ink);
         }
     }
     });
