@@ -184,6 +184,19 @@ void Window::close()
     }
 }
 
+void Window::remove_last()
+{
+    if (widget_count_ == 0) {
+        return;
+    }
+    Widget *w = widgets_[--widget_count_];
+    widgets_[widget_count_] = nullptr;
+    focus_ = focus_ == w ? nullptr : focus_;
+    default_ = default_ == w ? nullptr : default_;
+    captured_ = captured_ == w ? nullptr : captured_;
+    invalidate();
+}
+
 bool Window::layered() const
 {
     for (int i = 0; i < widget_count_; i++) {

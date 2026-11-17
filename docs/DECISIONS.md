@@ -2110,6 +2110,17 @@ option of a card the owner has not answered yet.
   `app::Canvas`, a thin class of the same shape, so a paint reads as
   before. Bitmaps and texts are still handed over as pointers into the
   program's memory, as Win16 did.
+- What the programs needed that was not a plain control became controls
+  of the system's (the agent's, to confirm): the grid of characters and
+  the picture a program paints (Terminal, games, viewer), the text
+  editor with its own text and undo memory (Editor), and the view of
+  icons with names (File manager). A program's toolbar buttons and
+  panels are pictures it paints itself. The one thing a program holds
+  that is not a number is the Editor's reader for its text while a save
+  job runs (good only while the window is locked).
+- All 17 programs are written with the thin classes. What is left on
+  `core/wm`'s classes is the desktop itself and its own windows (About,
+  Welcome, the widget gallery, the message box).
 - Events through a queue: with item 26.
 
 ### Chosen for background jobs (2026-11-17, to confirm)

@@ -9,6 +9,7 @@
 #include <new>
 
 #include "core/os/os.hpp"
+#include "core/wm/text_edit.hpp"
 #include "core/wm/widgets.hpp"
 #include "core/wm/wm.hpp"
 
@@ -16,6 +17,8 @@ namespace os {
 namespace ui {
 
 namespace {
+
+static_assert(kScrollBarThickness == wm::ScrollBar::kThickness, "the scroll bar's thickness, as programs are told it");
 
 // The drawings in progress: the canvas of the Paint event being answered
 // and the parts the program has asked of it. Numbers are given afresh for
@@ -73,6 +76,8 @@ enum class Kind : uint8_t {
     Grid,
     DropDown,
     Meter,
+    TextEdit,
+    IconView,
 };
 
 // A line of text exactly as given, kept by the control.
@@ -105,9 +110,19 @@ class Picture : public wm::Widget {
 public:
     using PaintFn = void (*)(Picture &picture, gfx::Canvas &c, void *context);
     using MouseFn = void (*)(Picture &picture, const wm::MouseMsg &m, void *context);
-    Picture(const gfx::Rect &r, uint8_t how, PaintFn paint, MouseFn mouse, void *context)
-        : Widget(r), how_(how), paint_(paint), mouse_(mouse), context_(context)
+    using KeyFn = bool (*)(Picture &picture, const wm::KeyMsg *k, const char *text, void *context);
+    Picture(const gfx::Rect &r, uint8_t how, PaintFn paint, MouseFn mouse, KeyFn key, void *context)
+        : Widget(r), how_(how), paint_(paint), mouse_(mouse), key_(key), context_(context)
     {
+    }
+    bool focusable() const override { return (how_ & kKeys) != 0; }
+    bool key(const wm::KeyMsg &k) override { return key_(*this, &k, nullptr, context_); }
+    void text(const char *utf8) override { key_(*this, nullptr, utf8, context_); }
+    gfx::Rect caret_rect() const override { return has_caret_ ? caret_ : Widget::caret_rect(); }
+    void set_caret(const gfx::Rect &r)
+    {
+        caret_ = r;
+        has_caret_ = true;
     }
     void paint(gfx::Canvas &c) override { paint_(*this, c, context_); }
     bool layered() const override { return (how_ & kOnce) == 0; }
@@ -119,7 +134,10 @@ private:
     uint8_t how_;
     PaintFn paint_;
     MouseFn mouse_;
+    KeyFn key_;
     void *context_;
+    gfx::Rect caret_ = {0, 0, 0, 0};
+    bool has_caret_ = false;
 };
 
 // A grid of cells to pick one from: the colours, or the patterns. The cell
@@ -321,6 +339,282 @@ private:
     int lit_ = 0;
 };
 
+// Icons in a grid with their names under them, 76 x 66 per entry: a
+// folder's contents. One is picked; a scroll bar comes when they do not fit.
+class IconView : public wm::Widget {
+public:
+    using Callback = void (*)(IconView &view, void *context);
+    static constexpr int kCellW = 76, kCellH = 66;
+    static constexpr gfx::Rgb kHighlight = {0, 0, 128};
+
+    IconView(const gfx::Rect &r, Callback on_open, Callback on_select, Callback on_drag, void *context)
+        : Widget(r), on_open_(on_open), on_select_(on_select), on_drag_(on_drag), context_(context),
+          bar_({0, 0, wm::ScrollBar::kThickness, 10}, true, &IconView::scrolled, this)
+    {
+        bar_.set_parent(this);
+    }
+    ~IconView() = default;
+    // The entries: the program's own tables, which must stay valid.
+    void set_items(const char *const *names, int count, const gfx::Bitmap *const *icons)
+    {
+        names_ = names;
+        icons_ = icons;
+        count_ = count;
+        if (selected_ >= count_) {
+            selected_ = -1;
+        }
+        layout();
+    }
+    int selected() const { return selected_; }
+    // The entry at a point of the view, or -1.
+    int item_at(int x, int y) const
+    {
+        const int col = (x - 2 - 10) / kCellW, row = (y - 2 - 8) / kCellH;
+        const int i = (row + top_row_) * columns() + col;
+        return x >= 12 && y >= 10 && col < columns() && i < count_ ? i : -1;
+    }
+    void select(int i)
+    {
+        i = i < -1 ? -1 : (i >= count_ ? count_ - 1 : i);
+        if (i == selected_) {
+            return;
+        }
+        selected_ = i;
+        if (i >= 0) {
+            const int row = i / columns();
+            if (row < top_row_) {
+                top_row_ = row;
+            } else if (row >= top_row_ + visible_rows()) {
+                top_row_ = row - visible_rows() + 1;
+            }
+        }
+        layout();
+        if (on_select_ != nullptr) {
+            on_select_(*this, context_);
+        }
+    }
+    void reset()
+    {
+        selected_ = -1;
+        top_row_ = 0;
+        layout();
+    }
+    void layout()
+    {
+        bar_.rect = {rect.w - 2 - wm::ScrollBar::kThickness, 2, wm::ScrollBar::kThickness, rect.h - 4};
+        const int rows = (count_ + columns() - 1) / columns();
+        bar_.set_range(rows > visible_rows() ? rows - visible_rows() : 0, visible_rows());
+        bar_.set_value_quietly(top_row_);
+        invalidate();
+    }
+    int columns() const
+    {
+        const int c = (rect.w - 4 - wm::ScrollBar::kThickness - 8) / kCellW;
+        return c < 1 ? 1 : c;
+    }
+    int visible_rows() const
+    {
+        const int r = (rect.h - 4 - 10) / kCellH;
+        return r < 1 ? 1 : r;
+    }
+
+    void paint(gfx::Canvas &c) override
+    {
+        const gfx::Rect r = {0, 0, rect.w, rect.h};
+        c.sunken(r);
+        const gfx::Rect area = {2, 2, rect.w - 4 - (bar_.maximum() > 0 ? wm::ScrollBar::kThickness : 0), rect.h - 4};
+        c.fill(area, gfx::kWhite);
+        gfx::Canvas inner = c.sub(area);
+        const int cols = columns();
+        for (int i = top_row_ * cols; i < count_; i++) {
+            const int row = i / cols - top_row_, col = i % cols;
+            if (row > visible_rows()) {
+                break;
+            }
+            const int x = 10 + col * kCellW, y = 8 + row * kCellH;
+            const gfx::Bitmap *icon = icons_[i];
+            const bool chosen = i == selected_;
+            if (chosen) {
+                inner.blit_selected(*icon, x + 22, y, gfx::rgb(0, 0, 2));
+            } else {
+                inner.blit(*icon, x + 22, y);
+            }
+            // The name under it, on two lines if it must (broken at a space
+            // when there is one), cut with "..." beyond that.
+            char lines[2][48];
+            split_name(names_[i], lines);
+            for (int l = 0; l < 2 && lines[l][0] != 0; l++) {
+                const int tw = gfx::Canvas::text_width(lines[l]);
+                const int tx = x + 38 - tw / 2, ty = y + 36 + l * 12;
+                if (chosen) {
+                    inner.fill_rgb({tx - 1, ty - 1, tw + 2, 13}, kHighlight);
+                }
+                inner.text(tx, ty, lines[l], chosen ? gfx::kWhite : gfx::kBlack);
+            }
+        }
+        if (bar_.maximum() > 0) {
+            gfx::Canvas bc = c.sub(bar_.rect);
+            bar_.paint(bc);
+        }
+    }
+
+    bool wants_mouse() const override { return true; }
+    bool focusable() const override { return true; }
+    void mouse(const wm::MouseMsg &m) override
+    {
+        if (m.kind == wm::MouseKind::Down) {
+            in_bar_ = bar_.maximum() > 0 && bar_.rect.contains(m.x, m.y);
+        }
+        if (in_bar_) {
+            bar_.mouse({m.kind, m.x - bar_.rect.x, m.y - bar_.rect.y});
+            invalidate();
+            return;
+        }
+        if (m.kind == wm::MouseKind::Move) {
+            // Held on an entry and moved a little: it is dragged.
+            const int dx = m.x - press_x_, dy = m.y - press_y_;
+            if (pressed_ && dx * dx + dy * dy > 16 && on_drag_ != nullptr) {
+                pressed_ = false;
+                on_drag_(*this, context_);
+            }
+            return;
+        }
+        if (m.kind != wm::MouseKind::Down) {
+            pressed_ = false;
+            return;
+        }
+        const int i = item_at(m.x, m.y);
+        select(i);
+        pressed_ = i >= 0 && !m.double_click;
+        press_x_ = m.x;
+        press_y_ = m.y;
+        if (i >= 0 && m.double_click && on_open_ != nullptr) {
+            on_open_(*this, context_);
+        }
+    }
+    bool key(const wm::KeyMsg &k) override
+    {
+        if (!k.pressed) {
+            return false;
+        }
+        const int cols = columns();
+        switch (k.usage) {
+        case wm::key::Left:
+            select(selected_ < 0 ? 0 : selected_ - 1);
+            return true;
+        case wm::key::Right:
+            select(selected_ + 1);
+            return true;
+        case wm::key::Up:
+            select(selected_ < 0 ? 0 : (selected_ - cols >= 0 ? selected_ - cols : selected_));
+            return true;
+        case wm::key::Down:
+            select(selected_ < 0 ? 0 : (selected_ + cols < count_ ? selected_ + cols : selected_));
+            return true;
+        case wm::key::Home:
+            select(0);
+            return true;
+        case wm::key::End:
+            select(count_ - 1);
+            return true;
+        case wm::key::Enter:
+            if (selected_ >= 0 && on_open_ != nullptr) {
+                on_open_(*this, context_);
+            }
+            return true;
+        default:
+            return false;
+        }
+    }
+
+private:
+    static constexpr int kChars = (kCellW - 4) / 6; // characters per line
+
+    // Up to kChars characters per line; byte offsets, as names are UTF-8.
+    static void split_name(const char *name, char (&lines)[2][48])
+    {
+        lines[0][0] = lines[1][0] = 0;
+        const char *p = name;
+        const char *cut = nullptr, *space = nullptr;
+        int n = 0;
+        while (*p != 0) {
+            const char *before = p;
+            const uint8_t c = gfx::next_latin1(p);
+            if (n == kChars) {
+                cut = before;
+                break;
+            }
+            if (c == ' ') {
+                space = before;
+            }
+            n++;
+        }
+        if (cut == nullptr) {
+            snprintf(lines[0], sizeof(lines[0]), "%.47s", name);
+            return;
+        }
+        const char *second = space != nullptr ? space + 1 : cut;
+        const int first_len = static_cast<int>((space != nullptr ? space : cut) - name);
+        snprintf(lines[0], sizeof(lines[0]), "%.*s", first_len, name);
+        // The rest, cut to a line with "..." if longer.
+        const char *q = second;
+        int m = 0;
+        while (*q != 0 && m < kChars) {
+            gfx::next_latin1(q);
+            m++;
+        }
+        if (*q == 0) {
+            snprintf(lines[1], sizeof(lines[1]), "%.47s", second);
+        } else {
+            const char *r = second;
+            for (int k = 0; k < kChars - 3; k++) {
+                gfx::next_latin1(r);
+            }
+            snprintf(lines[1], sizeof(lines[1]), "%.*s...", static_cast<int>(r - second), second);
+        }
+    }
+
+    static void scrolled(wm::ScrollBar &bar, void *context)
+    {
+        auto *v = static_cast<IconView *>(context);
+        v->top_row_ = bar.value();
+        v->invalidate();
+    }
+
+    const char *const *names_ = nullptr;
+    const gfx::Bitmap *const *icons_ = nullptr;
+    int count_ = 0;
+    Callback on_open_, on_select_, on_drag_;
+    void *context_;
+    bool pressed_ = false;
+    int press_x_ = 0, press_y_ = 0;
+    int selected_ = -1;
+    int top_row_ = 0;
+    bool in_bar_ = false;
+    wm::ScrollBar bar_;
+};
+
+// The text editor with its own memory for the text and for undo.
+class OwnedTextEdit : public wm::TextEdit {
+public:
+    OwnedTextEdit(const gfx::Rect &r, size_t text_bytes, size_t undo_bytes) : TextEdit(r)
+    {
+        text_ = static_cast<uint8_t *>(os::allocate(text_bytes));
+        undo_ = static_cast<uint8_t *>(os::allocate(undo_bytes));
+        if (text_ != nullptr && undo_ != nullptr) {
+            attach(text_, text_bytes, undo_, undo_bytes);
+        }
+    }
+    ~OwnedTextEdit()
+    {
+        os::release(text_);
+        os::release(undo_);
+    }
+
+private:
+    uint8_t *text_ = nullptr, *undo_ = nullptr;
+};
+
 // The frame for a client area of this size.
 gfx::Rect frame_for(const Look &look)
 {
@@ -373,6 +667,8 @@ public:
             case Kind::Grid: static_cast<Grid *>(controls_[i])->~Grid(); break;
             case Kind::DropDown: static_cast<DropDown *>(controls_[i])->~DropDown(); break;
             case Kind::Meter: static_cast<Meter *>(controls_[i])->~Meter(); break;
+            case Kind::TextEdit: static_cast<OwnedTextEdit *>(controls_[i])->~OwnedTextEdit(); break;
+            case Kind::IconView: static_cast<IconView *>(controls_[i])->~IconView(); break;
             }
             os::release(controls_[i]);
         }
@@ -477,6 +773,20 @@ public:
             }
         }
     }
+    static bool picture_key(Picture &p, const wm::KeyMsg *k, const char *text, void *context)
+    {
+        auto *w = static_cast<Behind *>(context);
+        for (int i = 0; i < w->count_; i++) {
+            if (w->controls_[i] == &p) {
+                Event e{k != nullptr ? What::Key : What::Text};
+                e.control = i + 1;
+                e.key = k;
+                e.text = text;
+                return w->tell(e);
+            }
+        }
+        return false;
+    }
     // The right button: to the topmost picture under it that takes the mouse.
     void right_click(int x, int y) override
     {
@@ -540,6 +850,52 @@ public:
         e.key = &k;
         return tell(e) || Window::key(k);
     }
+    void resized() override
+    {
+        Event e{What::Resized};
+        e.x = client().w;
+        e.y = client().h;
+        tell(e);
+    }
+    bool close_requested() override { return !tell(Event{What::Closing}); }
+    static void icon_opened(IconView &v, void *context) { static_cast<Behind *>(context)->from(v, What::Chosen); }
+    static void icon_picked(IconView &v, void *context) { static_cast<Behind *>(context)->from(v, What::Changed); }
+    static void icon_dragged(IconView &v, void *context) { static_cast<Behind *>(context)->from(v, What::Drag); }
+    bool drag_over(const char *path, int x, int y) override
+    {
+        Event e{What::DragOver};
+        e.text = path;
+        e.x = x;
+        e.y = y;
+        return tell(e);
+    }
+    void dropped(const char *path, int x, int y) override
+    {
+        Event e{What::Dropped};
+        e.text = path;
+        e.x = x;
+        e.y = y;
+        tell(e);
+    }
+    // The editor's text changed between modified and not.
+    static void edited(wm::TextEdit &edit, void *context)
+    {
+        auto *w = static_cast<Behind *>(context);
+        if (edit.modified() != w->edit_modified_) {
+            w->edit_modified_ = edit.modified();
+            w->from(edit, What::Changed);
+        }
+    }
+    void note_modified(bool modified) { edit_modified_ = modified; }
+    // The last control made, taken back (it could not get what it needs).
+    template <class T> void unmake()
+    {
+        count_--;
+        remove_last();
+        static_cast<T *>(controls_[count_])->~T();
+        os::release(controls_[count_]);
+        controls_[count_] = nullptr;
+    }
     void menu_opening(int entry) override
     {
         Event e{What::Menu};
@@ -565,6 +921,7 @@ private:
     void *state_;
     uint8_t flags_;
     bool centred_;
+    bool edit_modified_ = false; // as the program was last told (one editor a window)
     bool told_closed_ = false;
     bool gone_ = false; // the program has heard Closed: its object is destroyed
     const gfx::Bitmap *const *row_icons_ = nullptr;
@@ -599,6 +956,14 @@ void destroy(wm::Window &w)
 
 constexpr size_t kAligned = (sizeof(Behind) + 15) & ~static_cast<size_t>(15);
 
+} // namespace
+
+namespace {
+template <class T> T *control_of(Window window, Control control, Kind kind)
+{
+    Behind *w = behind(window);
+    return w != nullptr ? w->as<T>(control, kind) : nullptr;
+}
 } // namespace
 
 Window create(const Look &look, Events events, size_t state_bytes)
@@ -706,8 +1071,152 @@ Control text_area(Window window, const gfx::Rect &place, const char *text)
 Control picture(Window window, const gfx::Rect &place, uint8_t how)
 {
     Behind *w = behind(window);
-    return w != nullptr ? w->make<Picture>(Kind::Picture, place, how, &Behind::paint_picture, &Behind::picture_mouse, w)
+    return w != nullptr ? w->make<Picture>(Kind::Picture, place, how, &Behind::paint_picture, &Behind::picture_mouse,
+                                           &Behind::picture_key, w)
                         : kNoControl;
+}
+
+Control icon_view(Window window, const gfx::Rect &place)
+{
+    Behind *w = behind(window);
+    return w != nullptr ? w->make<IconView>(Kind::IconView, place, &Behind::icon_opened, &Behind::icon_picked,
+                                            &Behind::icon_dragged, w)
+                        : kNoControl;
+}
+
+void reset_view(Window window, Control control)
+{
+    if (auto *v = control_of<IconView>(window, control, Kind::IconView)) {
+        v->reset();
+    }
+}
+
+int item_at(Window window, Control control, int x, int y)
+{
+    auto *v = control_of<IconView>(window, control, Kind::IconView);
+    return v != nullptr ? v->item_at(x, y) : -1;
+}
+
+Control text_edit(Window window, const gfx::Rect &place, size_t text_bytes, size_t undo_bytes)
+{
+    Behind *w = behind(window);
+    const Control c = w != nullptr ? w->make<OwnedTextEdit>(Kind::TextEdit, place, text_bytes, undo_bytes) : kNoControl;
+    if (c == kNoControl) {
+        return kNoControl;
+    }
+    auto *e = w->as<OwnedTextEdit>(c, Kind::TextEdit);
+    if (!e->attached()) {
+        w->unmake<OwnedTextEdit>(); // no memory for the text
+        return kNoControl;
+    }
+    e->set_on_change(&Behind::edited, w);
+    e->layout();
+    return c;
+}
+
+void edit(Window window, Control control, Edit what)
+{
+    Behind *w = behind(window);
+    auto *e = w != nullptr ? w->as<OwnedTextEdit>(control, Kind::TextEdit) : nullptr;
+    if (e == nullptr) {
+        return;
+    }
+    switch (what) {
+    case Edit::Clear:
+        e->clear();
+        w->note_modified(e->modified()); // a new text: the program is not told of that as a change
+        break;
+    case Edit::Undo: e->undo(); break;
+    case Edit::Cut: e->cut(); break;
+    case Edit::Copy: e->copy(); break;
+    case Edit::Paste: e->paste(); break;
+    case Edit::Delete: e->delete_selection(); break;
+    case Edit::SelectAll: e->select_all(); break;
+    }
+}
+
+uint8_t edit_state(Window window, Control control)
+{
+    auto *e = control_of<OwnedTextEdit>(window, control, Kind::TextEdit);
+    return e == nullptr ? 0
+                        : static_cast<uint8_t>((e->modified() ? kModified : 0) | (e->can_undo() ? kCanUndo : 0) |
+                                               (e->has_selection() ? kHasSelection : 0));
+}
+
+void set_modified(Window window, Control control, bool modified)
+{
+    Behind *w = behind(window);
+    if (auto *e = w != nullptr ? w->as<OwnedTextEdit>(control, Kind::TextEdit) : nullptr) {
+        e->set_modified(modified);
+        w->note_modified(modified);
+    }
+}
+
+void load_begin(Window window, Control control)
+{
+    if (auto *e = control_of<OwnedTextEdit>(window, control, Kind::TextEdit)) {
+        e->load_begin();
+    }
+}
+
+bool load_append(Window window, Control control, const uint8_t *bytes, size_t size)
+{
+    auto *e = control_of<OwnedTextEdit>(window, control, Kind::TextEdit);
+    return e != nullptr && e->load_append(bytes, size);
+}
+
+void load_finish(Window window, Control control)
+{
+    Behind *w = behind(window);
+    if (auto *e = w != nullptr ? w->as<OwnedTextEdit>(control, Kind::TextEdit) : nullptr) {
+        e->load_finish();
+        w->note_modified(e->modified());
+    }
+}
+
+TextReader text_reader(Window window, Control control)
+{
+    return control_of<OwnedTextEdit>(window, control, Kind::TextEdit);
+}
+
+size_t read_text(TextReader reader, size_t offset, uint8_t *out, size_t room)
+{
+    return reader != nullptr ? static_cast<const OwnedTextEdit *>(reader)->save_bytes(offset, out, room) : 0;
+}
+
+size_t clipboard_size() { return wm::clipboard::size(); }
+
+void set_locked(Window window, bool locked)
+{
+    if (Behind *w = behind(window)) {
+        w->set_locked(locked);
+    }
+}
+
+bool locked(Window window)
+{
+    Behind *w = behind(window);
+    return w != nullptr && w->locked();
+}
+
+void set_caret(Window window, Control control, const gfx::Rect &caret)
+{
+    if (auto *p = control_of<Picture>(window, control, Kind::Picture)) {
+        p->set_caret(caret);
+    }
+}
+
+bool control_has_keys(Window window, Control control)
+{
+    Behind *w = behind(window);
+    const wm::Widget *c = w != nullptr ? w->any(control) : nullptr;
+    return c != nullptr && c->has_focus();
+}
+
+bool caret_lit(Window window)
+{
+    Behind *w = behind(window);
+    return w != nullptr && (w->manager() == nullptr || w->manager()->caret_visible());
 }
 
 void place_control(Window window, Control control, const gfx::Rect &place)
@@ -716,8 +1225,19 @@ void place_control(Window window, Control control, const gfx::Rect &place)
     if (wm::Widget *c = w != nullptr ? w->any(control) : nullptr) {
         c->invalidate(); // where it was
         c->rect = place;
+        if (w->kind(control) == Kind::TextEdit) {
+            static_cast<OwnedTextEdit *>(c)->layout();
+        } else if (w->kind(control) == Kind::IconView) {
+            static_cast<IconView *>(c)->layout();
+        }
         c->invalidate();
     }
+}
+
+gfx::Rect client_size(Window window)
+{
+    Behind *w = behind(window);
+    return w != nullptr ? gfx::Rect{0, 0, w->client().w, w->client().h} : gfx::Rect{0, 0, 0, 0};
 }
 
 void resize(Window window, int client_width, int client_height)
@@ -830,14 +1350,6 @@ void set_text(Window window, Control control, const char *text)
     }
 }
 
-namespace {
-template <class T> T *control_of(Window window, Control control, Kind kind)
-{
-    Behind *w = behind(window);
-    return w != nullptr ? w->as<T>(control, kind) : nullptr;
-}
-} // namespace
-
 void get_text(Window window, Control control, char *out, int capacity)
 {
     if (capacity > 0) {
@@ -927,6 +1439,8 @@ void set_items(Window window, Control control, const char *const *items, int cou
             l->set_icons(&Behind::row_icon);
         }
         l->set_items(items, count);
+    } else if (auto *v = control_of<IconView>(window, control, Kind::IconView)) {
+        v->set_items(items, count, icons);
     }
 }
 
@@ -934,6 +1448,9 @@ int selected(Window window, Control control)
 {
     if (auto *g = control_of<Grid>(window, control, Kind::Grid)) {
         return g->selected();
+    }
+    if (auto *v = control_of<IconView>(window, control, Kind::IconView)) {
+        return v->selected();
     }
     auto *l = control_of<wm::ListBox>(window, control, Kind::List);
     return l != nullptr ? l->selected() : -1;
@@ -945,6 +1462,8 @@ void select(Window window, Control control, int index)
         l->select(index);
     } else if (auto *g = control_of<Grid>(window, control, Kind::Grid)) {
         g->select_quietly(index);
+    } else if (auto *v = control_of<IconView>(window, control, Kind::IconView)) {
+        v->select(index);
     }
 }
 
@@ -990,7 +1509,12 @@ bool show(Window window)
 void close(Window window)
 {
     if (Behind *w = behind(window)) {
-        w->close();
+        if (w->open()) {
+            w->close();
+        } else {
+            w->closed(); // the program hears of it now, not when the memory goes back
+            installed_kit().wm->discard(*w);
+        }
     }
 }
 

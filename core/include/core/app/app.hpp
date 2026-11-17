@@ -121,6 +121,7 @@ constexpr Number kNone = os::ui::kNoWindow;
 using os::ui::kClientSize;
 using os::ui::kDialog;
 using os::ui::kFixedSize;
+using os::ui::kKeys;
 using os::ui::kMenuBar;
 using os::ui::kMouse;
 using os::ui::kOnce;
@@ -136,6 +137,8 @@ public:
     bool operator!=(const Control &other) const { return !(*this == other); }
     os::ui::Control number() const { return number_; }
     void redraw() const { os::ui::redraw_control(window_, number_); } // painted again
+    // Moved, or made another size; an empty place hides it.
+    void place(const gfx::Rect &where) const { os::ui::place_control(window_, number_, where); }
 
 protected:
     Number window_ = kNone;
@@ -211,7 +214,10 @@ class Picture : public Control {
 public:
     using Control::Control;
     using Control::redraw;
-    void place(const gfx::Rect &where) const { os::ui::place_control(window_, number_, where); }
+    // For one made with kKeys. Where its text cursor is (all a blink
+    // paints again); whether the keys go to it.
+    void set_caret(const gfx::Rect &caret) const { os::ui::set_caret(window_, number_, caret); }
+    bool has_keys() const { return os::ui::control_has_keys(window_, number_); }
     // A part of it painted again, in its own coordinates.
     void redraw(const gfx::Rect &part) const { os::ui::redraw_control_part(window_, number_, part); }
 };
@@ -233,6 +239,50 @@ public:
     using Control::Control;
     void set_text(const char *text) const { os::ui::set_text(window_, number_, text); } // must stay valid
     void menu(wm::Menu &menu) const { os::ui::menu_under(window_, number_, menu); }
+};
+
+// Icons in a grid with their names under them: what a folder holds.
+class IconView : public Control {
+public:
+    using Control::Control;
+    // The program's tables, which must stay valid; what is picked stays.
+    void set_items(const char *const *names, int count, const gfx::Bitmap *const *icons) const
+    {
+        os::ui::set_items(window_, number_, names, count, icons);
+    }
+    void reset() const { os::ui::reset_view(window_, number_); } // nothing picked, back at the top
+    int selected() const { return os::ui::selected(window_, number_); } // -1: none
+    void select(int index) const { os::ui::select(window_, number_, index); } // tells of it (changed)
+    int item_at(int x, int y) const { return os::ui::item_at(window_, number_, x, y); } // in its coordinates
+};
+
+// The text editor: a whole text file, with its own memory for the text
+// and for undo. made(): false when there was no memory for it.
+class TextEdit : public Control {
+public:
+    using Control::Control;
+    bool made() const { return number_ != os::ui::kNoControl; }
+    void clear() const { os::ui::edit(window_, number_, os::ui::Edit::Clear); }
+    void undo() const { os::ui::edit(window_, number_, os::ui::Edit::Undo); }
+    void cut() const { os::ui::edit(window_, number_, os::ui::Edit::Cut); }
+    void copy() const { os::ui::edit(window_, number_, os::ui::Edit::Copy); }
+    void paste() const { os::ui::edit(window_, number_, os::ui::Edit::Paste); }
+    void delete_selection() const { os::ui::edit(window_, number_, os::ui::Edit::Delete); }
+    void select_all() const { os::ui::edit(window_, number_, os::ui::Edit::SelectAll); }
+    bool modified() const { return (os::ui::edit_state(window_, number_) & os::ui::kModified) != 0; }
+    bool can_undo() const { return (os::ui::edit_state(window_, number_) & os::ui::kCanUndo) != 0; }
+    bool has_selection() const { return (os::ui::edit_state(window_, number_) & os::ui::kHasSelection) != 0; }
+    void set_modified(bool on) const { os::ui::set_modified(window_, number_, on); }
+    // A file's bytes into the text, in pieces.
+    void load_begin() const { os::ui::load_begin(window_, number_); }
+    bool load_append(const uint8_t *bytes, size_t size) const
+    {
+        return os::ui::load_append(window_, number_, bytes, size);
+    }
+    void load_finish() const { os::ui::load_finish(window_, number_); }
+    // For a job that writes the text out while the window is locked
+    // (os::ui::read_text).
+    os::ui::TextReader reader() const { return os::ui::text_reader(window_, number_); }
 };
 
 // A bar that fills from the left in blocks: progress, or how full.
@@ -258,10 +308,15 @@ public:
     Number number() const { return number_; }
     void close() { os::ui::close(number_); }
     bool on_screen() const { return os::ui::on_screen(number_); }
+    gfx::Rect client_size() const { return os::ui::client_size(number_); } // as w and h
     // Another size for the client area (see os::ui::resize).
     void resize(int client_width, int client_height) { os::ui::resize(number_, client_width, client_height); }
     bool in_front() const { return os::ui::in_front(number_); } // it is the window in use
     bool has_keys() const { return os::ui::has_keys(number_); } // the keys go to it, and it is not minimised
+    // Locked: it takes no keys, no clicks and no request to close.
+    void set_locked(bool on) { os::ui::set_locked(number_, on); }
+    bool locked() const { return os::ui::locked(number_); }
+    bool caret_lit() const { return os::ui::caret_lit(number_); } // the lit half of the text cursor's blink
     // Asks for a part of the client area to be painted again.
     void redraw(const gfx::Rect &part) { os::ui::redraw(number_, part); }
 
@@ -283,11 +338,28 @@ public:
     virtual void paint_in(Control /*which*/, Canvas &) {}
     // A cell of a grid is to be painted.
     virtual void paint_cell(Control /*which*/, int /*index*/, const gfx::Rect & /*cell*/, Canvas &) {}
+    // A key, or characters typed (UTF-8), for the picture made with kKeys
+    // that has the keys. True: the key was used.
+    virtual bool key_in(Control /*which*/, const wm::KeyMsg &) { return false; }
+    virtual void text_in(Control /*which*/, const char * /*utf8*/) {}
     // The left button in a picture made with kMouse, in its coordinates;
     // from Down to Up they all go to the picture that was pressed.
     virtual void mouse(Control /*which*/, const wm::MouseMsg &) {}
     // The right button went down in a picture made with kMouse.
     virtual void right_click(Control /*which*/, int /*x*/, int /*y*/) {}
+    // The client area has another size: the controls go where they belong now.
+    virtual void resized(int /*width*/, int /*height*/) {}
+    // An entry of an icon view was held and moved: the program starts the
+    // drag of what it stands for (os::begin_drag).
+    virtual void drag(Control /*which*/) {}
+    // A file dragged over the client area (client coordinates): true if
+    // it would be taken there. nullptr: the drag left the window, or ended.
+    virtual bool drag_over(const char * /*path*/, int /*x*/, int /*y*/) { return false; }
+    // The file let go there, after drag_over() said yes.
+    virtual void dropped(const char * /*path*/, int /*x*/, int /*y*/) {}
+    // The close button, Alt+F4, a TERM signal. True: the program deals
+    // with it (asks about unsaved work, and closes itself later).
+    virtual bool closing() { return false; }
     // A menu of the menu bar is about to open: a chance to grey items out.
     virtual void menu_opening(int /*which*/) {}
     // The window has closed; the object is destroyed after this.
@@ -330,6 +402,11 @@ protected:
     {
         return {number_, os::ui::drop_down(number_, icon, place)};
     }
+    IconView icon_view(const gfx::Rect &place) { return {number_, os::ui::icon_view(number_, place)}; }
+    TextEdit text_edit(const gfx::Rect &place, size_t text_bytes, size_t undo_bytes)
+    {
+        return {number_, os::ui::text_edit(number_, place, text_bytes, undo_bytes)};
+    }
     Meter meter(const gfx::Rect &place, gfx::Colour colour = gfx::rgb(0, 0, 2))
     {
         return {number_, os::ui::meter(number_, place, colour)};
@@ -362,7 +439,7 @@ protected:
     void set_radio_value(int group, int value) { os::ui::set_radio_value(number_, group, value); }
 
 private:
-    template <class T, class... Args> friend Number open(const Look &look, Args &&...args);
+    template <class T, class... Args> friend Number make(const Look &look, Args &&...args);
 
     static Number &making()
     {
@@ -384,7 +461,13 @@ private:
             return true;
         case os::ui::What::Chosen:
             return window->chosen(Control(window->number_, event.control));
-        case os::ui::What::Key: return window->key(*event.key);
+        case os::ui::What::Key:
+            return event.control != os::ui::kNoControl
+                       ? window->key_in(Control(window->number_, event.control), *event.key)
+                       : window->key(*event.key);
+        case os::ui::What::Text:
+            window->text_in(Control(window->number_, event.control), event.text);
+            return true;
         case os::ui::What::Painting:
             window->painting();
             return true;
@@ -410,6 +493,17 @@ private:
         case os::ui::What::RightClick:
             window->right_click(Control(window->number_, event.control), event.x, event.y);
             return true;
+        case os::ui::What::Resized:
+            window->resized(event.x, event.y);
+            return true;
+        case os::ui::What::Drag:
+            window->drag(Control(window->number_, event.control));
+            return true;
+        case os::ui::What::DragOver: return window->drag_over(event.text, event.x, event.y);
+        case os::ui::What::Dropped:
+            window->dropped(event.text, event.x, event.y);
+            return true;
+        case os::ui::What::Closing: return window->closing();
         case os::ui::What::Menu:
             window->menu_opening(event.index);
             return true;
@@ -424,10 +518,10 @@ private:
     Number number_;
 };
 
-// Makes a program's window and shows it. T inherits from app::Window; the
-// arguments after `look` go to its constructor. kNone: there was no memory,
-// or no room on the screen.
-template <class T, class... Args> Number open(const Look &look, Args &&...args)
+// Makes a program's window without showing it yet, for a program that may
+// still find it cannot start: app::show() puts it on the screen, and
+// os::ui::close() takes it back. kNone: there was no memory.
+template <class T, class... Args> Number make(const Look &look, Args &&...args)
 {
     const Number number = os::ui::create(look, &Window::events<T>, sizeof(T));
     if (number == kNone) {
@@ -436,7 +530,18 @@ template <class T, class... Args> Number open(const Look &look, Args &&...args)
     Window::making() = number;
     new (os::ui::state(number)) T(std::forward<Args>(args)...);
     Window::making() = kNone;
-    return os::ui::show(number) ? number : kNone;
+    return number;
+}
+// False: there was no room on the screen, and the window is gone.
+inline bool show(Number number) { return os::ui::show(number); }
+
+// Makes a program's window and shows it. T inherits from app::Window; the
+// arguments after `look` go to its constructor. kNone: there was no memory,
+// or no room on the screen.
+template <class T, class... Args> Number open(const Look &look, Args &&...args)
+{
+    const Number number = make<T>(look, std::forward<Args>(args)...);
+    return number != kNone && os::ui::show(number) ? number : kNone;
 }
 
 // The program's object behind a window it opened as T; nullptr once the

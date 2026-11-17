@@ -42,7 +42,9 @@ enum class What : uint8_t {
     Command, // a button was pressed: `control`
     Changed, // a check box, a scroll bar or a list's selection changed: `control`
     Chosen,  // a row of a list was double-clicked, or Enter on it: `control`. False: press the default button
-    Key,     // a key the controls did not use: `key`. True: the program used it
+    Key,     // a key, before the controls see it: `key`. True: the program used it. With a `control`,
+             // a key for the picture that has the keys (kKeys)
+    Text,    // characters typed into the picture that has the keys: `control`, `text` (UTF-8)
     Painting, // the window is about to be painted: the last moment to change what the controls show
     Paint,   // the client area, after the face and the controls are painted: `drawing`. With a
              // `control`, that picture alone, its corner as (0, 0)
@@ -50,6 +52,15 @@ enum class What : uint8_t {
     Mouse,   // the left button in a picture that asked for it (kMouse): `control`, `mouse`, in the
              // picture's coordinates. From Down to Up they all go to the picture pressed
     RightClick, // the right button went down in a picture that asked for the mouse: `control`, `x`, `y`
+    Resized, // the client area has another size (the user pulled an edge, or maximised): `x`, `y` are
+             // its width and height. The program puts its controls where they go now
+    Drag,    // an entry of an icon view was held and moved a little: `control`. The program starts
+             // the drag of what it stands for
+    DragOver, // a file is dragged over the client area: `text` its path, `x`, `y`. True: it would be
+              // taken there. `text` is nullptr when the drag has left the window or ended
+    Dropped, // the file was let go there, after DragOver said yes: `text`, `x`, `y`
+    Closing, // the close button, Alt+F4, a TERM signal. True: the program deals with it (asks about
+             // unsaved work, closes itself later); otherwise the window closes
     Menu,    // a menu of the menu bar is about to open: `index`, which. A chance to grey items out
     Closed,  // the window has closed, or never opened; once, and it and its numbers are dead after this
 };
@@ -62,6 +73,7 @@ struct Event {
     int index = 0;
     gfx::Rect part = {};
     const wm::MouseMsg *mouse = nullptr;
+    const char *text = nullptr;
     int x = 0, y = 0;
 };
 
@@ -97,6 +109,8 @@ bool alive(Window window);
 bool on_screen(Window window); // shown, and not closed
 void set_title(Window window, const char *title); // the text must stay valid
 bool in_front(Window window);                     // it is the window in use
+// The size of the client area, as `w` and `h`.
+gfx::Rect client_size(Window window);
 // Another size for the client area. A window on the screen stays where it
 // is, but inside the screen; one not yet shown is centred again unless it
 // was given a place.
@@ -121,6 +135,7 @@ Control check_box(Window window, const gfx::Rect &place, const char *text, bool 
 // own; `value` is what radio_value() answers while this one is chosen.
 Control radio(Window window, const gfx::Rect &place, const char *text, int group, int value);
 Control text_field(Window window, const gfx::Rect &place, const char *initial = "");
+constexpr int kScrollBarThickness = 16;
 Control scroll_bar(Window window, const gfx::Rect &place, bool vertical);
 // The rows are the program's texts and must stay valid while they are shown.
 Control list(Window window, const gfx::Rect &place, const char *const *items, int count);
@@ -132,9 +147,18 @@ enum PictureFlag : uint8_t {
     kOnce = 1,  // the program writes every pixel of it exactly once when it paints (a game's board,
                 // a picture), so the system need not paint it through a buffer
     kMouse = 2, // What::Mouse and What::RightClick for it
+    kKeys = 4,  // it can have the keys: What::Key and What::Text with its number
 };
 Control picture(Window window, const gfx::Rect &place, uint8_t how = 0);
-// A control moved or made another size, in the client area.
+// Where the text cursor is in a picture that takes the keys, in its
+// coordinates: all that a blink paints again. An empty one: none.
+void set_caret(Window window, Control picture, const gfx::Rect &caret);
+// For a picture that paints its own text cursor: whether the keys go to
+// it, and whether the cursor is in the lit half of its blink.
+bool control_has_keys(Window window, Control control);
+bool caret_lit(Window window);
+// A control moved or made another size, in the client area. An empty
+// place: it is not shown.
 void place_control(Window window, Control control, const gfx::Rect &place);
 // Asks for a control to be painted again.
 void redraw_control(Window window, Control control);
@@ -152,6 +176,51 @@ Control drop_down(Window window, const gfx::Bitmap *icon, const gfx::Rect &place
 // A menu of the program's just under a control. The menu and its items
 // are the program's and must stay valid while it is open.
 void menu_under(Window window, Control control, wm::Menu &menu);
+
+/* ---- The text editor: a control that holds a whole text file ----
+ *
+ * The text and the undo memory are the control's, asked for when it is
+ * made (kNoControl if there is none) and given back with it. Changed
+ * tells of the first change after set_modified(false), and of the text
+ * going back to unchanged.
+ */
+Control text_edit(Window window, const gfx::Rect &place, size_t text_bytes, size_t undo_bytes);
+enum class Edit : uint8_t { Clear, Undo, Cut, Copy, Paste, Delete, SelectAll };
+void edit(Window window, Control text_edit, Edit what);
+enum EditState : uint8_t { kModified = 1, kCanUndo = 2, kHasSelection = 4 };
+uint8_t edit_state(Window window, Control text_edit);
+void set_modified(Window window, Control text_edit, bool modified);
+// A file's bytes into the text, in pieces (CRLF becomes a line end):
+// begin, append each piece (false when it does not fit), finish.
+void load_begin(Window window, Control text_edit);
+bool load_append(Window window, Control text_edit, const uint8_t *bytes, size_t size);
+void load_finish(Window window, Control text_edit);
+// The file's bytes again, for a job of the program that writes them out
+// on another task. The reader is taken on the UI task and is good while
+// the window stays locked (set_locked), which is what keeps the text and
+// the window as they are; read_text may then be called from the job.
+using TextReader = const void *;
+TextReader text_reader(Window window, Control text_edit);
+size_t read_text(TextReader reader, size_t offset, uint8_t *out, size_t room);
+
+// How many bytes of text the clipboard holds (0: Paste has nothing).
+size_t clipboard_size();
+
+// Locked: the window is shown and can be moved, but takes no keys, no
+// clicks and no request to close, and the pointer is an hourglass over
+// it. For a program whose job is using what the window holds.
+void set_locked(Window window, bool locked);
+bool locked(Window window);
+
+// Icons in a grid with their names under them: what a folder holds. The
+// names and the pictures (32 by 32) are the program's tables and must stay
+// valid; set_items() is a list's, and keeps what is picked. One entry is
+// picked: selected() and select() are a list's, and select() tells of it
+// (Changed), as a click or an arrow key does. Chosen: Enter or a double
+// click. Drag: an entry held and moved.
+Control icon_view(Window window, const gfx::Rect &place);
+void reset_view(Window window, Control icon_view); // nothing picked, back at the top
+int item_at(Window window, Control icon_view, int x, int y); // the entry at a point of it, or -1
 
 // A bar that fills from the left in blocks, in a sunken box: progress, or
 // how full something is.
@@ -176,7 +245,7 @@ int value(Window window, Control scroll_bar);
 void set_value(Window window, Control scroll_bar, int value); // no Changed for it
 // A list.
 // `icons`: a picture for each row, or nullptr for none. One list with
-// pictures a window.
+// pictures a window. For an icon view too, where they are not optional.
 void set_items(Window window, Control list, const char *const *items, int count,
                const gfx::Bitmap *const *icons = nullptr);
 int selected(Window window, Control list); // -1: none. A grid's too
@@ -192,6 +261,7 @@ void press(Window window, Control button);
 // On the screen, or to the front if it is there already. False: the window
 // manager is full, and the window is gone.
 bool show(Window window);
+// One that was never shown is destroyed, and its program hears Closed.
 void close(Window window);
 
 /* ---- Drawing, while a Paint event is being answered ----

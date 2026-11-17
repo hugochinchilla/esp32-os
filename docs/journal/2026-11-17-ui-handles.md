@@ -363,6 +363,108 @@ where it is but inside the screen), for the three sizes of the field.
 PC tests pass (41 of 41) and the pictures match with no change to the
 tests. Firmware not compiled since, and not run.
 
+## The same day: the Picture viewer, the first window that changes size
+
+Program thirteen, with its Options dialog. New in the system:
+
+- The Resized event: the client area has another size, and the program
+  puts its controls where they go now (`place`, on any control; an empty
+  place hides one). `client_size` tells the size when the window is made.
+- The scroll bars of the picture are the system's, placed by the viewer
+  beside the picture when it is larger than its area. They were two
+  scroll bars kept inside the viewer's own widget, which passed the mouse
+  on to them by hand.
+- The status line is a `picture` the viewer paints.
+
+The viewer no longer makes a window before it knows it has the memory
+for a picture and throws it away: it opens, and closes at once if there
+is none.
+
+PC tests pass (41 of 41), the pictures match. Firmware not compiled
+since, and not run.
+
+## The same day: the Terminal
+
+Program fourteen. Its grid of characters is a `picture` that takes the
+keys. New in the system for it:
+
+- `kKeys`: a picture that can have the keys. Its keys come as the Key
+  event with its number, and the characters typed as the Text event.
+- The text cursor: the program tells where it is (`set_caret`), which is
+  all that a blink paints again, and asks while it paints whether the
+  picture has the keys and whether the cursor is in the lit half of its
+  blink.
+- A window can be made without being shown (`app::make`, then
+  `app::show`): the Terminal has to get its session first, and gives the
+  window back if it cannot. `close` on a window never shown destroys it.
+
+The grid is still read under the session's lock while it is painted; the
+lock is the program's business and the system knows nothing of it.
+
+PC tests pass (41 of 41), the pictures match. A Terminal is four blocks
+of memory now (its window, the grid's picture, the scroll bar and the
+session) where it was two. Firmware not compiled since, and not run.
+
+## The same day: the Editor
+
+Program fifteen. The text editor (`wm::TextEdit`) was an object inside
+the Editor's window, with memory the Editor asked for and handed to it.
+By number it is a control of the system's:
+
+- `text_edit`: made with the sizes of its text and undo memory, which
+  are the control's own, counted as the program's, and go back with it.
+  No control if there is no memory.
+- What the menus do is one call with a name (`edit`: undo, cut, copy,
+  paste, delete, select all, clear); what the menus need to know is one
+  answer (`edit_state`: changed, can undo, has a selection). The file
+  goes in by pieces as before.
+- Saving runs on a job of the Editor's, on another task. The job cannot
+  look a number up in the system's table while the UI task may be
+  changing it, so the Editor takes a reader for the text on the UI task
+  before it starts the job (`text_reader`), and the job reads through it
+  (`read_text`). It is good while the window is locked, which the Editor
+  already did for the length of the save. The agent's, to confirm: it is
+  the one place where a program holds something that is not a number.
+- The Closing event (the Editor asks about unsaved changes), `set_locked`
+  and `clipboard_size`.
+
+PC tests pass (41 of 41), the pictures match. Firmware not compiled
+since, and not run.
+
+## The same day: the File manager, and the last of the 17
+
+Programs sixteen and seventeen: the folder windows and the Trash window
+(one file, `file_manager.cpp`).
+
+- The view of icons with names (`FolderView`) was a widget of the File
+  manager's. It is a control of the system's now (`icon_view`): the
+  program hands it the names and the icons, and asks which is selected
+  and which is under a point (`item_at`). Large and small icons, the
+  scrolling and the selection are the control's.
+- Dragging files out of a window and dropping them on one are three
+  events: Drag (the control says a drag began on an item), DragOver (a
+  file is over the window: the program answers whether it would take it)
+  and Dropped.
+- The toolbar buttons and the two panels (the path, the status line) are
+  pictures the File manager paints itself, with the mouse sent to them.
+  Options: system controls for a tool button and a panel (two more kinds
+  for one program), or pictures (chosen: the calls were there already).
+  The agent's, to confirm.
+- A folder window is made, filled and only then shown (`app::make`,
+  `app::show`), so a folder that cannot be read never flashes a window.
+
+What it costs: the Task Manager's row for the File manager says 20K
+where it said 18K (the controls are blocks of their own). The three
+reference pictures of the Task Manager were drawn again for that number
+and nothing else changed in them (24 pixels, the figure).
+
+All 17 programs on the list of `tools/check_os_calls.py` are on the thin
+classes. Still on `core/wm`'s classes: the desktop and its own windows
+(About, Welcome, the widget gallery, the message box), which are the
+system's side.
+
+PC tests pass (41 of 41), the pictures match. Firmware not compiled
+since, and not run.
 
 ## On the board, first tranche (added by the board thread, 2026-11-17)
 
@@ -431,3 +533,65 @@ Each program exercised:
 `dbg.py misses` after both games and the Task Manager: none. The idle desktop
 against main: identical but for 20 pixels of the clock. VNC and telnet
 answered. Nothing was left changed on C:.
+
+
+## On the board, second tranche (added by the board thread, 2026-11-17)
+
+a1018a6 with main 039aae1 merged in: the same code as ce9ed0e (no difference
+outside docs). The PC build stopped on the laptop's GCC with
+`-Werror=overloaded-virtual`: in `core/src/shell/viewer.cpp` the static
+`chosen(const char *, void *)` hid `app::Window::chosen(Control)`. The board
+commit renames it `file_chosen` (two lines). Then `tools/gate.sh` passed (42
+tests, the pictures, check_os_calls; `dbg_tool` did not fail this time).
+Firmware 0x1697a0 (27 % free), flashed by cable, the app only. Main (039aae1)
+was measured on the board just before with the same scripts.
+
+Memory, free bytes against the idle desktop while open (internal /
+external), main / this; every one back to the byte when closed:
+
+| program | main | this |
+|---|---|---|
+| Terminal | -12,656 / -27,144 | -12,656 / -27,320 |
+| Editor | 0 / -609,700 | 0 / -610,136 |
+| File manager (C:\pictures) | 0 / -16,736 | 0 / -18,396 |
+| Picture viewer (earthrise.jpg) | 0 / -2,430,644 | 0 / -2,431,228 |
+| Trash window | 0 / -15,072 | 0 / -16,448 |
+
+Twenty open/close rounds of each: internal and external back (+0, once
++20), the largest free blocks unchanged (131,072 and 6,422,528).
+
+Speed, the UI task's processor time, four runs each, medians main / this:
+200 characters typed in the Editor 30 / 30 ms; the File manager, 80 files,
+Page Down ten times and Page Up ten times 39 / 41 ms; the Terminal, `type` of
+30 KB, 680 / 642 ms of UI time and 0.77 / 0.73 s until the next command ran.
+(A single first run had shown 33 / 42 and 42 / 60 ms; the repeats show that
+was noise.) A 300 KB `type`: 13.0 s on main's single run, 6.1 s here. A 300 KB
+Editor save: 3.8, 4.0, 3.9 s, the file right. The Picture viewer, decode /
+total: mascot.bmp 429 / 638 ms, test card.png 391 / 604, blue marble.png 649
+/ 1,187, earthrise.jpg 894 / 1,505 (main earlier today 449 / 641, 389 / 598,
+645 / 1,156, 892 / 1,440). Idle repaint 13.9 ms.
+
+Exercised:
+
+- Terminal: typing, three `help`s and Page Up, a corner resize, maximise,
+  `top` and `ted`; `ps` shows Terminal (parent 3) and sh (parent Terminal);
+  three open and a fourth refused.
+- Editor: a 300 KB file opened with `edit`, typing, Ctrl+Z, a line cut and
+  pasted twice, saved (the hourglass while saving); closing with a change
+  asks; four open and a fifth refused.
+- File manager: two folder windows, a file dragged from one into the other
+  (moved) and one onto the Trash (trashed); Up and Back in the toolbar;
+  Backspace goes up. The View menu has only "Show hidden files": there is no
+  large/small icons choice to test. A file dragged from a folder window onto
+  the desktop moved into C:\Documents\Desktop; that desktop icon dragged onto
+  a folder window moved the file into the folder.
+- Trash window: a file selected, File > Restore put it back in its folder;
+  File > Empty Trash asks, and Yes emptied it.
+- Picture viewer: BMP, PNG and JPEG; View > Actual size shows earthrise.jpg
+  full size with scroll bars and Fit to window brings it back; View >
+  Options... opens the dithering list, Escape closes only it.
+
+`dbg.py misses`: none. VNC and telnet answered. The idle desktop against main:
+identical but for 40 pixels of the clock. The test folders, the files and
+the icons.ini a desktop drop wrote were removed; the desktop and the Trash are
+empty, as found.

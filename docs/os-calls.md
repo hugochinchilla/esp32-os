@@ -40,6 +40,7 @@ The journal entry with the reasons is
 | | `os::main_window(pid)`, `os::window_title(id)`, `os::window_icon(id)`, `os::bring_forward(id)` | Another process's window, as a number (`os::WindowId`) and never as its object: its title and icon, and bringing it or its dialog to the front. A closed window's number answers nothing |
 | | `os::caret_moved()` | The text cursor of the window in use has moved: shown at once (the Terminal) |
 | Windows by number | `os::ui` (`core/os/ui.hpp`): windows, controls and their events | A program asks for a window and controls and gets numbers; written through the thin classes of `core/app/app.hpp` (item 37) |
+| | `os::ui::icon_view`, `set_items`, `item_at`, `reset_view`; events Drag, DragOver, Dropped | The view of icons with names (File manager), and files dragged out of it and dropped on a window |
 | | `os::ui::draw::fill`, `text`, `blit`, `part`, ... | Drawing while a Paint event is answered, on a number good only until it returns (`app::Canvas`) |
 | | `os::begin_drag(path)` | A file starts being dragged |
 | | `os::Busy busy;` | The hourglass until the end of the block |
