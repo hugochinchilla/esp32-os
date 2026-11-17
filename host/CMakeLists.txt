@@ -108,6 +108,11 @@ add_executable(test_msg tests/test_msg.cpp)
 target_link_libraries(test_msg PRIVATE core Threads::Threads)
 add_test(NAME msg COMMAND test_msg)
 
+# The TTY (backlog item 12), with a session on a thread of its own.
+add_executable(test_tty tests/test_tty.cpp)
+target_link_libraries(test_tty PRIVATE core Threads::Threads)
+add_test(NAME tty COMMAND test_tty)
+
 # Chinchilla as a desktop program (backlog item 32): the same core in an SDL2
 # window. Its parts that need no window are tested everywhere; the program
 # itself is built only where SDL2 is installed, so the tests above need

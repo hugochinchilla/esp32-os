@@ -33,7 +33,7 @@ board or the merge), `done`.
 | 10 | Jobs owned by a process, and "cannot exit until jobs finish". The Editor saves through a job, its window locked meanwhile | M | 2, 8, 9 | Yes | todo |
 | 11 | Three priority classes (Low, Normal, High) for jobs and services | S | 10 | Yes | todo |
 | | **Phase 3: the console** | | | | |
-| 12 | TTY object: echo, line editing, Ctrl+C | M | 8 | | todo |
+| 12 | TTY object: echo, line editing, Ctrl+C | M | 8 | | on a branch (`claude/project-thread-8q7ksu`), PC tests pass; nothing on the board uses it yet. [Journal](journal/2026-11-17-tty.md) |
 | 13 | Shell with the file and process commands (Linux names, DOS aliases, both slashes), tested on the PC | L | 2, 9, 12 | | todo |
 | 14 | Serial console sharing the wire with the debug link | M | 12, 13 | Yes, with care | todo |
 | 15 | Terminal window on the desktop | M | 12, 13 | | todo |

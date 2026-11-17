@@ -53,6 +53,7 @@ set(CORE_SRCS
     src/shell/settings.cpp
     src/shell/task_manager.cpp
     src/shell/viewer.cpp
+    src/tty/tty.cpp
     src/wm/text_edit.cpp
     src/wm/widgets.cpp
     src/wm/window.cpp

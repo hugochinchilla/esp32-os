@@ -3,6 +3,7 @@
 #pragma once
 
 #include <atomic>
+#include <condition_variable>
 #include <mutex>
 #include <thread>
 #include <algorithm>
@@ -154,6 +155,37 @@ public:
 private:
     std::mutex mutex_;
     std::atomic<std::thread::id> owner_{};
+};
+
+// A real event for tests with several threads, as a FreeRTOS binary
+// semaphore is on the board.
+class ThreadEvent : public ports::Event {
+public:
+    void set() override
+    {
+        {
+            const std::lock_guard<std::mutex> hold(mutex_);
+            set_ = true;
+        }
+        changed_.notify_one();
+    }
+    bool wait(uint32_t max_ms) override
+    {
+        std::unique_lock<std::mutex> hold(mutex_);
+        const auto is_set = [this] { return set_; };
+        if (max_ms == 0xFFFFFFFF) {
+            changed_.wait(hold, is_set);
+        } else if (!changed_.wait_for(hold, std::chrono::milliseconds(max_ms), is_set)) {
+            return false;
+        }
+        set_ = false;
+        return true;
+    }
+
+private:
+    std::mutex mutex_;
+    std::condition_variable changed_;
+    bool set_ = false;
 };
 
 class HostSystem : public ports::System {

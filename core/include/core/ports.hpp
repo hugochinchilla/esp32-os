@@ -33,6 +33,20 @@ protected:
     ~Lock() = default;
 };
 
+// Something a task sleeps on until another task has work for it: a shell
+// session waiting for a typed line (tty::Tty). A set() that comes before the
+// wait() is not lost: that wait() returns at once. One sleeper at a time.
+class Event {
+public:
+    // Any task. Wakes the sleeper, now or at its next wait().
+    virtual void set() = 0;
+    // Sleeps until a set() or until max_ms have gone by. True if it was set.
+    virtual bool wait(uint32_t max_ms) = 0;
+
+protected:
+    ~Event() = default;
+};
+
 // The screen: one byte per pixel, RRRGGGBB, rows top to bottom, no padding.
 class Display {
 public:
