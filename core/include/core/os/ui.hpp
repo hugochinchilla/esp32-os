@@ -35,7 +35,7 @@ enum class What : uint8_t {
     Command, // a button was pressed: `control`
     Key,     // a key the controls did not use: `key`. True: the program used it
     Paint,   // the client area, after the face and the controls are painted: `canvas`
-    Closed,  // the window has closed; it and its numbers are dead after this
+    Closed,  // the window has closed, or never opened; once, and it and its numbers are dead after this
 };
 
 struct Event {

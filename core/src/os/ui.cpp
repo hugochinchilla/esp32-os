@@ -42,6 +42,7 @@ public:
 
     ~Behind()
     {
+        closed(); // one that never reached the screen: the program still hears that it is gone
         for (int i = 0; i < count_; i++) {
             switch (kinds_[i]) {
             case Kind::Label: static_cast<wm::Label *>(controls_[i])->~Label(); break;
@@ -106,7 +107,13 @@ public:
         e.key = &k;
         return tell(e) || Window::key(k);
     }
-    void closed() override { tell(Event{What::Closed}); }
+    void closed() override
+    {
+        if (!told_closed_) {
+            told_closed_ = true;
+            tell(Event{What::Closed});
+        }
+    }
 
 private:
     bool tell(const Event &e) { return events_(handle(), e, state_); }
@@ -115,6 +122,7 @@ private:
     Events events_;
     void *state_;
     uint8_t flags_;
+    bool told_closed_ = false;
     wm::Widget *controls_[kMaxWidgets] = {};
     Kind kinds_[kMaxWidgets] = {};
     int count_ = 0;

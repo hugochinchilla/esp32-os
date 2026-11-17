@@ -76,3 +76,30 @@ One block per control is the cost of not knowing, when the window is
 asked for, how many controls will follow. Each block has a 16-byte note
 of whose it is. If that matters, the window can be given room for its
 controls up front.
+
+## The same day: thin classes on top (the owner's choice)
+
+The owner chose the first option of the card. `core/app/app.hpp` is one
+header, compiled into each program and not into the system:
+`app::Window` with virtual `command`, `key`, `paint` and `closed`, and
+`app::Button` and `app::Label`, each of which is a number and a few
+functions that call `os::ui` with it. `app::open<T>(look)` asks the system
+for a window with room for a `T`, builds the `T` in that room, and shows
+it; when the window has closed the `T` is destroyed and the room goes
+with the window.
+
+Shut Down is written with it and reads much as it did before: a class
+with five members and three small functions. The difference is in what
+the members are. Before, they were the system's label and button objects
+inside the program; now they are numbers, and the objects are on the
+system's side.
+
+One thing had to be settled for the classes to feel like before: members
+are made in the constructor's list (`cancel_(button(...))`), so the
+constructor must know which window it is building for. `open()` says so
+just before it runs the constructor.
+
+A window that never reaches the screen (the window manager full) is told
+`Closed` as well, once, so the program's object is destroyed either way.
+
+PC tests pass (41), pictures match. The firmware compiles and links (0x167c60 of 0x1f0000); not run. `dbg_tool` failed once in a full run and passed alone and in the next full run; nothing in it touches this change.
