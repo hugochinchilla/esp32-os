@@ -8,6 +8,7 @@
 #include "core/gfx/art.hpp"
 #include "core/desk/desk.hpp"
 #include "core/os/os.hpp"
+#include "core/init/init.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/text_edit.hpp"
 #include "core/wm/widgets.hpp"
@@ -565,17 +566,19 @@ void stop_taskbar(proc::Pid pid, proc::Signal, void *)
 }
 
 // The desktop shell: the taskbar with the Start menu and the quick-launch
-// icons, and the icons on the desktop. A process, child of the desktop, not
-// protected: End Task or kill ends it and it comes back.
+// icons, and the icons on the desktop. A process, not protected: End Task
+// or kill ends it. init starts it and, if C:\.config\startup.txt says
+// `taskbar:respawn` (or says nothing), starts it again; it is init's child
+// then. On a machine with no init (a test) it is the desktop's child and
+// stays away once ended.
 void start_taskbar(void *)
 {
     wm::Wm &wm = manager();
     proc::Table &processes = proc::table();
     const proc::Pid desktop = processes.find_by_name("desktop");
-    const proc::Pid pid = processes.spawn("taskbar", desktop, proc::kSystem);
+    const proc::Pid pid = processes.spawn("taskbar", init::the() != nullptr ? proc::kRoot : desktop, proc::kSystem);
     if (pid != proc::kNone) {
         processes.set_stop(pid, &stop_taskbar, nullptr);
-        processes.set_restart(pid, &start_taskbar, nullptr);
         g_taskbar = pid;
     }
     // With no room in the table the taskbar is the desktop's, as it was
@@ -658,10 +661,25 @@ void set_tray_icon(const gfx::Bitmap *icon, void (*click)(void *context), void *
 desk::Taskbar *taskbar() { return g_bar; }
 desk::Icons *desktop_icons() { return g_desk; }
 
+namespace {
+
+// For init: the taskbar as something it starts.
+bool taskbar_unit(void *)
+{
+    start_taskbar(nullptr);
+    return g_taskbar_up;
+}
+
+} // namespace
+
 bool start_taskbar_again()
 {
     if (g_taskbar_up) {
         return false;
+    }
+    if (init::Init *first = init::the()) {
+        first->add("taskbar", &taskbar_unit, nullptr, true, init::Again::Does); // false: it has it already
+        return first->start_again("taskbar"); // with all its tries again
     }
     start_taskbar(nullptr);
     return true;
@@ -706,9 +724,18 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
     install_screen_saver();
     install_display();
     start_network();
-    // The taskbar, the Start menu and the icons are a process of their own,
-    // started here and again whenever it ends (backlog item 21).
-    start_taskbar(nullptr);
+    // The taskbar, the Start menu and the icons are a process of their own
+    // (backlog item 21), started by init at its line of startup.txt and
+    // again whenever it ends (item 39). With the file already done, or with
+    // no init at all, it is started here.
+    init::Init *first = init::the();
+    if (first == nullptr) {
+        start_taskbar(nullptr);
+    } else if (first->booting()) {
+        first->add("taskbar", &taskbar_unit, nullptr, true, init::Again::Does); // false: it has it already
+    } else {
+        start_taskbar_again();
+    }
     // The desktop starts with no windows open (the owner's choice).
 }
 
