@@ -28,6 +28,47 @@ have the whole story.
   container (it now also fetches the ELF loader), then the commands in
   `CLAUDE.md`.
 
+## Board results so far for PR 43 (the board thread, 2026-11-17, turn cut short)
+
+Measured on 60113e5 and 32e202e. 435bd25, def4089 and later were never
+built or run there: **item 27 has no board result at all.** Not merged.
+
+- **Fails: a File manager window on a folder of 50 or more files does not
+  open** (Run `C:\m50`, `C:\m81`: nothing, no crash, no log line); 10 and
+  30 files open. `main` opened an 80-file folder earlier the same day; not
+  compared again. Not reproduced on the PC: `test_os` now opens a folder of
+  81 files with the File manager on a real thread, also with a 1 ms limit
+  so that the open is late, and the window comes. **Theory, not checked:**
+  listing is slow on LittleFS (each entry is asked for by index), 50 files
+  take more than the two-second limit, the File manager is marked late in
+  the middle of opening, and a late program only gets 10 ms of OS calls a
+  round at the idle priority, so the window would come after a very long
+  time or look as if it never does. To check on the board: time the same
+  folder on `main`; on the branch watch `dbg.py tasks` (the File manager at
+  priority 0) and wait a minute. If so, the fixes to choose from are a
+  listing that does not cost n squared, a longer limit while a window is
+  being opened, or more turns for a late program. A design choice: ask Hugo.
+- Stack never used, in bytes: Editor 4,776 (300 KB save, Save As); File
+  manager 4,888 to 5,416; Picture viewer 4,548 to 4,712; Task Manager
+  3,636; Defragmenter 6,296; Cactus Patch 1,528 of 4 KB; About 2,632;
+  Welcome 2,788; Widget gallery 2,820; Culebra 1,396. So the 8 KB programs
+  use at most about 4.6 KB: 6 KB would do, with the margin Culebra has.
+- Works: Run with a file and a folder; Ctrl+Alt+Del; End Task; `fault
+  hang` and `slow --pid` on Editor and File manager; a desktop icon opens
+  in 0.32 s with the File manager hung; eight tasks and a ninth program;
+  the three new programs; no watchdog lines; no misses but the debug
+  link's.
+- Help > About opens About as a separate process. That is as built
+  (`in_program` makes it a child of whoever asks; the board saw it as its
+  own process, which is right. Its parent was not read).
+- Odd, unconfirmed: after 15 Editor rounds three Editor tasks were left
+  (25,680 bytes of internal RAM), gone later; possibly the script. Worth a
+  check: `Runner` gives a task back only after its thread has left the
+  loop. The debug link's window list answers "too many windows" at about
+  ten windows.
+- Not done: File manager rename, Trash, drag; the viewer with PNG and
+  JPEG; cost against `main`; everything from 435bd25 on.
+
 ## Hugo's decisions (he writes Spanish; reply in Spanish)
 
 - Item 37: drawing by calls, now. Merged.

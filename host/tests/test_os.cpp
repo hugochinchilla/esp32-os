@@ -671,6 +671,26 @@ void test_programs_on_tasks()
     storage.make_folder("C:\\Work");
     CHECK(storage.write_file("C:\\Work\\a.txt", "hello", 5) == ports::FsError::Ok);
 
+    // A folder of many files opens like any other.
+    storage.make_folder("C:\\Many");
+    for (int i = 0; i < 81; i++) {
+        char name[40];
+        snprintf(name, sizeof(name), "C:\\Many\\file%02d.txt", i);
+        CHECK(storage.write_file(name, "x", 1) == ports::FsError::Ok);
+    }
+    // Even when listing it takes longer than the system waits: the File
+    // manager is late for a while, and the window comes when it is done.
+    runner.set_limit(1);
+    shell::open_folder("C:\\Many");
+    runner.set_limit(prog::kForever);
+    CHECK(soon([&] { return desktop.active() != nullptr && strcmp(title(), "Many") == 0; }));
+    CHECK(os::responding(t.find_by_name("File manager")));
+    while (desktop.active() != nullptr) {
+        desktop.close(*desktop.active());
+        wait(10000);
+    }
+    CHECK(soon([&] { return runner.tasks() == 0; }));
+
     // From the desktop: the File manager gets a process and a task, and its
     // window is made on that task.
     shell::open_folder("C:\\Work");
