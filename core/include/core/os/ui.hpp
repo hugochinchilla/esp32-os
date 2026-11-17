@@ -47,6 +47,9 @@ enum class What : uint8_t {
     Paint,   // the client area, after the face and the controls are painted: `drawing`. With a
              // `control`, that picture alone, its corner as (0, 0)
     Cell,    // a cell of a grid is to be painted: `control`, `index`, `part` (the cell), `drawing`
+    Mouse,   // the left button in a picture that asked for it (kMouse): `control`, `mouse`, in the
+             // picture's coordinates. From Down to Up they all go to the picture pressed
+    RightClick, // the right button went down in a picture that asked for the mouse: `control`, `x`, `y`
     Menu,    // a menu of the menu bar is about to open: `index`, which. A chance to grey items out
     Closed,  // the window has closed, or never opened; once, and it and its numbers are dead after this
 };
@@ -58,6 +61,8 @@ struct Event {
     Drawing drawing = kNoDrawing;
     int index = 0;
     gfx::Rect part = {};
+    const wm::MouseMsg *mouse = nullptr;
+    int x = 0, y = 0;
 };
 
 using Events = bool (*)(Window window, const Event &event, void *state);
@@ -92,6 +97,10 @@ bool alive(Window window);
 bool on_screen(Window window); // shown, and not closed
 void set_title(Window window, const char *title); // the text must stay valid
 bool in_front(Window window);                     // it is the window in use
+// Another size for the client area. A window on the screen stays where it
+// is, but inside the screen; one not yet shown is centred again unless it
+// was given a place.
+void resize(Window window, int client_width, int client_height);
 bool has_keys(Window window);                     // the keys go to it, and it is not minimised
 // The menu bar: the program's own table, which must stay valid; the
 // window must have been made with kMenuBar. What::Menu comes before one
@@ -119,10 +128,14 @@ Control group(Window window, const gfx::Rect &place, const char *caption); // a 
 Control text_area(Window window, const gfx::Rect &place, const char *text); // several lines, read only
 
 // A rectangle the program paints (What::Paint with this control).
-// `once`: the program writes every pixel of it exactly once when it paints
-// (a game's board, a picture), so the system need not paint it through a
-// buffer.
-Control picture(Window window, const gfx::Rect &place, bool once = false);
+enum PictureFlag : uint8_t {
+    kOnce = 1,  // the program writes every pixel of it exactly once when it paints (a game's board,
+                // a picture), so the system need not paint it through a buffer
+    kMouse = 2, // What::Mouse and What::RightClick for it
+};
+Control picture(Window window, const gfx::Rect &place, uint8_t how = 0);
+// A control moved or made another size, in the client area.
+void place_control(Window window, Control control, const gfx::Rect &place);
 // Asks for a control to be painted again.
 void redraw_control(Window window, Control control);
 void redraw_control_part(Window window, Control control, const gfx::Rect &part); // in the control's coordinates

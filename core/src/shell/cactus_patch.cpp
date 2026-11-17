@@ -3,6 +3,7 @@
 // are in core/games/cactus.hpp; this is the window: the status row (cacti
 // left, the mascot's face, seconds), the field and the menus. All of its
 // pictures are original, drawn here as text rows.
+#include "core/app/app.hpp"
 #include "core/gfx/art.hpp"
 #include <cstdio>
 #include <cstring>
@@ -191,7 +192,7 @@ const char kHowToPlay[] =
     "all its markers placed opens the rest.\n"
     "Open every safe tile to win. F2 starts again.";
 
-class CactusWindow : public wm::Window {
+class CactusWindow : public app::Window {
 public:
     static constexpr int kTile = 16;
     static constexpr int kMargin = 8;
@@ -201,9 +202,10 @@ public:
     static constexpr int kMaxSeconds = 999;
     enum Face : uint8_t { kCalm, kCareful, kOuch, kGlad };
 
-    CactusWindow() : Window("Cactus Patch", {0, 0, 200, 200}, &gfx::cactus_icon_16())
+    // One picture covers the whole client area: the program paints all of
+    // it, each pixel once, and takes the mouse.
+    CactusWindow() : all_(picture({0, 0, 200, 200}, app::kOnce | app::kMouse))
     {
-        set_resizable(false);
         game_items_[0] = {"&New game", &CactusWindow::new_game_action, this, nullptr, nullptr, 0};
         game_items_[1] = {nullptr, nullptr, nullptr, nullptr, nullptr, wm::kMenuSeparator};
         game_items_[2] = {"&Small", &CactusWindow::pick_small, this, nullptr, nullptr, 0};
@@ -227,22 +229,14 @@ public:
         }
         saved_level_ = level;
         set_level(level);
-        place();
     }
 
-    // Before the window opens: where it goes on the screen.
-    void place()
+    void paint_in(app::Control, app::Canvas &c) override
     {
-        const Rect f = frame();
-        set_frame(os::centred(f.w, f.h));
-    }
-
-    void paint(gfx::Canvas &c) override
-    {
-        const Rect all = {0, 0, client().w, client().h};
+        const Rect all = {0, 0, width_, height_};
         // What needs painting, in client coordinates: tiles outside it are
         // skipped, so a change to one tile costs one tile.
-        const Rect wanted = c.limit().offset(-c.origin_x(), -c.origin_y());
+        const Rect wanted = c.limit();
 
         // The face colour where nothing else paints: each pixel once.
         gfx::RectList &background = background_; // the window's own, gone with it
@@ -270,7 +264,7 @@ public:
         }
     }
 
-    void mouse(const wm::MouseMsg &m) override
+    void mouse(app::Control, const wm::MouseMsg &m) override
     {
         const int tile = tile_at(m.x, m.y);
         switch (m.kind) {
@@ -313,7 +307,7 @@ public:
         sync();
     }
 
-    void right_click(int x, int y) override
+    void right_click(app::Control, int x, int y) override
     {
         const int tile = tile_at(x, y);
         if (tile >= 0 && !probing_) {
@@ -328,7 +322,7 @@ public:
             new_game();
             return true;
         }
-        return Window::key(k);
+        return false;
     }
 
     void closed() override
@@ -351,14 +345,14 @@ public:
     {
         return {kMargin + 2 + col * kTile, kFieldTop + 2 + row * kTile, kTile, kTile};
     }
-    Rect face_rect() const { return {(client().w - kFaceSize) / 2, kMargin, kFaceSize, kFaceSize}; }
+    Rect face_rect() const { return {(width_ - kFaceSize) / 2, kMargin, kFaceSize, kFaceSize}; }
     void refresh() { sync(); }
 
 private:
     Rect counter_rect(int which) const
     {
         const int y = kMargin + (kFaceSize - kCounterH) / 2;
-        return {which == 0 ? kMargin : client().w - kMargin - kCounterW, y, kCounterW, kCounterH};
+        return {which == 0 ? kMargin : width_ - kMargin - kCounterW, y, kCounterW, kCounterH};
     }
     Rect field_frame() const
     {
@@ -396,7 +390,7 @@ private:
     }
     bool face_down() const { return face_held_ && face_inside_; }
 
-    void paint_tile(gfx::Canvas &c, int col, int row)
+    void paint_tile(app::Canvas &c, int col, int row)
     {
         const Rect r = tile_rect(col, row);
         const uint8_t shown = look(col, row);
@@ -436,7 +430,7 @@ private:
     }
 
     // A sunken white box: a small picture, then three digits.
-    void paint_counter(gfx::Canvas &c, const Rect &r, const gfx::Bitmap &picture, int value)
+    void paint_counter(app::Canvas &c, const Rect &r, const gfx::Bitmap &picture, int value)
     {
         c.sunken(r);
         const Rect inside = r.inset(2);
@@ -464,7 +458,7 @@ private:
         c.fill({inside.x + 16 + 3 * kDigitW, y, 2, kDigitH}, kWhite);
     }
 
-    void paint_face(gfx::Canvas &c)
+    void paint_face(app::Canvas &c)
     {
         const Rect r = face_rect();
         const bool down = face_down();
@@ -480,7 +474,7 @@ private:
     void sync()
     {
         const bool playing = field_.state() == CactusField::State::Playing;
-        if (playing && timer_ == 0 && open()) {
+        if (playing && timer_ == 0 && on_screen()) {
             timer_ = os::start_timer(1000000, 1000000, &CactusWindow::second, this);
         } else if (!playing && timer_ != 0) {
             os::stop_timer(timer_);
@@ -504,24 +498,24 @@ private:
             }
         }
         if (count > kSeparate) {
-            invalidate_client(changed); // a large opening: one rectangle
+            all_.redraw(changed); // a large opening: one rectangle
         } else {
             for (int i = 0; i < count; i++) {
-                invalidate_client(separate_[i]);
+                all_.redraw(separate_[i]);
             }
         }
         const uint8_t face_now = static_cast<uint8_t>(face() | (face_down() ? 0x80 : 0));
         if (face_now != shown_face_) {
             shown_face_ = face_now;
-            invalidate_client(face_rect());
+            all_.redraw(face_rect());
         }
         if (field_.unmarked() != shown_unmarked_) {
             shown_unmarked_ = field_.unmarked();
-            invalidate_client(counter_rect(0));
+            all_.redraw(counter_rect(0));
         }
         if (seconds_ != shown_seconds_) {
             shown_seconds_ = seconds_;
-            invalidate_client(counter_rect(1));
+            all_.redraw(counter_rect(1));
         }
     }
 
@@ -544,18 +538,11 @@ private:
         }
         new_game();
         const Level &l = kLevels[level];
-        const int w = 2 * kMargin + l.cols * kTile + 4 + 2 * kBorder;
-        const int h = kFieldTop + l.rows * kTile + 4 + kMargin + kClientTop + kMenuBarHeight + kBorder;
-        if (!open()) {
-            set_frame({frame().x, frame().y, w, h});
-            return;
-        }
-        // Stay where the window is, but inside the screen.
-        const Rect area = os::work_area();
-        int x = frame().x, y = frame().y;
-        x = x + w > area.w ? area.w - w : x;
-        y = y + h > area.h ? area.h - h : y;
-        os::move(*this, {x < 0 ? 0 : x, y < 0 ? 0 : y, w, h});
+        width_ = 2 * kMargin + l.cols * kTile + 4;
+        height_ = kFieldTop + l.rows * kTile + 4 + kMargin;
+        // The window stays where it is, but inside the screen.
+        resize(width_, height_);
+        all_.place({0, 0, width_, height_});
     }
 
     // A different field each game, and each time of day.
@@ -589,6 +576,8 @@ private:
     static constexpr int kSeparate = 16; // more changed tiles than this are painted as one area
 
     CactusField field_;
+    int width_ = 0, height_ = 0; // of the client area, which follows the size of the field
+    app::Picture all_;
     int level_ = 0;
     int saved_level_ = 0;
     gfx::RectList background_; // paint()'s working list
@@ -615,14 +604,27 @@ private:
     const wm::MenuBar bar_ = {entries_, 2};
 };
 
-CactusWindow &cactus_window() { return *one<CactusWindow>("Cactus Patch"); }
+app::Number g_window = app::kNone; // the one there may be: a number, dead once it has closed
+
+// For the tests and the reference pictures, while Cactus Patch is open.
+CactusWindow &cactus_window() { return *app::program<CactusWindow>(g_window); }
 
 } // namespace
 
 void open_cactus_patch()
 {
     const AsProgram as("Cactus Patch");
-    open_one<CactusWindow>("Cactus Patch");
+    if (app::bring_forward(g_window)) {
+        return;
+    }
+    app::Look look;
+    look.title = "Cactus Patch";
+    look.icon = &gfx::cactus_icon_16();
+    look.flags = app::kClientSize | app::kFixedSize | app::kMenuBar; // the size is set by the game
+    g_window = app::open<CactusWindow>(look);
+    if (g_window == app::kNone) {
+        no_memory_for("Cactus Patch");
+    }
 }
 
 games::CactusField &cactus_patch_field() { return cactus_window().field(); }

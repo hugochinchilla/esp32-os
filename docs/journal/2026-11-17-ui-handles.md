@@ -340,3 +340,25 @@ the game believed it never had the keys.
 PC tests pass (41 of 41), the pictures match: each step still paints
 only the four cells that changed, each pixel once. Firmware not compiled
 since, and not run.
+
+## The same day: Cactus Patch, the first program that takes the mouse
+
+Program twelve. It painted its whole window itself and read the mouse
+there. By number it is one `picture` that covers the client area.
+
+Options for the mouse:
+
+- **The mouse goes to a picture that asks for it** (chosen; the agent's,
+  to confirm): `kMouse` when the picture is made, then the Mouse event
+  (left button: down, move, up, all to the picture that was pressed) and
+  RightClick, in the picture's coordinates. A window with controls and a
+  drawn part (the viewer, the File manager) needs exactly this.
+- A flag for "the program paints and hears everything in the window":
+  one more way of doing the same, only for windows without controls.
+
+Also new: a control can be moved or made another size (`place_control`)
+and a window can change the size of its client area (`resize`: it stays
+where it is but inside the screen), for the three sizes of the field.
+
+PC tests pass (41 of 41) and the pictures match with no change to the
+tests. Firmware not compiled since, and not run.

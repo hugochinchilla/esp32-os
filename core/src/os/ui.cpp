@@ -104,17 +104,21 @@ private:
 class Picture : public wm::Widget {
 public:
     using PaintFn = void (*)(Picture &picture, gfx::Canvas &c, void *context);
-    Picture(const gfx::Rect &r, bool once, PaintFn paint, void *context)
-        : Widget(r), once_(once), paint_(paint), context_(context)
+    using MouseFn = void (*)(Picture &picture, const wm::MouseMsg &m, void *context);
+    Picture(const gfx::Rect &r, uint8_t how, PaintFn paint, MouseFn mouse, void *context)
+        : Widget(r), how_(how), paint_(paint), mouse_(mouse), context_(context)
     {
     }
     void paint(gfx::Canvas &c) override { paint_(*this, c, context_); }
-    bool layered() const override { return !once_; }
+    bool layered() const override { return (how_ & kOnce) == 0; }
+    bool wants_mouse() const override { return (how_ & kMouse) != 0; }
+    void mouse(const wm::MouseMsg &m) override { mouse_(*this, m, context_); }
     ~Picture() = default;
 
 private:
-    bool once_;
+    uint8_t how_;
     PaintFn paint_;
+    MouseFn mouse_;
     void *context_;
 };
 
@@ -331,7 +335,7 @@ class Behind : public wm::Window {
 public:
     Behind(int slot, const Look &look, Events events, void *state)
         : Window(look.title, frame_for(look), look.icon), slot_(slot), events_(events),
-          state_(state), flags_(look.flags)
+          state_(state), flags_(look.flags), centred_(look.x < 0 || look.y < 0)
     {
         if ((flags_ & kDialog) != 0) {
             set_dialog(true);
@@ -461,6 +465,46 @@ public:
     {
         static_cast<Behind *>(context)->paint_control(p, c, What::Paint, 0, {});
     }
+    static void picture_mouse(Picture &p, const wm::MouseMsg &m, void *context)
+    {
+        auto *w = static_cast<Behind *>(context);
+        for (int i = 0; i < w->count_; i++) {
+            if (w->controls_[i] == &p) {
+                Event e{What::Mouse};
+                e.control = i + 1;
+                e.mouse = &m;
+                w->tell(e);
+            }
+        }
+    }
+    // The right button: to the topmost picture under it that takes the mouse.
+    void right_click(int x, int y) override
+    {
+        for (int i = count_ - 1; i >= 0; i--) {
+            if (kinds_[i] == Kind::Picture && controls_[i]->wants_mouse() && controls_[i]->rect.contains(x, y)) {
+                Event e{What::RightClick};
+                e.control = i + 1;
+                e.x = x - controls_[i]->rect.x;
+                e.y = y - controls_[i]->rect.y;
+                tell(e);
+                return;
+            }
+        }
+    }
+    void resize_client(int w, int h)
+    {
+        const int fw = w + 2 * kBorder;
+        const int fh = h + kClientTop + ((flags_ & kMenuBar) != 0 ? kMenuBarHeight : 0) + kBorder;
+        if (!open()) {
+            set_frame(centred_ ? os::centred(fw, fh) : gfx::Rect{frame().x, frame().y, fw, fh});
+            return;
+        }
+        const gfx::Rect area = os::work_area();
+        int x = frame().x, y = frame().y;
+        x = x + fw > area.w ? area.w - fw : x;
+        y = y + fh > area.h ? area.h - fh : y;
+        os::move(*this, {x < 0 ? 0 : x, y < 0 ? 0 : y, fw, fh});
+    }
     static void paint_cell(Grid &g, gfx::Canvas &c, const gfx::Rect &cell, int index, void *context)
     {
         static_cast<Behind *>(context)->paint_control(g, c, What::Cell, index, cell);
@@ -520,6 +564,7 @@ private:
     Events events_;
     void *state_;
     uint8_t flags_;
+    bool centred_;
     bool told_closed_ = false;
     bool gone_ = false; // the program has heard Closed: its object is destroyed
     const gfx::Bitmap *const *row_icons_ = nullptr;
@@ -658,10 +703,28 @@ Control text_area(Window window, const gfx::Rect &place, const char *text)
     return w != nullptr ? w->make<wm::TextArea>(Kind::TextArea, place, text) : kNoControl;
 }
 
-Control picture(Window window, const gfx::Rect &place, bool once)
+Control picture(Window window, const gfx::Rect &place, uint8_t how)
 {
     Behind *w = behind(window);
-    return w != nullptr ? w->make<Picture>(Kind::Picture, place, once, &Behind::paint_picture, w) : kNoControl;
+    return w != nullptr ? w->make<Picture>(Kind::Picture, place, how, &Behind::paint_picture, &Behind::picture_mouse, w)
+                        : kNoControl;
+}
+
+void place_control(Window window, Control control, const gfx::Rect &place)
+{
+    Behind *w = behind(window);
+    if (wm::Widget *c = w != nullptr ? w->any(control) : nullptr) {
+        c->invalidate(); // where it was
+        c->rect = place;
+        c->invalidate();
+    }
+}
+
+void resize(Window window, int client_width, int client_height)
+{
+    if (Behind *w = behind(window)) {
+        w->resize_client(client_width, client_height);
+    }
 }
 
 void redraw_control(Window window, Control control)

@@ -122,6 +122,8 @@ using os::ui::kClientSize;
 using os::ui::kDialog;
 using os::ui::kFixedSize;
 using os::ui::kMenuBar;
+using os::ui::kMouse;
+using os::ui::kOnce;
 using os::ui::kPicture;
 using os::ui::kWholeDesktop;
 
@@ -209,6 +211,7 @@ class Picture : public Control {
 public:
     using Control::Control;
     using Control::redraw;
+    void place(const gfx::Rect &where) const { os::ui::place_control(window_, number_, where); }
     // A part of it painted again, in its own coordinates.
     void redraw(const gfx::Rect &part) const { os::ui::redraw_control_part(window_, number_, part); }
 };
@@ -255,6 +258,8 @@ public:
     Number number() const { return number_; }
     void close() { os::ui::close(number_); }
     bool on_screen() const { return os::ui::on_screen(number_); }
+    // Another size for the client area (see os::ui::resize).
+    void resize(int client_width, int client_height) { os::ui::resize(number_, client_width, client_height); }
     bool in_front() const { return os::ui::in_front(number_); } // it is the window in use
     bool has_keys() const { return os::ui::has_keys(number_); } // the keys go to it, and it is not minimised
     // Asks for a part of the client area to be painted again.
@@ -278,6 +283,11 @@ public:
     virtual void paint_in(Control /*which*/, Canvas &) {}
     // A cell of a grid is to be painted.
     virtual void paint_cell(Control /*which*/, int /*index*/, const gfx::Rect & /*cell*/, Canvas &) {}
+    // The left button in a picture made with kMouse, in its coordinates;
+    // from Down to Up they all go to the picture that was pressed.
+    virtual void mouse(Control /*which*/, const wm::MouseMsg &) {}
+    // The right button went down in a picture made with kMouse.
+    virtual void right_click(Control /*which*/, int /*x*/, int /*y*/) {}
     // A menu of the menu bar is about to open: a chance to grey items out.
     virtual void menu_opening(int /*which*/) {}
     // The window has closed; the object is destroyed after this.
@@ -324,10 +334,11 @@ protected:
     {
         return {number_, os::ui::meter(number_, place, colour)};
     }
-    // `once`: every pixel of it is written exactly once when it is painted.
-    Picture picture(const gfx::Rect &place, bool once = false)
+    // `how`: kOnce (every pixel of it is written exactly once when it is
+    // painted), kMouse (mouse() and right_click() for it).
+    Picture picture(const gfx::Rect &place, uint8_t how = 0)
     {
-        return {number_, os::ui::picture(number_, place, once)};
+        return {number_, os::ui::picture(number_, place, how)};
     }
     Grid grid(const gfx::Rect &place, int columns, int count, int cell_w, int cell_h, int margin = 3)
     {
@@ -392,6 +403,12 @@ private:
                 Canvas canvas(event.drawing);
                 window->paint_cell(Control(window->number_, event.control), event.index, event.part, canvas);
             }
+            return true;
+        case os::ui::What::Mouse:
+            window->mouse(Control(window->number_, event.control), *event.mouse);
+            return true;
+        case os::ui::What::RightClick:
+            window->right_click(Control(window->number_, event.control), event.x, event.y);
             return true;
         case os::ui::What::Menu:
             window->menu_opening(event.index);

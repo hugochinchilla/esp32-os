@@ -162,7 +162,7 @@ public:
     CulebraWindow()
         : score_label_(plain({kMargin + 2, 6, 120, 14})),
           best_label_(plain({kClientW - kMargin - 80, 6, 80, 14})),
-          board_(picture(kBoard, true)) // painted once already, and often
+          board_(picture(kBoard, app::kOnce)) // painted once already, and often
     {
         game_items_[0] = {"&New game", &CulebraWindow::menu_new, this, nullptr, nullptr, 0};
         game_items_[1] = {"&Pause", &CulebraWindow::menu_pause, this, nullptr, nullptr, 0};
