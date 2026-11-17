@@ -128,3 +128,47 @@ in the file and a restart: ended, it stays away. `taskbar:off`: no bar at
 all until `run taskbar`. `taskbar:respawn`. The file deleted: the usual
 one is written in the new form. `inetd:respawn`: started once, said in
 the log, no start-up box.
+
+
+## On the board (added by the board thread, 2026-11-17)
+
+Branch commit f0cd0b0 with main 80948eb merged in (clean). PC tests 42 of 42,
+firmware 0x161d10, flashed by cable, the app only. The board's
+C:\.config\startup.txt (the earlier default, old form, no taskbar line) was
+saved first and put back byte for byte at the end. Each case below is one
+restart with that file; processes read with `ps` over telnet, the log with
+`dbg.py dmesg`.
+
+1. The board's own file (old form): the bar is there; `ps` shows taskbar PID
+   3, parent 1, flags S-R-; the log says "init: taskbar goes before inetd",
+   "init: started taskbar", "0 lines failed"; no box. `kill` on it: back as
+   PID 6 with "init: taskbar ended; starting it again".
+2. Killed again and again: after the fifth quick end it stayed away with
+   "init: taskbar keeps ending as soon as it starts; not started again" (no
+   bar). `run taskbar` brought it back (PID 12, R), and one more kill after
+   that brought it back again (PID 13): its tries start again.
+3. `desktop:once`, `taskbar:once`, `inetd:once`: taskbar without R; killed,
+   it stays away (no bar); `run taskbar` brings it back (no R).
+4. `taskbar:off` as the first line, then the old lines: no bar after the
+   start, "init: taskbar is off", "0 lines failed". `run taskbar` starts it;
+   it then has R (it is started as the respawn kind).
+5. `taskbar:respawn`: killed, it came back with a new PID.
+6. `inetd:respawn`: "init: inetd cannot be started again when it ends;
+   started once", inetd started, "0 lines failed", no box.
+7. `inetd:twice`: the box "Start-up" after the start; the log says "not
+   understood: inetd:twice (once, respawn or off after the colon)" and "1 line
+   failed".
+8. `terminal:once` as the last line: a Terminal is open after the start.
+9. No file: written again as `desktop:once`, `taskbar:respawn`,
+   `inetd:once`, `console:off` (with its comments).
+10. `console:once`: the serial console runs (row console, SP). `console:off`:
+    no console row. An Editor started with `run editor` and killed does not
+    come back. `kill 1` and `kill 2`: "it is protected".
+11. `dbg.py misses`: no missed refill not caused by the debug link. VNC took
+    a full screen, telnet answered. Free RAM on the idle desktop: internal
+    206,131 bytes against 206,159 on main, external 6,471,144 against
+    6,472,080. No late or missed refill in 60 s.
+
+The single painted frame without the bar between an end and the restart was
+not filmed again in this turn; the earlier turn (the taskbar as a process)
+showed that restart is not visible to the eye.
