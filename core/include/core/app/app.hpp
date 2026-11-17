@@ -131,8 +131,9 @@ public:
     virtual void command(Control /*which*/) {}
     // A check box was ticked, a scroll bar moved, another row of a list picked:
     virtual void changed(Control /*which*/) {}
-    // A row of a list was double-clicked, or Enter pressed on it:
-    virtual void chosen(Control /*which*/) {}
+    // A row of a list was double-clicked, or Enter pressed on it. False:
+    // the program has no use for it, and the default button is pressed.
+    virtual bool chosen(Control /*which*/) { return false; }
     // A key the controls did not use. True: the program used it.
     virtual bool key(const wm::KeyMsg &) { return false; }
     // The window is about to be painted: the last moment to change a text
@@ -210,8 +211,7 @@ private:
             window->changed(Control(window->number_, event.control));
             return true;
         case os::ui::What::Chosen:
-            window->chosen(Control(window->number_, event.control));
-            return true;
+            return window->chosen(Control(window->number_, event.control));
         case os::ui::What::Key: return window->key(*event.key);
         case os::ui::What::Painting:
             window->painting();

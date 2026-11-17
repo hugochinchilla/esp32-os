@@ -150,3 +150,24 @@ in a list, and an area the program draws and takes the mouse in.
   buttons, a picture, Browse opening the file dialog over it.
 
 PC tests pass (41) and the pictures match after each of the three.
+
+## The same day: Screen Saver, and a mistake caught by the tests
+
+Screen Saver is the third program on the thin classes. It needed one new
+event, `Painting`: the window is about to be painted, the last moment to
+change a text the controls show (the figures of the last run).
+
+The commit that moved it (3 of 17) was pushed with two PC tests failing,
+because the command that ran the tests looked only at the last lines of
+their output. What they had found:
+
+- `test_saver`: Enter on the list no longer pressed OK. A list made by
+  number always reported Enter on a row to the program (`Chosen`), and so
+  swallowed it; the old dialog had no use for that and let Enter fall
+  through to the default button. Now a program answers whether it used
+  `Chosen`; if not, the default button is pressed. The thin class answers
+  "no" unless the program says otherwise, so a dialog with a list behaves
+  as before.
+- `test_os`: a count of blocks that had to follow the dialog's new shape.
+
+Fixed in the next commit; 41 of 41 pass, pictures match.

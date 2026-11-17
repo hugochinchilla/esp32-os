@@ -99,22 +99,30 @@ public:
     int *radio_group(int group) { return group >= 0 && group < kGroups ? &groups_[group] : nullptr; }
 
     // A control says something happened: which one, as an event.
-    void from(const wm::Widget &control, What what)
+    bool from(const wm::Widget &control, What what)
     {
         for (int i = 0; i < count_; i++) {
             if (controls_[i] == &control) {
                 Event e{what};
                 e.control = i + 1;
-                tell(e);
-                return;
+                return tell(e);
             }
         }
+        return false;
     }
     static void pressed(wm::Button &b, void *context) { static_cast<Behind *>(context)->from(b, What::Command); }
     static void ticked(wm::CheckBox &b, void *context) { static_cast<Behind *>(context)->from(b, What::Changed); }
     static void scrolled(wm::ScrollBar &b, void *context) { static_cast<Behind *>(context)->from(b, What::Changed); }
     static void picked(wm::ListBox &l, void *context) { static_cast<Behind *>(context)->from(l, What::Changed); }
-    static void chosen(wm::ListBox &l, void *context) { static_cast<Behind *>(context)->from(l, What::Chosen); }
+    // Enter on a row, or a double click. A program that has no use for it
+    // gets what Enter does anywhere else in the window: the default button.
+    static void chosen(wm::ListBox &l, void *context)
+    {
+        auto *w = static_cast<Behind *>(context);
+        if (!w->from(l, What::Chosen) && w->default_widget() != nullptr) {
+            w->default_widget()->press();
+        }
+    }
 
     bool layered() const override { return (flags_ & kPicture) != 0 || Window::layered(); }
     void paint(gfx::Canvas &c) override

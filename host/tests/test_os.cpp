@@ -356,7 +356,7 @@ void test_desktop_calls()
     shell::display_dialog();
     shell::screen_saver_dialog();
     wait(10000);
-    CHECK(os::blocks_out() == blocks + 2);
+    CHECK(os::blocks_out() == blocks + 1 + 11); // Display's window; Screen Saver's and its ten controls
     while (desktop.active() != nullptr) {
         desktop.close(*desktop.active());
         wait(10000);
@@ -404,7 +404,11 @@ public:
         moves += which == bar_;
         picks += which == rows_;
     }
-    void chosen(app::Control which) override { chosen_rows += which == rows_; }
+    bool chosen(app::Control which) override
+    {
+        chosen_rows += which == rows_;
+        return true;
+    }
 
     app::CheckBox tick_;
     app::RadioButton a_, b_;
