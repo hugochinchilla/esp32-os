@@ -90,3 +90,40 @@ test, and step 3 removes it.
 - Whether the 2.5 s wait after the first screen is still wanted once the
   times are seen on the board; with it the start is about 1.3 s longer
   than before.
+
+## The first screen on the board: not seen
+
+Two builds were run (the board thread's report).
+
+8d6fc61, the BIOS with the OS's two video settings and no first screen:
+first light on the monitor about 5.0 s after a reset by the EN pin and
+5.25 s after a restart by software, steady text at 7.0 s, the desktop at
+15.0 s. Before those settings it was 5.75 s and 6.25 s, so they helped by
+about three quarters of a second, no more. At 5.5 s the title, processor,
+memory, video and drive lines were already drawn.
+
+bd20569, with the first screen. Serial, from the reset: the title at
+3.5 s (so the video starts at 0.5 s and the first screen ends at 3.5 s),
+"Main Processor" at 6.3 s as planned, the last line at 7.83 s, the
+handover at 12.89 s, the desktop at 13.85 s. A byte on serial at 1.5 s
+ends the first screen and the BIOS hands over at 2.06 s. No missed
+refills. But on the monitor the first image came at about 6.5 s, steady
+from about 7.5 s: the first screen was never seen, and the self-test was
+again not seen from its first line; its first frames had the left edge of
+the lines cut off.
+
+So the monitor showed its first image 4.5 s after the video started
+without the first screen, and 6.0 s after it with one, which is 3.0 s
+after the change from the first screen to the self-test. The plan
+assumed a fixed time. It looks as if this monitor needs a few seconds of
+a picture that does not change much, and starts again when the whole
+picture changes; the cut-off left edge says it is still fitting itself to
+the picture then. The OS's own self-test is seen 2.4 s after the video
+starts with much the same header on the screen, and why the BIOS takes
+longer is not known.
+
+Not guessed at again: the next build is for measuring only. It holds the
+first screen for 10 s and the self-test's header for another 10 s, so the
+webcam shows how long the monitor takes on a still picture from the BIOS
+and whether the change of screen makes it start again. `main`'s start is
+to be filmed the same way, to see whether 2.4 s still holds.

@@ -274,7 +274,11 @@ void bios_task(void *)
 
     static shell::BootIo io{display, system, memory, clock, nullptr, &idle, nullptr, nullptr};
     io.video_start_us = s_video_start_us;
-    io.monitor_wait_ms = shell::kMonitorWaitMs; // settings come with step 3 (NVS)
+    // MEASUREMENT BUILD, not for merging: both screens are held for 10 s so
+    // the webcam shows when the monitor locks on a still picture and what
+    // the change of screen does (the journal, "The first screen on the
+    // board"). The real values: shell::kMonitorWaitMs and bios::kSplashMs.
+    io.monitor_wait_ms = 10000;
     io.pace_percent = shell::kSelfTestPace;
     io.hold_s = shell::kSelfTestHoldS;
     io.skip = [](void *) { return s_key; };
@@ -285,7 +289,7 @@ void bios_task(void *)
     post.drive = drive_text();
     post.boot_device = &boot_device;
     // The first screen while the monitor wakes, then the self-test.
-    bios::run_splash(post);
+    bios::run_splash(post, 10000);
     bios::run_post(post);
 
     if (!post.bootable) {
