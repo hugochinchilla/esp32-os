@@ -95,9 +95,18 @@ choice between the update slots as it is. Whether the reset after flashing
 clears this memory as it cleared our own RTC variable does not matter here:
 a cleared flag means "run the BIOS", which is right after a flash.
 
+## What was chosen
+
+Asked on a card, "Accept almost 4 s of black screen between the BIOS and the
+desktop?", the owner chose **"Yes, go ahead"**. Not chosen: "No, one image
+instead" (the BIOS screen inside the one firmware, no restart and no blank)
+and "Keep talking". The agent's reason for recommending it: a real second
+stage is what was asked for, and a monitor going black between the BIOS and
+the system is true to a PC of the time.
+
 ## What is left
 
-- The owner's answer on whether a blank of about 3.8 s is acceptable.
+- How the flash is split, put to the owner next.
 - The hook is only read, not built: compile it, and try it on the board.
 - The clips are in the laptop session's scratchpad, for the film:
   `bios-desktop-fast-1..3.mkv`, `bios-desktop-normal-1..3.mkv`,

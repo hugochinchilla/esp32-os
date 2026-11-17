@@ -255,7 +255,8 @@ Measured on the board the same day
 picture every time, for 3.5 to 3.9 s; the video signal is back 0.76 s after
 the reset and the display needs about 3 s more. So the handover from the
 BIOS to the OS is a blank of about 3.8 s that ends on the desktop, and a
-splash would have to stay about 4 s to be seen.
+splash would have to stay about 4 s to be seen. The owner accepted the blank
+("Yes, go ahead").
 The bootloader hook was confirmed by reading ESP-IDF v5.5's source (not
 compiled): our own copy of `bootloader_start.c` starts an app of subtype
 `test`, the BIOS, unless the reserved RTC memory
@@ -398,7 +399,7 @@ and reasons are in `docs/journal/2026-11-17-program-lifecycle.md`.
 | A PC build of the desktop for testing | Yes, no | Decided: yes. See Decided |
 | How the PC build shows the screen | SDL window, image files only | Open |
 | Clock chip | DS3231 module, another I2C chip | DS3231 |
-| Details of the BIOS stage (`docs/journal/2026-11-17-bios-stage.md`) | How the app area is split (a small BIOS and two smaller update slots, or a larger BIOS and one OS slot); the blank monitor at the handover; settings in NVS or `boot.ini`; an OS image over serial; who shows the crash screen | Small BIOS and two slots; the splash covers the blank; NVS; yes, later; the BIOS |
+| Details of the BIOS stage (`docs/journal/2026-11-17-bios-stage.md`) | How the app area is split (a small BIOS and two smaller update slots, or a larger BIOS and one OS slot); settings in NVS or `boot.ini`; an OS image over serial; who shows the crash screen | Small BIOS and two slots; NVS; yes, later; the BIOS |
 
 ## Ideas kept for later
 
