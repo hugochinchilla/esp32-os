@@ -40,6 +40,7 @@ set(CORE_SRCS
     src/msg/input.cpp
     src/msg/queue.cpp
     src/proc/table.cpp
+    src/sh/console.cpp
     src/sh/files.cpp
     src/sh/filters.cpp
     src/sh/path.cpp
@@ -47,6 +48,7 @@ set(CORE_SRCS
     src/sh/system.cpp
     src/sh/ted.cpp
     src/sys/crash.cpp
+    src/sys/log.cpp
     src/shell/apps.cpp
     src/shell/boot.cpp
     src/shell/cactus_patch.cpp

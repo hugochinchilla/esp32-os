@@ -16,6 +16,24 @@ Version 1. Working on the board since 2026-11-16.
   middle of a screenshot. Text the chip prints before the OS starts (boot
   messages) is not framed; the tool shows it as plain text.
 
+## The serial console on the same wire
+
+With `start console` in `C:\.config\startup.txt` the command shell is on
+this port too (backlog item 14, `docs/journal/2026-11-17-serial-console.md`).
+Nothing changes for a tool that only speaks frames.
+
+- To the board: a zero byte opens a frame and the next zero closes it. Bytes
+  that arrive outside a frame are typed text and go to the shell at once. A
+  frame that fails its check is dropped and the wire stays "inside a frame",
+  so the bytes of a frame never reach the shell. If nothing arrives for half
+  a second while a frame is open, it is given up and what it held is taken
+  as typed (a stray zero must not swallow the keyboard).
+- From the board: what the shell shows is sent as plain text between
+  frames, never inside one. Between two zeros, what passes the frame check
+  is a frame and the rest is text.
+- `tools/dbg.py console` is a terminal for it (Ctrl+] leaves); any serial
+  terminal program works, and shows the frames as noise between the lines.
+
 ## Frames
 
 On the wire, a frame is a zero byte, the encoded frame, and another zero byte:

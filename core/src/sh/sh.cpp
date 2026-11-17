@@ -204,6 +204,7 @@ const Command kCommands[] = {
     {"uptime", &cmd_uptime, "uptime", "Show how long the machine has been on"},
     {"date", &cmd_date, "date", "Show the date and the time"},
     {"time", &cmd_date, nullptr, ""},
+    {"dmesg", &cmd_dmesg, "dmesg", "Show what the system has logged"},
     {"ver", &cmd_ver, "ver", "Show the version of Chinchilla"},
     {"uname", &cmd_ver, nullptr, ""},
     {"open", &cmd_open, "open PATH...", "Open a file with its program, or a folder"},

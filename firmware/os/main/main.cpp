@@ -43,6 +43,8 @@
 #include "core/net/services.hpp"
 #include "core/net/telnet.hpp"
 #include "core/init/init.hpp"
+#include "core/sh/console.hpp"
+#include "core/sys/log.hpp"
 #include "core/net/web.hpp"
 #include "core/net/wifi.hpp"
 #include "core/proc/table.hpp"
@@ -137,6 +139,13 @@ public:
     {
         uart_write_bytes(kDebugUart, data, size);
     }
+};
+
+// What the serial console's session shows: plain text on the debug link's
+// wire, between its frames (dbg::Protocol::send_text).
+class ConsoleOut : public ports::ByteSink {
+public:
+    void write(const uint8_t *data, size_t size) override;
 };
 
 class RtosLock : public ports::Lock {
@@ -591,6 +600,13 @@ struct ServicesTask {
     rfb::Server *remote;
 };
 
+void ConsoleOut::write(const uint8_t *data, size_t size)
+{
+    if (s_protocol != nullptr) {
+        s_protocol->send_text(data, size);
+    }
+}
+
 void services_task(void *context)
 {
     const ServicesTask &my = *static_cast<ServicesTask *>(context);
@@ -629,6 +645,10 @@ void ui_task(void *)
     // A service gets a row when it is a task of its own (the owner's rule,
     // 2026-11-16), as the network services have now: `inetd`, further down.
     // The debug link answers from here on, also during the start-up screens.
+    // The log lines are also kept, the last 16 KB of them, for `dmesg`.
+    static EXT_RAM_BSS_ATTR char log_room[16 * 1024];
+    static RtosLock log_lock;
+    sys::log().set_room(log_room, sizeof(log_room), &log_lock);
     s_protocol = &protocol;
     esp_log_set_vprintf(log_to_debug_link);
     protocol.send_hello();
@@ -854,6 +874,39 @@ void ui_task(void *)
         },
         nullptr);
 
+    // "console": the command shell on the serial port, on the same wire as
+    // the debug link (core/sh/console.hpp). What arrives outside a frame is
+    // typed text; what the session shows is sent between frames. A task of
+    // its own, so 12 KB of internal RAM: the usual start-up file leaves it
+    // out. Its commands work with what the desktop sets up.
+    first.add(
+        "console",
+        [](void *) {
+            if (!first.started("desktop")) {
+                ESP_LOGW(TAG, "console: the start-up file must start the desktop first");
+                return false;
+            }
+            static RtosMutex console_lock;
+            static RtosEvent console_typed, console_answered;
+            static RtosTasks console_tasks;
+            static sh::QueueCall console_ui(*s_queue, console_answered);
+            static ConsoleOut console_out;
+            static sh::ConsoleKit console_kit;
+            console_kit.lock = &console_lock;
+            console_kit.typed = &console_typed;
+            console_kit.tasks = &console_tasks;
+            const proc::Pid pid = proc::table().spawn_service("console", proc::kProtected);
+            static EXT_RAM_BSS_ATTR sh::Console console(shell::session_environment(&console_ui, pid), console_kit,
+                                                        console_out);
+            if (!console.start()) {
+                proc::table().exit(pid);
+                return false;
+            }
+            protocol.set_console(&console.typed(), &clock);
+            return true;
+        },
+        nullptr);
+
     const int64_t init_start = esp_timer_get_time();
     const int not_done = first.boot(storage);
     ESP_LOGI(TAG, "init: start-up file %s, %d line%s failed, %lld ms",
@@ -893,6 +946,7 @@ void ui_task(void *)
             }
             const int got = uart_read_bytes(kDebugUart, buffer, sizeof(buffer), 0);
             if (got <= 0) {
+                protocol.line_idle(); // nothing waiting: a frame left half sent is given up in time
                 break;
             }
             protocol.feed(buffer, static_cast<size_t>(got));

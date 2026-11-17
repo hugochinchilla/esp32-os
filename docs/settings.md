@@ -47,7 +47,7 @@ Files so far:
 | `cactus.ini` | `[game]` | `size`: small (default), medium or large, the patch the next game starts with. Written when Cactus Patch closes, if it changed |
 | `network.ini` | `[wifi]` | `tx_power_dbm`: the radio's top transmit power, 2 to 20, default 2 (higher values put lines on the picture while connecting). `enabled`: false leaves the radio off, default true |
 | `network.ini` | `[telnet]` | `enabled`: true offers the command shell on port 23, with no password, to whoever connects (one session at a time). Default false. Read at start-up |
-| `startup.txt` | (lines, not sections) | What init starts, from the top down: `start desktop`, `start inetd` (the network services), `run WHAT` for a program or a file as Start > Run... takes it, `#` for a comment. Written with the usual lines if it is not there. Read at start-up |
+| `startup.txt` | (lines, not sections) | What init starts, from the top down: `start desktop`, `start inetd` (the network services), `start console` (the command shell on the serial port; left out of the usual file), `run WHAT` for a program or a file as Start > Run... takes it, `#` for a comment. Written with the usual lines if it is not there. Read at start-up |
 
 A one-shot fast start for debugging: `tools/dbg.py reboot --fast`, or
 `tools/dbg.py boot fast-next` before flashing, makes the next start behave as

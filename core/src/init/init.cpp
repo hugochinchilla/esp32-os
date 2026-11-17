@@ -31,7 +31,7 @@ const char *Init::default_text()
            "# machine starts. Without this file the lines below are used and\r\n"
            "# the file is written again.\r\n"
            "#\r\n"
-           "#   start NAME   a part of the system: desktop, inetd\r\n"
+           "#   start NAME   a part of the system: desktop, inetd, console\r\n"
            "#   run WHAT     a program or a file, as Start > Run... takes it\r\n"
            "#   # ...        a comment\r\n"
            "#\r\n"
@@ -41,6 +41,10 @@ const char *Init::default_text()
            "\r\n"
            "start desktop\r\n"
            "start inetd\r\n"
+           "\r\n"
+           "# The command shell on the serial port, on the same wire as the\r\n"
+           "# debug link (tools/dbg.py console, or any serial terminal):\r\n"
+           "# start console\r\n"
            "\r\n"
            "# run terminal\r\n";
 }

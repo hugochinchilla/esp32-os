@@ -542,7 +542,11 @@ void open_terminal()
 
 sh::Env session_environment(sh::UiCall *ui, proc::Pid owner)
 {
-    static SessionMemory memory;
+    // One for each caller (telnet, the serial console): each charges its
+    // own process.
+    static SessionMemory memories[4];
+    static int used = 0;
+    SessionMemory &memory = memories[used < 3 ? used++ : 3];
     memory.owner = owner;
     sh::Env env;
     env.storage = &storage();

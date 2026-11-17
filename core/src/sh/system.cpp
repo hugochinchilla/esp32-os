@@ -4,6 +4,7 @@
 #include <cstring>
 
 #include "commands.hpp"
+#include "core/sys/log.hpp"
 #include "core/net/wifi.hpp"
 #include "core/shell/boot.hpp"
 
@@ -172,6 +173,44 @@ int cmd_date(Session &s, int, char **argv)
     const net::LocalTime t = net::local_time(utc, s.env().zone != nullptr ? *s.env().zone : net::kDefaultZone);
     s.printf("%s %d %s %d %02d:%02d:%02d\n", kDays[t.weekday % 7], t.day, kMonths[(t.month + 11) % 12], t.year, t.hour,
              t.minute, t.second);
+    return 0;
+}
+
+// The system log, oldest line first. Colour codes a logger may have put in
+// are left out: they are for a terminal that knows them.
+int cmd_dmesg(Session &s, int, char **argv)
+{
+    sys::Log &log = sys::log();
+    if (!log.kept()) {
+        return s.fail(argv[0], nullptr, "this machine keeps no log");
+    }
+    uint64_t at = log.oldest();
+    char piece[128];
+    char clean[sizeof(piece) + 1];
+    int escape = 0; // 1 after ESC, 2 inside ESC [ ... until a letter
+    char last = '\n';
+    size_t got;
+    while (!s.stopped() && (got = log.read(at, piece, sizeof(piece))) > 0) {
+        size_t n = 0;
+        for (size_t i = 0; i < got; i++) {
+            const char c = piece[i];
+            if (escape == 1) {
+                escape = c == '[' ? 2 : 0;
+            } else if (escape == 2) {
+                escape = (c >= '@' && c <= '~') ? 0 : 2;
+            } else if (c == 27) {
+                escape = 1;
+            } else if (c != '\r' && c != 0) {
+                clean[n++] = c;
+                last = c;
+            }
+        }
+        clean[n] = 0;
+        s.write(clean, n);
+    }
+    if (last != '\n') {
+        s.write("\n", 1);
+    }
     return 0;
 }
 
