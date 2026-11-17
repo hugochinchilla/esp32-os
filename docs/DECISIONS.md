@@ -987,8 +987,15 @@ tested on the PC only (not yet compiled for or run on the board).
   `core/src/shell/cactus_patch.cpp`. Its tests and reference pictures are
   `host/tests/test_cactus.cpp` (pictures 50 to 54).
 
-### noVNC from a CDN (asked 2026-11-16, to confirm)
+### noVNC from a CDN: dropped (the owner, 2026-11-17)
 
+- **Dropped** (the owner, 2026-11-17: "drop the novnc"). Our own viewer at
+  `/` works without the internet and is enough. The `/novnc` page and its
+  file hashes cost about 9.4 KB and 10.9 KB of firmware; removing them,
+  `tools/novnc_integrity.py` and the web server's support for a second page
+  (it had no other user) made the firmware 11,056 bytes smaller.
+  `/novnc` now answers 404. The notes below are what was built and why, kept
+  as the record. Journal: `docs/journal/2026-11-17-drop-novnc.md`.
 - The owner asked whether noVNC could be used from a trusted CDN at a pinned
   version. It can, and is added as a second page, `http://<address>/novnc`,
   beside the built-in viewer at `/` so the two can be compared; which one
@@ -1803,7 +1810,7 @@ agent under the owner's "dejo a tu criterio" of 2026-11-16.
   down. Rejected: an .ini file (order is the point); a shell script (maybe
   later); names without verbs. *Changed 2026-11-17 (the owner's choice): the
   lines are fields, `WHAT:ACTION`, as in inittab; see "init starts again
-  what ends". The verbs are still understood.*
+  what ends". The verbs are not read any more.*
 - **Without a file the usual lines are used and the file is written.** A
   wrong line is logged and skipped. The desktop is started even if no line
   asks, until there is a console to fall back on (item 14).
@@ -1993,8 +2000,9 @@ process table into `init`, as `respawn` in a Unix `/etc/inittab`.
   the last colon so a path keeps its own. `desktop:once`,
   `taskbar:respawn`, `inetd:once`, `console:off`. A WHAT that is not a
   part of the system is a program or a file. The lines of the first form
-  (`start NAME`, `run WHAT`) are still understood, so the file on the
-  board goes on working (the agent's, to confirm).
+  (`start NAME`, `run WHAT`) are not read: the agent had kept them
+  understood so the board's file went on working, and the owner had that
+  taken out the same day (see "No backward compatibility").
 - The agent's, to confirm: two fields and not inittab's four (there are
   no runlevels, and an id beside the name would say the same thing
   twice); `off` is new with the fields; the desktop cannot be `off`; a
@@ -2006,6 +2014,18 @@ process table into `init`, as `respawn` in a Unix `/etc/inittab`.
   network services or the console starts them once and says so in the log.
 - Not done: init on a task of its own that waits for endings. That is
   item 26.
+
+### No backward compatibility (the owner's rule, 2026-11-17)
+
+"We are not making releases for users; backward compatibility is not
+needed; the data on the board can be wiped whole every time, C: too." So a
+format that changes is read in its new form only, and the board's copy is
+rewritten. The saved Wi-Fi networks are to be kept where that is free;
+otherwise the owner gives the credentials again. First applied to
+`startup.txt` (the verbs `start` and `run` are gone from init's parser).
+Still in the code from before the rule, to be taken out when next touched
+or if the owner says so: moving an old `C:\docs` into `C:\Documents` at
+start-up (`desktop.ini`, `[documents]`).
 
 ### Chosen for background jobs (2026-11-17, to confirm)
 

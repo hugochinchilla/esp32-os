@@ -298,11 +298,8 @@ def check_web(board, port, web, shot):
     page = body
     assert head[0] == "HTTP/1.1 200 OK" and "Content-Length: %d" % len(body) in head, head
     assert body.startswith(b"<!doctype html>") and b"WebSocket" in body and body.endswith(b"</html>\n")
-    head, body = http_get(web, b"/novnc")
-    assert head[0] == "HTTP/1.1 200 OK" and b"novnc/noVNC@" in body and body.endswith(b"</html>\n"), head
-    # Every noVNC file the page loads has its hash in the page.
-    assert body.count(b'.js":"sha384-') >= 50 and b'core/rfb.js":"sha384-' in body
-    assert http_get(web, b"/novncx")[0][0] == "HTTP/1.1 404 Not Found"
+    # The noVNC page was dropped (the owner, 2026-11-17): only / is served.
+    assert http_get(web, b"/novnc")[0][0] == "HTTP/1.1 404 Not Found"
     head, body = http_get(web, b"/secret.txt")
     assert head[0] == "HTTP/1.1 404 Not Found", head
     # Connections that never ask for anything (browsers open spares) do not

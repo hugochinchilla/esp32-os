@@ -124,7 +124,7 @@ void test_lines()
         // The file's order is the order; comments, empty lines, spaces, both
         // line ends and either case are fine. What is started is init's child,
         // and init is the current process while it starts.
-        run(i, "# what starts\r\n\r\n  START Desktop  \r\nstart inetd\n\t# later\nrun terminal\r\nrun C:\\Documents\\notes.txt", 0);
+        run(i, "# what starts\r\n\r\n  Desktop:ONCE  \r\ninetd:once\n\t# later\nterminal:once\r\nC:\\Documents\\notes.txt:once", 0);
         CHECK(m.order == "desktop inetd " && m.ran == "terminal;C:\\Documents\\notes.txt;");
         CHECK(m.desktop == 2 && m.procs.find(m.desktop)->parent == proc::kRoot && m.current_at_start == proc::kRoot);
         CHECK(m.inetd == 3 && m.procs.find(m.inetd)->parent == proc::kRoot && m.procs.current() == proc::kNone);
@@ -138,21 +138,21 @@ void test_lines()
         m.set_up(i);
         m.net_works = false;
         run(i,
-            "run terminal\n"   // the desktop goes first, then this
-            "start inetd\n"    // does not start
-            "start printer\n"  // no such thing
-            "begin desktop\n"  // not a word init knows
-            "start\n"          // start what?
-            "startdesktop\n"
-            "start desktop\n"
-            "start desktop\n"  // twice
-            "run nothing\n"
-            "start console\n",
+            "terminal:once\n"  // the desktop goes first, then this
+            "inetd:once\n"     // does not start
+            "start desktop\n"  // the first form of the file: not read any more
+            "desktop:begin\n"  // not an action init knows
+            ":once\n"          // what, once?
+            "desktop\n"
+            "desktop:once\n"
+            "desktop:once\n"   // twice
+            "nothing:once\n"   // not a part, so a program: there is none
+            "console:once\n",
             7);
         CHECK(m.order == "desktop console " && m.ran == "terminal;");
         CHECK(has("init: desktop goes before terminal") && has("init: inetd did not start"));
-        CHECK(has("init: nothing here is called printer") && has("init: not understood: begin desktop"));
-        CHECK(has("init: start what?") && has("init: not understood: startdesktop"));
+        CHECK(has("init: not understood: start desktop") && has("init: not understood: desktop:begin (once, respawn or off"));
+        CHECK(has("init: once what? (:once)") && has("init: not understood: desktop\n"));
         CHECK(has("init: desktop is already started") && has("init: run nothing: no such program"));
     }
     // A file that leaves the desktop out, or has it after a service or a
@@ -162,21 +162,21 @@ void test_lines()
         Machine m;
         init::Init i(m.procs);
         m.set_up(i);
-        run(i, "start inetd\n", 0);
+        run(i, "inetd:once\n", 0);
         CHECK(m.order == "desktop inetd " && has("init: desktop goes before inetd"));
     }
     {
         Machine m;
         init::Init i(m.procs);
         m.set_up(i);
-        run(i, "start inetd\nstart desktop\nstart desktop\n", 1);
+        run(i, "inetd:once\ndesktop:once\ndesktop:once\n", 1);
         CHECK(m.order == "desktop inetd " && has("init: desktop is already started"));
     }
     {
         Machine m;
         init::Init i(m.procs);
         m.set_up(i);
-        run(i, "run terminal\nstart desktop\n", 0);
+        run(i, "terminal:once\ndesktop:once\n", 0);
         CHECK(m.order == "desktop " && m.ran == "terminal;" && has("init: desktop goes before terminal"));
     }
     // A file with nothing to start: the desktop, after its last line.
@@ -194,7 +194,7 @@ void test_lines()
         m.set_up(i);
         run(i, "", 0);
         CHECK(m.order == "desktop ");
-        const std::string wide = "start desktop\nrun " + std::string(200, 'x') + "\nstart inetd\n";
+        const std::string wide = "desktop:once\n" + std::string(200, 'x') + ":once\ninetd:once\n";
         Machine n;
         init::Init j(n.procs);
         n.set_up(j);
@@ -253,7 +253,7 @@ void test_file()
     }
     // The owner's file: no network services, a Terminal open from the start.
     {
-        const char mine[] = "start desktop\r\n# start inetd\r\nrun terminal\r\n";
+        const char mine[] = "desktop:once\r\n# inetd:once\r\nterminal:once\r\n";
         CHECK(storage.write_file(init::kPath, mine, sizeof(mine) - 1) == ports::FsError::Ok);
         Machine m;
         init::Init i(m.procs);
@@ -369,7 +369,7 @@ void test_needed_and_late()
         m.set_up(i);
         Comes bar{&m.procs, "bar"};
         i.add("bar", &Comes::start, &bar, true, init::Again::Does);
-        run(i, "start desktop\nstart inetd\n", 0);
+        run(i, "desktop:once\ninetd:once\n", 0);
         CHECK(bar.starts == 1 && m.order == "desktop inetd ");
         CHECK(has("init: bar goes before inetd"));
         m.procs.exit(bar.pid);
@@ -392,7 +392,7 @@ void test_needed_and_late()
             }
         };
         for (const char *text : {"desktop:once\ntaskbar:respawn\n", "taskbar:respawn\ndesktop:once\n",
-                                 "taskbar:once\n", "start taskbar\n", "# nothing\n"}) {
+                                 "taskbar:once\n", "# nothing\n"}) {
             Machine m;
             init::Init i(m.procs);
             Late late{&i, &m, {&m.procs, "taskbar"}};
@@ -401,7 +401,7 @@ void test_needed_and_late()
             said.clear();
             run(i, text, 0);
             CHECK(!i.booting() && late.bar.starts == 1 && i.started("taskbar"));
-            const bool once = strstr(text, "taskbar:once") != nullptr || strstr(text, "start taskbar") != nullptr;
+            const bool once = strstr(text, "taskbar:once") != nullptr;
             CHECK(m.procs.find(late.bar.pid)->is(proc::kRespawn) == !once);
             m.procs.exit(late.bar.pid);
             CHECK(m.procs.restart_due() == (once ? 0 : 1));
@@ -582,7 +582,7 @@ void test_desktop()
     static fs::MemoryVolume ram_disk(memory.allocate(1 << 20), 1 << 20, "RAM disk");
     storage.mount('C', ram_disk);
     fs::add_samples(storage, 'C');
-    const char mine[] = "start desktop\r\nrun terminal\r\nrun nothing like it\r\n";
+    const char mine[] = "desktop:once\r\nterminal:once\r\nnothing like it:once\r\n";
     storage.make_folder("C:\\.config");
     CHECK(storage.write_file(init::kPath, mine, sizeof(mine) - 1) == ports::FsError::Ok);
 

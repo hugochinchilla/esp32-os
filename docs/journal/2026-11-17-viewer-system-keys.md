@@ -1,6 +1,6 @@
 # Ctrl+Alt+Del, Alt+Tab and Alt+F4 from the browser viewer
 
-2026-11-17. Backlog item 44. Built and tested on the PC; not yet on the board.
+2026-11-17. Backlog item 45. Built and tested on the PC; not yet on the board.
 
 ## What was asked
 

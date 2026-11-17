@@ -265,11 +265,6 @@ void WebGate::header_line(Request &r)
         r.is_get = strncmp(r.line, "GET ", 4) == 0;
         const char *path = r.line + 4;
         r.root = r.is_get && path[0] == '/' && (path[1] == ' ' || path[1] == '?' || strncmp(path, "/index.html", 11) == 0);
-        if (r.is_get && second_path_ != nullptr) {
-            const size_t size = strlen(second_path_);
-            const char after = strncmp(path, second_path_, size) == 0 ? path[size] : 'x';
-            r.second = after == ' ' || after == '?' || after == '/';
-        }
         return;
     }
     if (starts(r.line, "upgrade:")) {
@@ -326,12 +321,6 @@ bool WebGate::answer(Request &r)
         type = "text/html; charset=utf-8";
         r.body = page_;
         r.body_size = page_size_;
-        pages_served_++;
-    } else if (r.second && second_ != nullptr) {
-        status = "200 OK";
-        type = "text/html; charset=utf-8";
-        r.body = second_;
-        r.body_size = second_size_;
         pages_served_++;
     } else if (r.root) {
         r.body = kNoPage;
