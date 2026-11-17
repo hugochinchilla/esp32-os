@@ -132,6 +132,10 @@ public:
 
 // The desktop's background: a colour and an 8x8 pattern over it.
 void set_backdrop(const wm::Wm::Backdrop &backdrop);
+// The look of windows, buttons and the taskbar: a place in the table of
+// themes (core/gfx/theme.hpp, where gfx::theme() tells the one in use).
+// Everything on the screen is painted again.
+void set_theme(int index);
 // The screensaver: which animation (a place in core/saver's list; -1: none)
 // and after how many seconds without a key or the mouse.
 void set_screen_saver(int animation, uint32_t wait_seconds);

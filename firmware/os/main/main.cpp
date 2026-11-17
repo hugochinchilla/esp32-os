@@ -7,12 +7,14 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <ctime>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 
+#include "bootloader_common.h"
 #include "driver/uart.h"
 #include "driver/uart_select.h"
 #include "esp_ota_ops.h"
@@ -59,6 +61,7 @@
 #include "core/wm/wm.hpp"
 #include "core/ports.hpp"
 #include "core/video/pointer.hpp"
+#include "boot_flag.h"
 #include "crash.hpp"
 #include "vga.h"
 #include "wifi.hpp"
@@ -68,8 +71,29 @@
 // this board; NVS survives that, and flashing does not erase it).
 constexpr const char *kFastNextKey = "fast_next";
 
+// The word the BIOS, the bootloader and this firmware pass across a restart
+// (firmware/common/boot_flag.h), in RTC memory the bootloader reserves.
+void set_boot_word(uint32_t word)
+{
+    memcpy(bootloader_common_get_rtc_retain_mem()->custom, &word, sizeof(word));
+}
+
+// True once if the bootloader came here from the BIOS, or from a restart
+// that asked for no BIOS: the start-up screens are not shown again.
+bool take_from_bios()
+{
+    uint32_t word;
+    memcpy(&word, bootloader_common_get_rtc_retain_mem()->custom, sizeof(word));
+    set_boot_word(0);
+    return word == CHINCHILLA_FROM_BIOS;
+}
+
 void arm_fast_next()
 {
+    // The restart that follows goes straight to this firmware, not through
+    // the BIOS. (After a flashing the RTC memory is gone; the BIOS then
+    // reads the word in NVS below and hands over at once.)
+    set_boot_word(CHINCHILLA_START_OS);
     nvs_handle_t h;
     if (nvs_flash_init() == ESP_OK && nvs_open("chinchilla", NVS_READWRITE, &h) == ESP_OK) {
         nvs_set_u32(h, kFastNextKey, shell::kFastBootMagic);
@@ -787,9 +811,16 @@ void ui_task(void *)
     // Start-up screens: the real self-test, then the splash.
     static shell::BootIo boot_io{display, system, memory, clock, &storage, &boot_idle, &protocol, &boot_log};
     shell::BootSettings boot = shell::boot_settings(storage);
+    // Both are read, so both are cleared.
+    const bool from_bios = take_from_bios();
     if (take_fast_next()) {
         boot.fastboot = true;
         ESP_LOGI(TAG, "one-shot fast boot (armed by tools/dbg.py; boot.ini unchanged)");
+    } else if (from_bios) {
+        // The BIOS has shown the self-test and counted down: this start
+        // goes on like a fast one (the cheap checks, no screens).
+        boot.fastboot = true;
+        ESP_LOGI(TAG, "started by the BIOS: its self-test is not repeated");
     }
     boot_io.video_start_us = s_video_start_us;
     boot_io.monitor_wait_ms = boot.monitor_wait_ms;

@@ -28,6 +28,10 @@ CORE = [
     r"^_ZN5shell(13load_settings|13save_settings)E",  # a program's own settings file
     r"^_ZNK?2fs3Ini",  # the settings file's sections and keys
 ]
+# Variables of the core library, by name: few, and each for a reason.
+CORE_DATA = [
+    r"^_ZN3gfx7g_themeE$",  # the theme in use: gfx::face() and the like read it in the program's own code
+]
 # From the core library: every function of these files.
 CORE_FILES = ["art.cpp", "rect.cpp"]
 
@@ -54,9 +58,14 @@ def core_names(nm, archive):
             member = line[:-1]
             continue
         parts = line.split()
-        if len(parts) != 3 or parts[1] not in "TW":
+        if len(parts) != 3:
             continue
         name = parts[2]
+        if parts[1] in "BDGRS" and any(re.search(p, name) for p in CORE_DATA):
+            names.add(name)
+            continue
+        if parts[1] not in "TW":
+            continue
         if any(re.search(p, name) for p in CORE) or any(member.startswith(f) for f in CORE_FILES):
             names.add(name)
     return names

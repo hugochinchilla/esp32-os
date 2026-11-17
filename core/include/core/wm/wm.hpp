@@ -224,6 +224,9 @@ public:
         uint8_t pattern[8];
     };
     void set_backdrop(const Backdrop &backdrop);
+    // The look of everything (a row of gfx's table of themes); all of the
+    // screen is painted again if it changes.
+    void set_theme(int index);
     const Backdrop &backdrop() const { return backdrop_; }
     // Pop-up menus. open_menu() opens a free-standing one at (x, y).
     void open_menu(Menu &menu, int x, int y);
@@ -396,6 +399,7 @@ private:
     void paint_desktop(const gfx::RectList &clip);
     void paint_window(Window &w, const gfx::RectList &clip);
     void paint_frame(gfx::Canvas &c, Window &w);
+    void paint_flat_title(gfx::Canvas &c, Window &w, const gfx::Rect &title, bool active);
     void paint_menu_bar(gfx::Canvas &c, Window &w);
     void paint_popup(int level, const gfx::RectList &clip);
     bool visible(const Window &w) const { return w.state_ != WindowState::Minimized; }

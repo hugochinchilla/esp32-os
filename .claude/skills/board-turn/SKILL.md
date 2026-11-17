@@ -54,19 +54,20 @@ exported; it must print "0 name(s) missing"), output in `build/programs/`.
 Which layout the board is on decides the command. Read the partition table
 offsets in `build/flash_args` first.
 
-- **Old layout** (bootloader 0x0, table 0x8000, ota_0 0x10000, ota_1 0x200000,
-  otadata 0x3f0000, C: 0x400000): app only,
-  `python3 tools/dbg.py boot fast-next` then in `firmware/os`:
-  `idf.py -p /dev/ttyACM0 app-flash`. A full cable flash of `main` must write
-  only 0x0, 0x8000, 0x10000, 0x3f0000.
-- **BIOS layout** (BIOS PR 40 and later; wipes C:): in the worktree's
-  `firmware/os`, `idf.py -p /dev/ttyACM0 flash` (must write only 0x0, 0x8000,
-  0x100000, 0x4e0000), then `sh tools/flash-bios.sh /dev/ttyACM0` (writes
-  0x10000 only). Never `idf.py flash` inside `firmware/bios`.
-- Restore C: after a rollback to the old layout:
-  `esptool.py -p /dev/ttyACM0 -b 921600 write_flash 0x400000 <storage-old.bin>`
-  from the safety copy (`/tmp/flash-backup-*/`, if it still exists), or copy
-  the file backup back with `dbg.py put`.
+- **BIOS layout** (the board's layout since PR 40 merged, 2026-11-17: bootloader
+  0x0, table 0x8000, BIOS 0x10000, ota_0 0x100000, ota_1 0x2f0000, otadata
+  0x4e0000, C: 0x500000): app only, `python3 tools/dbg.py boot fast-next` then
+  in `firmware/os`: `idf.py -p /dev/ttyACM0 app-flash`. A full cable flash
+  (`idf.py -p /dev/ttyACM0 flash` there) must write only 0x0, 0x8000, 0x100000,
+  0x4e0000; the BIOS itself is written with `sh tools/flash-bios.sh
+  /dev/ttyACM0` (0x10000 only; never `idf.py flash` inside `firmware/bios`).
+  A fast start armed with `boot fast-next` is honoured by the BIOS too.
+- **Old layout** (before PR 40: ota_0 0x10000, ota_1 0x200000, otadata 0x3f0000,
+  C: 0x400000, no BIOS): only for testing a branch cut before PR 40. Do not
+  put a post-merge build on it; it needs a layout change either way.
+- Restore the files of C: after a layout change with `dbg.py mkdir` and
+  `dbg.py put` from the file backup (`/tmp/c-backup-*/`, if it still exists).
+  The Wi-Fi networks live in `nvs` (0x9000), which flashing never touches.
 - Update over the network (OTA): `[update] enabled = true` in
   `C:\.config\network.ini`, restart, then
   `python3 tools/ota.py <board address> firmware/os/build/esp32-os.bin`.

@@ -322,10 +322,10 @@ private:
         const gfx::Rect line2 = {inside.x + (inside.w - hw) / 2, inside.y + 24, hw, th};
         const gfx::Rect top = {inside.x, inside.y, inside.w, line2.y - inside.y};
         const gfx::Rect bottom = {inside.x, line2.y, inside.w, inside.bottom() - line2.y};
-        c.fill_around(top, line1, gfx::kGrey);
-        c.fill_around(bottom, line2, gfx::kGrey);
-        c.text_opaque(line1.x, line1.y, title, gfx::kBlack, gfx::kGrey);
-        c.text_opaque(line2.x, line2.y, hint, gfx::kBlack, gfx::kGrey);
+        c.fill_around(top, line1, gfx::face());
+        c.fill_around(bottom, line2, gfx::face());
+        c.text_opaque(line1.x, line1.y, title, gfx::ink(), gfx::face());
+        c.text_opaque(line2.x, line2.y, hint, gfx::ink(), gfx::face());
     }
 
     // Time between steps, and points for a berry, at each speed.

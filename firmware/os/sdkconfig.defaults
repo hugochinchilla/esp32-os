@@ -58,3 +58,11 @@ CONFIG_ELF_LOADER=y
 CONFIG_ELF_LOADER_LOAD_PSRAM=y
 CONFIG_ELF_LOADER_LIBC_SYMBOLS=n
 CONFIG_ELF_LOADER_ESPIDF_SYMBOLS=n
+
+# The BIOS and the OS pass a word to each other across a restart, in RTC
+# memory the bootloader reserves (firmware/common/boot_flag.h). The BIOS's
+# sdkconfig.defaults has the same three lines: the two firmwares and the
+# bootloader must agree where the word is. Delete the sdkconfig file after
+# changing this.
+CONFIG_BOOTLOADER_CUSTOM_RESERVE_RTC=y
+CONFIG_BOOTLOADER_CUSTOM_RESERVE_RTC_SIZE=0x8

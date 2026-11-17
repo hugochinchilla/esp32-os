@@ -285,3 +285,44 @@ board saw about 1.4 KB never used when they were built in.
 What is left: the board; then the other programs, which need more than
 the games did (a path to open handed to `APP_MAIN`, programs that call
 each other by name).
+
+## The board's fourth and fifth answers (the same day)
+
+The fourth turn (the listing and the late-program fixes) passed: a folder
+of 30, 50, 80 and 200 files opens in 0.41, 0.69, 0.98 and about 2.3 s
+(main: 0.61, 4.03 and 10.82 s for the first three, and never for 200),
+with no memory lost and no missed refill.
+
+The fifth, with the games as files, **failed for the games only**: the
+three files are installed and listed with their pictures, Hello runs, the
+start is 262 to 273 ms (main: 246 to 251), no refill is missed; but neither
+game opens. The loader says `Can't find common app_info` and gives -88.
+
+The cause: each game's way in read its window's picture from `app_info`,
+its own header. The header is in a section of its own, `.appinfo`, which
+the build copies to the front of the file and which the board's loader
+does not put in memory (it knows `.text`, `.rodata`, `.data`, `.bss` and
+two more); a reference to something in a section it has not placed is one
+it cannot settle, so it refuses the whole program. The PC's loader places
+every section, so the PC tests passed. Hello never read its header.
+
+| Option | Chosen | Why |
+|---|---|---|
+| The program makes its picture again from the same rows (`app::icon16`), and the build refuses a program that names `app_info` | Yes | 256 bytes in the program, nothing new in the system, and the mistake cannot come back unseen |
+| Put the header in `.rodata` so that it is in memory too | No | 1.3 KB of external RAM kept for every running program, for a picture the system has already read from the file |
+| A call that hands the program its header | No | A new OS call and a copy kept by the system, for the same picture |
+
+Built: `app::Icon16` and `app::icon16` (`core/app/file.hpp`); the two
+games use it; `tools/check_program_elf.py` refuses a program with a
+relocation that names `app_info` (tried on the old games: refused).
+
+The same change joins main, which now has themes (item 47). The games draw
+with the theme's colours, read from the variable `gfx::g_theme` by code
+that is now in the program: the first variable a program asks the system
+for. `tools/gen_exports.py` has a short list of such variables
+(`CORE_DATA`), each there for a reason. The table has 322 names.
+
+Tested: the gate passes on the PC; the firmware compiles and links (three
+program files, no name missing). **Not run on the board**: neither the
+games with this fix nor a program reading a variable of the system have
+run there.

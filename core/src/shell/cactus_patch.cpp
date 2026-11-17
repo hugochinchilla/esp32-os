@@ -247,7 +247,7 @@ public:
         background.subtract(face_rect());
         background.subtract(field_frame());
         for (int i = 0; i < background.size(); i++) {
-            c.fill(background[i], kGrey);
+            c.fill(background[i], gfx::face());
         }
 
         paint_counter(c, counter_rect(0), kCactusBitmap, field_.unmarked());
@@ -399,9 +399,9 @@ private:
         if (shown == static_cast<uint8_t>(Tile::Covered) || shown == static_cast<uint8_t>(Tile::Marked)) {
             c.button_frame(r, gfx::ButtonLook::Raised);
             if (shown == static_cast<uint8_t>(Tile::Marked)) {
-                c.blit_opaque(kMarkerBitmap, picture.x, picture.y, kGrey);
+                c.blit_opaque(kMarkerBitmap, picture.x, picture.y, gfx::face());
             } else {
-                c.fill(picture, kGrey);
+                c.fill(picture, gfx::face());
             }
             return;
         }
@@ -466,8 +466,8 @@ private:
         c.button_frame(r, down ? gfx::ButtonLook::Pressed : gfx::ButtonLook::Raised);
         const Rect inside = r.inset(2);
         const Rect picture = {inside.x + 3 + (down ? 1 : 0), inside.y + 4 + (down ? 1 : 0), 16, 16};
-        c.blit_opaque(kFaceBitmaps[face()], picture.x, picture.y, kGrey);
-        c.fill_around(inside, picture, kGrey);
+        c.blit_opaque(kFaceBitmaps[face()], picture.x, picture.y, gfx::face());
+        c.fill_around(inside, picture, gfx::face());
     }
 
     // Asks for whatever looks different from what was last shown to be

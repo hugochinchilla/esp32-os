@@ -43,6 +43,7 @@ Files so far:
 | `desktop.ini` | `[welcome]` | `created`: true once welcome.txt has been put in C:\Documents\Desktop, so a deleted copy does not come back; set it to false to get it again |
 | `desktop.ini` | `[documents]` | `moved`: true once an old C:\docs has been moved into C:\Documents (done by itself at start-up) |
 | `desktop.ini` | `[background]` | `colour`: steel-blue (default), chinchilla-blue (the only dithered one; the default until 2026-11-17), teal, sea-green, forest, navy, purple, plum, brick, olive, sand, sky, rose, silver, slate, black; or `#RRGGBB` for any other (Display > Other... writes one of the board's 256). `pattern`: none (default), dots, diagonal, grid, bricks, weave, diamonds, waves, zigzag, crosses. Set in the Display dialog |
+| `desktop.ini` | `[look]` | `theme`: classic (default), sky, glacier, midnight: the look of windows, buttons, menus and the taskbar (`core/gfx/theme.hpp`). Set in the Display dialog |
 | `desktop.ini` | `[icons]` | `snap`: true makes an icon let go on the desktop take the nearest free cell of the grid. Default false. Set from the desktop's menu (right click) |
 | `icons.ini` | `[system]`, `[files]` | Where each desktop icon is: `My Board = 214,124`, the corner of its place in pixels. `[system]` by the icon's label, `[files]` by the file's name in C:\Documents\Desktop. Written whole by the desktop when an icon is moved or the icons are realigned; without it the icons are in columns from the top left |
 | `culebra.ini` | `[game]` | `best`: the best score. `speed`: slow, normal (default) or fast. Written when Culebra closes, if either changed |
@@ -51,6 +52,13 @@ Files so far:
 | `network.ini` | `[telnet]` | `enabled`: the command shell on port 23, with no password, for whoever connects (one session at a time). Default true (the owner's choice, 2026-11-17); false switches it off. Read at start-up |
 | `network.ini` | `[update]` | `enabled`: true lets `tools/ota.py` send a new version of the system over the network (port 3232, no password). Default false. Read at start-up |
 | `startup.txt` | (lines, not sections) | What init starts, from the top down, a line each as `WHAT:ACTION` (the form of a Unix inittab). WHAT is a part of the system (`desktop`, `taskbar`, `inetd` for the network services, `console` for the command shell on the serial port) or a program or a file as Start > Run... takes it. ACTION is `once` (started), `respawn` (started, and started again whenever it ends: the taskbar can be) or `off` (not started). `#` for a comment. The usual file: `desktop:once`, `taskbar:respawn`, `inetd:once`, `console:off`. The desktop and its taskbar start even with no line; with `taskbar:once` an ended taskbar stays away until `run taskbar`. Written with the usual lines if it is not there. Read at start-up |
+
+Since the BIOS (2026-11-17, `firmware/bios`): the self-test and its
+countdown are shown by the BIOS, which cannot read `boot.ini` and uses the
+built-in defaults until its settings move to NVS (backlog item 46, step 3).
+The `[boot]` keys for the self-test then only reach the OS's own screen,
+which shows when there is no BIOS in the flash. `splash_ms`, `crash_hold_s`
+and `[watchdog]` are the OS's and work as before.
 
 A one-shot fast start for debugging: `tools/dbg.py reboot --fast`, or
 `tools/dbg.py boot fast-next` before flashing, makes the next start behave as
