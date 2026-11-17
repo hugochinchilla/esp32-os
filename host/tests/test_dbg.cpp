@@ -265,8 +265,12 @@ static void test_fault()
     CHECK(got.size() == 1 && got[0].payload == Bytes({dbg::kOk}));
     CHECK(rig.system.fault_requested == 1 && rig.system.fault_pid == editor);
     CHECK(proc::table().current() == proc::kNone); // put back afterwards
+    // Slow: busy for a while, then it carries on.
+    got = rig.request(dbg::kFault, 3, {3, static_cast<uint8_t>(editor), 0});
+    CHECK(got.size() == 1 && got[0].payload == Bytes({dbg::kOk}));
+    CHECK(rig.system.fault_requested == 3 && rig.system.fault_pid == editor);
     rig.system.fault_requested = -1;
-    for (const Bytes &bad : {Bytes{}, Bytes{3}, Bytes{0, 1}, Bytes{2, 99, 0}}) {
+    for (const Bytes &bad : {Bytes{}, Bytes{4}, Bytes{0, 1}, Bytes{2, 99, 0}}) {
         got = rig.request(dbg::kFault, 3, bad);
         CHECK(got.size() == 1 && got[0].payload == Bytes({dbg::kBadArguments}));
     }

@@ -323,7 +323,7 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
         // kind, then optionally the PID to charge it to (16 bits): the fault
         // happens as if that program had made it, so the crash record and
         // the error screen name it.
-        if (args_size < 1 || args[0] > static_cast<uint8_t>(ports::Fault::Abort) || (args_size != 1 && args_size != 3)) {
+        if (args_size < 1 || args[0] > static_cast<uint8_t>(ports::Fault::Slow) || (args_size != 1 && args_size != 3)) {
             reply(type, seq, kBadArguments, nullptr, 0);
             break;
         }
