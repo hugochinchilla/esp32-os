@@ -157,9 +157,9 @@ program's settings file, as `docs/settings.md` already lays down:
 
 ## 5. How it was tested
 
-On the PC only. `host/tests/test_lifecycle.cpp` is new (23 tests in all now,
-all passing, built with the address checker, which stops on any touch of a
-destroyed window):
+On the PC only. `host/tests/test_lifecycle.cpp` is new (24 tests in all with
+`main` merged, all passing, built with the address checker, which stops on
+any touch of a destroyed window):
 
 - The window manager alone: a window closed from its own key handler lives
   to the end of the event and no longer; one that reopens itself is kept; a
