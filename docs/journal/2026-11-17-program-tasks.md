@@ -292,3 +292,50 @@ the task counts its depth in a thread-local, and only the outermost
 call stores the flag the UI task looks at. Whether what is left over
 the first step (it was 21 ms per 10 s of play) is acceptable is the
 owner's to say once measured.
+
+## On the board, both steps (the board thread, 2026-11-17)
+
+Three pins were checked before this one was merged.
+
+- **2c3341d** (the limit, 8 KB stack). The hang itself worked, but it was
+  not merged. Play cost twice the first step (344 against 169 ms of
+  processor time per 10 s; repaint with Culebra open 30.9 against 25.9 ms).
+  Refills were missed while Culebra hung (about one every 5 s, 1.7 to 1.8 ms
+  late). Closing Culebra sometimes left its task behind (2 in 15 rounds,
+  about 8.4 KB each).
+- **fa0e885** (thread-local slot, priority 3 while late, `end()` waits).
+  The leak was gone and play cost less (91 ms over idle per 10 s), but
+  refills were still missed during a hang. On that build the serial port
+  showed why: "Task watchdog got triggered ... IDLE1 (CPU 1)" every 5 s,
+  each followed by a miss in the log 20 ms later. The thread's theory was
+  confirmed.
+- **6efd5ff** (a late program at the idle priority; nested calls cost
+  nothing), merged with main f8ae1d7:
+  - **A hang.** `dbg.py fault hang --pid` froze the desktop once for
+    1.99 to 2.00 s, then it answered in 1 ms. Culebra was grey and at
+    priority 0. In 30 s quiet and 15 s of VNC while it spun there was no
+    watchdog line on the serial port and no missed refill.
+  - **Ending it.** Its window's close button, End Task and `kill` from
+    telnet each ended it. The task was gone, internal RAM +0 with the
+    largest block unchanged, and Culebra opened and played again.
+  - **The leak.** 15 rounds of open, start and Alt+F4 left 0 tasks and
+    internal RAM +0.
+  - **Cost.** Four rounds in one boot. 10 s of play costs 70.5 ms over idle
+    (185.4 against 114.9; the first step 70, `main` about 60). A repaint
+    with Culebra open takes 26.3 ms (25.97 to 26.38; the first step 25.9,
+    `main` 25.1).
+  - **Stack.** At 4 KB, never fewer than 1,288 bytes unused (play, the
+    hang, the three endings, a 300 KB save).
+  - **Saves.** A 2 KB Editor save took 0.5 s; a 300 KB save while Culebra
+    played took 4.1 s; both had the right size.
+  - **Misses.** `dbg.py misses` found none not caused by the debug link.
+  - **Gate.** The PC gate passed 44 of 44 on a second run; on the first,
+    `dbg_tool` failed once under parallel load, then passed three times
+    alone.
+  - **Not checked.** A program that is slow but alive (late for more than
+    2 s, then answering): nothing outside the board can make one yet. A
+    `dbg.py fault` kind that sleeps for a while would let the next board
+    turn check it.
+
+Merged on the owner's earlier acceptance of the first step's cost; what is
+left over beyond it is the 0.4 ms of repaint with Culebra open.
