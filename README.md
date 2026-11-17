@@ -12,6 +12,15 @@ baseline JPEG), files on the flash (LittleFS, kept across restarts), a
 start-up self-test and splash, plus a debug protocol for screenshots,
 injected input and file transfer.
 
+## Try it in the browser
+
+**<https://hugochinchilla.github.io/esp32-os/>**
+
+The same desktop, running in a web page with nothing to install. It needs a
+mouse and a keyboard. Files saved on its C: stay in your own browser. It is
+built from `main` on every change; how it works is under
+[Chinchilla in a web browser](#chinchilla-in-a-web-browser).
+
 ## What it will be
 
 - 640x480 at 60 Hz on a VGA monitor, 256 colours, with a mouse cursor that
