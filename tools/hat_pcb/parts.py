@@ -33,7 +33,7 @@ GPIO_NET = {
     # USB host and hub power switch
     "GPIO19": "USB_DN", "GPIO20": "USB_DP",
     "GPIO21": "USB_PWR_EN", "GPIO42": "USB_FAULT",
-    # spare pins brought to the expansion header
+    # spare pins brought to the expansion header; GPIO47 also senses the VGA monitor
     "GPIO38": "GPIO38", "GPIO47": "GPIO47", "GPIO48": "GPIO48",
 }
 
@@ -153,10 +153,15 @@ _n0 = _n[0]
 part("J3", "hat:VGA_HD15",
      "Connector_Dsub:DSUB-15-HD_Female_Horizontal_P2.29x1.98mm_EdgePinOffset3.03mm_Housed_MountingHolesOffset4.94mm",
      "VGA", {"1": "VGA_R", "2": "VGA_G", "3": "VGA_B", "13": "VGA_HSYNC", "14": "VGA_VSYNC",
-             "5": "GND", "6": "GND", "7": "GND", "8": "GND", "10": "GND", "0": "GND",
+             "5": "VGA_SENSE", "6": "GND", "7": "GND", "8": "GND", "10": "GND", "0": "GND",
              "4": None, "9": None, "11": None, "12": None, "15": None},
      "vga", "Amphenol ICC", "L77HDE15SD1CH4F", "",
      "HD15 (VGA) female, right angle, through hole. Check the footprint against the part actually used")
+# Monitor presence: pin 5 is a ground pin that the monitor joins to the other grounds.
+# Here it is pulled up instead, so GPIO47 reads low while a monitor (or adapter) is
+# plugged in and high otherwise. 1k in series protects the GPIO.
+R("R32", "10k", "+3V3", "GPIO47", "vga")
+R("R33", "1k", "GPIO47", "VGA_SENSE", "vga")
 
 # ---- Audio out and beeper -------------------------------------------------------
 R("R20", "1k", "AUDIO_PWM", "AUDIO_FILT", "audio")

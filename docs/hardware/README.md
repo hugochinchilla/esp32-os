@@ -74,7 +74,8 @@ cable used for this build and apply to that cable only.
 | USB power switch enable and fault, optional | 21, 42 |
 | Clock chip alarm output (hat PCB) | 11 |
 | SD card detect (hat PCB) | 12 |
-| Spare | 38, 47, 48 (one of 38 or 48 is the on-board LED); 11 and 12 too on the perfboard adapter |
+| VGA monitor presence, low when plugged in (hat PCB) | 47 |
+| Spare | 38, 48 (one of them is the on-board LED); 11, 12 and 47 too on the perfboard adapter |
 | Not used: boot strapping pins | 0, 3, 45, 46 |
 | Not available: flash and PSRAM | 26 to 37 |
 

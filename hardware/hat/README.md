@@ -28,7 +28,14 @@ the walls (see [Enclosure](#enclosure)).
   current-limited switch: on by default, GPIO21 low turns it off, GPIO42
   reads its overcurrent flag. ESD protection (USBLC6-2SC6) on every port,
   100 uF electrolytic on port power. Bus powered from the dev board's 5V pin.
+- Monitor presence on GPIO47: VGA pin 5 (a ground pin, which the monitor
+  joins to the other grounds) is pulled up to 3V3 through 10 k and reaches
+  GPIO47 through 1 k. Low means a monitor or adapter is plugged in. The
+  other four ground pins and the shell stay grounded. No DDC/EDID: it would
+  need a level shifter, one more part type on every order (owner's choice,
+  2026-11-17).
 - A 6-pin expansion header (3V3, GPIO38, 47, 48, 5V, GND), not fitted.
+  GPIO47 is shared with the monitor presence sense.
 
 Only two resistor values (1 k, 10 k) and two capacitor values (100 nF,
 10 uF). Pull-ups stay at 10 k because the SD card specification asks for
@@ -36,7 +43,7 @@ Only two resistor values (1 k, 10 k) and two capacitor values (100 nF,
 
 ### Who fits what
 
-| Board maker (SMD, 8 different parts, 49 placements) | You (hand soldering) |
+| Board maker (SMD, 8 different parts, 51 placements) | You (hand soldering) |
 | --- | --- |
 | 1 k and 10 k resistors, 100 nF and 10 uF capacitors (0603 / 0805) | Two 1x22 sockets for the dev board |
 | CH334R hub (QSOP-16, 0.635 mm pitch) | HD15 VGA socket, two stacked USB-A sockets |
@@ -160,8 +167,10 @@ corner (as in the drawing); heights are above the board's top surface.
 
 ## Firmware notes
 
-- Pins newly used: GPIO11 (clock chip alarm, open drain, pulled up) and
-  GPIO12 (card detect, low when a card is inserted). Both were spare.
+- Pins newly used: GPIO11 (clock chip alarm, open drain, pulled up),
+  GPIO12 (card detect, low when a card is inserted) and GPIO47 (monitor
+  presence, low when a monitor is plugged in). All three were spare.
+  Untested with a VGA-to-HDMI adapter: check that it also grounds pin 5.
 - Leave GPIO21 high or floating to keep USB power on (R30 pulls it up).
 - The hub is a standard USB hub. ESP-IDF 5.5's USB host library supports
   external hubs behind `CONFIG_USB_HOST_HUBS_SUPPORTED` (marked
