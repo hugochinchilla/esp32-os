@@ -350,3 +350,20 @@ two-second limit it is "not responding" for three seconds and must
 come back by itself, at its own priority, painted again. Without a PID
 (or for a program without a task) the desktop itself is busy for five
 seconds, under the watchdog's fifteen.
+
+## On the board: `dbg.py fault slow` (PR 42, f2de5df; the board thread, 2026-11-17)
+
+Merged with `main` 2d7ad53; PC gate 44 of 44; the app alone flashed.
+
+- `fault slow --pid` on Culebra while it played: the desktop answered
+  again after 1.99 s; Culebra's board was grey, the Task Manager said "Not
+  responding" and its task ran at priority 0. At about 7 s it had answered
+  by itself: the title back in the Task Manager, the task back at
+  priority 5, the board painted again, and the game went on and took keys
+  (1,166 board pixels changed after six keys).
+- `fault slow` without `--pid`: the desktop was busy for 5.00 s and went
+  on; the 15 s watchdog did not trip, no restart.
+- No task watchdog line on the serial port and no missed refill in either;
+  `dbg.py misses` none.
+
+The slow-but-alive case left open in the previous entry is now checked.
