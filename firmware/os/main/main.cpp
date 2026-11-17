@@ -878,15 +878,15 @@ void ui_task(void *)
                 ESP_LOGI(TAG, "answers to chinchilla.local (mDNS)");
             }
 
-            // Telnet: the command shell on port 23, with no password. Off
-            // unless C:\.config\network.ini says [telnet] enabled = true (the
+            // Telnet: the command shell on port 23, with no password. On
+            // unless C:\.config\network.ini says [telnet] enabled = false (the
             // owner's choice, docs/DECISIONS.md). One session at a time, on
             // a task of its own that exists while someone is connected.
             static net::PosixTcpListener telnet_port;
             net::Telnet *telnet = nullptr;
             // Its commands work with what the desktop sets up, so it needs
             // the desktop started first.
-            const bool telnet_wanted = radio && network.get_bool("telnet", "enabled", false);
+            const bool telnet_wanted = radio && network.get_bool("telnet", "enabled", true);
             if (telnet_wanted && !first.started("desktop")) {
                 ESP_LOGW(TAG, "telnet not offered: the start-up file starts inetd before the desktop");
             } else if (telnet_wanted && telnet_port.listen(net::Telnet::kPort)) {

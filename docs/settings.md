@@ -46,7 +46,7 @@ Files so far:
 | `culebra.ini` | `[game]` | `best`: the best score. `speed`: slow, normal (default) or fast. Written when Culebra closes, if either changed |
 | `cactus.ini` | `[game]` | `size`: small (default), medium or large, the patch the next game starts with. Written when Cactus Patch closes, if it changed |
 | `network.ini` | `[wifi]` | `tx_power_dbm`: the radio's top transmit power, 2 to 20, default 2 (higher values put lines on the picture while connecting). `enabled`: false leaves the radio off, default true |
-| `network.ini` | `[telnet]` | `enabled`: true offers the command shell on port 23, with no password, to whoever connects (one session at a time). Default false. Read at start-up |
+| `network.ini` | `[telnet]` | `enabled`: the command shell on port 23, with no password, for whoever connects (one session at a time). Default true (the owner's choice, 2026-11-17); false switches it off. Read at start-up |
 | `network.ini` | `[update]` | `enabled`: true lets `tools/ota.py` send a new version of the system over the network (port 3232, no password). Default false. Read at start-up |
 | `startup.txt` | (lines, not sections) | What init starts, from the top down: `start desktop`, `start inetd` (the network services), `start console` (the command shell on the serial port; left out of the usual file), `run WHAT` for a program or a file as Start > Run... takes it, `#` for a comment. Written with the usual lines if it is not there. Read at start-up |
 
