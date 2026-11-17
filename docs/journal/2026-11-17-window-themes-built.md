@@ -102,7 +102,8 @@ background stays the owner's choice in the same dialog).
 
 ## How it was tested
 
-On the PC only. Nothing here has run on the board.
+On the PC only. The firmware compiles and links with ESP-IDF v5.5 in the
+cloud container; nothing here has run on the board.
 
 - The 100 reference pictures that do not show the Display dialog are byte
   for byte what they were: the classic look did not move. The seven that
