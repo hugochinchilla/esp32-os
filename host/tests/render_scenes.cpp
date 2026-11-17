@@ -600,6 +600,7 @@ int main(int argc, char **argv)
         click(x, y);
         check(desktop.active() != nullptr && strcmp(desktop.active()->title(), "Display") == 0, "the dialog opens");
         save("37q-display-dialog");
+        key(wm::key::Right);
         key(wm::key::Right);            // Teal
         key(0x13, true);                // Alt+P: the patterns
         for (int i = 0; i < 4; i++) {
@@ -608,20 +609,20 @@ int main(int argc, char **argv)
         save("37r-display-teal-bricks");
         check(desktop.backdrop().colour.r == 58, "nothing changes before Apply");
         key(0x04, true);                // Alt+A: Apply
-        check(desktop.backdrop().colour.g == 128 && desktop.backdrop().pattern[0] == 0xFF, "Apply shows it");
+        check(desktop.backdrop().colour.g == 146 && desktop.backdrop().pattern[0] == 0xFF, "Apply shows it");
         save("37s-display-applied");
         key(wm::key::Escape);
         check(desktop.backdrop().colour.r == 58 && desktop.backdrop().pattern[0] == 0, "Escape takes it back");
         // Kept by OK, in desktop.ini.
         shell::display_dialog();
-        for (int i = 0; i < 9; i++) {
+        for (int i = 0; i < 10; i++) {
             key(wm::key::Right);        // Sand
         }
         key(0x13, true);
         key(wm::key::Down);
         key(wm::key::Right);            // Diamonds
         key(wm::key::Enter);
-        check(desktop.backdrop().colour.r == 208 && desktop.backdrop().pattern[0] == 0x10, "OK keeps it");
+        check(desktop.backdrop().colour.r == 219 && desktop.backdrop().pattern[0] == 0x10, "OK keeps it");
         fs::Ini ini;
         char value[32] = "";
         check(shell::load_settings("desktop", ini) && ini.get("background", "colour", value, sizeof(value)) &&
@@ -632,7 +633,7 @@ int main(int argc, char **argv)
         save("37t-desktop-sand-diamonds");
         // Back to how it was, for the pictures that follow.
         shell::display_dialog();
-        for (int i = 0; i < 9; i++) {
+        for (int i = 0; i < 10; i++) {
             key(wm::key::Left);
         }
         key(0x13, true);
@@ -640,6 +641,41 @@ int main(int argc, char **argv)
         key(wm::key::Left);
         key(wm::key::Enter);
         check(desktop.backdrop().colour.r == 58 && desktop.backdrop().pattern[0] == 0, "and back");
+        // Other...: any of the board's 256 colours, in a dialog of its own.
+        shell::display_dialog();
+        key(0x12, true);                // Alt+O
+        check(desktop.active() != nullptr && strcmp(desktop.active()->title(), "Colour") == 0,
+              "Other... opens the colours");
+        save("37u-colour-dialog");
+        key(wm::key::Escape);
+        check(desktop.active() != nullptr && strcmp(desktop.active()->title(), "Display") == 0,
+              "Escape closes only the colours");
+        key(0x12, true);
+        for (int i = 0; i < 3; i++) {
+            key(wm::key::Right);
+            key(wm::key::Up);
+        }
+        save("37v-colour-picked");
+        key(wm::key::Enter);
+        check(desktop.active() != nullptr && strcmp(desktop.active()->title(), "Display") == 0,
+              "OK gives the colour to Display");
+        save("37w-display-other-colour");
+        key(wm::key::Enter);
+        const gfx::Rgb custom = desktop.backdrop().colour;
+        check(gfx::shown(gfx::nearest(custom)).r == custom.r && gfx::shown(gfx::nearest(custom)).g == custom.g &&
+                  gfx::shown(gfx::nearest(custom)).b == custom.b && custom.r != 58,
+              "the desktop has a board colour");
+        char hex[8];
+        snprintf(hex, sizeof(hex), "#%02X%02X%02X", custom.r, custom.g, custom.b);
+        check(shell::load_settings("desktop", ini) && ini.get("background", "colour", value, sizeof(value)) &&
+                  strcmp(value, hex) == 0,
+              "a colour without a name is in desktop.ini as #RRGGBB");
+        // Opened again it shows that colour, with no cell of the list chosen.
+        shell::display_dialog();
+        save("37x-display-reopened");
+        key(wm::key::Right);            // the first of the list
+        key(wm::key::Enter);
+        check(desktop.backdrop().colour.r == 58 && desktop.backdrop().pattern[0] == 0, "and back again");
     }
 
     // The Trash. Empty at first, from its desktop icon.

@@ -1987,3 +1987,21 @@ architecture" above already says about saves and signals.
   `start()`, under the whole-desktop hourglass, as before.
 - On the board a job's task has priority 4, one below the UI task: the
   Normal class of item 11 ("Chosen for the priority classes").
+
+### Chosen in the second review round (2026-11-17, the agent's, to confirm)
+
+Backlog item 38, asked by the owner. Journal:
+`docs/journal/2026-11-17-review-round-2.md`.
+
+- The Start button is 60 wide: two clear pixels on each side (the owner
+  suggested one; one leaves the sides unequal).
+- Display's list is 15 colours the board shows exactly, plus "Chinchilla
+  blue (dithered)", still the default. Whether the default becomes solid is
+  open, the owner's. "Lilac" is gone from the list.
+- "Other..." opens a grid of the board's 256 colours, not a 24-bit picker
+  and not sliders: everything it offers is undithered. A colour without a
+  name is kept in `desktop.ini` as `#RRGGBB`. The chooser is a window of
+  Display's program, not a program of its own.
+- The Terminal's grid follows its window (20x4 to 104x36, opening at
+  80x25) rather than staying 80x25 or scaling the font. Lines already
+  written are not wrapped again. It has a scroll bar over its history.

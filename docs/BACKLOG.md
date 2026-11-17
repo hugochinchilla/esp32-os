@@ -67,6 +67,7 @@ at the same time.
 | 29 | Refined icons for every program, at 32x32 and 16x16. The owner picks from drawn proposals | M | | | done (checked on the board 2026-11-17). [Journal](journal/2026-11-16-icon-proposals.md) |
 | 30 | Quick-launch icons by the Start button that launch something | S | 29 | | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-quick-launch.md) |
 | 31 | Desktop background: 16 colours and 10 patterns, chosen in a Display dialog (Start > Settings, or a right click on the desktop) | S | | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-desktop-background.md) |
+| 38 | Second review round: Start button two pixels wider; Display offers all 256 board colours (Other...) and a list of solid, undithered colours; the Terminal resizes, maximises and has a scroll bar | S | 15, 31 | | built, PC tests pass; firmware not compiled, not run on the board. [Journal](journal/2026-11-17-review-round-2.md) |
 | | **Memory** | | | | |
 | 35 | Our static objects in external RAM: the core's and the firmware's big ones, about 121 KB out of internal RAM | S | | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-statics-in-psram.md) |
 | 36 | The remote screen holds its 183 KB of buffers only while a viewer is connected | S | 8b | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-remote-screen-memory.md) |
