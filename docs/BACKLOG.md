@@ -55,7 +55,7 @@ board or the merge), `done`.
 | 26 | Apps on their own tasks, one at a time | XL | 8, 20 | Yes | todo |
 | 27 | Loadable or sandboxed apps | XL | 19, 20 | Yes | todo |
 | 37 | The OS calls taken to numbered calls with handles (windows, files and timers as numbers, events through a queue, the system's tables of what is whose), as Win16 and Unix had them. To be looked at again at the end of the backlog (the owner's decision, 2026-11-17); it is what item 27 needs | L to XL | 20 | Yes | todo. [The comparison](journal/2026-11-17-os-calls.md) |
-| 38 | Restarting what ends moves to init, as `respawn` in a Unix `/etc/inittab`: the restart mark, the count of quick deaths and the give-up rule leave the process table (`proc::Table::set_restart`, `may_restart`) for `init`, and `startup.txt` can say which programs come back (the taskbar is the first) | M | 18, 21 | Yes | todo (the owner's request, 2026-11-17). Today: [the taskbar is a process](journal/2026-11-17-taskbar-process.md) |
+| 39 | Restarting what ends moves to init, as `respawn` in a Unix `/etc/inittab`: the restart mark, the count of quick deaths and the give-up rule leave the process table (`proc::Table::set_restart`, `may_restart`) for `init`, and `startup.txt` can say which programs come back (the taskbar is the first) | M | 18, 21 | Yes | todo (the owner's request, 2026-11-17). Today: [the taskbar is a process](journal/2026-11-17-taskbar-process.md) |
 
 Item 14 is the only one that puts the agents' access to the board at risk
 while it is being built. It is tried on a branch with the old firmware ready
@@ -71,6 +71,7 @@ at the same time.
 | | **Memory** | | | | |
 | 35 | Our static objects in external RAM: the core's and the firmware's big ones, about 121 KB out of internal RAM | S | | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-statics-in-psram.md) |
 | 36 | The remote screen holds its 183 KB of buffers only while a viewer is connected | S | 8b | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-remote-screen-memory.md) |
+| 38 | Missed video refills in the system log, told apart from the debug link's; `dbg.py dmesg` and `dbg.py misses` | S | | | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-missed-refill-log.md) |
 | | **Chinchilla off the board** | | | | |
 | 32 | Chinchilla as a desktop program for Linux: a window (SDL2) on the same `core/`, the real mouse and keyboard, sound, a folder of the PC as C:. Not an emulator of the ESP32: no real Wi-Fi, no memory limits, much faster than the board | M | | | done on the PC (2026-11-17): built, tested with a real mouse and keyboard on a virtual screen; not yet run on the owner's desktop. No sound: the core makes none yet. [The idea](journal/2026-11-17-chinchilla-on-a-pc.md), [the program](journal/2026-11-17-desktop-program.md) |
 | 33 | Chinchilla in a web browser (WebAssembly): a link anyone can open, C: kept in the browser, the page published somewhere (GitHub Pages?) | M | 32 | | built and tested in Chromium on the PC (2026-11-17); **not published yet**: the Pages workflow is in `ci/` and has to be turned on by the owner. [Journal](journal/2026-11-17-chinchilla-in-the-browser.md) |

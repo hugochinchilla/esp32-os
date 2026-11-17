@@ -23,6 +23,7 @@ import getpass
 import json
 import os
 import queue
+import re
 import struct
 import sys
 import threading
@@ -38,6 +39,7 @@ BOOT_SCREEN = 18
 MEMORY_REPORT = 19
 TASKS = 20
 FAULT = 21
+LOG_READ = 22
 WIFI = 0x20
 MAX_REQUEST = 1024  # largest request payload the board takes
 LOG, HELLO, SHOT_DATA, SHOT_END = 0x70, 0x71, 0x72, 0x73
@@ -417,6 +419,32 @@ class Board:
                           "stack_free": stack_free, "stack": "psram" if flags & 1 else "internal"})
             at += size
         return {"clock_us": clock_us, "cores": cores, "left_out": left_out}, tasks
+
+    def log_text(self):
+        """The system log the board keeps (what `dmesg` prints), oldest first."""
+        out, at = bytearray(), 0
+        while True:
+            body = self.request(LOG_READ, struct.pack("<Q", at))
+            nxt = struct.unpack_from("<Q", body)[0]
+            out += body[8:]
+            if len(body) <= 8 or nxt == at:
+                break
+            at = nxt
+        return out.decode("utf-8", "replace")
+
+    MISS_LINE = re.compile(r"video: (\d+) refills? missed( \((all|\d+) during a debug task list\))?")
+
+    def missed_refills(self):
+        """The missed-refill lines in the log, as (line, misses not caused by
+        the debug link's task list)."""
+        found = []
+        for line in self.log_text().splitlines():
+            m = self.MISS_LINE.search(line)
+            if m:
+                total = int(m.group(1))
+                debug = total if m.group(3) == "all" else int(m.group(3) or 0)
+                found.append((line, total - debug))
+        return found
 
     def boot_screen(self, which):
         """Shows a start-up screen again ("selftest" runs the checks again,
@@ -830,6 +858,9 @@ def main(argv=None):
     p.add_argument("state", choices=["on", "off"])
     sub.add_parser("repaint", help="paint the whole screen again and time it")
     sub.add_parser("memory", help="where the memory goes: heaps and video timing (stacks: tasks)")
+    sub.add_parser("dmesg", help="the system log the board keeps, oldest first")
+    p = sub.add_parser("misses", help="missed video refills in the log not caused by the debug link; exits 1 if any")
+    p.add_argument("--all", action="store_true", help="also the lines caused only by dbg.py tasks")
     p = sub.add_parser("tasks", help="the kernel's tasks: state, priority, core, processor time, unused stack")
     p.add_argument("--interval", type=float, default=1.0,
                    help="seconds between the two readings behind the %%NOW column (default 1; 0: one reading)")
@@ -893,6 +924,7 @@ def main(argv=None):
     except Exception as error:  # the port could not be opened
         sys.exit("error: %s" % error)
 
+    exit_code = 0
     try:
         if args.command == "ping":
             print("answered in %.0f ms" % (board.ping() * 1000))
@@ -945,6 +977,18 @@ def main(argv=None):
             print("repainted in %d us" % board.repaint())
         elif args.command == "memory":
             print(board.memory_report(), end="")
+        elif args.command == "dmesg":
+            print(board.log_text(), end="")
+        elif args.command == "misses":
+            lines = board.missed_refills()
+            own = [(line, n) for line, n in lines if n > 0]
+            for line, _ in (lines if args.all else own):
+                print(line)
+            debug = sum(1 for _, n in lines if n == 0)
+            print("%d missed-refill line(s) not caused by the debug link; %d caused only by it (dbg.py tasks)" %
+                  (len(own), debug), file=sys.stderr)
+            if own:
+                exit_code = 1
         elif args.command == "tasks":
             earlier = None
             if args.interval > 0:
@@ -1008,6 +1052,8 @@ def main(argv=None):
         pass
     finally:
         board.close()
+    if exit_code:
+        sys.exit(exit_code)
 
 
 if __name__ == "__main__":

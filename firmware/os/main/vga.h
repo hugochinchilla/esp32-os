@@ -34,6 +34,11 @@ typedef struct {
 } vga_scan_stats_t;
 void vga_scan_stats(vga_scan_stats_t *out, bool reset);
 
+/* Missed refills since start, never reset (vga_scan_stats can be). worst_us
+ * is the worst lateness of a miss since the last call (then cleared); line is
+ * the screen line where the most recent miss was. */
+void vga_missed_total(uint32_t *missed, uint32_t *worst_us, uint32_t *line);
+
 /* The pixel clock the panel was set up with, in Hz. */
 uint32_t vga_pixel_clock_hz(void);
 

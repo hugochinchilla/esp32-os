@@ -183,6 +183,9 @@ add_test(NAME telnet COMMAND test_telnet)
 add_executable(test_crash tests/test_crash.cpp)
 target_link_libraries(test_crash PRIVATE core)
 add_test(NAME crash COMMAND test_crash)
+add_executable(test_missed_refills tests/test_missed_refills.cpp)
+target_link_libraries(test_missed_refills PRIVATE core)
+add_test(NAME missed_refills COMMAND test_missed_refills)
 
 # Chinchilla as a desktop program (backlog item 32): the same core in an SDL2
 # window. Its parts that need no window are tested everywhere; the program

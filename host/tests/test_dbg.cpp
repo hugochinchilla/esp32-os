@@ -2,12 +2,14 @@
 // prints the line that failed, and the program's exit code is the result.
 #include <cstdio>
 #include <cstring>
+#include <string>
 #include <utility>
 #include <vector>
 
 #include "core/dbg/cobs.hpp"
 #include "core/dbg/crc.hpp"
 #include "core/dbg/protocol.hpp"
+#include "core/sys/log.hpp"
 #include "core/gfx/canvas.hpp"
 #include "core/video/pointer.hpp"
 #include "../host_adapters.hpp"
@@ -555,8 +557,39 @@ static void test_screenshot_pointer()
     }
 }
 
+// Log read (0x16): the system log a piece at a time, from where the last
+// piece ended; text pushed out of the ring is skipped.
+static void test_log_read()
+{
+    static char room[128];
+    sys::log().set_room(room, sizeof(room));
+    Rig rig;
+    const char *first = "I (100) os: started, a line long enough to be pushed out of the ring\nW (2000) os: video: 2 refills missed, worst 640 us late, last at line 9\n";
+    sys::log().write(first, strlen(first)); // 151 bytes into 128: the start is pushed out
+    Bytes from(8, 0);
+    auto got = rig.request(dbg::kLogRead, 1, from);
+    CHECK(got.size() == 1 && got[0].payload.size() > 9 && got[0].payload[0] == dbg::kOk);
+    if (got.size() == 1 && got[0].payload.size() > 9) {
+        const Bytes &p = got[0].payload;
+        const std::string text(p.begin() + 9, p.end());
+        CHECK(text.rfind("W (2000) os: video: 2 refills missed", 0) == 0); // from the first whole line
+        CHECK(get64(p, 1) == strlen(first));                               // the next piece starts at the end
+        // Asking from the end: nothing more.
+        Bytes at(8);
+        for (int i = 0; i < 8; i++) {
+            at[i] = static_cast<uint8_t>(get64(p, 1) >> (8 * i));
+        }
+        auto more = rig.request(dbg::kLogRead, 2, at);
+        CHECK(more.size() == 1 && more[0].payload.size() == 9);
+    }
+    auto bad = rig.request(dbg::kLogRead, 3, Bytes(3, 0));
+    CHECK(bad.size() == 1 && bad[0].payload == Bytes({dbg::kBadArguments}));
+    sys::log().set_room(nullptr, 0);
+}
+
 int main()
 {
+    test_log_read();
     test_cobs();
     test_crc();
     test_ping_and_info();

@@ -104,6 +104,19 @@ def main():
         assert fresh[-1] == "3 more tasks did not fit in the reply"
         assert "%NOW" not in dbg.task_table(totals, tasks)[0]
 
+        # The log read (the simulator has no video, so no missed refills), and
+        # how the missed-refill lines are told apart.
+        assert isinstance(board.log_text(), str)
+        assert board.missed_refills() == []
+        real = board.log_text
+        board.log_text = lambda: (
+            "I (900) os: started\n"
+            "W (2000) os: video: 1 refill missed, worst 412 us late, last at line 240\n"
+            "W (3000) os: video: 2 refills missed (all during a debug task list), worst 812 us late, last at line 96\n"
+            "W (4000) os: video: 5 refills missed (2 during a debug task list), worst 640 us late, last at line 30\n")
+        assert [n for _, n in board.missed_refills()] == [1, 0, 3], board.missed_refills()
+        board.log_text = real
+
         # Files: the RAM disk has the samples; put, list, get, delete.
         names = [n for n, _, _ in board.ls("C:\\")]
         assert "Documents" in names and "readme.txt" in names, names
