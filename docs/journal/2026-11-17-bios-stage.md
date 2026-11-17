@@ -1,8 +1,9 @@
 # A BIOS before the OS: the discussion so far
 
 2026-11-16 and 2026-11-17. A conversation, not a build. Nothing here has been
-compiled or run. One thing is decided (the font); the rest is open and listed
-at the end. Backlog item 46.
+compiled or run. Two things are decided (the font, and that the BIOS gets its
+own partition once a restart has been measured on the board); the rest is
+open and listed at the end. Backlog item 46.
 
 ## What was asked
 
@@ -169,6 +170,14 @@ free ones were drawn (`docs/look/bios-text/`, made by
 - Choosing a font for the text screen is read as choosing **the text screen
   with the mascot as a picture on top** over the earlier drawing. This is the
   agent's reading, to be confirmed.
+- **The BIOS gets its own partition (option B), after measuring first**, by
+  the owner, on a card with three answers ("Own partition, measure first",
+  "One image, two stages", "Keep talking"). Not chosen: one image with two
+  logical stages, because nothing would really be separate, which was the
+  point of the idea; the bootloader, for the reasons in the table. The
+  measurement comes first because the two unknowns (what a restart does to
+  the monitor, how long a second start takes) decide how the handover should
+  look, and measuring them needs no change to the flash.
 
 ## How the PC maps onto this
 
@@ -189,7 +198,8 @@ warm-boot mark, and the restart is the moment the firmware lets go.
 
 Open, for the owner:
 
-1. A or B. Recommended: B with the bootloader hook.
+1. Decided: B. How it picks what to start (the bootloader hook is
+   recommended) waits for the check against ESP-IDF v5.5.
 2. How the app area is split for B: a small BIOS and two smaller update
    slots (recommended), or a larger BIOS and one OS slot.
 3. Whether the blank of about 2.4 s at the handover is acceptable, with the

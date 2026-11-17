@@ -236,10 +236,23 @@ Decided by the owner; the story is in
   than the dialog frees, and the widgets assume one task); waiting for
   loadable programs (item 27) before changing how dialogs are written.
 
+### A BIOS stage in its own partition (2026-11-17)
+
+Decided by the owner: the self-test moves to a BIOS, a small firmware of its
+own in its own app partition, which ends by restarting into the OS; init
+then shows the splash. First a restart is measured on the board (what the
+monitor does, how long a second start takes), with no change to the flash.
+Recommended and to be checked against ESP-IDF v5.5: a small hook in the
+bootloader starts the BIOS unless a flag in RTC memory says the BIOS has
+just run. Not chosen: one image with two logical stages (nothing would
+really be separate); the BIOS inside the bootloader (about 32 KB, no
+drivers, no PSRAM). Nothing is built. The details still open are under
+Still open; the whole conversation is in
+`docs/journal/2026-11-17-bios-stage.md`.
+
 ### BIOS screen font (2026-11-17)
 
-Decided by the owner: if the BIOS stage is built (still open, see Still
-open), its screen is a true text screen, 80 by 30 characters of 8x16 on
+Decided by the owner: the BIOS's screen is a true text screen, 80 by 30 characters of 8x16 on
 640x480, in Spleen 8x16 (already in the repo and the firmware), chosen from
 five free fonts drawn in `docs/look/bios-text/`. The mascot sits on top as a
 picture over cells left empty, so the serial port can mirror the text
@@ -374,7 +387,7 @@ and reasons are in `docs/journal/2026-11-17-program-lifecycle.md`.
 | A PC build of the desktop for testing | Yes, no | Decided: yes. See Decided |
 | How the PC build shows the screen | SDL window, image files only | Open |
 | Clock chip | DS3231 module, another I2C chip | DS3231 |
-| A BIOS stage before the OS (asked 2026-11-16, `docs/journal/2026-11-17-bios-stage.md`) | One image with two logical stages; a BIOS app in its own partition chosen by a small bootloader hook; the BIOS inside the bootloader. With it: how the app area is split, the blank monitor at the handover, settings in NVS or `boot.ini`, an OS image over serial, who shows the crash screen | Its own partition with the hook, after measuring a restart on the board |
+| Details of the BIOS stage (`docs/journal/2026-11-17-bios-stage.md`) | How the app area is split (a small BIOS and two smaller update slots, or a larger BIOS and one OS slot); the blank monitor at the handover; settings in NVS or `boot.ini`; an OS image over serial; who shows the crash screen | Small BIOS and two slots; the splash covers the blank; NVS; yes, later; the BIOS |
 
 ## Ideas kept for later
 
