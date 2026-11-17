@@ -51,3 +51,7 @@ in the same change whenever a decision is made or reversed.
   asked the Memory port for, and keep what must outlive a close in the
   program's settings file. Do not keep a pointer or reference to a window
   across an event unless something clears it when the window is destroyed.
+- Programs ask the system through the OS calls (`core/os/os.hpp`, listed in
+  `docs/os-calls.md`; backlog item 20). A new program uses only those and
+  goes on the `MOVED` list of `tools/check_os_calls.py`; if a call is
+  missing, add it there rather than reaching for `manager()` or `storage()`.

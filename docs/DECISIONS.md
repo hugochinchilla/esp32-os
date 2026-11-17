@@ -1861,6 +1861,29 @@ Chosen by the agent under the owner's "dejo a tu criterio" of 2026-11-16.
   hears the stop; an idle board's services task wakes once a second where
   it did not wake at all (item 8b). Rejected: a socket to itself.
 
+### Chosen for the OS calls (2026-11-17, to confirm)
+
+Backlog item 20. The owner was asked (a card in the thread, the first
+option recommended); built on it meanwhile.
+[Journal](journal/2026-11-17-os-calls.md), [the list](os-calls.md).
+
+- Programs ask the system through `core/os/os.hpp` (namespace `os`): a thin
+  layer in C++ over the window manager, the drives, the process table and
+  the ports. Rejected for now: numbered calls with handles (every program
+  and widget rewritten first, and its shape depends on how programs are
+  delivered, which is open). The thin layer does not rule it out.
+- A program that has moved is listed in `tools/check_os_calls.py`, a PC
+  test that fails if it names `manager()`, `storage()`, `system_port()` or
+  `proc::table()` again. New programs start on the list.
+- A missing call is added to `os.hpp` and to `docs/os-calls.md`; a program
+  does not go around.
+- Files are still paths and `fs::File`. Open files owned by the process and
+  closed at its end are the next step, not part of this one.
+- The dialogs any program may open stay in `shell.hpp`: they are programs.
+- init: what is needed (the desktop) starts before anything that is not,
+  wherever its line is; a failed line of the start-up file opens a box
+  after the start (`shell::startup_trouble`).
+
 ### Chosen for background jobs (2026-11-17, to confirm)
 
 Backlog item 10. Journal: `docs/journal/2026-11-17-jobs.md`. Chosen by the

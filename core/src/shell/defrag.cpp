@@ -4,6 +4,7 @@
 
 #include "core/gfx/art.hpp"
 #include "core/shell/defrag.hpp"
+#include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/widgets.hpp"
 #include "internal.hpp"
@@ -328,7 +329,7 @@ public:
         start_.set_default(true);
         set_default(&start_);
         show_state();
-        set_frame(centred(shell::manager(), frame().w, frame().h));
+        set_frame(os::centred(frame().w, frame().h));
     }
 
     const DefragModel &disk() const { return disk_; }
@@ -357,7 +358,7 @@ private:
                 w->disk_.scramble(++w->seed_);
                 w->map_.invalidate();
             }
-            w->timer_ = shell::manager().start_timer(kDefragStepUs, kDefragStepUs, &DefragWindow::tick, w);
+            w->timer_ = os::start_timer(kDefragStepUs, kDefragStepUs, &DefragWindow::tick, w);
             w->started_ = true;
         }
         w->show_state();
@@ -394,7 +395,7 @@ private:
     void pause()
     {
         if (timer_ != 0) {
-            shell::manager().stop_timer(timer_);
+            os::stop_timer(timer_);
         }
         timer_ = 0;
     }

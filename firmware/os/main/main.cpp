@@ -1006,6 +1006,7 @@ void ui_task(void *)
     ESP_LOGI(TAG, "init: start-up file %s, %d line%s failed, %lld ms",
              first.had_file() ? "read" : (first.wrote_file() ? "not there: written" : "not there"), not_done,
              not_done == 1 ? "" : "s", (esp_timer_get_time() - init_start) / 1000);
+    shell::startup_trouble(not_done);
 
     ESP_LOGI(TAG, "debug link ready at %d baud", CONFIG_ESP_CONSOLE_UART_BAUDRATE);
     ESP_LOGI(TAG, "%s: %d failed, %lld ms (on screen until %u ms after the video started); splash %lld ms; "

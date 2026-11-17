@@ -5,6 +5,7 @@
 
 #include "core/gfx/art.hpp"
 #include "core/job/job.hpp"
+#include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/text_edit.hpp"
 #include "core/wm/wm.hpp"
@@ -176,21 +177,21 @@ private:
     void load(const char *path)
     {
         fs::File f;
-        ports::FsError e = storage().open(path, ports::OpenMode::Read, f);
+        ports::FsError e = os::file::open(path, ports::OpenMode::Read, f);
         if (e != ports::FsError::Ok) {
             report("open", path, e);
             return;
         }
         bool fits = true;
         {
-            const wm::Wait hourglass(shell::manager());
+            const os::Busy hourglass;
             edit_.load_begin();
             uint8_t piece[1024];
             for (size_t got = 1; got > 0 && fits && e == ports::FsError::Ok;) {
-                e = storage().read(f, piece, sizeof(piece), got);
+                e = os::file::read(f, piece, sizeof(piece), got);
                 fits = edit_.load_append(piece, got);
             }
-            storage().close(f);
+            os::file::close(f);
             edit_.load_finish();
         }
         if (!fits) {
@@ -231,7 +232,7 @@ private:
         spec.context = this;
         spec.stack_bytes = 8192; // the file system's calls, a 1 KB piece and the paths
         // Where the caller does the work, the whole desktop waits as it used to.
-        const wm::Wait hourglass(shell::manager());
+        const os::Busy hourglass;
         if (!job::jobs().start(spec)) {
             set_locked(false);
             next_ = Then::Nothing;
@@ -249,7 +250,7 @@ private:
     {
         auto *w = static_cast<EditorWindow *>(context);
         fs::Save save;
-        ports::FsError e = storage().begin_save(w->path_, save);
+        ports::FsError e = os::file::begin_save(w->path_, save);
         uint8_t piece[1024];
         size_t at = 0;
         while (e == ports::FsError::Ok) {
@@ -257,11 +258,11 @@ private:
             if (n == 0) {
                 break;
             }
-            e = storage().write(save.file, piece, n);
+            e = os::file::write(save.file, piece, n);
             at += n;
         }
         if (save.file.open()) {
-            const ports::FsError c = storage().finish_save(save, e == ports::FsError::Ok);
+            const ports::FsError c = os::file::finish_save(save, e == ports::FsError::Ok);
             e = e != ports::FsError::Ok ? e : c;
         }
         return static_cast<uint32_t>(e);
@@ -385,7 +386,7 @@ void open_in_editor(const char *path)
         if (e == nullptr || !e->open()) {
             place = i; // free, or closed and about to go
         } else if (path != nullptr && strcasecmp(e->path(), path) == 0) {
-            manager().activate(*e);
+            os::activate(*e);
             return;
         }
     }
@@ -393,10 +394,9 @@ void open_in_editor(const char *path)
         message_box("Editor", "Four Editors are open already.\nClose one of them first.");
         return;
     }
-    proc::Table &t = proc::table();
-    const proc::Pid pid = t.spawn("Editor", t.current(), proc::kWindowed);
+    const proc::Pid pid = os::spawn("Editor");
     // With no room in the table it is the caller's window, as elsewhere.
-    const proc::Scope as(&t, pid != proc::kNone ? pid : t.current());
+    const os::As as(pid != proc::kNone ? pid : os::self());
     EditorWindow *w = make_window<EditorWindow>(place);
     if (w == nullptr) {
         no_memory_for("Editor");

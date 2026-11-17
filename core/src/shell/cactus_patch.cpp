@@ -8,6 +8,7 @@
 #include <cstring>
 
 #include "core/games/cactus.hpp"
+#include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
 #include "internal.hpp"
 
@@ -233,7 +234,7 @@ public:
     void place()
     {
         const Rect f = frame();
-        set_frame(centred(shell::manager(), f.w, f.h));
+        set_frame(os::centred(f.w, f.h));
     }
 
     void paint(gfx::Canvas &c) override
@@ -480,9 +481,9 @@ private:
     {
         const bool playing = field_.state() == CactusField::State::Playing;
         if (playing && timer_ == 0 && open()) {
-            timer_ = shell::manager().start_timer(1000000, 1000000, &CactusWindow::second, this);
+            timer_ = os::start_timer(1000000, 1000000, &CactusWindow::second, this);
         } else if (!playing && timer_ != 0) {
-            shell::manager().stop_timer(timer_);
+            os::stop_timer(timer_);
             timer_ = 0;
         }
 
@@ -550,17 +551,17 @@ private:
             return;
         }
         // Stay where the window is, but inside the screen.
-        const Rect area = shell::manager().work_area();
+        const Rect area = os::work_area();
         int x = frame().x, y = frame().y;
         x = x + w > area.w ? area.w - w : x;
         y = y + h > area.h ? area.h - h : y;
-        shell::manager().resize(*this, {x < 0 ? 0 : x, y < 0 ? 0 : y, w, h});
+        os::move(*this, {x < 0 ? 0 : x, y < 0 ? 0 : y, w, h});
     }
 
     // A different field each game, and each time of day.
     uint32_t seed() const
     {
-        return static_cast<uint32_t>(shell::manager().now_us()) ^ (static_cast<uint32_t>(games_) * 0x9E3779B9u);
+        return static_cast<uint32_t>(os::now_us()) ^ (static_cast<uint32_t>(games_) * 0x9E3779B9u);
     }
 
     static void second(void *context)

@@ -160,6 +160,11 @@ games::CactusField &cactus_patch_field();
 void cactus_patch_refresh();
 int cactus_patch_seconds();
 
+// After init has done the start-up file (core/init): says on the screen
+// that `lines` of it could not be done, and where to read which. Nothing
+// for 0. After start().
+void startup_trouble(int lines);
+
 // Sets up the desktop icons and the Start menu, and opens the first windows.
 // `storage` holds the drives; `memory` gives the large buffers (editor,
 // clipboard, folder lists), once.

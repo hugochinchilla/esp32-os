@@ -10,6 +10,7 @@
 #include "core/fs/ini.hpp"
 #include "core/gfx/art.hpp"
 #include "core/sh/sh.hpp"
+#include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/widgets.hpp"
 #include "core/wm/wm.hpp"
@@ -45,7 +46,7 @@ const App *program_named(const char *name)
 bool open_path(const char *full, char *why, size_t capacity)
 {
     if (strlen(full) <= 3) {
-        if (storage().volume(fs::path::drive(full)) == nullptr) {
+        if (!os::file::has_drive(fs::path::drive(full))) {
             snprintf(why, capacity, "there is no such drive");
             return false;
         }
@@ -53,7 +54,7 @@ bool open_path(const char *full, char *why, size_t capacity)
         return true;
     }
     fs::DirEntry entry;
-    const ports::FsError e = storage().stat(full, entry);
+    const ports::FsError e = os::file::stat(full, entry);
     if (e != ports::FsError::Ok) {
         snprintf(why, capacity, "%s", fs::error_text(e));
         return false;
@@ -87,13 +88,13 @@ public:
             // A name that is not there yet is a new file, as a console
             // editor would take it.
             fs::DirEntry entry;
-            const ports::FsError found = storage().stat(full_path, entry);
+            const ports::FsError found = os::file::stat(full_path, entry);
             if (found == ports::FsError::Ok && entry.folder) {
                 snprintf(why, capacity, "%s", fs::error_text(ports::FsError::IsFolder));
                 return false;
             }
             if (found != ports::FsError::Ok) {
-                const ports::FsError made = storage().write_file(full_path, "", 0);
+                const ports::FsError made = os::file::write_file(full_path, "", 0);
                 if (made != ports::FsError::Ok) {
                     snprintf(why, capacity, "%s", fs::error_text(made));
                     return false;
@@ -122,7 +123,7 @@ public:
           browse_({332 - 75 - 8, 92, 75, 23}, "&Browse...", &RunDialog::browse, this)
     {
         set_dialog(true);
-        set_frame(centred(shell::manager(), frame().w, frame().h));
+        set_frame(os::centred(frame().w, frame().h));
         add(line1_);
         add(line2_);
         add(label_);
@@ -179,7 +180,7 @@ private:
         // this dialog: the dialog is gone a moment later.
         bool opened;
         {
-            const proc::Scope as_desktop(&proc::table(), proc::table().find_by_name("desktop"));
+            const os::As as_desktop(os::find("desktop"));
             opened = run_text(typed, "C:\\", why, sizeof(why));
         }
         if (!opened) {

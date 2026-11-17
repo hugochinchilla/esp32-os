@@ -7,6 +7,7 @@
 #include <strings.h>
 
 #include "core/fs/ini.hpp"
+#include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
 #include "internal.hpp"
 
@@ -28,7 +29,7 @@ bool indexable(const char *name)
 bool exists(const char *path)
 {
     ports::DirEntry e;
-    return storage().stat(path, e) == ports::FsError::Ok;
+    return os::file::stat(path, e) == ports::FsError::Ok;
 }
 
 // "name (2).ext", "name (3).ext"... for a folder or a file without an
@@ -120,16 +121,16 @@ bool trashable(const char *path)
 ports::FsError remove_tree(const char *p, int depth)
 {
     ports::DirEntry e;
-    ports::FsError err = storage().stat(p, e);
+    ports::FsError err = os::file::stat(p, e);
     if (err != ports::FsError::Ok || !e.folder) {
-        return err == ports::FsError::Ok ? storage().remove(p) : err;
+        return err == ports::FsError::Ok ? os::file::remove(p) : err;
     }
     if (depth > 12) {
         return ports::FsError::NotEmpty;
     }
     // Entry 0 again and again: each removal moves the rest up.
     char child[fs::kMaxPath];
-    while (storage().entry(p, 0, e) == ports::FsError::Ok) {
+    while (os::file::entry(p, 0, e) == ports::FsError::Ok) {
         if (!fs::path::join(p, e.name, child, sizeof(child))) {
             return ports::FsError::BadName;
         }
@@ -138,7 +139,7 @@ ports::FsError remove_tree(const char *p, int depth)
             return err;
         }
     }
-    return storage().remove(p);
+    return os::file::remove(p);
 }
 
 ports::FsError to_trash(const char *path)
@@ -147,11 +148,11 @@ ports::FsError to_trash(const char *path)
         return ports::FsError::BadName;
     }
     ports::DirEntry e;
-    ports::FsError err = storage().stat(path, e);
+    ports::FsError err = os::file::stat(path, e);
     if (err != ports::FsError::Ok) {
         return err;
     }
-    storage().make_folder(kTrashFolder);
+    os::file::make_folder(kTrashFolder);
     fs::Ini index;
     load_settings(kIndex, index);
     char name[fs::kMaxPath], to[fs::kMaxPath];
@@ -159,7 +160,7 @@ ports::FsError to_trash(const char *path)
         !fs::path::join(kTrashFolder, name, to, sizeof(to))) {
         return ports::FsError::Exists;
     }
-    err = storage().rename(path, to);
+    err = os::file::rename(path, to);
     if (err == ports::FsError::Ok && indexable(name) && index.set("from", name, path)) {
         save_settings(kIndex, index);
     }
@@ -170,7 +171,7 @@ int trash_count()
 {
     int n = 0;
     ports::DirEntry e;
-    while (storage().entry(kTrashFolder, n, e) == ports::FsError::Ok) {
+    while (os::file::entry(kTrashFolder, n, e) == ports::FsError::Ok) {
         n++;
     }
     return n;
@@ -201,20 +202,20 @@ ports::FsError restore_from_trash(const char *name)
         return ports::FsError::NotFound;
     }
     ports::DirEntry e;
-    ports::FsError err = storage().stat(from, e);
+    ports::FsError err = os::file::stat(from, e);
     if (err != ports::FsError::Ok) {
         return err;
     }
     fs::path::parent(origin, folder, sizeof(folder));
     if (fs::path::relative(folder)[0] != 0 && !exists(folder)) {
-        storage().make_folder(folder); // gone since: made again (one level)
+        os::file::make_folder(folder); // gone since: made again (one level)
     }
     // Back under its old name, or numbered if that is taken now.
     if (!free_name(folder, fs::path::name(origin), e.folder, nullptr, free, sizeof(free)) ||
         !fs::path::join(folder, free, to, sizeof(to))) {
         return ports::FsError::Exists;
     }
-    err = storage().rename(from, to);
+    err = os::file::rename(from, to);
     if (err == ports::FsError::Ok) {
         fs::Ini index;
         load_settings(kIndex, index);
@@ -241,7 +242,7 @@ ports::FsError move_to_folder(const char *path, const char *folder)
     if (exists(to)) {
         return ports::FsError::Exists;
     }
-    const ports::FsError err = storage().rename(path, to);
+    const ports::FsError err = os::file::rename(path, to);
     if (err == ports::FsError::Ok && in_trash(path) && indexable(fs::path::name(path))) {
         fs::Ini index; // taken out of the Trash by hand: forget where it came from
         load_settings(kIndex, index);
@@ -254,7 +255,7 @@ ports::FsError move_to_folder(const char *path, const char *folder)
 void delete_asking(const char *path)
 {
     ports::DirEntry e;
-    if (fs::path::relative(path)[0] == 0 || storage().stat(path, e) != ports::FsError::Ok) {
+    if (fs::path::relative(path)[0] == 0 || os::file::stat(path, e) != ports::FsError::Ok) {
         return;
     }
     snprintf(g_pending, sizeof(g_pending), "%s", path);

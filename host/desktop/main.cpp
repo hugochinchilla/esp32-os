@@ -550,7 +550,7 @@ void Machine::start()
             return true;
         },
         this, true);
-    init_process.boot(storage_);
+    shell::startup_trouble(init_process.boot(storage_));
     screen_.set_damage_listener([](const gfx::Rect &, void *self) { static_cast<Machine *>(self)->dirty_ = true; },
                                 this);
     const time_t now = time(nullptr);

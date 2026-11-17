@@ -1,34 +1,12 @@
 // Each program's settings: C:\.config\<program>.ini (docs/DECISIONS.md).
-#include <cstdio>
-
-#include "core/fs/ini.hpp"
+// The work is the OS's (core/os/os.hpp); these are the names the programs
+// already use.
+#include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
-#include "internal.hpp"
 
 namespace shell {
 
-namespace {
-
-void settings_path(const char *program, char *out, size_t n)
-{
-    snprintf(out, n, "C:\\.config\\%s.ini", program);
-}
-
-} // namespace
-
-bool load_settings(const char *program, fs::Ini &ini)
-{
-    char path[fs::kMaxPath];
-    settings_path(program, path, sizeof(path));
-    return ini.load(storage(), path);
-}
-
-bool save_settings(const char *program, const fs::Ini &ini)
-{
-    storage().make_folder("C:\\.config"); // already there is fine
-    char path[fs::kMaxPath];
-    settings_path(program, path, sizeof(path));
-    return ini.save(storage(), path) == ports::FsError::Ok;
-}
+bool load_settings(const char *program, fs::Ini &ini) { return os::load_settings(program, ini); }
+bool save_settings(const char *program, const fs::Ini &ini) { return os::save_settings(program, ini); }
 
 } // namespace shell

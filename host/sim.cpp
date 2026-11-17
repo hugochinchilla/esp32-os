@@ -297,7 +297,10 @@ int main(int argc, char **argv)
         "inetd",
         [](void *) {
             if (!parts.any_port) {
-                return false;
+                // Nothing to listen on is not a line of the file gone
+                // wrong: the default file has this line, and most runs of
+                // the simulator ask for no port.
+                return true;
             }
             if (telnet_port.listening() && first.started("desktop")) {
                 static host::ThreadLock telnet_lock;
@@ -410,7 +413,7 @@ int main(int argc, char **argv)
         storage.make_folder("C:\\.config");
         storage.write_file(init::kPath, text.data(), text.size());
     }
-    first.boot(storage);
+    shell::startup_trouble(first.boot(storage));
 
     // The loop, as on the board (firmware/os/main/main.cpp): take what has
     // arrived (serial bytes, messages from the services thread), let the
