@@ -124,3 +124,10 @@ ESP32 build (0x1616d0), flashed by cable, the app only.
 4. A click on the desktop closes the menu; Ctrl+Esc opens it.
 5. `dbg.py misses`: no missed refill not caused by the debug link. VNC took
    a full screen; telnet answered.
+
+## The owner's answer (2026-11-17)
+
+Asked to choose between "keep it on a slant" and "always switch at once",
+the owner chose to keep the open submenu while the pointer slants towards
+it. Nothing in the code changed. The answer came while the branch was on the
+board, so it is recorded here after the merge.
