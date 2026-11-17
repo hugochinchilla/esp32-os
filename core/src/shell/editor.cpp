@@ -176,7 +176,7 @@ private:
 
     void load(const char *path)
     {
-        fs::File f;
+        os::file::Handle f;
         ports::FsError e = os::file::open(path, ports::OpenMode::Read, f);
         if (e != ports::FsError::Ok) {
             report("open", path, e);
@@ -246,11 +246,11 @@ private:
     // the locked window keeps as they are. The text goes to a temporary file
     // that takes the place of the old one at the end, so a power cut, a full
     // disk or a failed write leaves the document as it was last saved.
-    static uint32_t write_out(const job::Job &, void *context)
+    static uint32_t write_out(const job::Job &job, void *context)
     {
         auto *w = static_cast<EditorWindow *>(context);
-        fs::Save save;
-        ports::FsError e = os::file::begin_save(w->path_, save);
+        os::file::Handle save;
+        ports::FsError e = os::file::begin_save(w->path_, save, &job);
         uint8_t piece[1024];
         size_t at = 0;
         while (e == ports::FsError::Ok) {
@@ -258,10 +258,10 @@ private:
             if (n == 0) {
                 break;
             }
-            e = os::file::write(save.file, piece, n);
+            e = os::file::write(save, piece, n);
             at += n;
         }
-        if (save.file.open()) {
+        if (save != os::file::kNoFile) {
             const ports::FsError c = os::file::finish_save(save, e == ports::FsError::Ok);
             e = e != ports::FsError::Ok ? e : c;
         }

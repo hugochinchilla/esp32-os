@@ -1155,6 +1155,10 @@ Backlog item 33, made by the agent under the owner's free hand. Journal:
   and turns Pages on, as with the build workflow. The built page is not
   committed to the repository.
 - Restart loads the page again. F11 and F12 are the browser's.
+- The browser build does not treat warnings in `core/` as errors
+  (2026-11-17, after the first Pages run failed on one): only it uses
+  Clang, and a warning GCC does not give must not stop the publication.
+  Its own code still does. Journal: `docs/journal/2026-11-17-pages-first-run.md`.
 
 ### Chosen for painting each pixel once (2026-11-16, to confirm)
 
@@ -1605,6 +1609,10 @@ Chosen by the agent under the owner's "dejo a tu criterio" of 2026-11-16.
 - "Terminal" in Start > Programs (`core/src/shell/terminal.cpp`): a window
   that is the device of a TTY, with a `sh::Session` behind it. Up to three at
   once, each a process.
+- Changed the same day: the session is now a process of its own, `sh`, and
+  the window only an emulator. See "The Terminal is an emulator; the
+  session is a process of its own" below; what follows about the task, the
+  lock and the kits holds for the session.
 - **Its session is a job of the Terminal's process, on a task of its own**,
   wherever the machine has tasks (2026-11-17,
   `docs/journal/2026-11-17-terminal-task.md`): the desktop goes on while a
@@ -2026,6 +2034,64 @@ otherwise the owner gives the credentials again. First applied to
 Still in the code from before the rule, to be taken out when next touched
 or if the owner says so: moving an old `C:\docs` into `C:\Documents` at
 start-up (`desktop.ini`, `[documents]`).
+
+### The Terminal is an emulator; the session is a process of its own (2026-11-17, the owner's request)
+
+Backlog item 44. Journal: `docs/journal/2026-11-17-terminal-split.md`. This
+replaces, in "Chosen for the Terminal window", the session being a job of
+the Terminal's process.
+
+- **Two processes** (the owner): `Terminal` is a terminal emulator, a
+  window with a grid, the keys and a scroll bar, and nothing else. The TTY
+  and the command shell are a session, `sh::TerminalSession` in `core/sh`,
+  running as a process `sh` that is the child of the one that asked for it.
+  The shell's task, its stack and what its commands use are `sh`'s.
+- **Closing the window ends the session, as xterm does** (the owner's
+  choice on a card; a session that lives on to be reattached was the other
+  option). The TTY is hung up; `sh` goes when its task has returned. The
+  window does not wait: it is destroyed when it closes, like every other.
+- The other way round, `exit`, Ctrl+D, or `kill` and End Task on `sh` close
+  the window (the agent's, to confirm).
+- A program asks for a session with `os::open_session(device, why)` and is
+  its device: a `ports::ByteSink` for what is shown, `typed()` for the keys.
+  The system makes the process and takes it away (`sessions.cpp`). With
+  this `terminal.cpp` uses only the OS calls: all 17 programs have moved.
+- Not chosen: one `tty` server process holding every session (one row
+  would carry three shells' figures, and `kill` could not end one of
+  them); splitting the classes but keeping one process (nothing would be
+  independent of the window).
+- Left as they are for now: the serial console and telnet make their own
+  TTY and shell; the shell's commands reach the system through `sh::Env`.
+
+### Open files are handles the system keeps (2026-11-17, the agent's, to confirm)
+
+Backlog item 37, first step. Journal:
+`docs/journal/2026-11-17-file-handles.md`. Started on the recommended
+option of a card the owner has not answered yet.
+
+- `os::file::open` and `begin_save` give a number, not an `fs::File` in
+  the program. The system keeps the table of which process holds which
+  file, and closes what a process leaves when it ends; a save not finished
+  is thrown away and the old file stays.
+- From a background job the call is given the job, which says whose the
+  file is. Not chosen: a per-task variable (hidden state), or opening on
+  the UI task (flash work where the job was meant to keep it away).
+- No lock: a slot is claimed by an atomic flag. The table (2 KB) comes
+  from the Memory port once, so it is external RAM on the board.
+- ponytail: six open in the machine, two for one process.
+- The picture decoder reads from an `image::Source`; the Picture viewer
+  hands in one over a handle it opened, held only while it decodes.
+  `os::file::storage()`, which handed a program the drives whole, is gone.
+- **Handles now, the queue with item 26** (the owner's choice on a card,
+  2026-11-17).
+- Another program's window is a number (`os::WindowId`, the number the
+  window server already gave each window): `os::main_window(pid)` no
+  longer hands out a pointer into another program's object. A program's
+  own windows stay C++ objects. The agent's, on the recommended option of
+  a second card (how far window handles go) that the owner has not
+  answered yet.
+- Still open in item 37: windows and widgets wholly by number (what item
+  27 needs); events through a queue, with item 26.
 
 ### Chosen for background jobs (2026-11-17, to confirm)
 

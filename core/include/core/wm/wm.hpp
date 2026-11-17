@@ -151,6 +151,9 @@ public:
     int windows_of(proc::Pid pid) const;
     int timers_of(proc::Pid pid) const;
     Window *main_window_of(proc::Pid pid) const;
+    // The open window with this number (Window::id(), given when it opens
+    // and not given again); nullptr once it has closed.
+    Window *window(int id) const;
     // The owner of a timer, 0 if the id is not running.
     proc::Pid timer_owner(int id) const;
 

@@ -7,6 +7,7 @@
 #include "core/fs/fs.hpp"
 #include "core/ports.hpp"
 #include "core/proc/table.hpp"
+#include "core/sh/terminal_session.hpp"
 #include "core/wm/wm.hpp"
 
 namespace shell {
@@ -124,6 +125,10 @@ void set_tray_icon(const gfx::Bitmap *icon, void (*click)(void *context), void *
 // The taskbar's process (desktop.cpp): starts it if it is not running, as
 // after it ended too often to be restarted. False if it runs.
 bool start_taskbar_again();
+
+// A terminal session for the process asking (sessions.cpp): what
+// os::open_session does.
+sh::TerminalSession *open_session(ports::ByteSink &device, const char *&why);
 
 // Starts following the network, if there is one (network.cpp).
 void start_network();

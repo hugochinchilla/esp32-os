@@ -45,10 +45,14 @@ public:
     // next place where what it is writing stays whole. It is a request; the
     // process waits for the work either way.
     bool stopping() const { return stop_.load(); }
+    // The process the job works for: what it opens through the OS calls is
+    // that process's.
+    proc::Pid owner() const { return owner_; }
 
 private:
     friend class Jobs;
     std::atomic<bool> stop_{false};
+    proc::Pid owner_ = proc::kNone;
 };
 
 // The work. Runs on the job's own task (or inside start() without tasks).

@@ -136,7 +136,14 @@ void test_terminal()
     shell::launch(*app);
     desktop.update();
     CHECK(strcmp(title(), "Terminal") == 0 && count("Terminal") == 1);
-    CHECK(memory.in_use() == blocks + 1); // the window, with the grid, the TTY and the session in it
+    // Two processes and two blocks: the window with its grid (the emulator),
+    // and the session it is the terminal of, with the TTY and the shell.
+    CHECK(memory.in_use() == blocks + 2 && count("sh") == 1);
+    {
+        const proc::Process *sh = proc::table().find(proc::table().find_by_name("sh"));
+        CHECK(sh != nullptr && sh->parent == desktop.active()->owner() && !sh->is(proc::kWindowed));
+        CHECK(sh != nullptr && sh->memory > 3000 && desktop.windows_of(sh->pid) == 0);
+    }
     CHECK_ROW(0, std::string("Chinchilla ") + shell::kVersion);
     CHECK_ROW(1, "help lists the commands.");
     CHECK_ROW(3, "C:\\>");
@@ -241,7 +248,7 @@ void test_terminal()
     // fourth is refused.
     shell::launch(*app);
     desktop.update();
-    CHECK(count("Terminal") == 2 && memory.in_use() == blocks + 2);
+    CHECK(count("Terminal") == 2 && count("sh") == 2 && memory.in_use() == blocks + 4);
     CHECK_ROW(3, "C:\\>"); // the new one is in front, in its own folder
     CHECK(no_stale_pixels()); // the first one's cursor is a line now
     shell::launch(*app);
@@ -257,12 +264,12 @@ void test_terminal()
     // exit closes the window and ends the process; the memory comes back.
     enter("exit");
     wait(20000);
-    CHECK(count("Terminal") == 2 && memory.in_use() == blocks + 2);
+    CHECK(count("Terminal") == 2 && count("sh") == 2 && memory.in_use() == blocks + 4);
     // Ctrl+D on an empty line does the same.
     CHECK(strcmp(title(), "Terminal") == 0);
     key(wm::key::A + 3, wm::key::LeftCtrl);
     wait(20000);
-    CHECK(count("Terminal") == 1 && memory.in_use() == blocks + 1);
+    CHECK(count("Terminal") == 1 && count("sh") == 1 && memory.in_use() == blocks + 2);
     // The first one is still where it was left.
     CHECK(row(24) == "C:\\Documents>");
     // It can end itself by number, like any other process.
@@ -270,8 +277,24 @@ void test_terminal()
     snprintf(line, sizeof line, "kill %d", proc::table().find_by_name("Terminal"));
     enter(line);
     wait(20000);
-    CHECK(count("Terminal") == 0 && memory.in_use() == blocks && shell::terminal_screen() == nullptr);
+    CHECK(count("Terminal") == 0 && count("sh") == 0);
+    CHECK(memory.in_use() == blocks && shell::terminal_screen() == nullptr);
     CHECK(no_stale_pixels());
+
+    // The other way round: the session is ended by its own number, from
+    // inside or by anyone (TERM or KILL), and its window closes with it.
+    shell::launch(*app);
+    desktop.update();
+    snprintf(line, sizeof line, "kill %d", proc::table().find_by_name("sh"));
+    enter(line);
+    wait(20000);
+    CHECK(count("Terminal") == 0 && count("sh") == 0 && desktop.window_count() == 0);
+    CHECK(memory.in_use() == blocks);
+    shell::launch(*app);
+    desktop.update();
+    CHECK(proc::table().signal(proc::table().find_by_name("sh"), proc::Signal::Kill) == proc::Sent::Ok);
+    wait(20000);
+    CHECK(count("Terminal") == 0 && count("sh") == 0 && memory.in_use() == blocks);
 
     // The close button's way (Alt+F4), with a half-typed line.
     shell::launch(*app);
@@ -279,7 +302,7 @@ void test_terminal()
     type("half a li");
     key(0x3D, wm::key::LeftAlt); // F4
     wait(20000);
-    CHECK(count("Terminal") == 0 && memory.in_use() == blocks);
+    CHECK(count("Terminal") == 0 && count("sh") == 0 && memory.in_use() == blocks);
 }
 
 } // namespace
@@ -552,8 +575,10 @@ void test_terminal_on_a_task()
     // task a moment later.
     shell::launch(*app);
     CHECK(strcmp(title(), "Terminal") == 0 && count("Terminal") == 1);
-    const proc::Pid pid = desktop.active()->owner();
+    // The task is the session's, not the window's.
+    const proc::Pid pid = proc::table().find_by_name("sh");
     CHECK(tasks.started == 1 && job::jobs().running(pid) == 1 && kits[0].in_use);
+    CHECK(job::jobs().running(desktop.active()->owner()) == 0);
     CHECK(settle([] { return locked_row(3) == "C:\\>"; }));
     CHECK(locked_row(0) == std::string("Chinchilla ") + shell::kVersion);
 
@@ -609,7 +634,7 @@ void test_terminal_on_a_task()
     // Page Up and Page Down are the program's while it has the keys, not
     // the history's.
     {
-        const proc::Pid pid = desktop.active()->owner();
+        const proc::Pid pid = proc::table().find_by_name("sh");
         const uint32_t before = proc::table().find(pid)->memory;
         storage.write_file("C:\\ted.txt", "one\ntwo\n", 8);
         enter("ted ted.txt");
@@ -654,7 +679,7 @@ void test_terminal_on_a_task()
     // exit: the session ends, its task returns, the window goes and the
     // process with it; the kit and the memory are back.
     enter("exit");
-    CHECK(settle([&] { return count("Terminal") == 0; }));
+    CHECK(settle([&] { return count("Terminal") == 0 && count("sh") == 0; }));
     CHECK(desktop.window_count() == 0 && job::jobs().running() == 0 && !kits[0].in_use);
     CHECK(memory.in_use() == blocks);
 
@@ -664,7 +689,9 @@ void test_terminal_on_a_task()
     CHECK(settle([] { return locked_row(3) == "C:\\>"; }));
     key(wm::key::F4, wm::key::LeftAlt);
     CHECK(desktop.window_count() == 0);
-    CHECK(settle([&] { return count("Terminal") == 0; }));
+    desktop.update();
+    CHECK(count("Terminal") == 0); // the emulator does not wait for its session
+    CHECK(settle([&] { return count("Terminal") == 0 && count("sh") == 0; }));
     CHECK(job::jobs().running() == 0 && memory.in_use() == blocks);
 
     // End Task with force, in the middle of a command.
@@ -673,8 +700,22 @@ void test_terminal_on_a_task()
     const proc::Pid second = desktop.active()->owner();
     enter("cat big.txt");
     CHECK(proc::table().signal(second, proc::Signal::Kill) == proc::Sent::Ok);
-    CHECK(settle([&] { return count("Terminal") == 0; }));
+    CHECK(settle([&] { return count("Terminal") == 0 && count("sh") == 0; }));
     CHECK(desktop.window_count() == 0 && job::jobs().running() == 0 && memory.in_use() == blocks);
+
+    // The session ended from outside, in the middle of a command: its
+    // window closes when the shell has stopped.
+    shell::launch(*app);
+    CHECK(settle([] { return locked_row(3) == "C:\\>"; }));
+    enter("cat big.txt");
+    CHECK(proc::table().signal(proc::table().find_by_name("sh"), proc::Signal::Kill) == proc::Sent::Ok);
+    CHECK(settle([&] { return count("Terminal") == 0 && count("sh") == 0; }));
+    CHECK(desktop.window_count() == 0 && job::jobs().running() == 0 && memory.in_use() == blocks);
+    shell::launch(*app);
+    CHECK(settle([] { return locked_row(3) == "C:\\>"; }));
+    CHECK(proc::table().signal(proc::table().find_by_name("sh"), proc::Signal::Term) == proc::Sent::Ok);
+    CHECK(settle([&] { return count("Terminal") == 0 && count("sh") == 0; }));
+    CHECK(desktop.window_count() == 0 && !kits[0].in_use && memory.in_use() == blocks);
 
     // Three at once, each with its own session; a fourth is refused.
     for (int i = 0; i < 3; i++) {
@@ -690,7 +731,7 @@ void test_terminal_on_a_task()
     while (desktop.active() != nullptr) {
         desktop.close(*desktop.active());
     }
-    CHECK(settle([&] { return count("Terminal") == 0; }));
+    CHECK(settle([&] { return count("Terminal") == 0 && count("sh") == 0; }));
     CHECK(job::jobs().running() == 0 && memory.in_use() == blocks);
 
     tasks.join();

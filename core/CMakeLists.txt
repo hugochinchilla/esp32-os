@@ -50,6 +50,7 @@ set(CORE_SRCS
     src/sh/path.cpp
     src/sh/sh.cpp
     src/sh/system.cpp
+    src/sh/terminal_session.cpp
     src/sh/ted.cpp
     src/sys/crash.cpp
     src/sys/log.cpp
@@ -75,6 +76,7 @@ set(CORE_SRCS
     src/shell/settings.cpp
     src/shell/shutdown.cpp
     src/shell/task_manager.cpp
+    src/shell/sessions.cpp
     src/shell/terminal.cpp
     src/shell/viewer.cpp
     src/tty/screen.cpp

@@ -53,18 +53,27 @@ Error Decoder::open(const fs::Storage &storage, const char *path, ports::Memory 
                     const uint8_t background[3])
 {
     close();
+    own_.storage = &storage;
+    if (storage.open(path, ports::OpenMode::Read, own_.file) != ports::FsError::Ok) {
+        return Error::NotFound;
+    }
+    return open(own_, memory, info, background);
+}
+
+Error Decoder::open(Source &source, ports::Memory &memory, Info &info, const uint8_t background[3])
+{
+    if (&source != &own_) {
+        close();
+    }
     if (pool_ == nullptr) {
         pool_ = static_cast<uint8_t *>(memory.allocate(kPoolBytes));
         if (pool_ == nullptr) {
+            close();
             return Error::NoMemory;
         }
     }
     used_ = 0;
-    storage_ = &storage;
-    if (storage.open(path, ports::OpenMode::Read, file_) != ports::FsError::Ok) {
-        return Error::NotFound;
-    }
-    g_reader.attach(storage, file_);
+    g_reader.attach(source);
     const int a = g_reader.byte(), b = g_reader.byte();
     g_reader.seek(0);
     static const uint8_t white[3] = {255, 255, 255};
@@ -118,8 +127,8 @@ Error Decoder::step(RowSink &sink, int rows)
 
 void Decoder::close()
 {
-    if (file_.open() && storage_ != nullptr) {
-        storage_->close(file_);
+    if (own_.file.open() && own_.storage != nullptr) {
+        own_.storage->close(own_.file);
     }
     format_ = nullptr; // in the pool: nothing to free
     done_ = true;

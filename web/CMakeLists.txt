@@ -23,12 +23,12 @@ set(CMAKE_CXX_FLAGS_RELEASE "-Os -DNDEBUG")
 add_compile_options(-fno-exceptions -fno-rtti -sUSE_SDL=2)
 
 add_subdirectory(../core core)
-# Emscripten's compiler is Clang, which reports three leftovers that GCC (the
-# board's and the PC's compiler) does not: an unused constant in boot.cpp, a
-# variable in desktop.cpp that is set and never read, and an unused field in
-# widgets.hpp. They stay warnings here until they are tidied in core/.
-target_compile_options(core PRIVATE -Wno-error=unused-const-variable -Wno-error=unused-but-set-global
-                                    -Wno-error=unused-private-field)
+# Emscripten's compiler is Clang. core/ is written and checked with GCC (the
+# board's and the PC's compiler), with warnings as errors, and Clang warns
+# about things GCC accepts. Nobody but this build runs Clang, so here they
+# stay warnings: a new one in core/ must not stop the page from being
+# published. They show in the build's output, to be tidied in core/.
+target_compile_options(core PRIVATE -Wno-error)
 
 add_executable(chinchilla ../host/desktop/main.cpp)
 target_compile_options(chinchilla PRIVATE -Wall -Wextra -Werror)

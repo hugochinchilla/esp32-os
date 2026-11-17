@@ -92,23 +92,81 @@ void test_files()
     CHECK(os::file::entry("C:\\os", 0, e) == Error::Ok && strcmp(e.name, "a.txt") == 0);
     CHECK(os::file::entry("C:\\os", 1, e) != Error::Ok);
 
-    fs::File f;
+    // An open file is a handle, and the system knows whose.
+    using os::file::Handle;
+    Handle f = os::file::kNoFile;
     char text[16] = {};
     size_t got = 0;
-    CHECK(os::file::open("C:\\os\\a.txt", ports::OpenMode::Read, f) == Error::Ok);
+    CHECK(os::file::open_files() == 0);
+    CHECK(os::file::open("C:\\os\\a.txt", ports::OpenMode::Read, f) == Error::Ok && f != os::file::kNoFile);
+    CHECK(os::file::open_files(os::self()) == 1 && os::file::open_files() == 1);
     CHECK(os::file::read(f, text, sizeof(text), got) == Error::Ok && got == 5 && memcmp(text, "hello", 5) == 0);
-    CHECK(os::file::close(f) == Error::Ok);
+    CHECK(os::file::close(f) == Error::Ok && os::file::open_files() == 0);
+    // A handle that was closed is refused, also once its slot is in use
+    // again; so are numbers that were never handles.
+    CHECK(os::file::read(f, text, sizeof(text), got) == Error::Io && got == 0);
+    CHECK(os::file::close(f) == Error::Io);
+    Handle again = os::file::kNoFile;
+    CHECK(os::file::open("C:\\os\\a.txt", ports::OpenMode::Read, again) == Error::Ok && again != f);
+    CHECK(os::file::read(f, text, sizeof(text), got) == Error::Io);
+    CHECK(os::file::close(again) == Error::Ok);
+    CHECK(os::file::close(0) == Error::Io && os::file::close(-5) == Error::Io && os::file::close(77) == Error::Io);
+    // A file that is not there takes no slot.
+    CHECK(os::file::open("C:\\os\\none.txt", ports::OpenMode::Read, f) == Error::NotFound && f == os::file::kNoFile);
+    CHECK(os::file::open_files() == 0);
 
     // A save given up leaves the old file; one kept replaces it.
-    fs::Save save;
+    Handle save = os::file::kNoFile;
     CHECK(os::file::begin_save("C:\\os\\a.txt", save) == Error::Ok);
-    CHECK(os::file::write(save.file, "bye", 3) == Error::Ok);
-    CHECK(os::file::finish_save(save, false) == Error::Ok);
+    CHECK(os::file::write(save, "bye", 3) == Error::Ok);
+    CHECK(os::file::finish_save(save, false) == Error::Ok && os::file::open_files() == 0);
     CHECK(os::file::read_file("C:\\os\\a.txt", text, sizeof(text), got) == Error::Ok && got == 5);
     CHECK(os::file::begin_save("C:\\os\\a.txt", save) == Error::Ok);
-    CHECK(os::file::write(save.file, "bye", 3) == Error::Ok);
+    CHECK(os::file::write(save, "bye", 3) == Error::Ok);
     CHECK(os::file::finish_save(save) == Error::Ok);
     CHECK(os::file::read_file("C:\\os\\a.txt", text, sizeof(text), got) == Error::Ok && got == 3);
+    CHECK(os::file::finish_save(save) == Error::Io); // it was closed by the first
+
+    // One process may hold kMaxOpenEach, the machine kMaxOpen.
+    {
+        proc::Table &t = proc::table();
+        const proc::Pid a = os::spawn("holder"), b = os::spawn("other"), c = os::spawn("third");
+        const proc::Pid d = os::spawn("fourth");
+        Handle held[os::file::kMaxOpen + 1] = {};
+        int n = 0;
+        for (const proc::Pid pid : {a, b, d}) {
+            const os::As as(pid);
+            for (int i = 0; i < os::file::kMaxOpenEach; i++) {
+                CHECK(os::file::open("C:\\os\\a.txt", ports::OpenMode::Read, held[n++]) == Error::Ok);
+            }
+            Handle more;
+            CHECK(os::file::open("C:\\os\\a.txt", ports::OpenMode::Read, more) == Error::TooManyOpen);
+        }
+        CHECK(os::file::open_files(a) == os::file::kMaxOpenEach && os::file::open_files() == os::file::kMaxOpen);
+        {
+            const os::As as(c);
+            Handle more;
+            CHECK(os::file::open("C:\\os\\a.txt", ports::OpenMode::Read, more) == Error::TooManyOpen);
+        }
+        // A process that ends: what it left open is closed for it, and its
+        // handles are dead. The other's are as they were.
+        CHECK(t.exit(a));
+        CHECK(os::file::open_files(a) == 0 && os::file::open_files() == 2 * os::file::kMaxOpenEach);
+        CHECK(os::file::read(held[0], text, sizeof(text), got) == Error::Io);
+        CHECK(os::file::read(held[os::file::kMaxOpenEach], text, sizeof(text), got) == Error::Ok && got == 3);
+        {
+            // One that ends in the middle of a save: the new text is thrown
+            // away, the old file stays, and no temporary file is left.
+            const os::As as(c);
+            CHECK(os::file::begin_save("C:\\os\\a.txt", save) == Error::Ok);
+            CHECK(os::file::write(save, "half", 4) == Error::Ok);
+        }
+        CHECK(t.exit(c) && t.exit(b) && t.exit(d) && os::file::open_files() == 0);
+        CHECK(os::file::read_file("C:\\os\\a.txt", text, sizeof(text), got) == Error::Ok && got == 3);
+        fs::DirEntry only;
+        CHECK(os::file::entry("C:\\os", 0, only) == Error::Ok && strcmp(only.name, "a.txt") == 0);
+        CHECK(os::file::entry("C:\\os", 1, only) != Error::Ok);
+    }
 
     CHECK(os::file::rename("C:\\os\\a.txt", "C:\\os\\b.txt") == Error::Ok);
     CHECK(os::file::remove("C:\\os") == Error::NotEmpty);
@@ -159,7 +217,7 @@ void test_process_list()
     const proc::Pid p = os::spawn("listed");
     CHECK(os::process_count() == before + 1 && os::process_at(before).pid == p);
     CHECK(os::alive(p) && os::process(p) != nullptr && strcmp(os::process(p)->name, "listed") == 0);
-    CHECK(os::main_window(p) == nullptr);
+    CHECK(os::main_window(p) == os::kNoWindow);
     os::refresh_figures();
     // The desktop is protected; one that is not there is not there; a
     // window program without windows is ended at the next safe point.
@@ -177,12 +235,21 @@ void test_process_list()
     wm::Window *w = desktop.active();
     CHECK(w != nullptr);
     if (w != nullptr) {
+        os::WindowId seen = os::kNoWindow;
         const proc::Pid owner = w->owner();
-        CHECK(os::main_window(owner) == w && os::in_front(*w) && os::blocker(*w) == nullptr);
+        CHECK(os::in_front(*w) && os::blocker(*w) == nullptr);
+        // Seen from another program it is a number: good while it is open.
+        const os::WindowId id = os::main_window(owner);
+        CHECK(id != os::kNoWindow && id == w->id() && strcmp(os::window_title(id), w->title()) == 0);
+        CHECK(os::window_icon(id) == w->icon() && os::bring_forward(id) && os::in_front(*w));
+        CHECK(os::window_title(id + 1000)[0] == 0 && !os::bring_forward(id + 1000) && !os::bring_forward(os::kNoWindow));
+        seen = id;
         CHECK(os::signal(owner, proc::Signal::Term) == proc::Sent::Ok);
         wait(10000);
         wait(10000);
         CHECK(!os::alive(owner));
+        // Closed: the number is dead, and stays dead.
+        CHECK(os::window_title(seen)[0] == 0 && os::window_icon(seen) == nullptr && !os::bring_forward(seen));
     }
 
     ports::SystemStats stats = {};
@@ -190,7 +257,27 @@ void test_process_list()
     uint32_t value = 0;
     char text[64] = "";
     os::fact(ports::Fact::Processor, value, text, sizeof(text));
-    CHECK(&os::file::storage() == &storage);
+
+    // The Picture viewer holds its file, as a handle, only while it decodes:
+    // one while the picture is being read, none when it is on the screen,
+    // and none when the viewer is ended half way.
+    {
+        uint8_t bmp[54 + 16] = {'B', 'M', 70, 0, 0, 0, 0, 0, 0, 0, 54, 0, 0, 0, 40, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 1, 0, 24};
+        bmp[34] = 16;
+        CHECK(os::file::write_file("C:\\dot.bmp", bmp, sizeof(bmp)) == os::file::Error::Ok);
+        CHECK(os::file::open_files() == 0);
+        shell::open_picture("C:\\dot.bmp");
+        const proc::Pid viewer = os::find("Picture viewer");
+        CHECK(viewer != proc::kNone && os::file::open_files(viewer) == 1);
+        shell::finish_picture();
+        CHECK(os::file::open_files() == 0);
+        shell::open_picture("C:\\dot.bmp"); // the same window starts again
+        CHECK(os::file::open_files(viewer) == 1);
+        CHECK(os::signal(viewer, proc::Signal::Kill) == proc::Sent::Ok);
+        wait(10000);
+        CHECK(!os::alive(viewer) && os::file::open_files() == 0);
+        CHECK(os::file::remove("C:\\dot.bmp") == os::file::Error::Ok);
+    }
 }
 
 // Every program opened and closed: the memory out comes back to where it

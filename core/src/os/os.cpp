@@ -3,11 +3,18 @@
 // they do but that programs come through here.
 #include "core/os/os.hpp"
 
+#include <atomic>
 #include <cstdio>
+#include <new>
 
 #include "core/saver/saver.hpp"
+#include "core/sys/log.hpp"
 
 namespace os {
+
+namespace file {
+void installed();
+}
 
 namespace {
 
@@ -41,7 +48,11 @@ void settings_path(const char *program, char *out, size_t n)
 
 } // namespace
 
-void install(const Kit &kit) { g_kit = kit; }
+void install(const Kit &kit)
+{
+    g_kit = kit;
+    file::installed();
+}
 void install_network(net::Manager *wifi) { g_network = wifi; }
 
 /* ---- The process ------------------------------------------------------------ */
@@ -146,7 +157,32 @@ bool menu_open() { return g_kit.wm->menu_open(); }
 void open_menu(wm::Menu &menu, int x, int y) { g_kit.wm->open_menu(menu, x, y); }
 wm::Window *blocker(const wm::Window &window) { return g_kit.wm->blocker(window); }
 bool in_front(const wm::Window &window) { return g_kit.wm->active() == &window; }
-wm::Window *main_window(proc::Pid pid) { return g_kit.wm->main_window_of(pid); }
+void caret_moved() { g_kit.wm->caret_moved(); }
+WindowId main_window(proc::Pid pid)
+{
+    const wm::Window *w = g_kit.wm->main_window_of(pid);
+    return w != nullptr ? w->id() : kNoWindow;
+}
+const char *window_title(WindowId window)
+{
+    const wm::Window *w = g_kit.wm->window(window);
+    return w != nullptr ? w->title() : "";
+}
+const gfx::Bitmap *window_icon(WindowId window)
+{
+    const wm::Window *w = g_kit.wm->window(window);
+    return w != nullptr ? w->icon() : nullptr;
+}
+bool bring_forward(WindowId window)
+{
+    wm::Window *w = g_kit.wm->window(window);
+    if (w == nullptr) {
+        return false;
+    }
+    wm::Window *dialog = g_kit.wm->blocker(*w);
+    g_kit.wm->activate(dialog != nullptr ? *dialog : *w);
+    return true;
+}
 void begin_drag(const char *path) { g_kit.wm->begin_drag(path); }
 
 Busy::Busy() { g_kit.wm->begin_wait(); }
@@ -190,6 +226,17 @@ bool shut_down() { return g_kit.shut_down != nullptr && g_kit.shut_down(); }
 
 net::Manager *network() { return g_network; }
 
+/* ---- Terminal sessions ----------------------------------------------------------- */
+
+sh::TerminalSession *open_session(ports::ByteSink &device, const char *&why)
+{
+    if (g_kit.open_session == nullptr) {
+        why = "This machine has no command shell.";
+        return nullptr;
+    }
+    return g_kit.open_session(device, why);
+}
+
 /* ---- Files --------------------------------------------------------------------- */
 
 namespace file {
@@ -203,15 +250,185 @@ Error make_folder(const char *path) { return g_kit.storage->make_folder(path); }
 Error remove(const char *path) { return g_kit.storage->remove(path); }
 Error rename(const char *from, const char *to) { return g_kit.storage->rename(from, to); }
 
-Error open(const char *path, ports::OpenMode mode, fs::File &file) { return g_kit.storage->open(path, mode, file); }
-Error read(fs::File &file, void *data, size_t size, size_t &done)
+/* The table of open files. A slot is claimed with its `used` flag alone, so
+ * the UI task and a job's task can each take one without a lock; after that
+ * a slot is its holder's until it is closed. The system closes what a
+ * process left (closed_for) on the UI task, when the process has no jobs
+ * any more. */
+namespace {
+
+struct Open {
+    std::atomic<bool> used{false};
+    proc::Pid owner = proc::kNone;
+    uint16_t serial = 0; // tells this use of the slot from the one before
+    bool saving = false;
+    fs::Save save;       // save.file alone for a file that was just opened
+};
+
+Open *g_open = nullptr; // kMaxOpen of them, once there is memory
+
+// The slot in the low byte, counted from 1; which use of it above.
+Handle handle_of(const Open &o) { return (static_cast<Handle>(o.serial) << 8) | static_cast<Handle>(&o - g_open + 1); }
+
+Open *held(Handle handle)
 {
-    return g_kit.storage->read(file, data, size, done);
+    const int slot = (handle & 0xFF) - 1;
+    if (g_open == nullptr || handle <= 0 || slot < 0 || slot >= kMaxOpen) {
+        return nullptr;
+    }
+    Open &o = g_open[slot];
+    return o.used && o.serial == (handle >> 8) ? &o : nullptr;
 }
-Error write(fs::File &file, const void *data, size_t size) { return g_kit.storage->write(file, data, size); }
-Error close(fs::File &file) { return g_kit.storage->close(file); }
-Error begin_save(const char *path, fs::Save &save) { return g_kit.storage->begin_save(path, save); }
-Error finish_save(fs::Save &save, bool keep) { return g_kit.storage->finish_save(save, keep); }
+
+Open *claim(const job::Job *job)
+{
+    const proc::Pid owner = job != nullptr ? job->owner() : proc::table().current();
+    if (g_open == nullptr || open_files(owner) >= kMaxOpenEach) {
+        return nullptr;
+    }
+    for (int i = 0; i < kMaxOpen; i++) {
+        Open &o = g_open[i];
+        bool free = false;
+        if (o.used.compare_exchange_strong(free, true)) {
+            o.owner = owner;
+            o.serial = o.serial >= 0x7FFF ? 1 : o.serial + 1;
+            o.saving = false;
+            o.save = fs::Save();
+            return &o;
+        }
+    }
+    return nullptr;
+}
+
+void give_back(Open &o)
+{
+    o.owner = proc::kNone;
+    o.used = false;
+}
+
+// A process has ended: what it left open.
+void closed_for(proc::Pid pid, void *)
+{
+    int count = 0;
+    for (int i = 0; g_open != nullptr && i < kMaxOpen; i++) {
+        Open &o = g_open[i];
+        if (!o.used || o.owner != pid) {
+            continue;
+        }
+        if (o.saving) {
+            g_kit.storage->finish_save(o.save, false);
+        } else {
+            g_kit.storage->close(o.save.file);
+        }
+        give_back(o);
+        count++;
+    }
+    if (count > 0) {
+        char line[64];
+        const int n = snprintf(line, sizeof(line), "os: closed %d file%s process %d left open\n", count,
+                               count == 1 ? "" : "s", pid);
+        sys::log().write(line, static_cast<size_t>(n));
+    }
+}
+
+} // namespace
+
+// The table, in large memory, the first time there is some; and the system
+// is told of every process that ends.
+void installed()
+{
+    if (g_open == nullptr && g_kit.memory != nullptr) {
+        void *room = g_kit.memory->allocate(kMaxOpen * sizeof(Open));
+        if (room != nullptr) {
+            g_open = new (room) Open[kMaxOpen];
+        }
+    }
+    proc::table().on_exit(&closed_for, nullptr);
+}
+
+int open_files(proc::Pid pid)
+{
+    int count = 0;
+    for (int i = 0; g_open != nullptr && i < kMaxOpen; i++) {
+        count += g_open[i].used && (pid == proc::kNone || g_open[i].owner == pid);
+    }
+    return count;
+}
+
+Error open(const char *path, ports::OpenMode mode, Handle &file, const job::Job *job)
+{
+    file = kNoFile;
+    Open *o = claim(job);
+    if (o == nullptr) {
+        return Error::TooManyOpen;
+    }
+    const Error e = g_kit.storage->open(path, mode, o->save.file);
+    if (e != Error::Ok) {
+        give_back(*o);
+        return e;
+    }
+    file = handle_of(*o);
+    return Error::Ok;
+}
+
+Error read(Handle file, void *data, size_t size, size_t &done)
+{
+    done = 0;
+    Open *o = held(file);
+    return o != nullptr ? g_kit.storage->read(o->save.file, data, size, done) : Error::Io;
+}
+
+Error write(Handle file, const void *data, size_t size)
+{
+    Open *o = held(file);
+    return o != nullptr ? g_kit.storage->write(o->save.file, data, size) : Error::Io;
+}
+
+Error seek(Handle file, uint32_t offset)
+{
+    Open *o = held(file);
+    return o != nullptr ? g_kit.storage->seek(o->save.file, offset) : Error::Io;
+}
+
+Error close(Handle file)
+{
+    Open *o = held(file);
+    if (o == nullptr) {
+        return Error::Io;
+    }
+    const Error e = o->saving ? g_kit.storage->finish_save(o->save, false) : g_kit.storage->close(o->save.file);
+    give_back(*o);
+    return e;
+}
+
+Error begin_save(const char *path, Handle &save, const job::Job *job)
+{
+    save = kNoFile;
+    Open *o = claim(job);
+    if (o == nullptr) {
+        return Error::TooManyOpen;
+    }
+    const Error e = g_kit.storage->begin_save(path, o->save);
+    if (e != Error::Ok) {
+        give_back(*o);
+        return e;
+    }
+    o->saving = true;
+    save = handle_of(*o);
+    return Error::Ok;
+}
+
+Error finish_save(Handle save, bool keep)
+{
+    Open *o = held(save);
+    if (o == nullptr || !o->saving) {
+        return Error::Io;
+    }
+    const Error e = g_kit.storage->finish_save(o->save, keep);
+    give_back(*o);
+    return e;
+}
+
 Error read_file(const char *path, void *data, size_t capacity, size_t &size)
 {
     return g_kit.storage->read_file(path, data, capacity, size);
@@ -220,8 +437,6 @@ Error write_file(const char *path, const void *data, size_t size)
 {
     return g_kit.storage->write_file(path, data, size);
 }
-
-const fs::Storage &storage() { return *g_kit.storage; }
 
 } // namespace file
 

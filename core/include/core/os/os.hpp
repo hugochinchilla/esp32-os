@@ -18,9 +18,11 @@
 
 #include "core/fs/fs.hpp"
 #include "core/fs/ini.hpp"
+#include "core/job/job.hpp"
 #include "core/net/wifi.hpp"
 #include "core/ports.hpp"
 #include "core/proc/table.hpp"
+#include "core/sh/terminal_session.hpp"
 #include "core/wm/wm.hpp"
 
 namespace os {
@@ -91,8 +93,21 @@ void open_menu(wm::Menu &menu, int x, int y); // a free-standing menu at (x, y)
 // The dialog that keeps `window` from being used now; nullptr: none.
 wm::Window *blocker(const wm::Window &window);
 bool in_front(const wm::Window &window); // it is the window in use
-// The main window of a process; nullptr: it has none.
-wm::Window *main_window(proc::Pid pid);
+// The text cursor of the window in use has moved: it is shown at once, and
+// its blink starts again.
+void caret_moved();
+// Another process's window is a number, never its object (backlog item 37):
+// the number is given when a window opens and not given again, so one that
+// has closed is simply not there. kNoWindow: none.
+using WindowId = int;
+constexpr WindowId kNoWindow = 0;
+// The main window of a process.
+WindowId main_window(proc::Pid pid);
+// Its title ("" once it has closed) and its icon (nullptr: none, or closed).
+const char *window_title(WindowId window);
+const gfx::Bitmap *window_icon(WindowId window);
+// Brings it to the front, or the dialog that holds it. False: it has closed.
+bool bring_forward(WindowId window);
 // A file or folder starts being dragged (the File manager).
 void begin_drag(const char *path);
 // The hourglass while slow work runs on the UI task:
@@ -136,6 +151,19 @@ bool shut_down();
 // the pointer.
 net::Manager *network();
 
+/* ---- Terminal sessions ----------------------------------------------------------- */
+
+// A command shell on a TTY of its own, as a new process `sh`, child of the
+// one asking (core/sh/terminal_session.hpp). The one asking is its device:
+// what the terminal shows is written to `device`, and the keys go in with
+// the session's typed(). nullptr: it could not be started, and `why` says
+// why in words for a message box.
+//
+// The session is the system's. The device hangs it up when it goes
+// (hang_up()) and from then on does not use the pointer; if the session
+// ends first it says so (on_ended()), and the pointer is dead after that.
+sh::TerminalSession *open_session(ports::ByteSink &device, const char *&why);
+
 /* ---- Files --------------------------------------------------------------------- */
 
 namespace file {
@@ -151,20 +179,38 @@ Error make_folder(const char *path);
 Error remove(const char *path);
 Error rename(const char *from, const char *to); // same drive only
 
-Error open(const char *path, ports::OpenMode mode, fs::File &file);
-Error read(fs::File &file, void *data, size_t size, size_t &done);
-Error write(fs::File &file, const void *data, size_t size);
-Error close(fs::File &file);
-// Saving without putting the old file at risk (fs::Storage::begin_save).
-Error begin_save(const char *path, fs::Save &save);
-Error finish_save(fs::Save &save, bool keep = true);
+// An open file is a number, a handle, and the system keeps the table of
+// which process holds which (backlog item 37, first step). What a process
+// leaves open when it ends is closed for it, and a save it had not finished
+// is thrown away, the old file staying as it was. A handle that is closed,
+// or was never given, is refused (Error::Io).
+using Handle = int;
+constexpr Handle kNoFile = 0;
+// ponytail: how many files may be open through these calls at once, in the
+// whole machine and by one process. No program holds more than one today,
+// and a drive itself keeps six open at most.
+constexpr int kMaxOpen = 6;
+constexpr int kMaxOpenEach = 2;
+
+// `job`: from a background job, which runs on another task, the job says
+// whose the file is. On the UI task leave it out: it is the one asking.
+// Error::TooManyOpen when the process, or the machine, has its share.
+Error open(const char *path, ports::OpenMode mode, Handle &file, const job::Job *job = nullptr);
+Error read(Handle file, void *data, size_t size, size_t &done);
+Error write(Handle file, const void *data, size_t size);
+// The place the next read() starts at, in bytes from the start of the file.
+Error seek(Handle file, uint32_t offset);
+Error close(Handle file);
+// Saving without putting the old file at risk (fs::Storage::begin_save):
+// write() to the handle, then finish_save(), which closes it. keep false
+// throws the new text away.
+Error begin_save(const char *path, Handle &save, const job::Job *job = nullptr);
+Error finish_save(Handle save, bool keep = true);
+// How many files a process holds open; every process for proc::kNone.
+int open_files(proc::Pid pid = proc::kNone);
 // Whole files at once; write_file saves the safe way too.
 Error read_file(const char *path, void *data, size_t capacity, size_t &size);
 Error write_file(const char *path, const void *data, size_t size);
-
-// The drives themselves, for library code that reads a file on its own
-// (the picture decoder). A program passes it on and does not keep it.
-const fs::Storage &storage();
 
 } // namespace file
 
@@ -193,6 +239,7 @@ struct Kit {
     fs::Storage *storage = nullptr;
     ports::Memory *memory = nullptr;
     bool (*shut_down)() = nullptr; // closes every program and takes the screen
+    sh::TerminalSession *(*open_session)(ports::ByteSink &device, const char *&why) = nullptr;
 };
 // What the calls work with. The desktop hands it in when it starts.
 void install(const Kit &kit);
