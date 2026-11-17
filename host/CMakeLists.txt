@@ -108,6 +108,11 @@ add_executable(test_msg tests/test_msg.cpp)
 target_link_libraries(test_msg PRIVATE core Threads::Threads)
 add_test(NAME msg COMMAND test_msg)
 
+# The watchdog's bookkeeping, the crash record and the error screen.
+add_executable(test_crash tests/test_crash.cpp)
+target_link_libraries(test_crash PRIVATE core)
+add_test(NAME crash COMMAND test_crash)
+
 # Memory-port buffers live as long as the program, as on the board, so the
 # leak checker would report them; applied after every add_test above.
 get_property(all_tests DIRECTORY PROPERTY TESTS)

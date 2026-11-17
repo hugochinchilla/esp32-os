@@ -44,6 +44,7 @@
 #include "core/wm/wm.hpp"
 #include "core/ports.hpp"
 #include "core/video/pointer.hpp"
+#include "crash.hpp"
 #include "vga.h"
 #include "wifi.hpp"
 
@@ -386,6 +387,7 @@ public:
         return false;
     }
     void arm_fast_boot() override { arm_fast_next(); }
+    void fault(ports::Fault kind) override { crash_fault(kind); }
     void reboot() override
     {
         uart_wait_tx_done(kDebugUart, pdMS_TO_TICKS(200));
@@ -537,6 +539,11 @@ void show_boot_screen(int which, void *context)
     auto &io = *static_cast<shell::BootIo *>(context);
     if (which == 0) {
         shell::run_self_test(io, false);
+    } else if (which == 3) {
+        // The error screen: this start's crash report, or a made-up one.
+        sys::CrashRecord sample;
+        sys::crash_sample(sample);
+        shell::show_crash_screen(io, crash_last() != nullptr ? *crash_last() : sample, true, false);
     } else {
         shell::show_splash(io, false);
     }
@@ -604,8 +611,18 @@ void ui_task(void *)
     boot_io.splash_ms = boot.splash_ms;
     boot_io.pace_percent = boot.pace_percent;
     boot_io.hold_s = boot.hold_s;
+    boot_io.crash_hold_s = boot.crash_hold_s;
     boot_io.skip = [](void *) { return input.skip; };
     pointer.set_visible(false);
+    // The last session ended in a crash: the report goes into C:\crash.txt
+    // and on the screen, before anything else (also on a fast start). The
+    // debug link answers meanwhile, so a machine that crashes at every start
+    // can still be reached here.
+    if (const sys::CrashRecord *crash = crash_last()) {
+        const bool logged = sys::crash_log_append(storage, *crash) == ports::FsError::Ok;
+        shell::show_crash_screen(boot_io, *crash, logged);
+        input.skip = false; // the key that ended it does not skip the self-test
+    }
     const int64_t test_start = esp_timer_get_time();
     const int failed = boot.fastboot ? shell::run_quiet_checks(boot_io) : shell::run_self_test(boot_io);
     const int64_t splash_start = esp_timer_get_time();
@@ -699,7 +716,11 @@ void ui_task(void *)
     static msg::Inbox inbox(*s_queue);
     static uint8_t buffer[256];
     bool viewer = false;
+    // From here on the loop must keep coming round: the watchdog restarts
+    // the machine if it is silent for [watchdog] timeout_s (boot.ini).
+    watchdog_start("ui", sys::watchdog_limit_ms(boot.watchdog_s));
     while (true) {
+        watchdog_beat();
         bool more = false;
         for (int reads = 0;; reads++) {
             if (reads == kSerialReads) {
@@ -758,6 +779,10 @@ void video_task(void *done)
 
 extern "C" void app_main(void)
 {
+    // What the last session left behind, before anything can go wrong in
+    // this one.
+    crash_init();
+
     // The message queue first: every task made from here on may post.
     static RtosQueue queue;
     s_queue = &queue;

@@ -62,3 +62,4 @@ Plain words, real numbers, no summaries of summaries.
 | 2026-11-17 | [Chinchilla on a PC](2026-11-17-chinchilla-on-a-pc.md) | Where the screenshots come from, and the owner's idea of a desktop program and a web page (backlog 32, 33) |
 | 2026-11-17 | [Dialogs as programs](2026-11-17-dialogs-as-programs.md) | The owner's rule that new dialogs are programs of their own; how programs really run today; what frees memory and what does not |
 | 2026-11-17 | [Our statics in external RAM](2026-11-17-statics-in-psram.md) | 121 KB of internal RAM freed, what stayed internal and why, before and after |
+| 2026-11-17 | [The watchdog, the crash record and the error screen](2026-11-17-watchdog.md) | Backlog item 7: a supervisor that notices a stuck desktop, what is written down in the machine's last moment and where it waits, ESP-IDF's panic handler wrapped, and the screen at the next start that names the program |
