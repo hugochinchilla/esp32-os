@@ -15,6 +15,7 @@
 
 #include "driver/uart.h"
 #include "driver/uart_select.h"
+#include "esp_ota_ops.h"
 #include "esp_attr.h"
 #include "nvs.h"
 #include "nvs_flash.h"
@@ -42,6 +43,7 @@
 #include "core/net/rfb.hpp"
 #include "core/net/services.hpp"
 #include "core/net/telnet.hpp"
+#include "core/net/update.hpp"
 #include "core/init/init.hpp"
 #include "core/sh/console.hpp"
 #include "core/sys/log.hpp"
@@ -139,6 +141,48 @@ public:
     {
         uart_write_bytes(kDebugUart, data, size);
     }
+};
+
+// Where an update over the network is written: the app slot that is not
+// running. The flash is erased as the writing goes, not all at once, so no
+// step takes long; the code runs from PSRAM, so the picture is not disturbed
+// (docs/DECISIONS.md, "Flash layout").
+class OtaUpdater : public ports::Updater {
+public:
+    bool begin(uint32_t size) override
+    {
+        slot_ = esp_ota_get_next_update_partition(nullptr);
+        if (slot_ == nullptr || size > slot_->size) {
+            return false;
+        }
+        open_ = esp_ota_begin(slot_, OTA_WITH_SEQUENTIAL_WRITES, &handle_) == ESP_OK;
+        return open_;
+    }
+    bool write(const uint8_t *data, size_t size) override
+    {
+        return open_ && esp_ota_write(handle_, data, size) == ESP_OK;
+    }
+    bool finish() override
+    {
+        if (!open_) {
+            return false;
+        }
+        open_ = false;
+        // esp_ota_end() checks the image; only then does the next start change.
+        return esp_ota_end(handle_) == ESP_OK && esp_ota_set_boot_partition(slot_) == ESP_OK;
+    }
+    void abandon() override
+    {
+        if (open_) {
+            esp_ota_abort(handle_);
+            open_ = false;
+        }
+    }
+
+private:
+    const esp_partition_t *slot_ = nullptr;
+    esp_ota_handle_t handle_ = 0;
+    bool open_ = false;
 };
 
 // What the serial console's session shows: plain text on the debug link's
@@ -846,18 +890,44 @@ void ui_task(void *)
                 ESP_LOGW(TAG, "telnet on port %d, no password", net::Telnet::kPort);
             }
 
+            // Updates over the network (tools/ota.py), port 3232, no password.
+            // Off unless C:\.config\network.ini says [update] enabled = true.
+            static net::PosixTcpListener update_port;
+            net::Update *update = nullptr;
+            if (radio && network.get_bool("update", "enabled", false) && update_port.listen(net::Update::kPort)) {
+                static OtaUpdater updater;
+                static net::Update service(updater, clock);
+                service.set_listener(&update_port);
+                service.set_log([](const char *line, void *) { ESP_LOGW(TAG, "%s", line); }, nullptr);
+                service.on_written(
+                    [](bool restart, void *) {
+                        if (restart) {
+                            // The sender has its answer; a moment for it to
+                            // leave, then the new version starts.
+                            vTaskDelay(pdMS_TO_TICKS(300));
+                            esp_restart();
+                        }
+                    },
+                    nullptr);
+                update = &service;
+                ESP_LOGW(TAG, "updates over the network on port %d, no password", net::Update::kPort);
+            }
+
             // One task for all of them. Not started when there is nothing to
             // listen on. Its stack is in internal RAM, like every task's
             // here; the Normal class, just under this task, so a viewer that
             // asks for a lot never holds the desktop back.
             bool started = false;
-            if (vnc_port.listening() || web_port.listening() || telnet != nullptr) {
+            if (vnc_port.listening() || web_port.listening() || telnet != nullptr || update != nullptr) {
                 static net::PosixWait sockets;
                 static net::Services services(sockets, clock);
                 static ServicesTask context = {&services, &remote};
                 services.add(remote);
                 if (telnet != nullptr) {
                     services.add(*telnet);
+                }
+                if (update != nullptr) {
+                    services.add(*update);
                 }
                 s_remote_input = &remote_input;
                 s_services = &services;
@@ -936,8 +1006,27 @@ void ui_task(void *)
     // From here on the loop must keep coming round: the watchdog restarts
     // the machine if it is silent for [watchdog] timeout_s (boot.ini).
     watchdog_start("ui", sys::watchdog_limit_ms(boot.watchdog_s));
+    // A version that arrived over the network is on trial until it has run
+    // this long: then it is confirmed, and before that any reset sends the
+    // bootloader back to the version before it.
+    constexpr int64_t kTrialUs = 10000000;
+    const int64_t loop_start = esp_timer_get_time();
+    bool on_trial = false;
+    {
+        esp_ota_img_states_t state;
+        on_trial = esp_ota_get_state_partition(esp_ota_get_running_partition(), &state) == ESP_OK &&
+                   state == ESP_OTA_IMG_PENDING_VERIFY;
+        if (on_trial) {
+            ESP_LOGW(TAG, "this version arrived over the network and is on trial for %d s", static_cast<int>(kTrialUs / 1000000));
+        }
+    }
     while (true) {
         watchdog_beat();
+        if (on_trial && esp_timer_get_time() - loop_start > kTrialUs) {
+            on_trial = false;
+            esp_ota_mark_app_valid_cancel_rollback();
+            ESP_LOGW(TAG, "this version is confirmed: it starts from now on");
+        }
         bool more = false;
         for (int reads = 0;; reads++) {
             if (reads == kSerialReads) {

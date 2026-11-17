@@ -420,4 +420,49 @@ private:
     std::chrono::steady_clock::time_point start_ = std::chrono::steady_clock::now();
 };
 
+// Where an update goes on the PC: memory. finish() wants what an ESP image
+// starts with (0xE9), so tests can send something that is not one.
+class MemoryUpdater : public ports::Updater {
+public:
+    bool begin(uint32_t size) override
+    {
+        begins++;
+        if (size > room) {
+            return false;
+        }
+        image.clear();
+        open = true;
+        return true;
+    }
+    bool write(const uint8_t *data, size_t size) override
+    {
+        if (!open || image.size() + size > fail_after) {
+            return false;
+        }
+        image.insert(image.end(), data, data + size);
+        return true;
+    }
+    bool finish() override
+    {
+        open = false;
+        if (image.empty() || image[0] != 0xE9) {
+            return false;
+        }
+        installed = image;
+        finished++;
+        return true;
+    }
+    void abandon() override
+    {
+        open = false;
+        abandoned++;
+    }
+
+    size_t room = 2 * 1024 * 1024;
+    size_t fail_after = static_cast<size_t>(-1); // write() fails past this many bytes
+    std::vector<uint8_t> image, installed;
+    bool open = false;
+    int begins = 0, finished = 0, abandoned = 0;
+};
+
 } // namespace host

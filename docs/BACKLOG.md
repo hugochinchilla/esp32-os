@@ -50,7 +50,7 @@ board or the merge), `done`.
 | 22 | Console text editor | M | 13 | | on a branch (`claude/project-thread-8q7ksu`): `ted`; PC tests pass, firmware compiles, not run on the board. [Journal](journal/2026-11-17-console-editor.md) |
 | 23 | Pipes and redirection | M | 13 | | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-pipes.md) |
 | 24 | File dates | S to M | | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-file-dates.md) |
-| 25 | Updates over Wi-Fi | M | | Yes | todo |
+| 25 | Updates over Wi-Fi | M | | Yes | on a branch (`claude/project-thread-8q7ksu`): `tools/ota.py`, two app slots, off unless `[update] enabled = true` in `network.ini`; PC tests pass, firmware compiles, not run on the board (the first flash with the new table must be by cable). [Journal](journal/2026-11-17-updates.md) |
 | 26 | Apps on their own tasks, one at a time | XL | 8, 20 | Yes | todo |
 | 27 | Loadable or sandboxed apps | XL | 19, 20 | Yes | todo |
 

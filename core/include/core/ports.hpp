@@ -190,6 +190,27 @@ enum class OpenMode : uint8_t {
     Update, // an existing file, read and written anywhere
 };
 
+// Where a new version of the system is written: on the board, the app slot
+// of the flash that is not running (docs/journal/2026-11-17-updates.md).
+// One update at a time; whoever calls stays on one task.
+class Updater {
+public:
+    // Makes room for an image of this many bytes. False if there is no
+    // second slot or the image is too big for it.
+    virtual bool begin(uint32_t size) = 0;
+    // The next bytes, in order.
+    virtual bool write(const uint8_t *data, size_t size) = 0;
+    // All of it has been written: checks that it is an image this machine
+    // can start and makes it the one the next start uses. False, and nothing
+    // changes, if it is not.
+    virtual bool finish() = 0;
+    // Gives up an update that was begun.
+    virtual void abandon() = 0;
+
+protected:
+    ~Updater() = default;
+};
+
 // One drive. Paths are relative to its root, with '\' between names
 // ("docs\notes.txt"; "" is the root). Names compare without regard to case.
 class Volume {
