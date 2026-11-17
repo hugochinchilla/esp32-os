@@ -192,3 +192,5 @@ clears the clock, the bar showed 12:00 AM for about a minute and a half
 before the network set the time. Measured again after two more hard resets
 the time came in 3 and 4 s. The code that sets it is unchanged, so this was
 the time server being slow that once.
+
+The idle desktop without the pointer, main ebe84b0 against this build after the merge: 31 pixels differ, all in the clock's minute digits (x 602 to 612, y 462 to 469); everything else is identical to the pixel.
