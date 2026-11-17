@@ -110,6 +110,9 @@ public:
     void on_interrupt(InterruptFn fn, void *context);
 
     bool hung_up() const { return hung_up_; }
+    // True if read() can sleep until something is typed (the TTY was given
+    // an Event). Without, a program must not wait for input in a loop.
+    bool can_wait() const { return event_ != nullptr; }
     int columns() const { return columns_; }
     int rows() const { return rows_; }
 

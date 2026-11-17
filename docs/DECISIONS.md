@@ -1471,7 +1471,8 @@ by the agent under the owner's "dejo a tu criterio" of 2026-11-16.
   pieces. It is not yet a signal of the process table, since built-in
   commands are not processes.
 - `type` shows a file as Latin-1, as the Editor reads it.
-- No redirection, pipes, `more` or `date` yet (items 23 and 24); `top`,
+- No `date` yet (item 24); redirection, pipes and `more` came with item 23
+  ("Chosen for pipes and redirection" below); `top`,
   `dmesg`, `edit`, `open`, `run` are item 16.
 - `build/host/chinchilla-console [FOLDER]` is the shell in a terminal of the
   PC, for trying it without a board.
@@ -1508,6 +1509,33 @@ Chosen by the agent under the owner's "dejo a tu criterio" of 2026-11-16.
   when another window has the keyboard. The icon was drawn by the agent.
   Both are for the owner to overrule.
 - Escape is not sent to the session.
+
+### Chosen for pipes and redirection (2026-11-17, to confirm)
+
+Backlog item 23. Journal: `docs/journal/2026-11-17-pipes.md`. Chosen by the
+agent under the owner's "dejo a tu criterio" of 2026-11-16.
+
+- **A pipe is a hidden file and the commands run one after the other**, as
+  on MS-DOS: `A | B` runs A with its output in `.~pipeNa.tmp` in the root of
+  the session's drive, then B with that file as input, then removes it. Up
+  to six commands on a line. Rejected for now: real pipes with a task per
+  command (the right way once a program that never ends needs one; the
+  commands would not change), and a buffer in memory (it has a size).
+- `> FILE` writes a file, `>> FILE` adds to it, `< FILE` reads one; anywhere
+  on the command, quoted names allowed. `<` only on the first command of a
+  pipe and `>` only on the last. No `2>`, `&&`, `;` or variables.
+- **Errors always go to the terminal**, never into the file or the pipe.
+- A file gets Latin-1 and the terminal UTF-8: the session converts what a
+  command prints when its output is a file, and typed input when a command
+  reads it. The filters work in Latin-1.
+- The filters: `more`; `grep` with the DOS names `find` and `findstr`
+  (plain text, not patterns; `-i -v -n -c`); `head` and `tail` (`-n N`;
+  `tail` shows 2 KB at most); `wc` (`-l -w -c`); `cat`/`type` without a file
+  copies its input. `ls` writes one name a line into a file or pipe. No
+  `sort` yet.
+- A command reads typed lines (until Ctrl+D) only where the session has a
+  task of its own. On the UI task it says what it needs instead of waiting,
+  and `more` does not stop between screens.
 
 ### Chosen for background jobs (2026-11-17, to confirm)
 

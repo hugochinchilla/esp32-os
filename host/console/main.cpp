@@ -110,7 +110,13 @@ int main(int argc, char **argv)
         pollfd waiting = {STDIN_FILENO, POLLIN, 0};
         if (!input_open || poll(&waiting, 1, 50) <= 0) {
             if (!input_open) {
+                // Nothing more will come. Ctrl+D again for as long as
+                // something still reads: a command that took the first one
+                // as the end of its own input (cat | wc), then the session.
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                if (terminal.readable() == false) {
+                    terminal.input("\x04");
+                }
             }
             continue;
         }

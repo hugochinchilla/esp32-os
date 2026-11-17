@@ -40,6 +40,14 @@ int cmd_rmdir(Session &s, int argc, char **argv);
 int cmd_touch(Session &s, int argc, char **argv);
 int cmd_df(Session &s, int argc, char **argv);
 
+// filters.cpp
+int copy_input(Session &s); // cat without a file
+int cmd_grep(Session &s, int argc, char **argv);
+int cmd_wc(Session &s, int argc, char **argv);
+int cmd_head(Session &s, int argc, char **argv);
+int cmd_tail(Session &s, int argc, char **argv);
+int cmd_more(Session &s, int argc, char **argv);
+
 // system.cpp
 int cmd_ps(Session &s, int argc, char **argv);
 int cmd_kill(Session &s, int argc, char **argv);

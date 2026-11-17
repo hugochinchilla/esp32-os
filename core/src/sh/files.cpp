@@ -174,7 +174,8 @@ int list_folder(Session &s, const Listing &how, const char *folder, const char *
     }
     const int column = widest + 2;
     int per_row = s.terminal().columns() / (column > 0 ? column : 1);
-    per_row = per_row < 1 ? 1 : per_row;
+    // Into a file or a pipe: a name on each line, for whatever reads them.
+    per_row = (per_row < 1 || s.output_redirected()) ? 1 : per_row;
     int in_row = 0, owed = 0; // spaces to the next column, written only if a name follows
     for (int i = 0; !s.stopped() && storage.entry(folder, i, entry) == FsError::Ok; i++) {
         if (!shown(entry, pattern, how.hidden)) {
@@ -618,6 +619,9 @@ int cmd_cd(Session &s, int argc, char **argv)
 
 int cmd_cat(Session &s, int argc, char **argv)
 {
+    if (argc < 2 && s.has_input()) {
+        return copy_input(s); // from a pipe, a < file, or the keyboard until Ctrl+D
+    }
     if (no_drives(s, argv[0])) {
         return 1;
     }

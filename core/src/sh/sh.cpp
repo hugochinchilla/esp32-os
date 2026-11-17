@@ -1,5 +1,6 @@
 #include "core/sh/sh.hpp"
 
+#include <atomic>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
@@ -155,7 +156,8 @@ int cmd_help(Session &s, int argc, char **argv)
         s.printf("  %-22s %s\n", names, kCommands[i].summary);
     }
     s.print("help NAME shows how a command is written. A: to Z: changes drive.\n"
-            "Paths take \\ and /. * and ? stand for any letters. Ctrl+C stops a command.\n");
+            "Paths take \\ and /. * and ? stand for any letters. Ctrl+C stops a command.\n"
+            "A | B gives B what A wrote. > F writes the file F, >> F adds to it, < F reads.\n");
     return 0;
 }
 
@@ -167,7 +169,7 @@ const Command kCommands[] = {
     {"cd", &cmd_cd, "cd [FOLDER]", "Go to a folder; alone, show where you are"},
     {"chdir", &cmd_cd, nullptr, ""},
     {"pwd", &cmd_pwd, "pwd", "Show the folder you are in"},
-    {"cat", &cmd_cat, "cat FILE...", "Show what is in a file"},
+    {"cat", &cmd_cat, "cat [FILE...]", "Show what is in a file"},
     {"type", &cmd_cat, nullptr, ""},
     {"cp", &cmd_cp, "cp [-r] FROM... TO", "Copy files; -r copies folders too"},
     {"copy", &cmd_cp, nullptr, ""},
@@ -183,6 +185,13 @@ const Command kCommands[] = {
     {"rmdir", &cmd_rmdir, "rmdir FOLDER...", "Delete an empty folder"},
     {"rd", &cmd_rmdir, nullptr, ""},
     {"touch", &cmd_touch, "touch FILE...", "Make an empty file"},
+    {"more", &cmd_more, "more [FILE...]", "Show text a screen at a time: Space, Enter, q"},
+    {"grep", &cmd_grep, "grep [-i] [-v] [-n] [-c] TEXT [FILE...]", "Show the lines that have the text"},
+    {"find", &cmd_grep, nullptr, ""},
+    {"findstr", &cmd_grep, nullptr, ""},
+    {"head", &cmd_head, "head [-n N] [FILE...]", "Show the first lines (10)"},
+    {"tail", &cmd_tail, "tail [-n N] [FILE...]", "Show the last lines (10)"},
+    {"wc", &cmd_wc, "wc [-l] [-w] [-c] [FILE...]", "Count lines, words and bytes"},
     {"df", &cmd_df, "df", "Show the drives and their free space"},
     {"echo", &cmd_echo, "echo [TEXT...]", "Write the text"},
     {"ps", &cmd_ps, "ps", "List the processes"},
@@ -214,7 +223,7 @@ Session::Session(tty::Tty &tty, const Env &env, const char *start_folder) : tty_
     }
 }
 
-void Session::write(const char *data, size_t size)
+void Session::say(const char *data, size_t size)
 {
     if (size > 0) {
         tty_.write(data, size);
@@ -222,8 +231,100 @@ void Session::write(const char *data, size_t size)
     }
 }
 
+void Session::write(const char *data, size_t size)
+{
+    if (!out_.open()) {
+        say(data, size);
+        return;
+    }
+    // To a file: the UTF-8 the commands write becomes the Latin-1 that text
+    // files hold. A character outside Latin-1 becomes a question mark.
+    char latin1[128];
+    size_t used = 0;
+    for (size_t i = 0; i < size; i++) {
+        const uint8_t c = static_cast<uint8_t>(data[i]);
+        if (used == sizeof latin1) {
+            to_file(latin1, used);
+            used = 0;
+        }
+        if (out_lead_ != 0) {
+            latin1[used++] = (c & 0xC0) == 0x80 ? static_cast<char>(((out_lead_ & 0x03) << 6) | (c & 0x3F)) : '?';
+            out_lead_ = 0;
+        } else if (c < 0x80) {
+            latin1[used++] = static_cast<char>(c);
+        } else if (c == 0xC2 || c == 0xC3) {
+            out_lead_ = c;
+        } else if ((c & 0xC0) != 0x80) {
+            latin1[used++] = '?'; // the start of a longer character; its other bytes are dropped
+        }
+    }
+    to_file(latin1, used);
+}
+
+void Session::to_file(const char *latin1, size_t size)
+{
+    for (size_t i = 0; i < size; i++) {
+        if (out_used_ == static_cast<int>(sizeof out_buffer_)) {
+            flush_file();
+        }
+        out_buffer_[out_used_++] = latin1[i];
+    }
+}
+
+void Session::flush_file()
+{
+    if (out_used_ > 0 && out_.open() && out_error_ == fs::FsError::Ok) {
+        out_error_ = env_.storage->write(out_, out_buffer_, static_cast<size_t>(out_used_));
+    }
+    out_used_ = 0;
+}
+
+bool Session::has_input() const { return in_.open() || tty_.can_wait(); }
+
+size_t Session::read_input(char *out, size_t capacity)
+{
+    if (capacity == 0 || cut_) {
+        return 0;
+    }
+    if (in_.open()) {
+        size_t got = 0;
+        if (tty_.interrupted() || env_.storage->read(in_, out, capacity, got) != fs::FsError::Ok) {
+            return 0;
+        }
+        return got;
+    }
+    if (!tty_.can_wait()) {
+        return 0;
+    }
+    // Typed: a line at a time, UTF-8 from the TTY.
+    char line[tty::Tty::kReadSize];
+    const size_t room = capacity < sizeof line ? capacity : sizeof line;
+    const int count = tty_.read(line, room, msg::kForever);
+    if (count == tty::kInterrupted) {
+        cut_ = true; // the TTY has forgotten it by telling us: the line still stops
+        return 0;
+    }
+    if (count <= 0) {
+        return 0; // Ctrl+D, or the terminal went away
+    }
+    size_t used = 0;
+    for (int i = 0; i < count; i++) {
+        const uint8_t c = static_cast<uint8_t>(line[i]);
+        if ((c == 0xC2 || c == 0xC3) && i + 1 < count) {
+            out[used++] = static_cast<char>(((c & 0x03) << 6) | (static_cast<uint8_t>(line[++i]) & 0x3F));
+        } else {
+            out[used++] = c < 0x80 ? static_cast<char>(c) : '?';
+        }
+    }
+    return used;
+}
+
 void Session::write_latin1(const char *data, size_t size)
 {
+    if (out_.open()) {
+        to_file(data, size); // a file holds Latin-1: as it is
+        return;
+    }
     char out[128];
     size_t used = 0;
     for (size_t i = 0; i < size; i++) {
@@ -264,10 +365,13 @@ void Session::printf(const char *format, ...)
 
 int Session::fail(const char *command, const char *what, const char *why)
 {
-    if (what != nullptr) {
-        printf("%s: %s: %s\n", command, what, why);
-    } else {
-        printf("%s: %s\n", command, why);
+    // Always on the terminal: an error is not what the next command or the
+    // file was meant to get.
+    char text[256];
+    const int length = what != nullptr ? snprintf(text, sizeof text, "%s: %s: %s\n", command, what, why)
+                                       : snprintf(text, sizeof text, "%s: %s\n", command, why);
+    if (length > 0) {
+        say(text, static_cast<size_t>(length) < sizeof text ? static_cast<size_t>(length) : sizeof text - 1);
     }
     return 1;
 }
@@ -305,12 +409,191 @@ bool Session::set_cwd(const char *full_path)
     return true;
 }
 
+// Finds the next < > or >> outside quotes in `text`, takes the name after it
+// out (the place is filled with spaces) and copies it to `name`. Returns the
+// sign ('<', '>', or 'a' for >>), 0 if there is none, -1 for one without a
+// name.
+static int take_redirection(char *text, char *name, int capacity)
+{
+    bool quoted = false;
+    for (char *p = text; *p != 0; p++) {
+        if (*p == '"') {
+            quoted = !quoted;
+        }
+        if (quoted || (*p != '<' && *p != '>')) {
+            continue;
+        }
+        int sign = *p;
+        *p++ = ' ';
+        if (sign == '>' && *p == '>') {
+            sign = 'a';
+            *p++ = ' ';
+        }
+        while (*p == ' ' || *p == '\t') {
+            p++;
+        }
+        int used = 0;
+        bool inside = false;
+        while (*p != 0 && (inside || (*p != ' ' && *p != '\t' && *p != '<' && *p != '>'))) {
+            if (*p == '"') {
+                inside = !inside;
+            } else if (used < capacity - 1) {
+                name[used++] = *p;
+            }
+            *p++ = ' ';
+        }
+        name[used] = 0;
+        return used > 0 ? sign : -1;
+    }
+    return 0;
+}
+
 int Session::execute(const char *line)
+{
+    static std::atomic<uint16_t> sessions{0};
+    if (id_ == 0) {
+        id_ = ++sessions;
+    }
+    cut_ = false;
+    char work[tty::Tty::kReadSize + 1];
+    snprintf(work, sizeof work, "%s", line);
+
+    // The line is cut at each | outside quotes.
+    char *stages[kMaxStages];
+    int count = 0;
+    stages[count++] = work;
+    bool quoted = false;
+    for (char *p = work; *p != 0; p++) {
+        if (*p == '"') {
+            quoted = !quoted;
+        } else if (*p == '|' && !quoted) {
+            *p = 0;
+            if (count == kMaxStages) {
+                return fail("sh", nullptr, "too many commands joined with |");
+            }
+            stages[count++] = p + 1;
+        }
+    }
+    if (count == 1) {
+        const int result = run_stage(work, true, true, nullptr, nullptr);
+        return result == kNotRun ? 1 : result;
+    }
+    for (int i = 0; i < count; i++) {
+        const char *p = stages[i];
+        while (*p == ' ' || *p == '\t') {
+            p++;
+        }
+        if (*p == 0) {
+            return fail("sh", nullptr, "there is no command on one side of a |");
+        }
+    }
+    if (env_.storage == nullptr) {
+        return fail("sh", nullptr, "a | needs a drive to work on");
+    }
+    // One command at a time, as on DOS: each writes all it has to say into a
+    // hidden file, and the next reads that file. Two files, used in turn,
+    // in the root of the drive the session is on.
+    char pipes[2][32];
+    for (int i = 0; i < 2; i++) {
+        snprintf(pipes[i], sizeof pipes[i], "%c:\\.~pipe%u%c.tmp", cwd_[0], static_cast<unsigned>(id_), 'a' + i);
+    }
+    int result = 0;
+    for (int i = 0; i < count && !stopped(); i++) {
+        result = run_stage(stages[i], i == 0, i == count - 1, i > 0 ? pipes[(i - 1) % 2] : nullptr,
+                           i < count - 1 ? pipes[i % 2] : nullptr);
+        if (result == kNotRun) {
+            break; // said why; what follows would work on nothing
+        }
+    }
+    env_.storage->remove(pipes[0]);
+    env_.storage->remove(pipes[1]);
+    return result == kNotRun ? 1 : result;
+}
+
+// One command of the line, with its input and output set up and put back.
+int Session::run_stage(char *text, bool first, bool last, const char *pipe_in, const char *pipe_out)
+{
+    char in_name[fs::kMaxPath] = "", out_name[fs::kMaxPath] = "";
+    bool append = false;
+    for (;;) {
+        char name[fs::kMaxPath];
+        const int sign = take_redirection(text, name, sizeof name);
+        if (sign == 0) {
+            break;
+        }
+        if (sign < 0) {
+            fail("sh", nullptr, "a file name is missing after < or >");
+            return kNotRun;
+        }
+        char *into = sign == '<' ? in_name : out_name;
+        if (!resolve(name, into)) {
+            fail("sh", name, "the name is too long");
+            return kNotRun;
+        }
+        append = sign == 'a' ? true : (sign == '>' ? false : append);
+    }
+    if ((in_name[0] != 0 && !first) || (out_name[0] != 0 && !last)) {
+        fail("sh", nullptr, "only the first command can take < and only the last > when they are joined with |");
+        return kNotRun;
+    }
+    const char *from = in_name[0] != 0 ? in_name : pipe_in;
+    const char *to = out_name[0] != 0 ? out_name : pipe_out;
+    if ((from != nullptr || to != nullptr) && env_.storage == nullptr) {
+        fail("sh", nullptr, "there are no drives");
+        return kNotRun;
+    }
+    if (from != nullptr) {
+        const fs::FsError e = env_.storage->open(from, fs::OpenMode::Read, in_);
+        if (e != fs::FsError::Ok) {
+            fail("sh", from, e);
+            return kNotRun;
+        }
+    }
+    if (to != nullptr) {
+        fs::FsError e = fs::FsError::NotFound;
+        fs::DirEntry there;
+        if (append && env_.storage->stat(to, there) == fs::FsError::Ok && !there.folder) {
+            // >>: the file as it is, written from its end on.
+            e = env_.storage->open(to, fs::OpenMode::Update, out_);
+            if (e == fs::FsError::Ok) {
+                e = env_.storage->seek(out_, there.size);
+            }
+        } else {
+            e = env_.storage->open(to, fs::OpenMode::Write, out_);
+        }
+        if (e != fs::FsError::Ok) {
+            if (out_.open()) {
+                env_.storage->close(out_);
+            }
+            if (in_.open()) {
+                env_.storage->close(in_);
+            }
+            fail("sh", to, e);
+            return kNotRun;
+        }
+        out_error_ = fs::FsError::Ok;
+        out_used_ = 0;
+        out_lead_ = 0;
+    }
+    int result = run_words(text);
+    if (out_.open()) {
+        flush_file();
+        const fs::FsError closed = env_.storage->close(out_);
+        const fs::FsError e = out_error_ != fs::FsError::Ok ? out_error_ : closed;
+        if (e != fs::FsError::Ok) {
+            result = fail("sh", to, e);
+        }
+    }
+    if (in_.open()) {
+        env_.storage->close(in_);
+    }
+    return result;
+}
+
+int Session::run_words(char *work)
 {
     // Words are split at spaces; "double quotes" keep a name with spaces
     // together.
-    char work[tty::Tty::kReadSize + 1];
-    snprintf(work, sizeof work, "%s", line);
     char *argv[kMaxArgs];
     int argc = 0;
     char *read = work, *write = work;
@@ -360,7 +643,9 @@ int Session::execute(const char *line)
 
     const Command *command = find(name);
     if (command == nullptr) {
-        printf("%s: there is no such command. help lists them.\n", argv[0]);
+        char text[96];
+        const int length = snprintf(text, sizeof text, "%s: there is no such command. help lists them.\n", argv[0]);
+        say(text, static_cast<size_t>(length) < sizeof text ? static_cast<size_t>(length) : sizeof text - 1);
         return 127;
     }
     argv[0] = const_cast<char *>(command->name);

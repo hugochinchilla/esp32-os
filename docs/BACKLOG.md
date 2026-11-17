@@ -47,7 +47,7 @@ board or the merge), `done`.
 | 21 | Split the window manager into window server and desktop shell. The taskbar becomes a process that restarts when killed | L | 18, 20 | Yes | todo |
 | | **Later** | | | | |
 | 22 | Console text editor | M | 13 | | todo |
-| 23 | Pipes and redirection | M | 13 | | todo |
+| 23 | Pipes and redirection | M | 13 | | on a branch (`claude/project-thread-8q7ksu`), PC tests pass, firmware compiles; not run on the board. [Journal](journal/2026-11-17-pipes.md) |
 | 24 | File dates | S to M | | Yes | todo |
 | 25 | Updates over Wi-Fi | M | | Yes | todo |
 | 26 | Apps on their own tasks, one at a time | XL | 8, 20 | Yes | todo |

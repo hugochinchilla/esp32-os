@@ -101,7 +101,9 @@ public:
     // The prompt is on the screen and the session waits for a line.
     bool waiting() const { return prompted_ && !ended_; }
 
-    // Runs one line as if typed. Returns the command's result: 0 for done.
+    // Runs one line as if typed: one command, or several joined with |,
+    // with < > and >> (docs/journal/2026-11-17-pipes.md). Returns the last
+    // command's result: 0 for done.
     int execute(const char *line);
 
     const char *cwd() const { return cwd_; }
@@ -110,6 +112,8 @@ public:
 
     const Env &env() const { return env_; }
     tty::Tty &terminal() { return tty_; }
+    // What a command writes goes to the terminal, or to the file or pipe the
+    // line sent it to. Text is UTF-8 here; a file gets Latin-1.
     void print(const char *text);
     void clear_screen();
     void printf(const char *format, ...) __attribute__((format(printf, 2, 3)));
@@ -117,12 +121,21 @@ public:
     // What is in a text file: Latin-1, as the Editor keeps it. The terminal
     // is given UTF-8.
     void write_latin1(const char *data, size_t size);
-    // "name: what: why" on a line of its own; returns 1 for the command to
-    // return.
+    // A command's input, as Latin-1: the file or pipe the line gave it,
+    // else what is typed, a line at a time, until Ctrl+D. Returns the number
+    // of bytes, 0 at the end. On a terminal that cannot be waited on (a
+    // session without a task of its own) there is nothing to read.
+    size_t read_input(char *out, size_t capacity);
+    bool input_redirected() const { return in_.open(); }
+    bool output_redirected() const { return out_.open(); }
+    // True if read_input() can give anything.
+    bool has_input() const;
+    // "name: what: why" on a line of its own, always on the terminal;
+    // returns 1 for the command to return.
     int fail(const char *command, const char *what, const char *why);
     int fail(const char *command, const char *what, fs::FsError error);
     // True once Ctrl+C has been typed: a command that loops stops.
-    bool stopped() const { return tty_.interrupted(); }
+    bool stopped() const { return cut_ || tty_.interrupted(); }
     bool resolve(const char *typed, char *out) const { return path::resolve(cwd_, typed, out, fs::kMaxPath); }
     bool set_cwd(const char *full_path);
     void end() { ended_ = true; }
@@ -134,7 +147,15 @@ public:
     char *walk_to() { return walk_to_; }
 
 private:
+    static constexpr int kMaxStages = 6; // commands on one line, joined with |
+    static constexpr int kNotRun = -1000; // run_stage(): the command was not started
+
     void prompt();
+    int run_stage(char *text, bool first, bool last, const char *pipe_in, const char *pipe_out);
+    int run_words(char *text);
+    void say(const char *data, size_t size); // to the terminal, whatever is redirected
+    void to_file(const char *latin1, size_t size);
+    void flush_file();
 
     tty::Tty &tty_;
     Env env_;
@@ -145,6 +166,15 @@ private:
     bool at_line_start_ = true; // nothing written since the last '\n'
     char buffer_[kBufferSize];
     char walk_from_[fs::kMaxPath], walk_to_[fs::kMaxPath];
+
+    // Redirection, for the command that is running.
+    fs::File in_, out_;
+    fs::FsError out_error_ = fs::FsError::Ok;
+    char out_buffer_[256];
+    int out_used_ = 0;
+    uint8_t out_lead_ = 0; // the first byte of a two-byte UTF-8 character, its second not yet written
+    bool cut_ = false;     // Ctrl+C was read as input: the line stops
+    uint16_t id_ = 0;      // tells this session's pipe files from another's
 };
 
 } // namespace sh

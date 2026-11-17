@@ -217,6 +217,121 @@ void test_lines()
     CHECK(s.ended());
 }
 
+/* ---- Pipes, redirection and the filters -------------------------------------------- */
+
+void test_pipes()
+{
+    Machine m;
+    m.storage.make_folder("C:\\docs");
+    // Latin-1 inside the file, as the Editor writes it; \r\n line ends.
+    m.file("C:\\docs\\fruit.txt", "apple\r\nBanana\r\ncherry\r\nmel\xF3n\r\nap ple pie\r\n");
+    m.file("C:\\docs\\notes.txt", "one\ntwo\nthree");
+    sh::Session s(m.terminal, m.env, "C:\\docs");
+
+    // > writes what the command says into a file, >> adds to one, and
+    // nothing of it is shown. A file holds Latin-1.
+    CHECK_TEXT(run(m, s, "echo hello > out.txt"), "");
+    CHECK(m.contents("C:\\docs\\out.txt") == "hello\n");
+    CHECK_TEXT(run(m, s, "echo se\xC3\xB1or >> out.txt"), "");
+    CHECK_TEXT(run(m, s, "echo again>>out.txt"), ""); // no spaces needed
+    CHECK(m.contents("C:\\docs\\out.txt") == "hello\nse\xF1or\nagain\n");
+    CHECK_TEXT(run(m, s, "echo new > out.txt"), "");
+    CHECK(m.contents("C:\\docs\\out.txt") == "new\n");
+    CHECK_TEXT(run(m, s, "echo first >> fresh.txt"), ""); // >> makes the file if there is none
+    CHECK(m.contents("C:\\docs\\fresh.txt") == "first\n");
+    CHECK_TEXT(run(m, s, "echo \"a > b\" > \"my file.txt\""), ""); // quotes keep a > and a space
+    CHECK(m.contents("C:\\docs\\my file.txt") == "a > b\n");
+    CHECK_TEXT(run(m, s, "> first.txt echo words"), ""); // anywhere on the line
+    CHECK(m.contents("C:\\docs\\first.txt") == "words\n");
+    // A file's own bytes go through untouched.
+    CHECK_TEXT(run(m, s, "cat fruit.txt > copy.txt"), "");
+    CHECK(m.contents("C:\\docs\\copy.txt") == m.contents("C:\\docs\\fruit.txt"));
+    // A list into a file has a name on each line.
+    CHECK_TEXT(run(m, s, "ls *.txt > list.txt"), "");
+    CHECK(m.contents("C:\\docs\\list.txt").find("fruit.txt\nnotes.txt\n") != std::string::npos);
+
+    // < gives a command a file as its input.
+    CHECK_TEXT(run(m, s, "cat < notes.txt"), "one\ntwo\nthree");
+    CHECK_TEXT(run(m, s, "wc -l < notes.txt"), "2\n");
+    CHECK_TEXT(run(m, s, "grep e < notes.txt > e.txt"), "");
+    CHECK(m.contents("C:\\docs\\e.txt") == "one\nthree\n");
+
+    // Errors stay on the terminal and out of the file.
+    CHECK_TEXT(run(m, s, "cat nothing.txt > out.txt", 1), "cat: C:\\docs\\nothing.txt: not found\n");
+    CHECK(m.contents("C:\\docs\\out.txt") == "");
+    CHECK_TEXT(run(m, s, "nonsense > out.txt", 127), "nonsense: there is no such command. help lists them.\n");
+    CHECK_TEXT(run(m, s, "echo x >", 1), "sh: a file name is missing after < or >\n");
+    CHECK_TEXT(run(m, s, "cat < nothing.txt", 1), "sh: C:\\docs\\nothing.txt: not found\n");
+    CHECK_TEXT(run(m, s, "echo x > Q:\\a.txt", 1), "sh: Q:\\a.txt: not found\n");
+
+    // grep: plain text, not patterns. find and findstr are the DOS names.
+    CHECK_TEXT(run(m, s, "grep ap fruit.txt"), "apple\nap ple pie\n");
+    CHECK_TEXT(run(m, s, "grep -i BAN fruit.txt"), "Banana\n");
+    CHECK_TEXT(run(m, s, "grep -n e fruit.txt"), "1:apple\n3:cherry\n4:mel\xC3\xB3n\n5:ap ple pie\n");
+    CHECK_TEXT(run(m, s, "grep -v -i a fruit.txt"), "cherry\nmel\xC3\xB3n\n");
+    CHECK_TEXT(run(m, s, "grep -c ap fruit.txt"), "2\n");
+    CHECK_TEXT(run(m, s, "grep \"ple p\" fruit.txt"), "ap ple pie\n");
+    CHECK_TEXT(run(m, s, "grep -i MEL\xC3\x93N fruit.txt"), "mel\xC3\xB3n\n"); // accents, in either case
+    CHECK_TEXT(run(m, s, "find \"cherry\" fruit.txt"), "cherry\n");
+    CHECK_TEXT(run(m, s, "findstr one notes.txt fruit.txt"), "notes.txt:one\n");
+    CHECK_TEXT(run(m, s, "grep zebra fruit.txt", 1), "");
+    CHECK_TEXT(run(m, s, "grep", 1), "grep: it needs the text to look for\n");
+    CHECK_TEXT(run(m, s, "grep x nothing.txt", 2), "grep: nothing.txt: not found\n");
+
+    // wc, head, tail.
+    CHECK_TEXT(run(m, s, "wc fruit.txt"), "      5       7      42 fruit.txt\n");
+    CHECK_TEXT(run(m, s, "wc -w notes.txt"), "3 notes.txt\n");
+    CHECK_TEXT(run(m, s, "head -n 2 fruit.txt"), "apple\nBanana\n");
+    CHECK_TEXT(run(m, s, "head -1 fruit.txt notes.txt"), "==> fruit.txt <==\napple\n==> notes.txt <==\none\n");
+    CHECK_TEXT(run(m, s, "tail -n 2 fruit.txt"), "mel\xC3\xB3n\nap ple pie\n");
+    CHECK_TEXT(run(m, s, "tail -1 notes.txt"), "three\n"); // a last line without an end gets one
+    CHECK_TEXT(run(m, s, "tail -n 99 notes.txt"), "one\ntwo\nthree\n");
+    CHECK_TEXT(run(m, s, "head -n x notes.txt", 1), "head: -n: it takes -n and a number of lines\n");
+    {
+        std::string many;
+        for (int i = 1; i <= 500; i++) {
+            many += "line " + std::to_string(i) + "\n";
+        }
+        m.file("C:\\docs\\many.txt", many);
+    }
+    CHECK_TEXT(run(m, s, "head many.txt | tail -n 1"), "line 10\n");
+    CHECK_TEXT(run(m, s, "tail -n 3 many.txt"), "line 498\nline 499\nline 500\n");
+    CHECK_TEXT(run(m, s, "wc -l many.txt"), "500 many.txt\n");
+
+    // A pipe: each command gets what the one before it wrote.
+    CHECK_TEXT(run(m, s, "cat fruit.txt | grep ap"), "apple\nap ple pie\n");
+    CHECK_TEXT(run(m, s, "cat fruit.txt | grep -i a | grep -v pie | wc -l"), "2\n");
+    CHECK_TEXT(run(m, s, "ls | grep many"), "many.txt\n");
+    CHECK_TEXT(run(m, s, "echo \"a | b\" | cat"), "a | b\n"); // a | inside quotes is text
+    CHECK_TEXT(run(m, s, "cat < notes.txt | grep t | head -n 1 > t.txt"), "");
+    CHECK(m.contents("C:\\docs\\t.txt") == "two\n");
+    CHECK_TEXT(run(m, s, "cat many.txt|wc -l"), "500\n");
+    // The session's own commands work in a pipe too, and it stays where it is.
+    CHECK_TEXT(run(m, s, "pwd | cat"), "C:\\docs\n");
+    // Nothing is left behind, not even with -a.
+    CHECK(run(m, s, "ls -a C:\\").find("pipe") == std::string::npos);
+
+    // What cannot be done is said, and the rest of the line is not run.
+    CHECK_TEXT(run(m, s, "cat fruit.txt | | wc", 1), "sh: there is no command on one side of a |\n");
+    CHECK_TEXT(run(m, s, "| wc", 1), "sh: there is no command on one side of a |\n");
+    CHECK_TEXT(run(m, s, "echo a > x.txt | cat", 1),
+               "sh: only the first command can take < and only the last > when they are joined with |\n");
+    CHECK(!m.exists("C:\\docs\\x.txt"));
+    CHECK_TEXT(run(m, s, "a|b|c|d|e|f|g", 1), "sh: too many commands joined with |\n");
+    // A command that fails in the middle: its error is shown, the next one
+    // gets nothing, and the line's result is the last command's.
+    CHECK_TEXT(run(m, s, "cat nothing.txt | wc -l"), "cat: C:\\docs\\nothing.txt: not found\n0\n");
+    CHECK(run(m, s, "ls -a C:\\").find("pipe") == std::string::npos);
+
+    // This terminal cannot be waited on (the session has no task of its
+    // own), so there is no keyboard input to read: the filters say so, and
+    // more shows everything at once.
+    CHECK_TEXT(run(m, s, "wc", 1), "wc: it needs the name of a file, or input from a | or a <\n");
+    CHECK_TEXT(run(m, s, "cat", 1), "cat: it needs the name of a file\n");
+    CHECK_TEXT(run(m, s, "more notes.txt"), "one\ntwo\nthree\n");
+    CHECK(run(m, s, "cat many.txt | more").find("line 500\n") != std::string::npos);
+}
+
 /* ---- Folders: cd, pwd, ls, dir, mkdir, rmdir ---------------------------------------- */
 
 void test_folders()
@@ -646,6 +761,43 @@ void test_session_on_a_thread()
     terminal.input("echo alive\r");
     wait_for("alive\nC:\\> ");
 
+    // With a task of its own a command can read what is typed: lines until
+    // Ctrl+D on an empty one.
+    terminal.input("cat | wc -l\r");
+    terminal.input("uno\rdos\rtres\r\x04");
+    wait_for("\n3\nC:\\> ");
+    terminal.input("cat > typed.txt\rse\xC3\xB1or\r\x04");
+    wait_for("C:\\> ");
+    CHECK(m.contents("C:\\typed.txt") == "se\xF1or\n");
+    // Ctrl+C ends the reading and the whole line.
+    terminal.input("cat | wc -l\rabc\r");
+    wait_for("abc\n");
+    terminal.input("\x03");
+    const std::string after = wait_for("^C\nC:\\> ");
+    CHECK(after.find("1\n") == std::string::npos); // wc did not run
+
+    // more stops at each screen (24 rows: 23 lines and its own) and waits
+    // for a key from the terminal, though its input is a pipe.
+    {
+        std::string many;
+        for (int i = 1; i <= 60; i++) {
+            many += "row " + std::to_string(i) + "\n";
+        }
+        m.file("C:\\many.txt", many);
+    }
+    terminal.input("cat many.txt | more\r");
+    std::string page = wait_for("-- More --");
+    CHECK(page.find("row 23\n") != std::string::npos && page.find("row 24\n") == std::string::npos);
+    terminal.input(" ");
+    page = wait_for("-- More --");
+    CHECK(page.find("row 46\n") != std::string::npos && page.find("row 47\n") == std::string::npos);
+    terminal.input("\r"); // Enter: one line more
+    page = wait_for("-- More --");
+    CHECK(page.find("row 47\n") != std::string::npos && page.find("row 48\n") == std::string::npos);
+    terminal.input("q");
+    page = wait_for("C:\\> ");
+    CHECK(page.find("row 48") == std::string::npos);
+
     terminal.input("exit\r");
     session.join();
     CHECK(s.ended());
@@ -665,6 +817,7 @@ int main()
     test_lines();
     test_folders();
     test_files();
+    test_pipes();
     test_processes();
     test_typed_session();
     test_session_on_a_thread();
