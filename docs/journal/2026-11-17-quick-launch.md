@@ -80,3 +80,18 @@ compiles and links in the cloud; it has not run on the board.
 - With six or more windows open the window buttons are 72 pixels narrower
   in all than before.
 - A list the user can change; tooltips; "show the desktop".
+
+
+## On the board (added by the board thread, 2026-11-17)
+
+Branch commit 1d34131 with main e18c324 merged in. The backlog table and the
+journal index conflicted; the resolution keeps the board results already on
+main and the branch's new lines. PC tests passed (33 of 33) and the firmware
+build was clean.
+
+1. The three icons, on the real screen through the webcam and in a
+   screenshot: a folder, a notepad and a terminal prompt, clear at 16 x 16,
+   sitting between Start and the window buttons.
+2. One click on each opens File manager (at "My Board"), the Editor and a
+   Terminal. With the three open, the window buttons start after the
+   quick-launch group and line up as before.

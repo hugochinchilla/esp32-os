@@ -114,3 +114,20 @@ and links in the cloud; it has not run on the board.
 - A terminal that changes size while ted is open is only noticed at
   Ctrl+L.
 - Undo, copy and paste, replace.
+
+
+## On the board (added by the board thread, 2026-11-17)
+
+Branch commit 1d34131 with main e18c324 merged in. The backlog table and the
+journal index conflicted; the resolution keeps the board results already on
+main and the branch's new lines. PC tests passed (33 of 33) and the firmware
+build was clean.
+
+1. In a Terminal, `ted C:\tedtest.txt` (a 120-line file of my own): the text
+   and the status line ("^S save ^Q leave ^F find ^K cut line", line and
+   column). Typing went in at the cursor. Page Down and Page Up moved a screen
+   at a time. Ctrl+F "line 100" put the cursor on line 101. Ctrl+S showed
+   "Saved", the star went from the name, and the file on the board began with
+   the typed text. Ctrl+Q went back to the prompt.
+2. Over telnet, `ted` drew its screen (1,297 bytes with the status line), and
+   Ctrl+Q cleared the screen and gave back the prompt.
