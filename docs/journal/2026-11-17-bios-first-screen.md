@@ -203,3 +203,29 @@ have a quick restart way for the agents?"):
 
 Not tested, and not possible from the laptop: the physical button and a
 real power cut.
+
+## Merged, and where the BIOS stops for now
+
+The owner chose "Yes, merge it" on a card (2026-11-17, 19:59 UTC). PR 40 is
+on `main` (merge ec8b694) and the board stays on the new layout with the
+BIOS: C: back with its 17 files, the Wi-Fi network kept, the BIOS's
+self-test at 7.0 s, the handover at 13.9 s, no missed refills.
+
+Asked whether to go on to step 3, whose plan had the BIOS show the OS's
+error screen, the owner wanted to discuss it first: BIOSes do not usually
+write to disk (here it is the OS that writes the report, the BIOS would
+only have read the note left in memory), and more to the point, "the BIOS
+should not have this link with the operating system": it should be a
+selector of the partition to start, the place to set the time once there
+is a clock chip, and other settings later, not the place to manage the
+OS's errors. The OS itself could start with a message that the last start
+failed and a button that opens the report in the text editor.
+
+That is the better design, and it was taken as his decision: the point
+recorded as "to confirm" in the first discussion (the BIOS shows the crash
+screen) is reversed in `docs/DECISIONS.md`. A revised plan was put to him
+with one choice (after a crash, through the BIOS like a PC, or straight
+back to the OS as today). Before choosing he asked to leave it for a next
+iteration in a fresh thread, so this one would not go on for ever. The
+plan, the open choice and what the board taught are in
+`docs/handoff/bios-step-3.md`. Nothing of it is built.

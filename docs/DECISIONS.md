@@ -2448,5 +2448,11 @@ Step 2 of backlog item 46, compiled but not run on the board
 - The memory count in the BIOS runs at the speed of the test, without the
   pause between steps that the OS's self-test has.
 - After an error the OS restarts without the BIOS, and a reset by a
-  watchdog or a brownout starts the OS directly, until the BIOS shows the
-  error screen itself (step 3). To confirm.
+  watchdog or a brownout starts the OS directly. Left as it is for now.
+- The BIOS will not show the OS's error screen (the owner, 2026-11-17,
+  reversing the "to confirm" point of the first discussion): the BIOS is
+  to have no link with the OS's errors. It is a self-test and, later, a
+  Setup with the partition to start, the clock and other settings. The OS
+  is to say on the desktop that the last session failed, with a button
+  that opens the report in the text editor. Not built; what is still open
+  is in `docs/handoff/bios-step-3.md`.
