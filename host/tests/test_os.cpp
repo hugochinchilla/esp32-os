@@ -217,7 +217,7 @@ void test_process_list()
     const proc::Pid p = os::spawn("listed");
     CHECK(os::process_count() == before + 1 && os::process_at(before).pid == p);
     CHECK(os::alive(p) && os::process(p) != nullptr && strcmp(os::process(p)->name, "listed") == 0);
-    CHECK(os::main_window(p) == nullptr);
+    CHECK(os::main_window(p) == os::kNoWindow);
     os::refresh_figures();
     // The desktop is protected; one that is not there is not there; a
     // window program without windows is ended at the next safe point.
@@ -235,12 +235,21 @@ void test_process_list()
     wm::Window *w = desktop.active();
     CHECK(w != nullptr);
     if (w != nullptr) {
+        os::WindowId seen = os::kNoWindow;
         const proc::Pid owner = w->owner();
-        CHECK(os::main_window(owner) == w && os::in_front(*w) && os::blocker(*w) == nullptr);
+        CHECK(os::in_front(*w) && os::blocker(*w) == nullptr);
+        // Seen from another program it is a number: good while it is open.
+        const os::WindowId id = os::main_window(owner);
+        CHECK(id != os::kNoWindow && id == w->id() && strcmp(os::window_title(id), w->title()) == 0);
+        CHECK(os::window_icon(id) == w->icon() && os::bring_forward(id) && os::in_front(*w));
+        CHECK(os::window_title(id + 1000)[0] == 0 && !os::bring_forward(id + 1000) && !os::bring_forward(os::kNoWindow));
+        seen = id;
         CHECK(os::signal(owner, proc::Signal::Term) == proc::Sent::Ok);
         wait(10000);
         wait(10000);
         CHECK(!os::alive(owner));
+        // Closed: the number is dead, and stays dead.
+        CHECK(os::window_title(seen)[0] == 0 && os::window_icon(seen) == nullptr && !os::bring_forward(seen));
     }
 
     ports::SystemStats stats = {};

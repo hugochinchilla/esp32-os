@@ -158,7 +158,31 @@ void open_menu(wm::Menu &menu, int x, int y) { g_kit.wm->open_menu(menu, x, y); 
 wm::Window *blocker(const wm::Window &window) { return g_kit.wm->blocker(window); }
 bool in_front(const wm::Window &window) { return g_kit.wm->active() == &window; }
 void caret_moved() { g_kit.wm->caret_moved(); }
-wm::Window *main_window(proc::Pid pid) { return g_kit.wm->main_window_of(pid); }
+WindowId main_window(proc::Pid pid)
+{
+    const wm::Window *w = g_kit.wm->main_window_of(pid);
+    return w != nullptr ? w->id() : kNoWindow;
+}
+const char *window_title(WindowId window)
+{
+    const wm::Window *w = g_kit.wm->window(window);
+    return w != nullptr ? w->title() : "";
+}
+const gfx::Bitmap *window_icon(WindowId window)
+{
+    const wm::Window *w = g_kit.wm->window(window);
+    return w != nullptr ? w->icon() : nullptr;
+}
+bool bring_forward(WindowId window)
+{
+    wm::Window *w = g_kit.wm->window(window);
+    if (w == nullptr) {
+        return false;
+    }
+    wm::Window *dialog = g_kit.wm->blocker(*w);
+    g_kit.wm->activate(dialog != nullptr ? *dialog : *w);
+    return true;
+}
 void begin_drag(const char *path) { g_kit.wm->begin_drag(path); }
 
 Busy::Busy() { g_kit.wm->begin_wait(); }

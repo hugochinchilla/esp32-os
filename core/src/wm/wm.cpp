@@ -374,6 +374,16 @@ Window *Wm::main_window_of(proc::Pid pid) const
     return any;
 }
 
+Window *Wm::window(int id) const
+{
+    for (int i = 0; i < count_; i++) {
+        if (order_[i]->id_ == id) {
+            return order_[i];
+        }
+    }
+    return nullptr;
+}
+
 // The safe point: the end of every event and tick, when no program's code
 // is on the stack. Signals take effect here, processes whose last window
 // has closed leave the table, and those that come back are started again.

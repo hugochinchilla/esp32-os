@@ -96,8 +96,18 @@ bool in_front(const wm::Window &window); // it is the window in use
 // The text cursor of the window in use has moved: it is shown at once, and
 // its blink starts again.
 void caret_moved();
-// The main window of a process; nullptr: it has none.
-wm::Window *main_window(proc::Pid pid);
+// Another process's window is a number, never its object (backlog item 37):
+// the number is given when a window opens and not given again, so one that
+// has closed is simply not there. kNoWindow: none.
+using WindowId = int;
+constexpr WindowId kNoWindow = 0;
+// The main window of a process.
+WindowId main_window(proc::Pid pid);
+// Its title ("" once it has closed) and its icon (nullptr: none, or closed).
+const char *window_title(WindowId window);
+const gfx::Bitmap *window_icon(WindowId window);
+// Brings it to the front, or the dialog that holds it. False: it has closed.
+bool bring_forward(WindowId window);
 // A file or folder starts being dragged (the File manager).
 void begin_drag(const char *path);
 // The hourglass while slow work runs on the UI task:

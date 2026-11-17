@@ -36,7 +36,8 @@ The journal entry with the reasons is
 | | `os::work_area()`, `os::centred(w, h)` | The screen without the taskbar; a frame in the middle of it |
 | | `os::menu_open()` | A menu is open (a game pauses) |
 | | `os::open_menu(menu, x, y)` | A free-standing menu |
-| | `os::blocker(window)`, `os::in_front(window)`, `os::main_window(pid)` | The dialog in a window's way; whether it is the one in use; a process's main window |
+| | `os::blocker(window)`, `os::in_front(window)` | The dialog in a window's way; whether it is the one in use |
+| | `os::main_window(pid)`, `os::window_title(id)`, `os::window_icon(id)`, `os::bring_forward(id)` | Another process's window, as a number (`os::WindowId`) and never as its object: its title and icon, and bringing it or its dialog to the front. A closed window's number answers nothing |
 | | `os::caret_moved()` | The text cursor of the window in use has moved: shown at once (the Terminal) |
 | | `os::begin_drag(path)` | A file starts being dragged |
 | | `os::Busy busy;` | The hourglass until the end of the block |

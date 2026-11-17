@@ -120,3 +120,32 @@ none when it is on the screen, none after the viewer is ended half way.
 PC tests pass (41), pictures match, firmware compiles and links
 (0x169b00 of 0x1f0000), not run. For the board: open a BMP, a PNG and a
 JPEG, and close the viewer while a large one loads.
+
+## The same day: another program's window is a number
+
+The owner answered the card: handles now, the queue with item 26. The next
+question, how far window handles go, was put on a second card (at the
+border only, recommended; windows and widgets all by number, which
+rewrites the 17 programs and is what item 27 needs; or leave windows).
+This was built on the recommendation while he decides.
+
+What was found: a window already had a number, given when it opens and
+never given again (`wm::Window::id()`); nothing used it outside the window
+server. The calls handed out pointers instead: `os::main_window(pid)` gave
+the Task Manager a `wm::Window *` into another program's object, which it
+read the title and icon from and passed back to bring it forward. Within
+one event that is safe; kept for longer it would be a pointer to a window
+that may have been destroyed.
+
+What was built: `os::WindowId`. `os::main_window(pid)` gives the number;
+`os::window_title`, `os::window_icon` and `os::bring_forward` take it, and
+answer "nothing" for a window that has closed. The Task Manager uses only
+those. A program's own windows stay C++ objects, and the calls on them
+(`os::show`, `os::activate`, `os::blocker`) are unchanged.
+
+`test_os`: the number of a window seen from outside, its title and icon,
+bringing it forward, numbers that are not windows, and the number dead
+after the window closes. PC tests pass (41), pictures match, firmware
+compiles and links (0x167080 of 0x1f0000), not run. For the board: Task
+Manager lists titles and icons, Switch To brings a program forward, and
+its dialog if it has one open.

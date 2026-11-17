@@ -158,8 +158,8 @@ private:
     static const gfx::Bitmap *icon_of(int index, void *context)
     {
         auto *self = static_cast<TaskManager *>(context);
-        const wm::Window *w = os::main_window(self->pids_[index]);
-        return w != nullptr ? w->icon() : &gfx::service_icon_16();
+        const os::WindowId w = os::main_window(self->pids_[index]);
+        return w != os::kNoWindow ? os::window_icon(w) : &gfx::service_icon_16();
     }
 
     // The PID of the row picked, if that process is still there.
@@ -175,11 +175,8 @@ private:
 
     static void switch_pressed(wm::Button &, void *context)
     {
-        if (wm::Window *w = os::main_window(static_cast<TaskManager *>(context)->chosen())) {
-            // Its dialog, if one holds it, comes forward with it.
-            wm::Window *dialog = os::blocker(*w);
-            os::activate(dialog != nullptr ? *dialog : *w);
-        }
+        // Its dialog, if one holds it, comes forward with it.
+        os::bring_forward(os::main_window(static_cast<TaskManager *>(context)->chosen()));
     }
 
     static void row_picked(wm::ListBox &, void *context) { static_cast<TaskManager *>(context)->update_buttons(); }
@@ -308,11 +305,11 @@ private:
         int n = 0;
         for (int i = 0; i < os::process_count() && n < kMaxRows; i++) {
             const proc::Process &p = os::process_at(i);
-            const wm::Window *w = os::main_window(p.pid);
-            if (!all && (p.is(proc::kSystem) || w == nullptr || p.pid == owner())) {
+            const os::WindowId w = os::main_window(p.pid);
+            if (!all && (p.is(proc::kSystem) || w == os::kNoWindow || p.pid == owner())) {
                 continue;
             }
-            const char *what = w != nullptr ? w->title() : (p.is(proc::kSystem) ? "(system)" : "");
+            const char *what = w != os::kNoWindow ? os::window_title(w) : (p.is(proc::kSystem) ? "(system)" : "");
             now[n] = p.pid;
             char time[16], held[16];
             snprintf(text[n], kRowText, "%5d  %-12.12s %7s %6s  %s", p.pid, p.name,

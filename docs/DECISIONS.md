@@ -2066,7 +2066,16 @@ option of a card the owner has not answered yet.
 - The picture decoder reads from an `image::Source`; the Picture viewer
   hands in one over a handle it opened, held only while it decodes.
   `os::file::storage()`, which handed a program the drives whole, is gone.
-- Still to do in item 37: windows as numbers, events through a queue.
+- **Handles now, the queue with item 26** (the owner's choice on a card,
+  2026-11-17).
+- Another program's window is a number (`os::WindowId`, the number the
+  window server already gave each window): `os::main_window(pid)` no
+  longer hands out a pointer into another program's object. A program's
+  own windows stay C++ objects. The agent's, on the recommended option of
+  a second card (how far window handles go) that the owner has not
+  answered yet.
+- Still open in item 37: windows and widgets wholly by number (what item
+  27 needs); events through a queue, with item 26.
 
 ### Chosen for background jobs (2026-11-17, to confirm)
 
