@@ -484,3 +484,7 @@ child).
 **Tested.** PC gate (43 tests), the round with threads ten times in a
 row. The firmware compiles and links; not run on the board.
 
+**The owner's answer** (the card, 2026-11-17): "Los programas, no los
+diálogos", the recommended option, which is what was built above. The
+stack figures and the Terminal's exception are still the agent's, to
+confirm with the board's measurements.

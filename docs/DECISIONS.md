@@ -2261,8 +2261,12 @@ The rest is the agent's, to confirm:
   folder, files changing under a File manager window, the answer to a
   question. Rejected for now: posting a message and returning (it comes
   with the queue of events).
-- Stack per program in the program table. The first tranche with tasks
-  (2026-11-17, to confirm with the owner's card and the board): Cactus
+- **The programs have tasks, the dialogs and settings tools do not** (the
+  owner's choice on a card, 2026-11-17: "Los programas, no los
+  diálogos"; every one with dialogs included, only those that can take
+  long, and leaving it at Culebra were the others).
+- Stack per program in the program table (the figures are the agent's,
+  to confirm with the board): Cactus
   Patch at 4 KB; Editor, File manager, Picture viewer, Task Manager and
   Defragmenter at 8 KB; About, Welcome and Widget gallery at 4 KB, now
   written on the OS calls like the rest. The Terminal's window stays on
