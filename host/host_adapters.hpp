@@ -323,6 +323,13 @@ public:
         out.frames_shown = out.uptime_ms * 60 / 1000;
     }
     void reboot() override { reboot_requested = true; }
+    // The time the tests say it is (`utc`), or the PC's own (`real_clock`);
+    // neither: not known, as on the board before the network has told it.
+    bool utc_time(int64_t &seconds) override
+    {
+        seconds = real_clock ? static_cast<int64_t>(time(nullptr)) : utc;
+        return seconds != 0;
+    }
     // The PC does not fail on purpose: it notes what was asked, and for
     // which process.
     void fault(ports::Fault kind) override
@@ -396,6 +403,8 @@ public:
     }
 
     bool reboot_requested = false;
+    int64_t utc = 0;
+    bool real_clock = false;
     int fault_requested = -1; // the last ports::Fault asked for
     proc::Pid fault_pid = proc::kNone;
     // Plausible figures for the task manager (the board's after start-up);

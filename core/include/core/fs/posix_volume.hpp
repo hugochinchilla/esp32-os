@@ -42,6 +42,7 @@ public:
                 const std::string p = dir + "/" + e->d_name;
                 out.folder = ::stat(p.c_str(), &s) == 0 && S_ISDIR(s.st_mode);
                 out.size = out.folder ? 0 : static_cast<uint32_t>(s.st_size);
+                out.modified = when(s);
                 closedir(d);
                 return ports::FsError::Ok;
             }
@@ -60,6 +61,7 @@ public:
         snprintf(out.name, sizeof(out.name), "%s", slash ? slash + 1 : path);
         out.folder = S_ISDIR(s.st_mode);
         out.size = out.folder ? 0 : static_cast<uint32_t>(s.st_size);
+        out.modified = when(s);
         return ports::FsError::Ok;
     }
 
@@ -195,6 +197,13 @@ protected:
         return p;
     }
 
+    // The file system's own date. One from before 2000 was written while
+    // the machine did not know the time (the board counts from 1970 until
+    // the network tells it): not known.
+    static int64_t when(const struct stat &s)
+    {
+        return s.st_mtime >= 946684800 ? static_cast<int64_t>(s.st_mtime) : 0;
+    }
     static ports::FsError error()
     {
         switch (errno) {

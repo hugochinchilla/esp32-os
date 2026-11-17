@@ -4,6 +4,8 @@
 #include <cstring>
 
 #include "core/gfx/art.hpp"
+#include "core/net/wifi.hpp"
+#include "core/sh/sh.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/widgets.hpp"
 #include "core/wm/wm.hpp"
@@ -559,13 +561,10 @@ public:
             }
             free_.set_text(t);
         }
-        char count[40];
-        snprintf(count, sizeof(count), "%d object%s%s", listing_.count(), listing_.count() == 1 ? "" : "s",
-                 listing_.truncated() ? " (more not shown)" : "");
-        objects_.set_text(count);
         back_.set_enabled(history_count_ > 0);
         up_.set_enabled(folder_[0] != 0);
         view_.layout();
+        status();
     }
 
 private:
@@ -643,7 +642,39 @@ private:
     }
 
     static void opened(void *context) { open_selected(context); }
-    static void selected(void *) {}
+    // The left of the status bar: "3 objects", or about the chosen one: its
+    // size and when it was last written ("1,234 bytes, 2026-11-17 14:05").
+    void status()
+    {
+        char t[96];
+        const int i = view_.selected();
+        if (i < 0 || i >= listing_.count() || folder_[0] == 0) {
+            snprintf(t, sizeof(t), "%d object%s%s", listing_.count(), listing_.count() == 1 ? "" : "s",
+                     listing_.truncated() ? " (more not shown)" : "");
+        } else {
+            const Listing::Item &it = listing_.item(i);
+            char when[24], size[24];
+            sh::date_text(it.modified, network() != nullptr ? &network()->zone() : nullptr, when, sizeof(when));
+            if (it.folder) {
+                snprintf(t, sizeof(t), "%s%s", when[0] != 0 ? "Folder, " : "Folder", when);
+            } else {
+                // Thousands apart, as the shell's dir shows them.
+                char digits[16];
+                const int n = snprintf(digits, sizeof(digits), "%u", static_cast<unsigned>(it.size));
+                int at = 0;
+                for (int d = 0; d < n; d++) {
+                    size[at++] = digits[d];
+                    if ((n - d - 1) % 3 == 0 && d != n - 1) {
+                        size[at++] = ',';
+                    }
+                }
+                size[at] = 0;
+                snprintf(t, sizeof(t), "%s byte%s%s%s", size, it.size == 1 ? "" : "s", when[0] != 0 ? ", " : "", when);
+            }
+        }
+        objects_.set_text(t);
+    }
+    static void selected(void *context) { static_cast<FolderWindow *>(context)->status(); }
     static void dragged(void *context)
     {
         auto *w = static_cast<FolderWindow *>(context);

@@ -138,6 +138,8 @@ int main(int argc, char **argv)
     constexpr size_t kRamDisk = 2 * 1024 * 1024;
     static fs::MemoryVolume ram_disk(memory.allocate(kRamDisk), kRamDisk, "RAM disk");
     storage.mount('C', ram_disk);
+    system.real_clock = true; // the PC knows the time: files get dates
+    ram_disk.set_clock(&system);
     fs::add_samples(storage, 'C');
     static host::FolderVolume *pc = nullptr;
     if (argc > 1) {

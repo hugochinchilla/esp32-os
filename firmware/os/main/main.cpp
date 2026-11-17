@@ -7,6 +7,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -234,6 +235,14 @@ public:
         out.free_external_ram = static_cast<uint32_t>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
         out.frames_shown = vga_frame_count();
         out.scanout_us = vga_fill_us();
+    }
+    // The board has no clock that keeps going without power: it counts from
+    // 1970 until the network has told it the time. Files written before
+    // that get no date (fs::PosixVolume treats so old a date as not known).
+    bool utc_time(int64_t &seconds) override
+    {
+        seconds = static_cast<int64_t>(time(nullptr));
+        return seconds > 1700000000;
     }
     // Every FreeRTOS task. The kernel adds up each task's processor time
     // at every task switch (the run-time statistics settings in

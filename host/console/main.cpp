@@ -80,6 +80,8 @@ int main(int argc, char **argv)
     procs.spawn("editor", proc::kRoot, proc::kWindowed);
 
     static host::HostSystem system;
+    system.real_clock = true; // files written from here on get the PC's date
+    ram.set_clock(&system);
     static StdOut out;
     static host::ThreadLock tty_lock;
     static host::ThreadEvent typed;

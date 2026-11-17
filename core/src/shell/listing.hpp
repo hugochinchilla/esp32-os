@@ -16,6 +16,7 @@ public:
         char name[64];
         bool folder;
         uint32_t size;
+        int64_t modified; // seconds since 1970, UTC; 0 not known
     };
 
     // Names starting with a dot are hidden unless this is set (View > Show

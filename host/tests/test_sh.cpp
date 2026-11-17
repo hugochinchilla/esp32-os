@@ -13,6 +13,7 @@
 #include "core/fs/fs.hpp"
 #include "core/fs/memory_volume.hpp"
 #include "core/msg/queue.hpp"
+#include "core/net/wifi.hpp"
 #include "core/proc/table.hpp"
 #include "core/sh/sh.hpp"
 #include "core/shell/boot.hpp"
@@ -462,20 +463,20 @@ void test_folders()
     std::string free_grouped = free_text; // 6 digits: one comma
     free_grouped.insert(free_grouped.size() - 3, ",");
     const std::string listing = " Folder C:\\Documents\n\n"
-                                " <DIR>           Letters\n"
-                                "              6  notes.txt\n"
-                                "              6  todo.txt\n"
-                                "         70,000  picture.bmp\n"
-                                "              1  a\xC3\xB1o.txt\n"
+                                "                  <DIR>           Letters\n"
+                                "                               6  notes.txt\n"
+                                "                               6  todo.txt\n"
+                                "                          70,000  picture.bmp\n"
+                                "                               1  a\xC3\xB1o.txt\n"
                                 "      4 files           70,013 bytes\n"
                                 "      1 folder         " + free_grouped + " bytes free\n";
     CHECK(free_grouped.size() == 7);
     CHECK_TEXT(run(m, s, "dir"), listing);
     CHECK_TEXT(run(m, s, "ls -l"), listing);
     CHECK_TEXT(run(m, s, "DIR c:/documents/"), " Folder C:\\documents" + listing.substr(20));
-    CHECK_TEXT(run(m, s, "dir *.bmp"), " Folder C:\\Documents\n\n         70,000  picture.bmp\n"
+    CHECK_TEXT(run(m, s, "dir *.bmp"), " Folder C:\\Documents\n\n                          70,000  picture.bmp\n"
                                        "      1 file            70,000 bytes\n      0 folders        " + free_grouped + " bytes free\n");
-    CHECK_TEXT(run(m, s, "dir \\readme.txt"), "          1,234  readme.txt\n");
+    CHECK_TEXT(run(m, s, "dir \\readme.txt"), "                           1,234  readme.txt\n");
     CHECK(run(m, s, "dir -a").find("              1  .hidden\n") != std::string::npos);
     CHECK(run(m, s, "ls -la /").find(" <DIR>           .config\n") != std::string::npos);
 
@@ -622,6 +623,63 @@ void test_files()
     CHECK_TEXT(run(m, s, "rm -r *"), "");
     CHECK_TEXT(run(m, s, "ls -a"), ".config\\\n");
     CHECK(m.contents("C:\\.config\\desktop.ini") == "x");
+}
+
+/* ---- Dates --------------------------------------------------------------------------- */
+
+// When a file was last written, in dir and ls -l, in local time; and date.
+void test_dates()
+{
+    Machine m;
+    sh::Session s(m.terminal, m.env);
+    m.c.set_clock(&m.system);
+
+    // A machine that does not know the time: no dates, and date says so.
+    m.file("C:\\early.txt", "x");
+    CHECK_TEXT(run(m, s, "dir early.txt"), "                               1  early.txt\n");
+    CHECK_TEXT(run(m, s, "date", 1), "date: the machine does not know the time yet (it learns it from the network)\n");
+
+    // 13:05:09 UTC on 17 November 2026 is 14:05 in the default zone (Spain).
+    m.system.utc = 1794920709;
+    CHECK_TEXT(run(m, s, "date"), "Tue 17 Nov 2026 14:05:09\n");
+    CHECK_TEXT(run(m, s, "time"), run(m, s, "date"));
+    m.file("C:\\notes.txt", "hello");
+    CHECK_TEXT(run(m, s, "mkdir Letters"), "");
+    CHECK_TEXT(run(m, s, "dir notes.txt"), "2026-11-17 14:05               5  notes.txt\n");
+    CHECK_TEXT(run(m, s, "ls -l"), " Folder C:\\\n\n"
+                                   "                               1  early.txt\n"
+                                   "2026-11-17 14:05               5  notes.txt\n"
+                                   "2026-11-17 14:05  <DIR>           Letters\n"
+                                   "      2 files                6 bytes\n"
+                                   "      1 folder         498,688 bytes free\n");
+
+    // In summer the zone is an hour further on: 07:30 UTC is 09:30.
+    m.system.utc = 1783150200;
+    CHECK_TEXT(run(m, s, "date"), "Sat 4 Jul 2026 09:30:00\n");
+    // A new name keeps the date; a copy is a new file; adding to a file
+    // gives it the date of the addition.
+    CHECK_TEXT(run(m, s, "ren notes.txt old.txt"), "");
+    CHECK_TEXT(run(m, s, "dir old.txt"), "2026-11-17 14:05               5  old.txt\n");
+    CHECK_TEXT(run(m, s, "copy old.txt new.txt"), "");
+    CHECK_TEXT(run(m, s, "dir new.txt"), "2026-07-04 09:30               5  new.txt\n");
+    CHECK_TEXT(run(m, s, "echo more >> early.txt"), "");
+    CHECK_TEXT(run(m, s, "dir early.txt"), "2026-07-04 09:30               6  early.txt\n");
+    // Reading changes nothing.
+    CHECK_TEXT(run(m, s, "type old.txt"), "hello");
+    CHECK_TEXT(run(m, s, "dir old.txt"), "2026-11-17 14:05               5  old.txt\n");
+
+    // Another zone, given to the session: UTC, no summer time.
+    static const net::TimeZone utc = {0, false};
+    m.env.zone = &utc;
+    sh::Session other(m.terminal, m.env);
+    CHECK_TEXT(run(m, other, "date"), "Sat 4 Jul 2026 07:30:00\n");
+    CHECK_TEXT(run(m, other, "dir old.txt"), "2026-11-17 13:05               5  old.txt\n");
+    m.env.zone = nullptr;
+
+    // The text by itself.
+    char text[24];
+    CHECK(strcmp(sh::date_text(0, nullptr, text, sizeof text), "") == 0);
+    CHECK(strcmp(sh::date_text(1794920709, nullptr, text, sizeof text), "2026-11-17 14:05") == 0);
 }
 
 /* ---- Processes and the machine ------------------------------------------------------ */
@@ -927,6 +985,7 @@ int main()
     test_files();
     test_pipes();
     test_desktop_commands();
+    test_dates();
     test_processes();
     test_typed_session();
     test_session_on_a_thread();

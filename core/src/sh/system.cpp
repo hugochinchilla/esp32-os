@@ -4,9 +4,21 @@
 #include <cstring>
 
 #include "commands.hpp"
+#include "core/net/wifi.hpp"
 #include "core/shell/boot.hpp"
 
 namespace sh {
+
+const char *date_text(int64_t utc_seconds, const net::TimeZone *zone, char *out, int capacity)
+{
+    if (utc_seconds <= 0) {
+        snprintf(out, static_cast<size_t>(capacity), "%s", "");
+        return out;
+    }
+    const net::LocalTime t = net::local_time(utc_seconds, zone != nullptr ? *zone : net::kDefaultZone);
+    snprintf(out, static_cast<size_t>(capacity), "%04d-%02d-%02d %02d:%02d", t.year, t.month, t.day, t.hour, t.minute);
+    return out;
+}
 
 namespace {
 
@@ -145,6 +157,21 @@ int cmd_uptime(Session &s, int, char **argv)
         s.printf("On for %u:%02u:%02u\n", static_cast<unsigned>(seconds / 3600), static_cast<unsigned>(seconds % 3600 / 60),
                  static_cast<unsigned>(seconds % 60));
     }
+    return 0;
+}
+
+int cmd_date(Session &s, int, char **argv)
+{
+    int64_t utc = 0;
+    if (s.env().system == nullptr || !s.env().system->utc_time(utc)) {
+        return s.fail(argv[0], nullptr, "the machine does not know the time yet (it learns it from the network)");
+    }
+    static const char *const kDays[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+    static const char *const kMonths[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+    const net::LocalTime t = net::local_time(utc, s.env().zone != nullptr ? *s.env().zone : net::kDefaultZone);
+    s.printf("%s %d %s %d %02d:%02d:%02d\n", kDays[t.weekday % 7], t.day, kMonths[(t.month + 11) % 12], t.year, t.hour,
+             t.minute, t.second);
     return 0;
 }
 

@@ -172,6 +172,9 @@ struct DirEntry {
     char name[64];
     bool folder;
     uint32_t size;
+    // When it was last written: seconds since 1970, UTC. 0: not known (the
+    // machine did not know the time then, or the drive keeps no dates).
+    int64_t modified = 0;
 };
 
 struct VolumeInfo {
@@ -303,6 +306,14 @@ enum class Fault : uint8_t {
 class System {
 public:
     virtual void stats(SystemStats &out) = 0;
+    // The date and time: seconds since 1970, UTC. False while the machine
+    // does not know (the board has no clock of its own: it learns the time
+    // from the network).
+    virtual bool utc_time(int64_t &seconds)
+    {
+        seconds = 0;
+        return false;
+    }
     // Every task of the kernel, in no particular order; returns how many
     // were written (0: not available, as when the kernel does not keep
     // run-time statistics).
