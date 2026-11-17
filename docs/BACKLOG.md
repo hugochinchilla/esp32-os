@@ -23,7 +23,7 @@ board or the merge), `done`.
 | 3 | Per-process processor time and memory. Task Manager shows PID, time and memory columns | M | 1, 2 | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-process-figures.md) |
 | 4 | System, protected and respawn flags | S | 2 | | done (checked on the board 2026-11-16). [Journal](journal/2026-11-16-signals-and-flags.md) |
 | 5 | TERM and KILL for window programs. End Task asks politely, then offers force | S | 2 | | done (checked on the board 2026-11-16). [Journal](journal/2026-11-16-signals-and-flags.md) |
-| 5b | TERM and KILL for services: each gets a stop function, so ending one really stops it. Waits until a service is a real task with a row (their label-only rows were removed, [journal](journal/2026-11-16-only-real-tasks.md)) | S | 5, 18 | Yes | on a branch (`claude/project-thread-8q7ksu`): `inetd` can be ended (End Task, `kill`); PC tests pass, firmware compiles, not run on the board. [Journal](journal/2026-11-17-stopping-services.md) |
+| 5b | TERM and KILL for services: each gets a stop function, so ending one really stops it. Waits until a service is a real task with a row (their label-only rows were removed, [journal](journal/2026-11-16-only-real-tasks.md)) | S | 5, 18 | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-stopping-services.md) |
 | 6 | Atomic saves: temporary file, then rename | S | | Yes | done (checked on the board 2026-11-16) |
 | 6b | Hourglass pointer while a program makes the user wait, first of all during a save (own art) | S | | Yes | done (checked on the board 2026-11-16) |
 | 7 | Watchdog, crash record, and an error screen on the next start | M | 2 | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-watchdog.md) |
@@ -51,7 +51,7 @@ board or the merge), `done`.
 | 22 | Console text editor | M | 13 | | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-console-editor.md) |
 | 23 | Pipes and redirection | M | 13 | | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-pipes.md) |
 | 24 | File dates | S to M | | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-file-dates.md) |
-| 25 | Updates over Wi-Fi | M | | Yes | on a branch (`claude/project-thread-8q7ksu`): `tools/ota.py`, two app slots, off unless `[update] enabled = true` in `network.ini`; PC tests pass, firmware compiles, not run on the board (the first flash with the new table must be by cable). [Journal](journal/2026-11-17-updates.md) |
+| 25 | Updates over Wi-Fi | M | | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-updates.md) |
 | 26 | Apps on their own tasks, one at a time | XL | 8, 20 | Yes | todo |
 | 27 | Loadable or sandboxed apps | XL | 19, 20 | Yes | todo |
 
