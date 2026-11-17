@@ -192,3 +192,22 @@ and the video. Raising the main task's stack in `sdkconfig.defaults` would
 also work, but only if the old `sdkconfig` is deleted first, and a task in
 the code cannot be forgotten. Compiled; BIOS 301,088 bytes. Not yet run on
 the board.
+
+What the first try did show (the board thread's report, on 1bf5acd):
+
+- The OS on the new table with no BIOS passed: `idf.py flash` wrote only
+  0x0, 0x8000, 0x100000 and 0x4e0000; the bootloader said "no BIOS in the
+  flash: starting the OS"; the OS's self-test took 11,286 ms with nothing
+  failed, C: was 11 MB, formatted with its samples, and the saved Wi-Fi
+  network joined.
+- With the BIOS, `tools/flash-bios.sh` wrote only 0x10000 and the
+  bootloader said "starting the BIOS". The BIOS printed its title, the
+  bottom line, the processor line and counted external memory to 5760K
+  before the overflow, every 4.9 s. The monitor never locked on in that
+  time, so there was no picture.
+- The way back is tested: a cable flash of `main` and the saved raw image
+  of the old C: written back. All 19 files on C: came back byte for byte,
+  the Wi-Fi networks survived both changes of table, no missed refills.
+- The laptop's ESP-IDF builds slightly smaller files than the cloud's
+  (bootloader 21,168, BIOS 287,296, OS 1,480,832 bytes): another patch
+  release of 5.5.
