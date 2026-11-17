@@ -1181,6 +1181,11 @@ Build and use: `README.md`, "Chinchilla as a desktop program".
   within 3 seconds leaves at once. Restart starts the program again.
 - The memory figures in Task Manager and the self-test are the simulator's
   pretend ones, not the PC's and not limits.
+- An `inetd` that serves nothing (the owner's choice, 2026-11-17), here and
+  in the browser: the start-up file is the board's, which starts inetd,
+  and without one every new C: opened with a "Start-up" box. The file stays
+  one file for every machine. The row has no task behind it, the one
+  exception to that rule. Journal: `docs/journal/2026-11-17-empty-inetd.md`.
 
 ### Chosen for the browser version (2026-11-17, to confirm)
 
