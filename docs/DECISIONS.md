@@ -1753,13 +1753,16 @@ Chosen by the agent under the owner's "dejo a tu criterio" of 2026-11-16.
 ### Chosen for telnet (2026-11-17, to confirm)
 
 Backlog item 17. Journal: `docs/journal/2026-11-17-telnet.md`. Chosen by the
-agent under the owner's "dejo a tu criterio" of 2026-11-16; the default was
-put to the owner as a question and is his to turn round.
+agent under the owner's "dejo a tu criterio" of 2026-11-16, except the
+default, which the owner decided.
 
-- **Off until a settings file says otherwise**: `[telnet] enabled = true` in
-  `C:\.config\network.ini`, read at start-up. Port 23, no password (the
-  owner's rule: no users). Rejected for now: on by default, because a shell
-  that deletes files would appear on any network the board joins.
+- **On by default** (the owner's decision, 2026-11-17, on a card in the
+  thread; it turns round what the agent had built). Port 23, no password
+  (the owner's rule: no users). `[telnet] enabled = false` in
+  `C:\.config\network.ini`, read at start-up, switches it off. The other
+  option, off until the file says otherwise, was what the agent had
+  recommended, because a shell that deletes files appears on any network
+  the board joins; the owner accepts that.
 - **One session at a time**; a second caller waits. Rejected: several, until
   someone wants them.
 - **The socket work is on the services task and never waits; the session
