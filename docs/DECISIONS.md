@@ -876,8 +876,12 @@ Put to the owner as options; built on the recommended one until he answers.
 - Compression: ZRLE (one colour, a palette of up to 16, or plain, then
   zlib), with our own small zlib compressor (fixed codes, 32 KB window)
   to stay free of a library and its memory. Viewers without ZRLE get plain
-  pixels. Memory: about 190 KB of external RAM plus the compressor's, taken
-  at the first connection.
+  pixels. Memory: about 183 KB of external RAM, the compressor's included,
+  taken when a viewer connects and given back when the last one leaves
+  (2026-11-17, `docs/journal/2026-11-17-remote-screen-memory.md`): a service
+  nobody is using holds no buffers, the same rule as for windows. Giving it
+  back after a pause was rejected: asking for the memory again costs nothing
+  that can be measured.
 - Keys: a key that exists on the US layout with the same Shift state goes
   in as that key; anything else goes in as text. Keys still held when the
   viewer leaves are released.
