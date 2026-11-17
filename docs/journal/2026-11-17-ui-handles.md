@@ -362,3 +362,72 @@ where it is but inside the screen), for the three sizes of the field.
 
 PC tests pass (41 of 41) and the pictures match with no change to the
 tests. Firmware not compiled since, and not run.
+
+
+## On the board, first tranche (added by the board thread, 2026-11-17)
+
+PR 36 at d88a909 (main 065e1e0 already in it). `tools/gate.sh` passed (42
+tests, the pictures, check_os_calls). Firmware 0x167310, flashed by cable,
+the app only. Main's figures were taken on the board just before, with the
+same scripts.
+
+Memory, free bytes against the idle desktop (internal / external), while open
+and after closing:
+
+| program | main, open | this, open | closed (both) |
+|---|---|---|---|
+| Shut Down | 0 / -404 | 0 / -720 | 0 / 0 |
+| Run | 0 / -2,820 | 0 / -3,236 | 0 / 0 |
+| Screen Saver | 0 / -2,948 | 0 / -3,420 | 0 / 0 |
+| Display | 0 / -2,820 | 0 / -3,456 | 0 / 0 |
+| Network | 0 / -4,916 | 0 / -5,200 | 0 / 0 |
+| Task Manager | 0 / -3,588 | 0 / -4,700 | 0 / 0 |
+| Defragmenter | 0 / -7,940 | 0 / -8,496 | 0 / 0 |
+| Culebra | 0 / -4,100 | 0 / -4,568 | 0 / 0 |
+| Cactus Patch | 0 / -6,916 | 0 / -7,104 | 0 / 0 |
+
+Each moved program takes 0.2 to 1.1 KB more external RAM while open (a block
+per control) and gives all of it back. Twenty open/close rounds of the Task
+Manager and of Display: internal and external back (+0 and +40 bytes), the
+largest free blocks unchanged (internal 131,072, external 6,422,528).
+
+Speed, the UI task's processor time from `dbg.py tasks` read before and
+after each run (main / this): idle 10 s 112.4 / 111.0 ms; Culebra played
+10 s 167.9 / 168.6 ms; the Task Manager open 10 s 232.0 / 231.5 ms; Cactus
+Patch, 40 right clicks 128.3 / 133.1 ms. A full repaint: idle 13.90 / 13.88
+ms; with the Task Manager open 31.69 / 31.52 ms; with Cactus Patch open 20.46
+/ 20.49 ms. The same within noise.
+
+Each program exercised:
+
+- Shut Down opens and Escape closes it. Run, and its Browse... opens the Open
+  box over it; Escape closes only the box.
+- Screen Saver: Preview runs and a mouse move ends it; Cancel leaves the
+  file as it was. Display: the colour and pattern grids (Teal with dots
+  chosen, the preview follows), Apply changes the desktop, Other... opens the
+  Colour dialog and Escape closes only it, Cancel takes the desktop back
+  (desktop.ini unchanged).
+- Network: all eight visible rows carry a signal picture. Connect on another
+  network opens the join box; a made-up password was typed and the box
+  cancelled, so nothing was tried. Other... opens its box. Wi-Fi stayed
+  connected, one network remembered. No network name was written down.
+- The Editor's Open box: the Look in drop-down lists the path, a double click
+  goes into Desktop, Backspace in the list goes back up, Up goes to C:\.
+  Save As onto an existing file asks "already exists. Do you want to replace
+  it?", and Yes wrote it.
+- File manager > File > New folder... opens the input box; the folder was
+  made (and removed again).
+- Task Manager: rows with icons, Ctrl+Alt+Del twice gives one window, the
+  processor graph moves, Switch To and End Task work, Show all processes
+  works.
+- Defragmenter: Start moves files with the progress bar; Close.
+- Culebra: the Game menu (New game, Pause, Speed, Close); a game started and
+  the Task Manager opened at once: Culebra shows "Paused" and an arrow key
+  carries on.
+- Cactus Patch: a right click flags, a left click opens, the face is drawn;
+  Medium (284 x 356), Large (508 x 356) and Small (172 x 244) change the
+  window. Its settings file is back to Small.
+
+`dbg.py misses` after both games and the Task Manager: none. The idle desktop
+against main: identical but for 20 pixels of the clock. VNC and telnet
+answered. Nothing was left changed on C:.
