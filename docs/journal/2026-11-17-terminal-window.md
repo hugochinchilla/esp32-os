@@ -1,8 +1,9 @@
 # The Terminal window
 
 2026-11-17. Backlog item 15. Built and tested on the PC only: it opens from
-the Start menu there and runs commands. Not compiled for the board and not
-run on it.
+the Start menu there and runs commands. It compiles and links into the
+firmware (ESP-IDF v5.5 in the cloud, 1,372,640 bytes with everything); it has
+not run on the board.
 
 ![The Terminal after a few commands](../look/terminal/45-terminal-commands.png)
 

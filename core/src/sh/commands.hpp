@@ -11,7 +11,7 @@ struct Command {
     const char *name;    // what is typed, lower case
     CommandFn run;
     const char *usage;   // nullptr: another name for the command before it
-    const char *summary;
+    const char *summary; // never nullptr ("" for another name)
 };
 
 extern const Command kCommands[];

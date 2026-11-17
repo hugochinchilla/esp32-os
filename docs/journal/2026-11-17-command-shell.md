@@ -1,8 +1,8 @@
 # The command shell
 
 2026-11-17. Backlog item 13. Built and tested on the PC only, where it also
-runs in a terminal. The firmware does not start it yet, it has not been
-compiled for the board and nothing here has run on it.
+runs in a terminal. It compiles and links into the firmware (ESP-IDF v5.5 in
+the cloud); nothing here has run on the board.
 
 ## 1. What was asked
 
@@ -203,6 +203,14 @@ needs there.
   entry. Neither showed in the TTY's own tests, which passed at the first
   run; that should have been a warning, not a comfort.
 - The help list is checked to be no wider than 80 columns. Two lines were 82.
+- The board's compiler refused what the PC's accepted. Built with ESP-IDF
+  (`-O2`, GCC 14 for the Xtensa), `help` failed with "'%s' directive argument
+  is null": the table of commands had no summary for the second names (`dir`,
+  `type`...), and the compiler, unrolling the loop over the table, could see
+  a path that printed one. The code never took that path, but the fix is to
+  have no null to print: the second names now have an empty summary. The PC
+  tests build without optimisation and said nothing. Worth the ten minutes
+  of installing ESP-IDF in the cloud.
 
 ## 6. What is left
 

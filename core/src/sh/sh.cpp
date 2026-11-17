@@ -127,8 +127,11 @@ int cmd_help(Session &s, int argc, char **argv)
         if (c == nullptr) {
             return s.fail("help", argv[1], "there is no such command");
         }
-        while (c->usage == nullptr) {
+        while (c > kCommands && c->usage == nullptr) {
             c--; // another name: the command itself is before it
+        }
+        if (c->usage == nullptr || c->summary == nullptr) {
+            return 1; // the table's first entry is a command, so never
         }
         s.printf("%s\n  %s\n", c->usage, c->summary);
         if (c + 1 < kCommands + kCommandCount && c[1].usage == nullptr) {
@@ -160,43 +163,43 @@ int cmd_help(Session &s, int argc, char **argv)
 
 const Command kCommands[] = {
     {"ls", &cmd_ls, "ls [-l] [-a] [PATH...]", "List a folder. -l with sizes, -a with hidden names"},
-    {"dir", &cmd_dir, nullptr, nullptr},
+    {"dir", &cmd_dir, nullptr, ""},
     {"cd", &cmd_cd, "cd [FOLDER]", "Go to a folder; alone, show where you are"},
-    {"chdir", &cmd_cd, nullptr, nullptr},
+    {"chdir", &cmd_cd, nullptr, ""},
     {"pwd", &cmd_pwd, "pwd", "Show the folder you are in"},
     {"cat", &cmd_cat, "cat FILE...", "Show what is in a file"},
-    {"type", &cmd_cat, nullptr, nullptr},
+    {"type", &cmd_cat, nullptr, ""},
     {"cp", &cmd_cp, "cp [-r] FROM... TO", "Copy files; -r copies folders too"},
-    {"copy", &cmd_cp, nullptr, nullptr},
+    {"copy", &cmd_cp, nullptr, ""},
     {"mv", &cmd_mv, "mv FROM... TO", "Move or rename"},
-    {"move", &cmd_mv, nullptr, nullptr},
-    {"ren", &cmd_mv, nullptr, nullptr},
-    {"rename", &cmd_mv, nullptr, nullptr},
+    {"move", &cmd_mv, nullptr, ""},
+    {"ren", &cmd_mv, nullptr, ""},
+    {"rename", &cmd_mv, nullptr, ""},
     {"rm", &cmd_rm, "rm [-r] PATH...", "Delete for good; -r deletes folders and all in them"},
-    {"del", &cmd_rm, nullptr, nullptr},
-    {"erase", &cmd_rm, nullptr, nullptr},
+    {"del", &cmd_rm, nullptr, ""},
+    {"erase", &cmd_rm, nullptr, ""},
     {"mkdir", &cmd_mkdir, "mkdir FOLDER...", "Make a folder"},
-    {"md", &cmd_mkdir, nullptr, nullptr},
+    {"md", &cmd_mkdir, nullptr, ""},
     {"rmdir", &cmd_rmdir, "rmdir FOLDER...", "Delete an empty folder"},
-    {"rd", &cmd_rmdir, nullptr, nullptr},
+    {"rd", &cmd_rmdir, nullptr, ""},
     {"touch", &cmd_touch, "touch FILE...", "Make an empty file"},
     {"df", &cmd_df, "df", "Show the drives and their free space"},
     {"echo", &cmd_echo, "echo [TEXT...]", "Write the text"},
     {"ps", &cmd_ps, "ps", "List the processes"},
-    {"tasklist", &cmd_ps, nullptr, nullptr},
+    {"tasklist", &cmd_ps, nullptr, ""},
     {"kill", &cmd_kill, "kill [-TERM | -KILL | -9] PID...", "Ask a process to end; -9 ends it without asking"},
-    {"taskkill", &cmd_kill, nullptr, nullptr},
+    {"taskkill", &cmd_kill, nullptr, ""},
     {"free", &cmd_free, "free", "Show the free memory"},
-    {"mem", &cmd_free, nullptr, nullptr},
+    {"mem", &cmd_free, nullptr, ""},
     {"uptime", &cmd_uptime, "uptime", "Show how long the machine has been on"},
     {"ver", &cmd_ver, "ver", "Show the version of Chinchilla"},
-    {"uname", &cmd_ver, nullptr, nullptr},
+    {"uname", &cmd_ver, nullptr, ""},
     {"cls", &cmd_cls, "cls", "Clear the screen"},
-    {"clear", &cmd_cls, nullptr, nullptr},
+    {"clear", &cmd_cls, nullptr, ""},
     {"help", &cmd_help, "help [NAME]", "Show this list, or how one command is written"},
-    {"?", &cmd_help, nullptr, nullptr},
+    {"?", &cmd_help, nullptr, ""},
     {"exit", &cmd_exit, "exit", "End the session"},
-    {"logout", &cmd_exit, nullptr, nullptr},
+    {"logout", &cmd_exit, nullptr, ""},
 };
 const int kCommandCount = static_cast<int>(sizeof kCommands / sizeof kCommands[0]);
 
