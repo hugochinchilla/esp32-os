@@ -263,3 +263,61 @@ the Picture viewer had been opened once.
   file instead.
 - Tasks of their own (26) and loadable programs (27) build on this: a
   program is now something with a start and an end.
+
+## 9. On the board (added by the board thread, 2026-11-17)
+
+Tested at c9ecf7f, the same code as cfe77ea (the commit after it only changes
+this journal), with main b966d94 merged in. PC tests 25 of 25; the first
+build and link of the whole firmware, clean; flashed with a fast start.
+Wi-Fi joined throughout. No restart, panic or heap message in any of it
+(uptime ran on between every step; the serial log kept while a VNC client
+drove 20 program opens and closes had one line: "VNC viewer connected").
+
+Memory, the same script on main and on the branch (Editor with a 300 KB
+file, Picture viewer with a picture, Task Manager):
+
+| | main: internal free / largest / external free | branch |
+| --- | --- | --- |
+| 1 empty desktop | 218,799 / 139,264 / 6,518,020 | 218,791 / 139,264 / 6,582,300 |
+| 2 the three open | 218,799 / 139,264 / 3,510,372 | 218,791 / 139,264 / 3,566,096 |
+| 3 the three closed | 218,799 / 139,264 / 3,510,372 | 218,791 / 139,264 / 6,582,300 |
+| 4 after 20 more rounds | 218,799 / 139,264 / 3,510,372 | 218,791 / 139,264 / 6,582,320 |
+| repaint, empty desktop / maximised Editor | 15.39 / 44.03 ms | 15.36 / 44.21 ms |
+| late / missed refills | 0 / 0 | 0 / 0 |
+
+External RAM at the empty desktop is 64 KB higher, and closing gives
+everything back; internal RAM does not move. The first VNC viewer takes
+about 183 KB of external RAM that the remote-screen server keeps until a
+restart (its buffers, unchanged by this branch); after that the open/close
+rounds return to the new figure exactly.
+
+Behaviour:
+
+- Every Start menu program opened and closed, three rounds of all ten.
+- Editor launched five times: four Editors, each 24 px lower and further
+  right, four rows in Task Manager; the fifth said "Four Editors are open
+  already. Close one of them first."
+- File > Open in one Editor and Save As in another, both open at once.
+- End Task on an Editor with unsaved text: its question; Ctrl+Alt+Del; the
+  "has not closed" box came by itself 6.0 s later with the question still
+  showing; End Now removed the Editor and its question, the other Editors
+  stayed.
+- Display, Screen Saver, Network and Shut Down each had their own PID while
+  open (Shut Down holds the screen, so Task Manager does not open over it).
+  Display: teal, Apply, Cancel took it back.
+- Culebra: one berry eaten (a bot steering from screenshots), score 10, best
+  10; closed and opened: a new game, best 10; after a restart, best 10;
+  culebra.ini has `best = 10`.
+- Cactus Patch: Large kept after closing and opening (set back to Small, as
+  it was).
+- Picture viewer closed three times while a JPEG was decoding (decode
+  0.41 s), opened again: the picture whole.
+- Shut Down with an unsaved Editor: its question; after No, Shut Down stops
+  there, as on main ("calls it off ... can be chosen again"); chosen again,
+  the power-down screen.
+- VNC, the web page and dbg.py answer; the screensaver preview runs (27.8
+  frames a second) and a key stops it; a desktop file dragged to the Trash,
+  the Trash window and its Empty Trash button; a 300 KB save (3.7 s) with the
+  hourglass on the webcam and the title clean after; K held 1.5 s typed 31
+  letters.
+

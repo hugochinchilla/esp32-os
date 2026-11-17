@@ -41,8 +41,8 @@ board or the merge), `done`.
 | 17 | Telnet server, no password. Ask the owner first: on by default, or switched on in a settings file | S | 13 | Yes | todo |
 | | **Phase 4: structure** | | | | |
 | 18 | init as PID 1 with a start-up file. Services start after the desktop | M | 2, 8 | Yes | todo |
-| 19 | Program lifecycle: created at launch, destroyed at exit, memory returned, more than one instance | L | 2 | Yes | on a branch (`claude/project-thread-0mfoj1`), PC tests pass, waiting for the board. [Journal](journal/2026-11-17-program-lifecycle.md) |
-| 34 | Display and the other built-in dialogs and settings tools (Screen Saver, Network, Shut Down, file dialogs, message box, Task Manager) become programs with a life of their own: created when opened, memory given back when closed. Display first. The owner's rule of 2026-11-17 | M | 19 | Yes | on a branch with item 19, waiting for the board. [Journal](journal/2026-11-17-program-lifecycle.md) (the rule: [dialogs as programs](journal/2026-11-17-dialogs-as-programs.md)) |
+| 19 | Program lifecycle: created at launch, destroyed at exit, memory returned, more than one instance | L | 2 | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-program-lifecycle.md) |
+| 34 | Display and the other built-in dialogs and settings tools (Screen Saver, Network, Shut Down, file dialogs, message box, Task Manager) become programs with a life of their own: created when opened, memory given back when closed. Display first. The owner's rule of 2026-11-17 | M | 19 | Yes | done with item 19 (checked on the board 2026-11-17). [Journal](journal/2026-11-17-program-lifecycle.md) (the rule: [dialogs as programs](journal/2026-11-17-dialogs-as-programs.md)) |
 | 20 | A defined set of OS calls, moved to app by app | L | 2 | | todo |
 | 21 | Split the window manager into window server and desktop shell. The taskbar becomes a process that restarts when killed | L | 18, 20 | Yes | todo |
 | | **Later** | | | | |
