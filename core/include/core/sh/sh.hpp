@@ -58,6 +58,25 @@ private:
     ports::Event &done_;
 };
 
+// The desktop, for the commands that open things on it (open, run, edit).
+// The session calls these on the UI task (Session::on_ui). Each answers
+// true if something was opened; if not, `why` says why not.
+class Desktop {
+public:
+    // A file with the program for its kind, or a folder in the File manager.
+    virtual bool open(const char *full_path, char *why, size_t capacity) = 0;
+    // A program by its name.
+    virtual bool run(const char *program, char *why, size_t capacity) = 0;
+    // The Editor with a file; nullptr for a new one.
+    virtual bool edit(const char *full_path, char *why, size_t capacity) = 0;
+    // The programs there are, for `run` alone.
+    virtual int program_count() = 0;
+    virtual const char *program_name(int index) = 0;
+
+protected:
+    ~Desktop() = default;
+};
+
 // What a session can reach. Anything left null makes the commands that need
 // it say so.
 struct Env {
@@ -65,6 +84,7 @@ struct Env {
     proc::Table *procs = nullptr;   // ps, kill
     ports::System *system = nullptr; // free, uptime
     UiCall *ui = nullptr;            // null: the session is on the UI task and calls straight in
+    Desktop *desktop = nullptr;      // open, run, edit; null where there is no desktop (a serial console on a PC)
 };
 
 namespace path {

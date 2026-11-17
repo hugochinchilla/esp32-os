@@ -244,6 +244,7 @@ wm::Menu g_programs = {g_program_items, 0};
 void open_screen_saver(void *) { screen_saver_dialog(); }
 void network_panel(void *) { open_network(); }
 void open_display(void *) { display_dialog(); }
+void open_run(void *) { run_dialog(); }
 // A right click on the desktop: a menu with what can be done to it.
 wm::MenuItem g_desktop_items[] = {
     {"&Display...", &open_display, nullptr, nullptr, nullptr, 0},
@@ -619,7 +620,7 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
     g_programs.count = n;
     g_start_items[0] = {"&Programs", nullptr, nullptr, &g_programs, &gfx::folder_icon_16(), 0};
     g_start_items[1] = {"&Settings", nullptr, nullptr, &g_settings, &gfx::settings_icon_16(), 0};
-    g_start_items[2] = {"&Run...", nullptr, nullptr, nullptr, &gfx::run_icon_16(), wm::kMenuDisabled};
+    g_start_items[2] = {"&Run...", &open_run, nullptr, nullptr, &gfx::run_icon_16(), 0};
     g_start_items[3] = {nullptr, nullptr, nullptr, nullptr, nullptr, wm::kMenuSeparator};
     g_start_items[4] = {"Sh&ut Down...", &shut_down, nullptr, nullptr, &gfx::power_icon_16(), 0};
     wm.set_start_menu(&g_start, "Chinchilla");

@@ -150,4 +150,123 @@ int cmd_ver(Session &s, int, char **)
     return 0;
 }
 
+/* ---- The desktop: open, run, edit ---------------------------------------------------- */
+
+namespace {
+
+// One thing asked of the desktop, done by the UI task.
+struct Ask {
+    Desktop *desktop;
+    int what; // 0 open, 1 run, 2 edit
+    const char *text; // nullptr for edit without a file
+    bool done;
+    char why[160];
+};
+
+void ask_desktop(void *context)
+{
+    Ask &a = *static_cast<Ask *>(context);
+    a.why[0] = 0;
+    switch (a.what) {
+    case 0: a.done = a.desktop->open(a.text, a.why, sizeof a.why); break;
+    case 1: a.done = a.desktop->run(a.text, a.why, sizeof a.why); break;
+    default: a.done = a.desktop->edit(a.text, a.why, sizeof a.why); break;
+    }
+}
+
+bool no_desktop(Session &s, const char *command)
+{
+    if (s.env().desktop != nullptr) {
+        return false;
+    }
+    s.fail(command, nullptr, "there is no desktop here to open it on");
+    return true;
+}
+
+int asked(Session &s, const char *command, int what, const char *text, const char *shown)
+{
+    Ask a = {s.env().desktop, what, text, false, ""};
+    s.on_ui(&ask_desktop, &a);
+    return a.done ? 0 : s.fail(command, shown, a.why[0] != 0 ? a.why : "it could not be opened");
+}
+
+struct Programs {
+    Desktop *desktop;
+    Session *session;
+};
+
+void list_programs(void *context)
+{
+    // The names are fixed text, so the UI task only has to read them out.
+    Programs &p = *static_cast<Programs *>(context);
+    for (int i = 0; i < p.desktop->program_count(); i++) {
+        p.session->printf("  %s\n", p.desktop->program_name(i));
+    }
+}
+
+} // namespace
+
+int cmd_open(Session &s, int argc, char **argv)
+{
+    if (no_desktop(s, argv[0])) {
+        return 1;
+    }
+    if (argc < 2) {
+        return s.fail(argv[0], nullptr, "it needs the name of a file or a folder");
+    }
+    int result = 0;
+    for (int i = 1; i < argc && !s.stopped(); i++) {
+        char full[fs::kMaxPath];
+        if (!s.resolve(argv[i], full)) {
+            result |= s.fail(argv[0], argv[i], "the name is too long");
+            continue;
+        }
+        result |= asked(s, argv[0], 0, full, argv[i]);
+    }
+    return result;
+}
+
+int cmd_run(Session &s, int argc, char **argv)
+{
+    if (no_desktop(s, argv[0])) {
+        return 1;
+    }
+    if (argc < 2) {
+        s.print("The programs:\n");
+        Programs p = {s.env().desktop, &s};
+        list_programs(&p); // only reads fixed names: no need to trouble the UI task
+        return 0;
+    }
+    // The name may have spaces: "run file manager" is one program.
+    char name[64];
+    int used = 0;
+    for (int i = 1; i < argc; i++) {
+        used += snprintf(name + used, sizeof name - static_cast<size_t>(used), "%s%s", i > 1 ? " " : "", argv[i]);
+        if (used >= static_cast<int>(sizeof name) - 1) {
+            break;
+        }
+    }
+    return asked(s, argv[0], 1, name, name);
+}
+
+int cmd_edit(Session &s, int argc, char **argv)
+{
+    if (no_desktop(s, argv[0])) {
+        return 1;
+    }
+    if (argc < 2) {
+        return asked(s, argv[0], 2, nullptr, nullptr);
+    }
+    int result = 0;
+    for (int i = 1; i < argc && !s.stopped(); i++) {
+        char full[fs::kMaxPath];
+        if (!s.resolve(argv[i], full)) {
+            result |= s.fail(argv[0], argv[i], "the name is too long");
+            continue;
+        }
+        result |= asked(s, argv[0], 2, full, argv[i]);
+    }
+    return result;
+}
+
 } // namespace sh

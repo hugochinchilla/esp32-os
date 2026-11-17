@@ -326,6 +326,7 @@ private:
         env.storage = &storage();
         env.procs = &proc::table();
         env.system = &system_port();
+        env.desktop = &desktop_for_sessions(); // open, run, edit
         // On the UI task the session calls straight in. From a task of its
         // own it asks the UI task, through the queue, for what belongs to it
         // (the process table).

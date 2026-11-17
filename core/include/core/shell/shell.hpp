@@ -17,6 +17,10 @@ namespace tty {
 class Screen;
 }
 
+namespace sh {
+class Desktop;
+}
+
 namespace net {
 class Manager;
 }
@@ -80,6 +84,21 @@ void input_dialog(wm::Window *owner, const char *title, const char *prompt, cons
 // Opens a file with the program for its kind (by extension). Returns
 // false, after saying so, when there is none.
 bool open_file(const char *path);
+// True if open_file() has a program for this kind of file.
+bool has_program_for(const char *path);
+// What Start > Run... does with what was typed, and the shell's `open` and
+// `run` commands with their words: the name of a program (in any case, or
+// the start of it if only one begins so) starts it; a path opens the folder
+// in the File manager or the file with its program. A name without a drive
+// is looked for from `folder`. False, with the reason in `why`, if nothing
+// was opened. `programs` and `paths` say which of the two to try.
+bool run_text(const char *typed, const char *folder, char *why, size_t capacity, bool programs = true,
+              bool paths = true);
+// The Run dialog (Start > Run...).
+void run_dialog();
+// The desktop as the command shell sees it (core/sh/sh.hpp): for the
+// sessions the desktop starts.
+sh::Desktop &desktop_for_sessions();
 // Welcome and About, as the desktop used to start: the PC picture tests and
 // the simulator's tool tests use them (the board starts with no windows).
 void open_demo_windows();

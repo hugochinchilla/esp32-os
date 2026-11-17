@@ -59,6 +59,7 @@ set(CORE_SRCS
     src/shell/screensaver.cpp
     src/shell/network.cpp
     src/shell/power.cpp
+    src/shell/run.cpp
     src/shell/settings.cpp
     src/shell/task_manager.cpp
     src/shell/terminal.cpp

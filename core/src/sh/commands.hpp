@@ -54,5 +54,8 @@ int cmd_kill(Session &s, int argc, char **argv);
 int cmd_free(Session &s, int argc, char **argv);
 int cmd_uptime(Session &s, int argc, char **argv);
 int cmd_ver(Session &s, int argc, char **argv);
+int cmd_open(Session &s, int argc, char **argv);
+int cmd_run(Session &s, int argc, char **argv);
+int cmd_edit(Session &s, int argc, char **argv);
 
 } // namespace sh

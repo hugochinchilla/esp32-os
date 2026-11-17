@@ -506,6 +506,12 @@ int main(int argc, char **argv)
     save("46-terminal-help");
     key(wm::key::F4, true);
 
+    // Start > Run...: a program of its own, with a name typed.
+    shell::run_dialog();
+    desktop.text("file manager");
+    save("47-run");
+    key(wm::key::Escape);
+
     // The Defragmenter: its made-up disk, part of the way, and tidy.
     while (desktop.active() != nullptr) {
         desktop.close(*desktop.active());

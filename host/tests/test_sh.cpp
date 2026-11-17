@@ -332,6 +332,73 @@ void test_pipes()
     CHECK(run(m, s, "cat many.txt | more").find("line 500\n") != std::string::npos);
 }
 
+/* ---- open, run, edit: what is asked of the desktop ---------------------------------- */
+
+struct FakeDesktop final : sh::Desktop {
+    std::string log;
+    bool open(const char *full_path, char *why, size_t capacity) override
+    {
+        log += std::string("open ") + full_path + "\n";
+        if (strstr(full_path, ".zip") != nullptr) {
+            snprintf(why, capacity, "there is no program for .zip files yet");
+            return false;
+        }
+        return true;
+    }
+    bool run(const char *program, char *why, size_t capacity) override
+    {
+        log += std::string("run ") + program + "\n";
+        if (strcmp(program, "nothing") == 0) {
+            snprintf(why, capacity, "there is no such program; run alone lists them");
+            return false;
+        }
+        return true;
+    }
+    bool edit(const char *full_path, char *, size_t) override
+    {
+        log += std::string("edit ") + (full_path != nullptr ? full_path : "<new>") + "\n";
+        return true;
+    }
+    int program_count() override { return 2; }
+    const char *program_name(int index) override { return index == 0 ? "Editor" : "File manager"; }
+};
+
+void test_desktop_commands()
+{
+    Machine m;
+    m.storage.make_folder("C:\\docs");
+    sh::Session s(m.terminal, m.env, "C:\\docs");
+
+    // Where there is no desktop (a console on a PC) the commands say so.
+    CHECK_TEXT(run(m, s, "open a.txt", 1), "open: there is no desktop here to open it on\n");
+    CHECK_TEXT(run(m, s, "run editor", 1), "run: there is no desktop here to open it on\n");
+    CHECK_TEXT(run(m, s, "edit", 1), "edit: there is no desktop here to open it on\n");
+
+    FakeDesktop desktop;
+    m.env.desktop = &desktop;
+    sh::Session d(m.terminal, m.env, "C:\\docs");
+    // Paths are made whole from the folder the session is in.
+    CHECK_TEXT(run(m, d, "open a.txt ..\\b.bmp"), "");
+    CHECK_TEXT(run(m, d, "start ."), ""); // the DOS name
+    CHECK(desktop.log == "open C:\\docs\\a.txt\nopen C:\\b.bmp\nopen C:\\docs\n");
+    desktop.log.clear();
+    CHECK_TEXT(run(m, d, "open x.zip", 1), "open: x.zip: there is no program for .zip files yet\n");
+    CHECK_TEXT(run(m, d, "open", 1), "open: it needs the name of a file or a folder\n");
+    desktop.log.clear();
+
+    // run: a program's name, spaces and all; alone, the list.
+    CHECK_TEXT(run(m, d, "run file manager"), "");
+    CHECK_TEXT(run(m, d, "run \"File manager\""), "");
+    CHECK_TEXT(run(m, d, "run nothing", 1), "run: nothing: there is no such program; run alone lists them\n");
+    CHECK_TEXT(run(m, d, "run"), "The programs:\n  Editor\n  File manager\n");
+    CHECK(desktop.log == "run file manager\nrun File manager\nrun nothing\n");
+    desktop.log.clear();
+
+    CHECK_TEXT(run(m, d, "edit"), "");
+    CHECK_TEXT(run(m, d, "edit notes.txt D:\\x.txt"), "");
+    CHECK(desktop.log == "edit <new>\nedit C:\\docs\\notes.txt\nedit D:\\x.txt\n");
+}
+
 /* ---- Folders: cd, pwd, ls, dir, mkdir, rmdir ---------------------------------------- */
 
 void test_folders()
@@ -818,6 +885,7 @@ int main()
     test_folders();
     test_files();
     test_pipes();
+    test_desktop_commands();
     test_processes();
     test_typed_session();
     test_session_on_a_thread();

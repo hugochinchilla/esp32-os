@@ -282,6 +282,118 @@ void test_terminal()
 
 } // namespace
 
+/* ---- Run, and the shell's open, run and edit ---------------------------------------- */
+
+wm::Window *window_titled(const char *text)
+{
+    for (int z = 0; z < desktop.window_count(); z++) {
+        if (strcasestr(desktop.window_at(z)->title(), text) != nullptr) { // the title has the name as typed
+            return desktop.window_at(z);
+        }
+    }
+    return nullptr;
+}
+
+void close_everything()
+{
+    while (desktop.active() != nullptr) {
+        desktop.close(*desktop.active());
+    }
+    wait(20000);
+}
+
+void test_run()
+{
+    const int blocks = memory.in_use();
+    storage.make_folder("C:\\Documents");
+    storage.write_file("C:\\Documents\\list.txt", "milk\n", 5);
+    storage.write_file("C:\\Documents\\old.zip", "zip", 3);
+
+    // The Run dialog is a program of its own. A program's name, in any
+    // case, starts it; the dialog goes, and the program is the desktop's
+    // child, not the dialog's.
+    shell::run_dialog();
+    CHECK(strcmp(title(), "Run") == 0 && count("Run") == 1);
+    type("editor");
+    key(wm::key::Enter);
+    wait(20000);
+    CHECK(strcmp(title(), "Untitled - Editor") == 0 && count("Run") == 0 && count("Editor") == 1);
+    CHECK(proc::table().find(desktop.active()->owner())->parent == proc::kRoot);
+    close_everything();
+
+    // It remembers what was run, selected, so typing replaces it. The start
+    // of a name is enough when only one program begins so.
+    shell::run_dialog();
+    key(wm::key::Enter); // "editor" again
+    wait(20000);
+    CHECK(strcmp(title(), "Untitled - Editor") == 0);
+    close_everything();
+    shell::run_dialog();
+    type("term");
+    key(wm::key::Enter);
+    wait(20000);
+    CHECK(strcmp(title(), "Terminal") == 0);
+    close_everything();
+
+    // A file opens with its program, a folder in the File manager.
+    shell::run_dialog();
+    type("C:\\Documents\\list.txt");
+    key(wm::key::Enter);
+    wait(20000);
+    CHECK(strcmp(title(), "list.txt - Editor") == 0);
+    close_everything();
+    shell::run_dialog();
+    type("documents"); // without a drive: looked for on C:
+    key(wm::key::Enter);
+    wait(20000);
+    CHECK(window_titled("Documents") != nullptr && count("Run") == 0);
+    close_everything();
+
+    // What cannot be opened is said, and the dialog stays for another try.
+    shell::run_dialog();
+    type("nothing here");
+    key(wm::key::Enter);
+    CHECK(desktop.active()->modal() && count("Run") == 1); // the message
+    key(wm::key::Enter);
+    CHECK(strcmp(title(), "Run") == 0);
+    type("C:\\Documents\\old.zip");
+    key(wm::key::Enter);
+    CHECK(desktop.active()->modal());
+    key(wm::key::Enter);
+    key(wm::key::Escape);
+    wait(20000);
+    CHECK(desktop.window_count() == 0 && count("Run") == 0);
+    CHECK(memory.in_use() == blocks);
+
+    // From a Terminal: run, open and edit put windows on the desktop.
+    shell::launch(*shell::find_app("Terminal"));
+    wm::Window *terminal = desktop.active();
+    enter("run editor");
+    CHECK(strcmp(title(), "Untitled - Editor") == 0);
+    desktop.activate(*terminal);
+    enter("cd Documents");
+    enter("open list.txt");
+    CHECK(strcmp(title(), "list.txt - Editor") == 0);
+    desktop.activate(*terminal);
+    enter("open old.zip");
+    CHECK(desktop.active() == terminal); // no message box: the reason is on the terminal
+    CHECK(row(at() - 1) == "open: old.zip: there is no program for .zip files yet");
+    enter("edit new.txt"); // a name that is not there yet is a new file
+    CHECK(strcmp(title(), "new.txt - Editor") == 0);
+    {
+        ports::DirEntry made;
+        CHECK(storage.stat("C:\\Documents\\new.txt", made) == ports::FsError::Ok && made.size == 0);
+    }
+    desktop.activate(*terminal);
+    enter("open .");
+    CHECK(window_titled("Documents") != nullptr);
+    desktop.activate(*terminal);
+    enter("run nonsense");
+    CHECK(row(at() - 1) == "run: nonsense: there is no such program; run alone lists them");
+    close_everything();
+    CHECK(memory.in_use() == blocks);
+}
+
 /* ---- The session on a task of its own ------------------------------------------ */
 
 host::ThreadQueue queue;
@@ -401,6 +513,17 @@ void test_terminal_on_a_task()
     enter("ps");
     CHECK(settle([] { return on_screen("Terminal") && on_screen("desktop"); }));
 
+    // run asks the UI task to start the program; the Terminal's session
+    // goes on to its next prompt.
+    {
+        wm::Window *terminal = desktop.active();
+        enter("run editor");
+        CHECK(settle([] { return strcmp(title(), "Untitled - Editor") == 0; }));
+        desktop.close(*desktop.active());
+        desktop.activate(*terminal);
+        settle([] { return true; });
+    }
+
     // A command that prints a lot does not hold the desktop, and Ctrl+C
     // ends it. What is typed before the prompt is back is kept for the next
     // line, as on any terminal.
@@ -480,6 +603,7 @@ int main()
         desktop.close(*desktop.active());
     }
     test_terminal();
+    test_run();
     test_terminal_on_a_task();
     if (failures != 0) {
         printf("%d checks failed\n", failures);
