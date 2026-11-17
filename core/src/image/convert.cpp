@@ -100,6 +100,18 @@ bool Converter::ready(ports::Memory &memory)
     return sums_ != nullptr && errors_ != nullptr && col_start_ != nullptr && avg_ != nullptr;
 }
 
+void Converter::release(ports::Memory &memory)
+{
+    memory.release(sums_);
+    memory.release(errors_);
+    memory.release(col_start_);
+    memory.release(avg_);
+    sums_ = nullptr;
+    errors_ = nullptr;
+    col_start_ = nullptr;
+    avg_ = nullptr;
+}
+
 void Converter::begin(int src_w, int src_h, int dst_w, int dst_h, uint8_t *out, Dither dither)
 {
     src_w_ = src_w;

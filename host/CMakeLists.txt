@@ -102,6 +102,10 @@ add_test(NAME saver COMMAND test_saver)
 add_executable(test_proc tests/test_proc.cpp)
 target_link_libraries(test_proc PRIVATE core)
 add_test(NAME proc COMMAND test_proc)
+# Programs made when opened and destroyed when closed (backlog 19 and 34).
+add_executable(test_lifecycle tests/test_lifecycle.cpp)
+target_link_libraries(test_lifecycle PRIVATE core)
+add_test(NAME lifecycle COMMAND test_lifecycle)
 # The message queue into the UI task, posted to from real threads.
 find_package(Threads REQUIRED)
 add_executable(test_msg tests/test_msg.cpp)

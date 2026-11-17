@@ -66,6 +66,8 @@ public:
     bool done() const { return done_; }
     int rows_done() const { return next_row_; }
     void close();
+    // Closes, and gives the working memory back to where open() got it.
+    void release(ports::Memory &memory);
     ~Decoder() { close(); }
 
     // Working memory, for the format decoders: a bump allocator over the pool.

@@ -374,9 +374,24 @@ public:
 
 void close_window(void *context) { static_cast<wm::Window *>(context)->close(); }
 
+// The folder windows there can be at once; nullptr where there is none now.
+// Each is made when it opens and gone once it has closed.
+constexpr int kWindows = 3;
+class FolderWindow;
+FolderWindow *g_windows[kWindows] = {};
+
 class FolderWindow : public wm::Window {
 public:
     static constexpr int kHistory = 8;
+
+    ~FolderWindow()
+    {
+        for (FolderWindow *&w : g_windows) {
+            if (w == this) {
+                w = nullptr;
+            }
+        }
+    }
 
     FolderWindow()
         : Window("My Board", {96, 28, 400, 300}, &gfx::folder_icon_16()),
@@ -940,43 +955,29 @@ private:
     const wm::MenuBar bar_ = {entries_, 1};
 };
 
-TrashWindow &trash_window()
-{
-    static TrashWindow w;
-    return w;
-}
-
-constexpr int kWindows = 3;
-
-FolderWindow &window(int i)
-{
-    static FolderWindow windows[kWindows];
-    return windows[i];
-}
-
 } // namespace
 
 void refresh_folder_windows()
 {
-    for (int i = 0; i < kWindows; i++) {
-        if (window(i).open()) {
-            window(i).refresh();
+    for (FolderWindow *w : g_windows) {
+        if (w != nullptr && w->open()) {
+            w->refresh();
         }
     }
-    if (trash_window().open()) {
-        trash_window().refresh();
+    if (TrashWindow *trash = the<TrashWindow>()) {
+        if (trash->open()) {
+            trash->refresh();
+        }
     }
 }
 
 void open_trash()
 {
     const AsProgram as("File manager");
-    TrashWindow &w = trash_window();
-    w.refresh();
-    if (w.open()) {
-        manager().activate(w);
-    } else {
-        show(w);
+    if (TrashWindow *w = one<TrashWindow>("Trash")) {
+        w->refresh();
+        show(*w);
+        discard(w); // if the window manager had no room for it
     }
 }
 
@@ -985,30 +986,37 @@ void open_folder(const char *path)
     const AsProgram as("File manager");
     const char *want = path != nullptr ? path : "";
     // Already shown: bring that window forward.
-    for (int i = 0; i < kWindows; i++) {
-        FolderWindow &w = window(i);
-        if (w.open() && strcmp(w.folder(), want) == 0) {
-            w.refresh();
-            manager().activate(w);
+    for (FolderWindow *w : g_windows) {
+        if (w != nullptr && w->open() && strcmp(w->folder(), want) == 0) {
+            w->refresh();
+            manager().activate(*w);
             return;
         }
     }
-    // A closed window, else the first one is reused.
-    FolderWindow *use = &window(0);
+    // A place with no open window, else the first window is reused.
+    int n = 0;
     for (int i = 0; i < kWindows; i++) {
-        if (!window(i).open()) {
-            use = &window(i);
+        if (g_windows[i] == nullptr || !g_windows[i]->open()) {
+            n = i;
             break;
         }
     }
+    if (g_windows[n] == nullptr) {
+        g_windows[n] = make_window<FolderWindow>();
+        if (g_windows[n] == nullptr) {
+            no_memory_for("File manager");
+            return;
+        }
+    }
+    FolderWindow *use = g_windows[n];
     use->forget_history();
     use->go_to(want, false);
     if (!use->open()) {
-        const int n = static_cast<int>(use - &window(0));
         use->set_frame({96 + n * 24, 28 + n * 24, 400, 300});
         use->resized();
     }
     show(*use);
+    discard(use); // if the window manager had no room for it
 }
 
 bool open_file(const char *path)

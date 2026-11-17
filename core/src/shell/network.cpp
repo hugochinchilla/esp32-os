@@ -173,17 +173,15 @@ private:
     wm::Button ok_, cancel_;
 };
 
-JoinDialog &password_dialog()
-{
-    static JoinDialog dialog(false);
-    return dialog;
-}
-
-JoinDialog &other_dialog()
-{
-    static JoinDialog dialog(true);
-    return dialog;
-}
+// The two kinds, each made when it is asked for and gone when it closes.
+class PasswordDialog : public JoinDialog {
+public:
+    PasswordDialog() : JoinDialog(false) {}
+};
+class OtherDialog : public JoinDialog {
+public:
+    OtherDialog() : JoinDialog(true) {}
+};
 
 /* ---- The panel ----------------------------------------------------------------- */
 
@@ -368,7 +366,9 @@ private:
         } else if (s->saved || s->network.security == net::Security::Open) {
             g_net->connect(s->network.ssid, nullptr, true);
         } else {
-            password_dialog().ask(this, s->network.ssid);
+            if (PasswordDialog *d = one<PasswordDialog>("Connect to network")) {
+                d->ask(this, s->network.ssid);
+            }
         }
     }
 
@@ -384,7 +384,12 @@ private:
         }
     }
     static void rescan(wm::Button &, void *) { g_net->scan(); }
-    static void other(wm::Button &, void *context) { other_dialog().ask(&self(context), ""); }
+    static void other(wm::Button &, void *context)
+    {
+        if (OtherDialog *d = one<OtherDialog>("Other network")) {
+            d->ask(&self(context), "");
+        }
+    }
     static void close_clicked(wm::Button &, void *context) { self(context).close(); }
     static const gfx::Bitmap *row_icon(int index, void *context)
     {
@@ -410,12 +415,6 @@ private:
     bool was_connecting_ = false;
 };
 
-NetworkWindow &panel()
-{
-    static NetworkWindow window;
-    return window;
-}
-
 void tray_clicked(void *) { open_network(); }
 
 void show_tray()
@@ -435,7 +434,9 @@ void network_tick(void *)
     if (g_net->changes() != g_shown_changes) {
         g_shown_changes = g_net->changes();
         show_tray();
-        panel().refresh();
+        if (NetworkWindow *panel = the<NetworkWindow>()) {
+            panel->refresh();
+        }
     }
 }
 
@@ -466,16 +467,20 @@ void open_network()
         return;
     }
     const AsProgram as("Network");
-    NetworkWindow &w = panel();
-    if (!w.open()) {
-        w.set_frame(centred(manager(), w.frame().w, w.frame().h));
-        w.refresh();
+    NetworkWindow *w = one<NetworkWindow>("Network");
+    if (w == nullptr) {
+        return;
+    }
+    if (!w->open()) {
+        w->set_frame(centred(manager(), w->frame().w, w->frame().h));
+        w->refresh();
         if (!g_net->scanning()) {
             g_net->scan(); // a fresh list each time it opens
-            w.refresh();
+            w->refresh();
         }
     }
-    show(w);
+    show(*w);
+    discard(w); // if the window manager had no room for it
 }
 
 } // namespace shell

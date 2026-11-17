@@ -1,6 +1,6 @@
 // The entries of a folder, sorted folders first then by name, kept in large
-// memory (external RAM) given once. Shared by the file dialogs and the File
-// manager.
+// memory (external RAM) that goes back with the Listing. Used by the file
+// dialogs and the File manager.
 #pragma once
 
 #include "core/fs/fs.hpp"
@@ -21,6 +21,11 @@ public:
     // Names starting with a dot are hidden unless this is set (View > Show
     // hidden files in the File manager; it applies to the file dialogs too).
     static bool show_hidden;
+
+    Listing() = default;
+    ~Listing();
+    Listing(const Listing &) = delete;
+    Listing &operator=(const Listing &) = delete;
 
     // Takes its memory on first use; false if there is none.
     bool ready();

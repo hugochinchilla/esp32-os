@@ -438,12 +438,16 @@ void test_window()
     letter('c');
     CHECK(game() == nullptr);
     wait_seconds(2);
+    // The program ended with its window: this is a new one, with a new
+    // field. The size comes back from its settings file.
+    CHECK(shell::find_app("Cactus Patch") != nullptr && proc::table().find_by_name("Cactus Patch") == proc::kNone);
     shell::launch(*app);
-    CHECK(game() != nullptr && f.state() == State::Ready && shell::cactus_patch_seconds() == 0);
-    CHECK(f.cols() == 30); // the size is kept
+    CactusField &f2 = shell::cactus_patch_field();
+    CHECK(game() != nullptr && f2.state() == State::Ready && shell::cactus_patch_seconds() == 0);
+    CHECK(f2.cols() == 30); // the size is kept
     letter('g', true);
     letter('s');
-    CHECK(f.cols() == 9 && game()->frame().w == 172);
+    CHECK(f2.cols() == 9 && game()->frame().w == 172);
     CHECK(no_stale_pixels());
 }
 

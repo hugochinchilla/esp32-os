@@ -845,8 +845,8 @@ void test_shell()
         close_all();
         CHECK(!t.alive(pid) && desktop.windows_of(pid) == 0 && desktop.timers_of(pid) == 0);
     }
-    // The other ways in: settings windows are programs too, and what the
-    // desktop itself shows (Shut Down) is the desktop's.
+    // The other ways in: settings windows are programs too, and so is the
+    // Shut Down dialog (the owner's rule, 2026-11-17).
     shell::screen_saver_dialog();
     CHECK(process("Screen Saver") != nullptr && desktop.active()->owner() == process("Screen Saver")->pid);
     shell::open_network();
@@ -855,7 +855,8 @@ void test_shell()
     key(wm::key::Escape, kCtrl);
     key(wm::key::Up);
     key(wm::key::Enter);
-    CHECK(strcmp(title(), "Shut Down Chinchilla") == 0 && desktop.active()->owner() == desk_pid);
+    CHECK(strcmp(title(), "Shut Down Chinchilla") == 0 && process("Shut Down") != nullptr &&
+          desktop.active()->owner() == process("Shut Down")->pid);
     key(wm::key::Escape);
     wait(10000);
     CHECK(t.count() == 1 && t.alive(desk_pid) && desktop.window_count() == 0);

@@ -381,16 +381,24 @@ void test_window()
     wait(80000 * 4);
     CHECK(g.head_row() == 5);
 
-    // Closed in the middle of a game, it is paused when opened again.
+    // Closing ends the program and the game with it: nothing is kept in
+    // memory. Opened again, it is a new game at the speed last chosen
+    // (C:\.config\culebra.ini).
+    const int blocks = memory.in_use();
     key(wm::key::F4, true);
     CHECK(strcmp(title(), "Culebra") != 0);
+    CHECK(memory.in_use() == blocks - 1); // the window, with the game in it
     wait(kStep * 3);
-    CHECK(g.state() == State::Paused && g.head_row() == 5);
     shell::launch(*app);
     desktop.update(); // a direct call, not an event: paint it
-    CHECK(g.state() == State::Paused && g.head_row() == 5);
+    const Snake &g2 = shell::culebra_game();
+    CHECK(g2.state() == State::Ready && g2.head_row() == 9);
     CHECK(no_stale_pixels());
+    key(wm::key::Up);
+    wait(80000 * 4);
+    CHECK(g2.head_row() == 5); // still Fast
     key(wm::key::F4, true);
+    CHECK(memory.in_use() == blocks - 1);
 }
 
 } // namespace

@@ -5,6 +5,7 @@
 // pictures are original, drawn here as text rows.
 #include "core/gfx/art.hpp"
 #include <cstdio>
+#include <cstring>
 
 #include "core/games/cactus.hpp"
 #include "core/shell/shell.hpp"
@@ -176,6 +177,7 @@ struct Level {
     int cols, rows, cacti;
 };
 constexpr Level kLevels[3] = {{9, 9, 10}, {16, 16, 40}, {30, 16, 99}};
+constexpr const char *kLevelKeys[3] = {"small", "medium", "large"}; // in cactus.ini
 
 constexpr uint16_t kF2 = 0x3B;
 
@@ -211,7 +213,20 @@ public:
         help_items_[0] = {"&How to play", &CactusWindow::how_to_play, nullptr, nullptr, nullptr, 0};
         help_items_[1] = {"&About Chinchilla", &CactusWindow::about, nullptr, nullptr, nullptr, 0};
         set_menu_bar(&bar_);
-        set_level(0);
+        // The size is remembered in C:\.config\cactus.ini: the window itself
+        // is gone once it closes.
+        int level = 0;
+        char name[16];
+        if (load_settings("cactus", settings_) && settings_.get("game", "size", name, sizeof(name))) {
+            for (int i = 0; i < 3; i++) {
+                if (strcmp(name, kLevelKeys[i]) == 0) {
+                    level = i;
+                }
+            }
+        }
+        saved_level_ = level;
+        set_level(level);
+        place();
     }
 
     // Before the window opens: where it goes on the screen.
@@ -317,9 +332,14 @@ public:
 
     void closed() override
     {
-        // Nothing runs while the window is shut: the next opening is a new
-        // game.
+        // Closing ends the program: the next opening is a new game, of the
+        // size last chosen.
         new_game();
+        if (level_ != saved_level_) {
+            saved_level_ = level_;
+            settings_.set("game", "size", kLevelKeys[level_]);
+            save_settings("cactus", settings_);
+        }
     }
 
     // Tests and the reference pictures.
@@ -569,6 +589,8 @@ private:
 
     CactusField field_;
     int level_ = 0;
+    int saved_level_ = 0;
+    fs::Ini settings_; // C:\.config\cactus.ini
     int seconds_ = 0;
     int games_ = 0;
     int timer_ = 0;
@@ -591,23 +613,14 @@ private:
     const wm::MenuBar bar_ = {entries_, 2};
 };
 
-CactusWindow &cactus_window()
-{
-    static CactusWindow window;
-    return window;
-}
+CactusWindow &cactus_window() { return *one<CactusWindow>("Cactus Patch"); }
 
 } // namespace
-
 
 void open_cactus_patch()
 {
     const AsProgram as("Cactus Patch");
-    CactusWindow &w = cactus_window();
-    if (!w.open()) {
-        w.place();
-    }
-    show(w);
+    open_one<CactusWindow>("Cactus Patch");
 }
 
 games::CactusField &cactus_patch_field() { return cactus_window().field(); }
