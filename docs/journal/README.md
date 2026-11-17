@@ -63,3 +63,4 @@ Plain words, real numbers, no summaries of summaries.
 | 2026-11-17 | [Dialogs as programs](2026-11-17-dialogs-as-programs.md) | The owner's rule that new dialogs are programs of their own; how programs really run today; what frees memory and what does not |
 | 2026-11-17 | [Our statics in external RAM](2026-11-17-statics-in-psram.md) | 121 KB of internal RAM freed, what stayed internal and why, before and after |
 | 2026-11-17 | [The desktop program](2026-11-17-desktop-program.md) | Backlog item 32: Chinchilla in an SDL2 window on Linux. How the picture is scaled, whose pointer is shown, which keys the PC keeps, where C: lives, why there is no sound, and what is ready for the browser |
+| 2026-11-17 | [A folder name copied into itself](2026-11-17-folder-copy-overlap.md) | The snprintf overlap GCC found in the Release build, and the fix |
