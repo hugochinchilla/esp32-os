@@ -35,6 +35,7 @@ const char *const kArrowGlyph[] = {"X   ", "XX  ", "XXX ", "XXXX", "XXX ", "XX  
 
 // Menus.
 constexpr int kMenuEdge = 3;
+constexpr int kMenuAimSlack = 8; // the aim at a submenu may miss its corners by this much
 constexpr int kItemH = 18, kIconItemH = 20, kStartItemH = 24, kSeparatorH = 7;
 constexpr int kBannerW = 21;
 
@@ -996,6 +997,12 @@ void Wm::mouse(const ports::MouseEvent &event)
         last_input_us_ = now_us();
     }
     if (x != pointer_x_ || y != pointer_y_) {
+        // Where the pointer was kTrail moves ago: its direction is taken
+        // over a few moves, so that one shaky report does not turn it.
+        for (int i = 0; i + 1 < kTrail; i++) {
+            trail_[i] = trail_[i + 1];
+        }
+        trail_[kTrail - 1] = {static_cast<int16_t>(pointer_x_), static_cast<int16_t>(pointer_y_)};
         pointer_x_ = x;
         pointer_y_ = y;
         pointer_.set_position(x, y);
@@ -1251,17 +1258,22 @@ void Wm::on_move()
     if (menu_open()) {
         const int level = popup_at(x, y);
         if (level >= 0 && level + 1 < popup_count_) {
-            // A menu whose submenu is open: the submenu stays while the
-            // pointer crosses borders, separators or other items on its
-            // way; another item takes over only once the pointer rests on
-            // it (each move starts the wait again), as menus did.
+            // A menu whose submenu is open. Borders and separators change
+            // nothing, so an inaccurate pointer can come back. Another item
+            // takes over at once, unless the pointer is on its way to the
+            // submenu (a slanted path crosses the items in between): then
+            // it takes over only if the pointer rests on it.
             const int item = item_at(level, x, y);
             stop_timer(switch_timer_);
             switch_timer_ = 0;
             if (item >= 0 && item != popups_[level].hover) {
-                switch_level_ = level;
-                switch_item_ = item;
-                switch_timer_ = start_timer_for(desktop_pid_, kSubmenuDelayUs, 0, &Wm::switch_due, this);
+                if (heading_for(popups_[level + 1].rect, trail_[0].x, trail_[0].y, x, y)) {
+                    switch_level_ = level;
+                    switch_item_ = item;
+                    switch_timer_ = start_timer_for(desktop_pid_, kSubmenuDelayUs, 0, &Wm::switch_due, this);
+                } else {
+                    switch_to(level, item);
+                }
             }
         } else if (level >= 0) {
             stop_timer(switch_timer_); // in the deepest menu: no hand-over
@@ -1650,24 +1662,57 @@ void Wm::submenu_due(void *self)
     }
 }
 
-// The pointer rested on another item of a menu whose submenu is open: that
-// item takes over, opening its own submenu at once.
+// Whether a pointer that went from (x0, y0) to (x1, y1) is on its way to the
+// submenu at r: the new point lies in the triangle from the old point to the
+// two corners of the submenu's near side, taken a little wide.
+bool Wm::heading_for(const Rect &r, int x0, int y0, int x1, int y1)
+{
+    int edge;
+    if (x0 < r.x) {
+        edge = r.x;
+    } else if (x0 >= r.right()) {
+        edge = r.right() - 1;
+    } else {
+        return false; // already level with it
+    }
+    const int top = r.y - kMenuAimSlack, bottom = r.bottom() + kMenuAimSlack;
+    const int side = edge > x0 ? 1 : -1;
+    if ((x1 - x0) * side <= 0) {
+        return false; // not getting closer
+    }
+    // On the inner side of the lines from the old point to each corner.
+    const long up = static_cast<long>(edge - x0) * (y1 - y0) - static_cast<long>(top - y0) * (x1 - x0);
+    const long down = static_cast<long>(edge - x0) * (y1 - y0) - static_cast<long>(bottom - y0) * (x1 - x0);
+    return up * side >= 0 && down * side <= 0;
+}
+
+// Another item of a menu whose submenu is open takes over: that submenu
+// closes, the item is highlighted and its own submenu opens, all at once.
+void Wm::switch_to(int level, int item)
+{
+    stop_timer(submenu_timer_);
+    submenu_timer_ = 0;
+    close_popups_from(level + 1);
+    set_hover(level, item);
+    const MenuItem &it = popups_[level].menu->items[item];
+    if (it.submenu != nullptr && !(it.flags & kMenuDisabled)) {
+        const Rect r = popup_item(level, item);
+        open_popup(*it.submenu, r.right() + kMenuEdge, r.y - kMenuEdge, false, false);
+    }
+}
+
+// The pointer, on its way to an open submenu, rested on another item of the
+// parent: that item takes over.
 void Wm::switch_due(void *self)
 {
     Wm &wm = *static_cast<Wm *>(self);
     wm.switch_timer_ = 0;
     const int level = wm.switch_level_, item = wm.switch_item_;
-    if (level >= wm.popup_count_ || wm.popup_at(wm.pointer_x_, wm.pointer_y_) != level ||
+    if (level + 1 >= wm.popup_count_ || wm.popup_at(wm.pointer_x_, wm.pointer_y_) != level ||
         wm.item_at(level, wm.pointer_x_, wm.pointer_y_) != item) {
         return;
     }
-    wm.close_popups_from(level + 1);
-    wm.set_hover(level, item);
-    const MenuItem &it = wm.popups_[level].menu->items[item];
-    if (it.submenu != nullptr && !(it.flags & kMenuDisabled)) {
-        const Rect r = wm.popup_item(level, item);
-        wm.open_popup(*it.submenu, r.right() + kMenuEdge, r.y - kMenuEdge, false, false);
-    }
+    wm.switch_to(level, item);
 }
 
 void Wm::close_menus()

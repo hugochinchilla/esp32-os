@@ -320,7 +320,7 @@ void test_respawn()
 
     // respawn: started, init's child, marked; ended, it is back at the next
     // safe point and not before.
-    run(i, "start desktop\nrespawn bar\nrespawn clock\nrespawn once\nrespawn inetd\n", 0);
+    run(i, "desktop:once\nbar:respawn\nclock : respawn\nonce:respawn\ninetd:respawn\n", 0);
     CHECK(bar.starts == 1 && clock.starts == 1 && once.starts == 1);
     CHECK(m.procs.find(bar.pid)->parent == proc::kRoot && m.procs.find(bar.pid)->is(proc::kRespawn));
     CHECK(m.procs.find(clock.pid)->is(proc::kRespawn) && !m.procs.find(once.pid)->is(proc::kRespawn));
@@ -349,7 +349,7 @@ void test_respawn()
         m2.set_up(i2);
         Comes bar2{&m2.procs, "bar"};
         i2.add("bar", &Comes::start, &bar2, false, init::Again::Does);
-        run(i2, "start desktop\nstart bar\n", 0);
+        run(i2, "desktop:once\nbar:once\n", 0);
         CHECK(bar2.starts == 1 && !m2.procs.find(bar2.pid)->is(proc::kRespawn));
         m2.procs.exit(bar2.pid);
         CHECK(m2.procs.restart_due() == 0 && bar2.starts == 1 && !i2.started("bar"));
@@ -391,8 +391,8 @@ void test_needed_and_late()
                 return true;
             }
         };
-        for (const char *text : {"start desktop\nrespawn taskbar\n", "respawn taskbar\nstart desktop\n",
-                                 "start taskbar\n", "# nothing\n"}) {
+        for (const char *text : {"desktop:once\ntaskbar:respawn\n", "taskbar:respawn\ndesktop:once\n",
+                                 "taskbar:once\n", "start taskbar\n", "# nothing\n"}) {
             Machine m;
             init::Init i(m.procs);
             Late late{&i, &m, {&m.procs, "taskbar"}};
@@ -401,7 +401,7 @@ void test_needed_and_late()
             said.clear();
             run(i, text, 0);
             CHECK(!i.booting() && late.bar.starts == 1 && i.started("taskbar"));
-            const bool once = strcmp(text, "start taskbar\n") == 0;
+            const bool once = strstr(text, "taskbar:once") != nullptr || strstr(text, "start taskbar") != nullptr;
             CHECK(m.procs.find(late.bar.pid)->is(proc::kRespawn) == !once);
             m.procs.exit(late.bar.pid);
             CHECK(m.procs.restart_due() == (once ? 0 : 1));
@@ -416,9 +416,66 @@ void test_needed_and_late()
         Comes bar{&m.procs, "bar"};
         i.add("bar", &Comes::start, &bar, true, init::Again::Does);
         CHECK(i.start_again("bar"));
-        run(i, "start desktop\nrespawn bar\n", 0);
+        run(i, "desktop:once\nbar:respawn\n", 0);
         CHECK(bar.starts == 1);
-        run(i, "respawn bar\n", 1); // a second time it is
+        run(i, "bar:respawn\n", 1); // a second time it is
+    }
+}
+
+// The lines as fields, WHAT:ACTION (the owner's choice): parts, programs,
+// paths with a colon of their own, off, and what is not understood.
+void test_fields()
+{
+    {
+        Machine m;
+        init::Init i(m.procs);
+        m.set_up(i);
+        run(i, "# as inittab\n desktop : once \nINETD:ONCE\nconsole:off\nterminal:once\nC:\\Documents\\notes.txt:once\n"
+               "nothing:off\n",
+            0);
+        CHECK(m.order == "desktop inetd " && m.ran == "terminal;C:\\Documents\\notes.txt;");
+        CHECK(i.started("desktop") && i.started("inetd") && !i.started("console"));
+        CHECK(has("init: console is off") && has("init: ran C:\\Documents\\notes.txt"));
+    }
+    // What is wrong with a line is said, and the rest goes on.
+    {
+        Machine m;
+        init::Init i(m.procs);
+        m.set_up(i);
+        run(i, "desktop:once\ninetd\ninetd:twice\n:once\nterminal:respawn\nnothing:once\ninetd:once\ninetd:off\n", 6);
+        CHECK(m.order == "desktop inetd ");
+        CHECK(has("init: not understood: inetd") && has("init: not understood: inetd:twice (once, respawn or off"));
+        CHECK(has("init: once what? (:once)") && has("init: only a part of the system can be started again: terminal"));
+        CHECK(has("init: run nothing: no such program") && has("init: inetd is already started; its off line goes higher up"));
+    }
+    // off: something needed that can come back (the taskbar) is left alone,
+    // wherever the line is, even before the desktop has brought it. The
+    // desktop itself cannot be off.
+    {
+        Machine m;
+        init::Init i(m.procs);
+        m.set_up(i);
+        Comes bar{&m.procs, "bar"};
+        i.add("bar", &Comes::start, &bar, true, init::Again::Does);
+        run(i, "bar:off\ndesktop:off\ninetd:once\n", 1);
+        CHECK(bar.starts == 0 && !i.started("bar") && i.started("desktop") && has("init: desktop cannot be off"));
+        // By hand it starts all the same, and comes back.
+        CHECK(i.start_again("bar") && bar.starts == 1);
+        m.procs.exit(bar.pid);
+        CHECK(m.procs.restart_due() == 1 && bar.starts == 2);
+    }
+    // The file there is when there is none: the new form, and it starts
+    // the same things.
+    {
+        Machine m;
+        init::Init i(m.procs);
+        m.set_up(i);
+        const char *usual = init::Init::default_text();
+        CHECK(strstr(usual, "\r\ndesktop:once\r\ntaskbar:respawn\r\ninetd:once\r\n") != nullptr);
+        CHECK(strstr(usual, "\r\nconsole:off\r\n") != nullptr && strstr(usual, "start ") == nullptr);
+        run(i, usual, 0);
+        CHECK(m.order == "desktop inetd " && i.started("taskbar") && !i.started("console"));
+        CHECK(m.procs.find(m.procs.find_by_name("taskbar"))->is(proc::kRespawn));
     }
 }
 
@@ -601,6 +658,7 @@ int main()
     test_file();
     test_respawn();
     test_needed_and_late();
+    test_fields();
     test_brake();
     test_desktop();
     if (failures == 0) {

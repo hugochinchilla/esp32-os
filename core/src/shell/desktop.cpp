@@ -652,7 +652,7 @@ void stop_taskbar(proc::Pid pid, proc::Signal, void *)
 // The desktop shell: the taskbar with the Start menu and the quick-launch
 // icons, and the icons on the desktop. A process, not protected: End Task
 // or kill ends it. init starts it and, if C:\.config\startup.txt says
-// `respawn taskbar` (or says nothing), starts it again; it is init's child
+// `taskbar:respawn` (or says nothing), starts it again; it is init's child
 // then. On a machine with no init (a test) it is the desktop's child and
 // stays away once ended.
 void start_taskbar(void *)

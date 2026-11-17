@@ -10,17 +10,23 @@
 // was there before any program and that runs between two of them. Its row
 // says so by being the root.
 //
-// The start-up file is text, a line for each thing:
+// The start-up file is text, a line for each thing, WHAT:ACTION as in
+// inittab (the owner's choice, 2026-11-17):
 //
 //     # a comment
-//     start desktop        something the machine can start, by its name
-//     respawn taskbar      the same, and started again whenever it ends
-//     run terminal         a program or a file, as Start > Run... takes it
+//     desktop:once         a part of the system, by its name: started
+//     taskbar:respawn      the same, and started again whenever it ends
+//     console:off          not started
+//     terminal:once        a program or a file, as Start > Run... takes it
 //
-// What `start` and `respawn` can name is what the machine has said it has
-// (add()): the desktop, its taskbar and the network services today. What
-// comes back is watched by its process, which has the thing's name. Without a file, default_text() is
-// used, and written where the file belongs so there is one to edit.
+// The action is after the last colon, so a path keeps its own. The lines
+// of the first form, "start desktop" and "run terminal", are still
+// understood: a file written then goes on working.
+//
+// The parts are what the machine has said it has (add()): the desktop, its
+// taskbar and the network services today. What comes back is watched by
+// its process, which has the thing's name. Without a file, default_text()
+// is used, and written where the file belongs so there is one to edit.
 //
 // The UI task only. No heap.
 #pragma once
@@ -43,9 +49,9 @@ using LogFn = void (*)(const char *line, void *context);
 
 // Whether a thing may be started again when its process ends.
 enum class Again : uint8_t {
-    No,   // it cannot: `respawn` starts it once and says so
-    Can,  // if the file says `respawn`
-    Does, // unless the file says `start` (and when no line names it)
+    No,   // it cannot: NAME:respawn starts it once and says so
+    Can,  // if the file says NAME:respawn
+    Does, // unless the file says NAME:once (and when no line names it)
 };
 
 class Init;
@@ -75,7 +81,7 @@ public:
     Init(const Init &) = delete;
     Init &operator=(const Init &) = delete;
 
-    // Something `start NAME` can start. `name` must stay valid. `needed`:
+    // Something a line can name. `name` must stay valid. `needed`:
     // started after the file's last line if no line started it, so a file
     // that leaves the desktop out does not leave a machine with nothing on
     // its screen (until there is a console to fall back on, item 14). And
@@ -138,13 +144,17 @@ private:
         bool respawn = false;      // it is started again when it ends
         proc::Pid pid = proc::kNone; // its process, while it is watched
         int quick = 0;             // quick endings, one after the other
+        bool off = false;          // the file says it is not to be started
     };
 
     void take(const char *text, size_t length);
     void end_line();
     int finish();
+    enum class Action : uint8_t { Once, Respawn, Off };
     bool line(const char *text);
-    bool needed_first(const char *before);
+    bool part(const char *name, Action action);
+    bool program(const char *what);
+    bool needed_first(const char *before, const char *off = nullptr);
     bool start(Unit &unit);
     Unit *unit(const char *name);
     bool may_restart(Unit &unit, const proc::Process &process);

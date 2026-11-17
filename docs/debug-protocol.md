@@ -18,7 +18,7 @@ Version 1. Working on the board since 2026-11-16.
 
 ## The serial console on the same wire
 
-With `start console` in `C:\.config\startup.txt` the command shell is on
+With `console:once` in `C:\.config\startup.txt` (or `start console`, the older form) the command shell is on
 this port too (backlog item 14, `docs/journal/2026-11-17-serial-console.md`).
 Nothing changes for a tool that only speaks frames.
 

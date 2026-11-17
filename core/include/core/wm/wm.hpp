@@ -226,6 +226,7 @@ public:
     bool start_menu_open() const { return popup_count_ > 0 && start_open_; }
     int popup_count() const { return popup_count_; }
     Rect popup_rect(int level) const { return popups_[level].rect; }
+    const Menu *popup_menu(int level) const { return popups_[level].menu; }
     Rect popup_item(int level, int item) const;
     int popup_hover(int level) const { return popups_[level].hover; }
 
@@ -345,6 +346,8 @@ private:
     static void key_repeat(void *self);
     static void submenu_due(void *self);
     static void switch_due(void *self);
+    static bool heading_for(const Rect &r, int x0, int y0, int x1, int y1);
+    void switch_to(int level, int item);
     void handle_key(uint16_t usage, bool pressed);
     Window *system_modal() const;
 
@@ -492,6 +495,11 @@ private:
     int submenu_timer_ = 0;
     int switch_timer_ = 0; // another item taking over from an open submenu
     int switch_level_ = 0, switch_item_ = 0;
+    static constexpr int kTrail = 4;
+    struct TrailPoint {
+        int16_t x, y;
+    };
+    TrailPoint trail_[kTrail] = {}; // the pointer's last positions, oldest first
     int submenu_level_ = -1, submenu_item_ = -1;
 
     ScreenSaver *saver_ = nullptr;

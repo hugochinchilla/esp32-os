@@ -707,14 +707,13 @@ static void test_slow_submenu()
         CHECK(rig.wm.popup_count() == 2 && rig.wm.popup_hover(0) == 0 && rig.wm.popup_hover(1) == want);
         rig.wm.close_menus();
     }
-    // Resting on another parent item hands over to it after the delay.
+    // Another parent item takes over at once: no wait.
     rig.wm.open_menu(menu, 100, 100);
     Rect r = rig.wm.popup_item(0, 0);
     rig.move(r.x + 20, r.y + r.h / 2, 0);
     rig.wait(wm::Wm::kSubmenuDelayUs);
     r = rig.wm.popup_item(0, 1);
     rig.quick(r.x + 20, r.y + r.h / 2, 0);
-    rig.wait(wm::Wm::kSubmenuDelayUs + 10000);
     CHECK(rig.wm.popup_count() == 1 && rig.wm.popup_hover(0) == 1);
     // The pointer off the menus leaves them as they are; a click there closes them.
     rig.move(500, 400, 0);
@@ -723,6 +722,101 @@ static void test_slow_submenu()
     rig.click(500, 400);
     CHECK(rig.wm.popup_count() == 0);
     CHECK(rig.no_stale_pixels());
+}
+
+// The owner's report of 2026-11-17: with a submenu open, the pointer moving
+// onto another item of a parent menu must close that submenu, highlight the
+// item and open its own submenu in the same move, at every depth; the
+// parent's border and the space off the menus must still change nothing.
+static void test_submenu_switches_at_once()
+{
+    Rig rig;
+    rig.wm.start();
+    wm::MenuItem deep_items[2] = {
+        {"&Deep", &run2, nullptr, nullptr, nullptr, 0},
+        {"D&eeper", &run2, nullptr, nullptr, nullptr, 0},
+    };
+    wm::Menu deep = {deep_items, 2};
+    wm::MenuItem other_items[1] = {{"&Else", &run2, nullptr, nullptr, nullptr, 0}};
+    wm::Menu other = {other_items, 1};
+    wm::MenuItem programs_items[3] = {
+        {"&Games", nullptr, nullptr, &deep, nullptr, 0},
+        {"&Tools", nullptr, nullptr, &other, nullptr, 0},
+        {"&Editor", &run2, nullptr, nullptr, nullptr, 0},
+    };
+    wm::Menu programs = {programs_items, 3};
+    wm::MenuItem settings_items[2] = {
+        {"&Display", &run2, nullptr, nullptr, nullptr, 0},
+        {"&Network", &run2, nullptr, nullptr, nullptr, 0},
+    };
+    wm::Menu settings = {settings_items, 2};
+    wm::MenuItem items[4] = {
+        {"&Programs", nullptr, nullptr, &programs, nullptr, 0},
+        {"&Settings", nullptr, nullptr, &settings, nullptr, 0},
+        {"&Greyed", nullptr, nullptr, &settings, nullptr, wm::kMenuDisabled},
+        {"&Run", &run1, nullptr, nullptr, nullptr, 0},
+    };
+    wm::Menu menu = {items, 4};
+    const auto centre = [&](int level, int item, int &x, int &y) {
+        const Rect r = rig.wm.popup_item(level, item);
+        x = r.x + r.w / 2;
+        y = r.y + r.h / 2;
+    };
+    int x, y, sx, sy;
+    rig.wm.open_menu(menu, 100, 100);
+    centre(0, 0, x, y);
+    rig.move(x, y, 0);
+    rig.wait(wm::Wm::kSubmenuDelayUs);
+    CHECK(rig.wm.popup_count() == 2 && rig.wm.popup_menu(1) == &programs);
+    // Into the program list, then out of it sideways onto Settings.
+    centre(1, 1, sx, sy);
+    slow_path(rig, x, y, sx, y);
+    slow_path(rig, sx, y, sx, sy);
+    CHECK(rig.wm.popup_hover(1) == 1);
+    centre(0, 1, x, y);
+    const Rect list = rig.wm.popup_rect(1);
+    slow_path(rig, sx, sy, list.x + 2, y);       // still inside the list
+    CHECK(rig.wm.popup_menu(1) == &programs);
+    rig.quick(list.x - 6, y, 0);                  // the first report on Settings
+    CHECK(rig.wm.popup_count() == 2 && rig.wm.popup_hover(0) == 1 && rig.wm.popup_menu(1) == &settings);
+    CHECK(rig.no_stale_pixels());
+    // Straight down the parent: a greyed entry and a plain one close it at once.
+    centre(0, 2, x, y);
+    rig.quick(x, y, 0);
+    CHECK(rig.wm.popup_count() == 1 && rig.wm.popup_hover(0) == 2);
+    // The border of the parent and the space off the menus change nothing.
+    centre(0, 0, x, y);
+    rig.move(x, y, 0);
+    rig.wait(wm::Wm::kSubmenuDelayUs);
+    CHECK(rig.wm.popup_count() == 2);
+    centre(1, 2, sx, sy);
+    slow_path(rig, x, y, sx, sy);
+    CHECK(rig.wm.popup_hover(1) == 2);
+    const Rect panel = rig.wm.popup_rect(0);
+    rig.quick(panel.right() - 1, sy, 0); // the parent's right border
+    rig.wait(2 * wm::Wm::kSubmenuDelayUs);
+    CHECK(rig.wm.popup_count() == 2 && rig.wm.popup_hover(0) == 0);
+    rig.quick(list.right() + 30, list.bottom() + 30, 0); // off every menu
+    rig.wait(2 * wm::Wm::kSubmenuDelayUs);
+    CHECK(rig.wm.popup_count() == 2 && rig.wm.popup_hover(0) == 0);
+    // The same one level down: Games open, the pointer comes back from it
+    // onto Tools, which takes over; then onto Run two levels up, which
+    // closes everything below the first menu.
+    centre(1, 0, x, y);
+    rig.move(x, y, 0);
+    rig.wait(wm::Wm::kSubmenuDelayUs);
+    CHECK(rig.wm.popup_count() == 3 && rig.wm.popup_menu(2) == &deep);
+    centre(2, 1, sx, sy);
+    slow_path(rig, x, y, sx, sy);
+    CHECK(rig.wm.popup_count() == 3 && rig.wm.popup_hover(2) == 1);
+    centre(1, 1, x, y);
+    slow_path(rig, sx, sy, x, y);
+    CHECK(rig.wm.popup_count() == 3 && rig.wm.popup_hover(1) == 1 && rig.wm.popup_menu(2) == &other);
+    centre(0, 3, x, y);
+    rig.quick(x, y, 0);
+    CHECK(rig.wm.popup_count() == 1 && rig.wm.popup_hover(0) == 3);
+    CHECK(rig.no_stale_pixels());
+    rig.wm.close_menus();
 }
 
 // A key whose handling takes long (a save, about 1 s on the board) must not
@@ -1419,6 +1513,7 @@ int main()
     test_shortcuts();
     test_menus();
     test_slow_submenu();
+    test_submenu_switches_at_once();
     test_slow_key_does_not_repeat();
     test_start_menu_and_icons();
     test_icon_places();
