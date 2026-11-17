@@ -514,6 +514,8 @@ void test_ui()
     // Closed: the program's object is destroyed, everything goes back, the
     // process ends and the number is dead.
     s.close();
+    // Dead to the program at once, before the system has taken it apart.
+    CHECK(sample_gone == 1 && !os::ui::alive(number) && !os::ui::show(number));
     wait(10000);
     wait(10000);
     CHECK(sample_gone == 1 && !os::ui::alive(number) && os::ui::state(number) == nullptr);

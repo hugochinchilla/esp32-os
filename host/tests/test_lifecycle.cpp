@@ -414,7 +414,7 @@ void test_dialogs()
         {"Screen Saver", "Screen Saver", &shell::screen_saver_dialog, 11}, // by number: the window and ten controls
         {"Network", "Network", &shell::open_network, 13},
         {"Shut Down", "Shut Down Chinchilla", &shell::shut_down_dialog, 6}, // by number (os::ui): the window and five controls
-        {"Task Manager", "Task Manager", &shell::open_task_manager, 1},
+        {"Task Manager", "Task Manager", &shell::open_task_manager, 20},
     };
     for (const Tool &tool : tools) {
         tool.open();

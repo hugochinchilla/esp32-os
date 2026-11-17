@@ -87,6 +87,7 @@ void *state(Window window);
 bool alive(Window window);
 bool on_screen(Window window); // shown, and not closed
 void set_title(Window window, const char *title); // the text must stay valid
+bool in_front(Window window);                     // it is the window in use
 // Asks for a part of the client area to be painted again.
 void redraw(Window window, const gfx::Rect &part);
 
@@ -125,6 +126,11 @@ Control drop_down(Window window, const gfx::Bitmap *icon, const gfx::Rect &place
 // A menu of the program's just under a control. The menu and its items
 // are the program's and must stay valid while it is open.
 void menu_under(Window window, Control control, wm::Menu &menu);
+
+// A bar that fills from the left in blocks, in a sunken box: progress, or
+// how full something is.
+Control meter(Window window, const gfx::Rect &place, gfx::Colour colour);
+void set_level(Window window, Control meter, uint32_t value, uint32_t total); // shown in whole blocks
 
 // What a control shows: a label, a button, a text area, a text field, a
 // drop-down box (whose text must stay valid, as a label's).

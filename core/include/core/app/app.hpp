@@ -129,6 +129,7 @@ public:
     bool operator==(const Control &other) const { return window_ == other.window_ && number_ == other.number_; }
     bool operator!=(const Control &other) const { return !(*this == other); }
     os::ui::Control number() const { return number_; }
+    void redraw() const { os::ui::redraw_control(window_, number_); } // painted again
 
 protected:
     Number window_ = kNone;
@@ -203,7 +204,6 @@ public:
 class Picture : public Control {
 public:
     using Control::Control;
-    void redraw() const { os::ui::redraw_control(window_, number_); }
 };
 
 // A grid of cells to pick one from, each painted by the program
@@ -214,7 +214,6 @@ public:
     int selected() const { return os::ui::selected(window_, number_); } // -1: none
     // Tells nobody. -1: none.
     void select(int index) const { os::ui::select(window_, number_, index); }
-    void redraw() const { os::ui::redraw_control(window_, number_); }
 };
 
 // A box showing a text and a picture, with an arrow to press
@@ -224,6 +223,13 @@ public:
     using Control::Control;
     void set_text(const char *text) const { os::ui::set_text(window_, number_, text); } // must stay valid
     void menu(wm::Menu &menu) const { os::ui::menu_under(window_, number_, menu); }
+};
+
+// A bar that fills from the left in blocks: progress, or how full.
+class Meter : public Control {
+public:
+    using Control::Control;
+    void set(uint32_t value, uint32_t total) const { os::ui::set_level(window_, number_, value, total); }
 };
 
 class GroupFrame : public Control {
@@ -242,6 +248,7 @@ public:
     Number number() const { return number_; }
     void close() { os::ui::close(number_); }
     bool on_screen() const { return os::ui::on_screen(number_); }
+    bool in_front() const { return os::ui::in_front(number_); } // it is the window in use
     // Asks for a part of the client area to be painted again.
     void redraw(const gfx::Rect &part) { os::ui::redraw(number_, part); }
 
@@ -302,6 +309,10 @@ protected:
     DropDown drop_down(const gfx::Bitmap *icon, const gfx::Rect &place)
     {
         return {number_, os::ui::drop_down(number_, icon, place)};
+    }
+    Meter meter(const gfx::Rect &place, gfx::Colour colour = gfx::rgb(0, 0, 2))
+    {
+        return {number_, os::ui::meter(number_, place, colour)};
     }
     Picture picture(const gfx::Rect &place) { return {number_, os::ui::picture(number_, place)}; }
     Grid grid(const gfx::Rect &place, int columns, int count, int cell_w, int cell_h, int margin = 3)
@@ -391,6 +402,10 @@ template <class T, class... Args> Number open(const Look &look, Args &&...args)
     Window::making() = kNone;
     return os::ui::show(number) ? number : kNone;
 }
+
+// The program's object behind a window it opened as T; nullptr once the
+// window has closed.
+template <class T> T *program(Number number) { return static_cast<T *>(os::ui::state(number)); }
 
 // For a program that runs once at a time: brings its window to the front.
 // False if it is not open.

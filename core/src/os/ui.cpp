@@ -72,6 +72,7 @@ enum class Kind : uint8_t {
     Picture,
     Grid,
     DropDown,
+    Meter,
 };
 
 // A line of text exactly as given, kept by the control.
@@ -263,6 +264,54 @@ private:
     int held_ = 0;
 };
 
+// A bar that fills from the left in blocks, in a sunken box.
+class Meter : public wm::Widget {
+public:
+    static constexpr int kBlock = 6, kGap = 2;
+
+    Meter(const gfx::Rect &r, gfx::Colour colour) : Widget(r), colour_(colour) {}
+    ~Meter() = default;
+
+    int blocks() const { return (rect.w - 4 + kGap) / (kBlock + kGap); }
+    // How full, as value out of total (shown in whole blocks).
+    void set(uint32_t value, uint32_t total)
+    {
+        const int n = blocks();
+        int lit = total == 0 ? 0 : static_cast<int>((static_cast<uint64_t>(value) * n + total / 2) / total);
+        lit = lit > n ? n : lit;
+        if (lit == 0 && value != 0) {
+            lit = 1; // anything at all shows
+        }
+        if (lit != lit_) {
+            lit_ = lit;
+            invalidate();
+        }
+    }
+
+    void paint(gfx::Canvas &c) override
+    {
+        const gfx::Rect r = {0, 0, rect.w, rect.h};
+        c.sunken(r);
+        // Every pixel inside once: blocks, then the gaps between them.
+        const int w = rect.w - 4, h = rect.h - 4;
+        int x = 0;
+        for (int i = 0; x < w; i++) {
+            const int bw = x + kBlock > w ? w - x : kBlock;
+            c.fill({2 + x, 2, bw, h}, i < lit_ ? colour_ : gfx::kWhite);
+            x += bw;
+            const int gw = x + kGap > w ? w - x : kGap;
+            if (gw > 0) {
+                c.fill({2 + x, 2, gw, h}, gfx::kWhite);
+                x += gw;
+            }
+        }
+    }
+
+private:
+    gfx::Colour colour_;
+    int lit_ = 0;
+};
+
 // The frame for a client area of this size.
 gfx::Rect frame_for(const Look &look)
 {
@@ -310,6 +359,7 @@ public:
             case Kind::Picture: static_cast<Picture *>(controls_[i])->~Picture(); break;
             case Kind::Grid: static_cast<Grid *>(controls_[i])->~Grid(); break;
             case Kind::DropDown: static_cast<DropDown *>(controls_[i])->~DropDown(); break;
+            case Kind::Meter: static_cast<Meter *>(controls_[i])->~Meter(); break;
             }
             os::release(controls_[i]);
         }
@@ -317,6 +367,7 @@ public:
     }
 
     ui::Window handle() const { return id(); }
+    bool gone() const { return gone_; }
     void *state() const { return state_; }
 
     template <class T, class... Args> Control make(Kind kind, Args &&...args)
@@ -441,17 +492,20 @@ public:
         if (!told_closed_) {
             told_closed_ = true;
             tell(Event{What::Closed});
+            gone_ = true;
         }
     }
 
 private:
-    bool tell(const Event &e) { return events_(handle(), e, state_); }
+    // Nothing reaches a program whose object has gone.
+    bool tell(const Event &e) { return !gone_ && events_(handle(), e, state_); }
 
     int slot_;
     Events events_;
     void *state_;
     uint8_t flags_;
     bool told_closed_ = false;
+    bool gone_ = false; // the program has heard Closed: its object is destroyed
     const gfx::Bitmap *const *row_icons_ = nullptr;
     static constexpr int kGroups = 4;
     int groups_[kGroups] = {};
@@ -463,7 +517,10 @@ private:
 Behind *behind(Window window)
 {
     for (Behind *w : g_windows) {
-        if (w != nullptr && window != kNoWindow && w->id() == window) {
+        // One that has closed is dead to the program at once, though its
+        // memory goes back a moment later: the program's object went with
+        // the Closed event.
+        if (w != nullptr && window != kNoWindow && w->id() == window && !w->gone()) {
             return w;
         }
     }
@@ -620,6 +677,26 @@ void menu_under(Window window, Control control, wm::Menu &menu)
         const gfx::Rect client = w->client();
         os::open_menu(menu, client.x + c->rect.x, client.y + c->rect.bottom());
     }
+}
+
+Control meter(Window window, const gfx::Rect &place, gfx::Colour colour)
+{
+    Behind *w = behind(window);
+    return w != nullptr ? w->make<Meter>(Kind::Meter, place, colour) : kNoControl;
+}
+
+void set_level(Window window, Control control, uint32_t value, uint32_t total)
+{
+    Behind *w = behind(window);
+    if (Meter *m = w != nullptr ? w->as<Meter>(control, Kind::Meter) : nullptr) {
+        m->set(value, total);
+    }
+}
+
+bool in_front(Window window)
+{
+    Behind *w = behind(window);
+    return w != nullptr && os::in_front(*w);
 }
 
 void set_title(Window window, const char *title)

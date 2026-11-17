@@ -279,3 +279,22 @@ Programs seven and eight (`dialogs.cpp`). New in the system for them:
 
 PC tests pass (41 of 41), the pictures match. Firmware not compiled
 since, and not run.
+
+## The same day: the Task Manager, and a number that outlived its window
+
+Program nine. New in the system for it: the `meter` (the bar of blocks
+that the Task Manager and Defrag shared as a widget of the shell's), and
+`in_front`. The graph of the last minute is a `picture`; the lines of
+figures are `plain` texts; the pictures of the rows are a table.
+
+A fault found by the PC tests (`test_paint`), in the system and not in
+the Task Manager: a window that had closed still answered to its number
+until the system took it apart a moment later, though the program's
+object had already gone with the Closed event. Opening the Task Manager
+again in that moment brought the dead window back and painted through an
+object that was no longer there. Now the number is dead as soon as the
+program has heard Closed, and nothing more is told to it. `test_os`
+checks it.
+
+PC tests pass (41 of 41), the pictures match. Firmware not compiled
+since, and not run.

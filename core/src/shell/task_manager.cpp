@@ -11,12 +11,11 @@
 #include <cstdio>
 #include <cstring>
 
+#include "core/app/app.hpp"
 #include "core/gfx/art.hpp"
 #include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
-#include "core/wm/widgets.hpp"
 #include "internal.hpp"
-#include "meter.hpp"
 
 namespace shell {
 
@@ -24,100 +23,42 @@ namespace {
 
 constexpr gfx::Colour kNavy = gfx::rgb(0, 0, 2);
 
-// The last minute of processor use, one column per second, newest right.
-class History : public wm::Widget {
-public:
-    static constexpr int kSamples = 60, kColumn = 2;
-
-    History(int x, int y, int h) : Widget({x, y, kSamples * kColumn + 4, h}) {}
-
-    void push(int percent)
-    {
-        memmove(values_, values_ + 1, kSamples - 1);
-        values_[kSamples - 1] = static_cast<uint8_t>(percent < 0 ? 0 : (percent > 100 ? 100 : percent));
-        invalidate();
-    }
-    int latest() const { return values_[kSamples - 1]; }
-
-    void paint(gfx::Canvas &c) override
-    {
-        c.sunken({0, 0, rect.w, rect.h});
-        const int h = rect.h - 4;
-        for (int i = 0; i < kSamples; i++) {
-            int bar = (values_[i] * h + 50) / 100;
-            bar = bar == 0 && values_[i] != 0 ? 1 : bar;
-            c.fill({2 + i * kColumn, 2, kColumn, h - bar}, gfx::kWhite);
-            c.fill({2 + i * kColumn, 2 + h - bar, kColumn, bar}, kNavy);
-        }
-    }
-
-private:
-    uint8_t values_[kSamples] = {};
-};
-
-class TaskManager : public wm::Window {
+class TaskManager : public app::Window {
 public:
     static constexpr int kClientW = 404, kClientH = 332;
     static constexpr int kMaxRows = proc::Table::kMaxProcesses, kRowText = 64;
     static constexpr uint32_t kRefreshUs = 1000000;
     // How long a program gets to close after End Task before force is offered.
     static constexpr uint32_t kGraceUs = 5000000;
+    // The last minute of processor use, one column per second, newest right.
+    static constexpr int kSamples = 60, kColumn = 2;
+    static constexpr gfx::Rect kHistory = {18, 202, kSamples * kColumn + 4, 46};
 
     TaskManager()
-        : Window("Task Manager", {0, 0, kClientW + 2 * kBorder, kClientH + kClientTop + kBorder},
-                 &gfx::tasks_icon_16()),
-          heading_({8, 6, 200, 14}, "&Processes running:"),
-          columns_({30, 22, kClientW - 46, 14}, "  PID  Name            Time    Mem  Window"),
-          list_({8, 36, kClientW - 16, 94}, titles_, 0, &TaskManager::row_picked, this),
-          end_({8, 136, 75, 23}, "&End Task", &TaskManager::end_pressed, this),
-          switch_({89, 136, 75, 23}, "&Switch To", &TaskManager::switch_pressed, this),
-          shut_down_({kClientW - 8 - 96, 136, 96, 23}, "Shut &Down...", &TaskManager::shut_down_pressed, this),
-          all_({8, 164, 200, 18}, "Show &all processes", false, &TaskManager::all_changed, this),
-          processor_({8, 184, kClientW - 16, 74}, "Processor"),
-          history_(18, 202, 46),
-          desktop_({152, 202, 168, 14}, desktop_text_),
-          video_({152, 218, 168, 14}, video_text_),
-          uptime_({152, 234, 168, 14}, uptime_text_),
-          memory_({8, 262, kClientW - 16, 62}, "Memory"),
-          internal_label_({18, 280, 54, 14}, "Internal"),
-          internal_({76, 280, 100, 14}),
-          internal_text_({184, 280, 138, 14}, internal_line_),
-          external_label_({18, 300, 54, 14}, "External"),
-          external_({76, 300, 100, 14}),
-          external_text_({184, 300, 138, 14}, external_line_)
+        : columns_(label({30, 22, kClientW - 46, 14}, "  PID  Name            Time    Mem  Window")),
+          heading_(label({8, 6, 200, 14}, "&Processes running:")), // just before the list: Alt+P goes to the control after the label
+          list_(list({8, 36, kClientW - 16, 94}, titles_, 0)),
+          end_(button({8, 136, 75, 23}, "&End Task")),
+          switch_(button({89, 136, 75, 23}, "&Switch To")),
+          shut_down_(button({kClientW - 8 - 96, 136, 96, 23}, "Shut &Down...")),
+          all_(check_box({8, 164, 200, 18}, "Show &all processes")),
+          processor_(group({8, 184, kClientW - 16, 74}, "Processor")),
+          history_(picture(kHistory)),
+          desktop_(plain({152, 202, 168, 14})),
+          video_(plain({152, 218, 168, 14})),
+          uptime_(plain({152, 234, 168, 14})),
+          memory_(group({8, 262, kClientW - 16, 62}, "Memory")),
+          internal_label_(label({18, 280, 54, 14}, "Internal")),
+          internal_(meter({76, 280, 100, 14})),
+          internal_text_(plain({184, 280, 138, 14})),
+          external_label_(label({18, 300, 54, 14}, "External")),
+          external_(meter({76, 300, 100, 14})),
+          external_text_(plain({184, 300, 138, 14}))
     {
-        set_dialog(true); // fixed size, only the close button
-        list_.set_icons(&TaskManager::icon_of);
-        list_.set_on_activate(&TaskManager::activated);
-        add(columns_);
-        add(heading_); // just before the list: Alt+P goes to the widget after the label
-        add(list_);
-        add(end_);
-        add(switch_);
-        add(shut_down_);
-        add(all_);
-        add(processor_);
-        add(history_);
-        add(desktop_);
-        add(video_);
-        add(uptime_);
-        add(memory_);
-        add(internal_label_);
-        add(internal_);
-        add(internal_text_);
-        add(external_label_);
-        add(external_);
-        add(external_text_);
-    }
-
-    // Called when the window opens: fresh figures, then once a second.
-    void opened()
-    {
-        have_baseline_ = false;
+        list_.set_items(titles_, 0, icons_);
+        // Fresh figures, then once a second.
         refresh();
-        if (timer_ == 0) {
-            timer_ = os::start_timer(kRefreshUs, kRefreshUs, &TaskManager::tick, this);
-        }
+        timer_ = os::start_timer(kRefreshUs, kRefreshUs, &TaskManager::tick, this);
     }
 
     void closed() override
@@ -133,7 +74,43 @@ public:
             close();
             return true;
         }
-        return Window::key(k);
+        return false;
+    }
+
+    void command(app::Control which) override
+    {
+        if (which == end_) {
+            end_pressed();
+        } else if (which == switch_) {
+            switch_to();
+        } else if (which == shut_down_) {
+            shut_down_dialog();
+        }
+    }
+    void changed(app::Control which) override
+    {
+        if (which == all_) {
+            refresh_programs();
+        } else if (which == list_) {
+            update_buttons();
+        }
+    }
+    bool chosen(app::Control) override
+    {
+        switch_to();
+        return true;
+    }
+
+    void paint_in(app::Control, app::Canvas &c) override
+    {
+        c.sunken({0, 0, kHistory.w, kHistory.h});
+        const int h = kHistory.h - 4;
+        for (int i = 0; i < kSamples; i++) {
+            int bar = (values_[i] * h + 50) / 100;
+            bar = bar == 0 && values_[i] != 0 ? 1 : bar;
+            c.fill({2 + i * kColumn, 2, kColumn, h - bar}, gfx::kWhite);
+            c.fill({2 + i * kColumn, 2 + h - bar, kColumn, bar}, kNavy);
+        }
     }
 
     // Ctrl+Alt+Del again while it is open: the list up to date and ready
@@ -141,7 +118,7 @@ public:
     void brought_forward()
     {
         refresh_programs();
-        set_focus(&list_);
+        set_focus(list_);
         check_ending();
     }
 
@@ -155,11 +132,11 @@ public:
 private:
     static void tick(void *context) { static_cast<TaskManager *>(context)->refresh(); }
 
-    static const gfx::Bitmap *icon_of(int index, void *context)
+    void push(int percent)
     {
-        auto *self = static_cast<TaskManager *>(context);
-        const os::WindowId w = os::main_window(self->pids_[index]);
-        return w != os::kNoWindow ? os::window_icon(w) : &gfx::service_icon_16();
+        memmove(values_, values_ + 1, kSamples - 1);
+        values_[kSamples - 1] = static_cast<uint8_t>(percent < 0 ? 0 : (percent > 100 ? 100 : percent));
+        history_.redraw();
     }
 
     // The PID of the row picked, if that process is still there.
@@ -169,25 +146,16 @@ private:
         return at >= 0 && at < count_ && os::alive(pids_[at]) ? pids_[at] : proc::kNone;
     }
 
-    static void activated(wm::ListBox &, void *context) { switch_pressed(static_cast<TaskManager *>(context)->switch_, context); }
-
-    static void all_changed(wm::CheckBox &, void *context) { static_cast<TaskManager *>(context)->refresh_programs(); }
-
-    static void switch_pressed(wm::Button &, void *context)
-    {
-        // Its dialog, if one holds it, comes forward with it.
-        os::bring_forward(os::main_window(static_cast<TaskManager *>(context)->chosen()));
-    }
-
-    static void row_picked(wm::ListBox &, void *context) { static_cast<TaskManager *>(context)->update_buttons(); }
+    // Its dialog, if one holds it, comes forward with it.
+    void switch_to() { os::bring_forward(os::main_window(chosen())); }
 
     // End Task is greyed out on a protected process: nobody may signal it.
     void update_buttons()
     {
         const proc::Process *p = os::process(chosen());
         const bool allowed = p == nullptr || !p->is(proc::kProtected);
-        if (!allowed && focus() == &end_) {
-            set_focus(&list_);
+        if (!allowed && focus() == end_) {
+            set_focus(list_);
         }
         end_.set_enabled(allowed);
     }
@@ -197,16 +165,16 @@ private:
     // signal takes effect when this click has been dealt with. If the
     // program is still there kGraceUs later, check_ending() offers force.
     // End Task again on the same program offers it at once.
-    static void end_pressed(wm::Button &, void *context)
+    void end_pressed()
     {
-        auto *self = static_cast<TaskManager *>(context);
-        const proc::Pid pid = self->chosen();
+        TaskManager *self = this;
+        const proc::Pid pid = chosen();
         if (pid == proc::kNone) {
             return;
         }
-        self->set_focus(&self->list_); // the arrow keys go on to the next row
-        if (pid == self->ending_) {
-            self->offer_force();
+        set_focus(list_); // the arrow keys go on to the next row
+        if (pid == ending_) {
+            offer_force();
             return;
         }
         static char text[120];
@@ -245,7 +213,7 @@ private:
             ending_ = proc::kNone;
             return;
         }
-        if (os::now_us() - ending_since_ >= kGraceUs && os::in_front(*this)) {
+        if (os::now_us() - ending_since_ >= kGraceUs && in_front()) {
             offer_force();
         }
     }
@@ -285,12 +253,10 @@ private:
     static void look_again(void *context)
     {
         auto *self = static_cast<TaskManager *>(context);
-        if (self->open()) {
+        if (self->on_screen()) {
             self->refresh_programs();
         }
     }
-
-    static void shut_down_pressed(wm::Button &, void *) { shut_down_dialog(); }
 
     // The list: one row per process. By default the programs with windows,
     // except this one; with "Show all processes" every row of the table,
@@ -306,7 +272,7 @@ private:
         for (int i = 0; i < os::process_count() && n < kMaxRows; i++) {
             const proc::Process &p = os::process_at(i);
             const os::WindowId w = os::main_window(p.pid);
-            if (!all && (p.is(proc::kSystem) || w == os::kNoWindow || p.pid == owner())) {
+            if (!all && (p.is(proc::kSystem) || w == os::kNoWindow || p.pid == os::self())) {
                 continue;
             }
             const char *what = w != os::kNoWindow ? os::window_title(w) : (p.is(proc::kSystem) ? "(system)" : "");
@@ -328,27 +294,21 @@ private:
             pids_[i] = now[i];
             memcpy(rows_[i], text[i], kRowText);
             titles_[i] = rows_[i];
+            const os::WindowId w = os::main_window(now[i]);
+            icons_[i] = w != os::kNoWindow ? os::window_icon(w) : &gfx::service_icon_16();
         }
         count_ = n;
         if (!same) {
-            list_.set_items(titles_, n);
+            list_.set_items(titles_, n, icons_);
             for (int i = 0; i < n; i++) {
                 if (now[i] == was) {
                     list_.select(i);
                 }
             }
         } else if (changed) {
-            list_.invalidate();
+            list_.redraw();
         }
         update_buttons();
-    }
-
-    void set_line(wm::Label &label, char *line, size_t capacity, const char *text)
-    {
-        if (strcmp(line, text) != 0) {
-            snprintf(line, capacity, "%s", text);
-            label.invalidate();
-        }
     }
 
     void refresh_figures()
@@ -365,7 +325,7 @@ private:
                 static_cast<uint64_t>(static_cast<uint32_t>(stats.scanout_us - last_scanout_)) * 100 / span);
             desktop = desktop > 100 ? 100 : desktop;
             video = video > 100 ? 100 : video;
-            history_.push(desktop + video);
+            push(desktop + video);
         }
         have_baseline_ = true;
         last_now_ = now;
@@ -374,13 +334,13 @@ private:
 
         char text[40];
         snprintf(text, sizeof(text), "Desktop:   %3d %% of a core", desktop);
-        set_line(desktop_, desktop_text_, sizeof(desktop_text_), text);
+        desktop_.set(text);
         snprintf(text, sizeof(text), "Video out: %3d %% of a core", video);
-        set_line(video_, video_text_, sizeof(video_text_), text);
+        video_.set(text);
         const uint32_t up = static_cast<uint32_t>(now / 1000000);
         snprintf(text, sizeof(text), "Running for %u:%02u:%02u", static_cast<unsigned>(up / 3600),
                  static_cast<unsigned>(up / 60 % 60), static_cast<unsigned>(up % 60));
-        set_line(uptime_, uptime_text_, sizeof(uptime_text_), text);
+        uptime_.set(text);
 
         // Memory: the totals are facts of the machine, read once.
         if (!have_totals_) {
@@ -398,12 +358,12 @@ private:
         external_.set(used_external, total_external_);
         snprintf(text, sizeof(text), "%u of %u KB used", static_cast<unsigned>(used_internal / 1024),
                  static_cast<unsigned>(total_internal_ / 1024));
-        set_line(internal_text_, internal_line_, sizeof(internal_line_), text);
+        internal_text_.set(text);
         const unsigned used_tenths = static_cast<unsigned>((static_cast<uint64_t>(used_external) * 10 + (1 << 19)) >> 20);
         const unsigned total_tenths = static_cast<unsigned>((static_cast<uint64_t>(total_external_) * 10 + (1 << 19)) >> 20);
         snprintf(text, sizeof(text), "%u.%u of %u.%u MB used", used_tenths / 10, used_tenths % 10,
                  total_tenths / 10, total_tenths % 10);
-        set_line(external_text_, external_line_, sizeof(external_line_), text);
+        external_text_.set(text);
     }
 
     proc::Pid pids_[kMaxRows] = {};
@@ -418,45 +378,49 @@ private:
     uint64_t last_now_ = 0;
     uint32_t last_busy_ = 0, last_scanout_ = 0;
     uint32_t total_internal_ = 0, total_external_ = 0;
-    char desktop_text_[40] = "", video_text_[40] = "", uptime_text_[40] = "";
-    char internal_line_[40] = "", external_line_[40] = "";
+    uint8_t values_[kSamples] = {};
+    const gfx::Bitmap *icons_[kMaxRows] = {};
 
-    wm::Label heading_, columns_;
-    wm::ListBox list_;
-    wm::Button end_, switch_, shut_down_;
-    wm::CheckBox all_;
-    wm::GroupFrame processor_;
-    History history_;
-    wm::Label desktop_, video_, uptime_;
-    wm::GroupFrame memory_;
-    wm::Label internal_label_;
-    Meter internal_;
-    wm::Label internal_text_;
-    wm::Label external_label_;
-    Meter external_;
-    wm::Label external_text_;
+    app::Label columns_, heading_;
+    app::ListBox list_;
+    app::Button end_, switch_, shut_down_;
+    app::CheckBox all_;
+    app::GroupFrame processor_;
+    app::Picture history_;
+    app::Plain desktop_, video_, uptime_;
+    app::GroupFrame memory_;
+    app::Label internal_label_;
+    app::Meter internal_;
+    app::Plain internal_text_;
+    app::Label external_label_;
+    app::Meter external_;
+    app::Plain external_text_;
 };
+
+app::Number g_window = app::kNone; // the one there may be: a number, dead once it has closed
 
 } // namespace
 
 void open_task_manager()
 {
     const AsProgram as("Task Manager");
-    TaskManager *window = one<TaskManager>("Task Manager");
-    if (window == nullptr) {
-        return;
+    if (!app::bring_forward(g_window)) {
+        app::Look look;
+        look.title = "Task Manager";
+        look.width = TaskManager::kClientW;
+        look.height = TaskManager::kClientH;
+        look.icon = &gfx::tasks_icon_16();
+        look.flags = app::kDialog | app::kClientSize; // fixed size, only the close button
+        g_window = app::open<TaskManager>(look);
+        if (g_window == app::kNone) {
+            no_memory_for("Task Manager");
+            return;
+        }
     }
-    TaskManager &w = *window;
-    const bool was_open = w.open();
-    if (!was_open) {
-        w.set_frame(os::centred(w.frame().w, w.frame().h));
+    // Ctrl+Alt+Del again while it is open does this too.
+    if (TaskManager *w = app::program<TaskManager>(g_window)) {
+        w->brought_forward();
     }
-    show(w);
-    if (!was_open && w.open()) {
-        w.opened();
-    }
-    w.brought_forward();
-    discard(window); // if the window manager had no room for it
 }
 
 } // namespace shell
