@@ -228,6 +228,26 @@ public:
     virtual FsError info(VolumeInfo &out) = 0;
     // The index-th entry of a folder; NotFound past the last one.
     virtual FsError entry(const char *folder, int index, DirEntry &out) = 0;
+    // Entries of a folder from the first-th on, as many as `out` holds, in
+    // one pass over it: what a listing asks, so that a folder of n files
+    // does not cost n passes. `count` is how many were given; fewer than
+    // `capacity` means the folder ends there (a folder that is not there
+    // gives none). A drive that can do no better is asked entry by entry.
+    virtual FsError entries(const char *folder, int first, DirEntry *out, int capacity, int &count)
+    {
+        count = 0;
+        while (count < capacity) {
+            const FsError e = entry(folder, first + count, out[count]);
+            if (e == FsError::NotFound) {
+                break;
+            }
+            if (e != FsError::Ok) {
+                return e;
+            }
+            count++;
+        }
+        return FsError::Ok;
+    }
     virtual FsError stat(const char *path, DirEntry &out) = 0;
     virtual FsError make_folder(const char *path) = 0;
     virtual FsError remove(const char *path) = 0; // a file or an empty folder

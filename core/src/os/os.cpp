@@ -432,6 +432,11 @@ Error entry(const char *folder, int index, fs::DirEntry &out)
     const prog::InCall in_call;
     return g_kit.storage->entry(folder, index, out);
 }
+Error entries(const char *folder, int first, fs::DirEntry *out, int capacity, int &count)
+{
+    const prog::InCall in_call;
+    return g_kit.storage->entries(folder, first, out, capacity, count);
+}
 Error make_folder(const char *path)
 {
     const prog::InCall in_call;

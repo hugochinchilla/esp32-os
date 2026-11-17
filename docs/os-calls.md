@@ -51,7 +51,7 @@ The journal entry with the reasons is
 | | `os::shut_down()` | Asks every program to close and shows the power-off screen; false if one called it off |
 | Network | `os::network()` | The Wi-Fi service, or nothing on a board with no radio; asked for each time, not kept |
 | Sessions | `os::open_session(device, why)` | A command shell on a TTY of its own, as a process `sh`, child of the one asking, which is its device (the Terminal). `nullptr` and the reason if it cannot start |
-| Files | `os::file::stat`, `entry`, `make_folder`, `remove`, `rename` | Folders and names |
+| Files | `os::file::stat`, `entry`, `entries` (a run of a folder in one pass), `make_folder`, `remove`, `rename` | Folders and names |
 | | `os::file::open`, `read`, `write`, `seek`, `close` | A file a piece at a time, by its handle: a number. The system knows which process holds it and closes it if the process ends. Two per process, six in all |
 | | `os::file::begin_save`, `finish_save` | Saving without putting the old file at risk, by a handle too; thrown away if the process ends first |
 | | `os::file::open_files(pid)` | How many a process holds |

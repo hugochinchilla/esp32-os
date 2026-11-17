@@ -51,34 +51,47 @@ ports::FsError Listing::read(const char *folder)
     if (!ready()) {
         return ports::FsError::NoSpace;
     }
+    // A few entries a call, each call one pass over the folder: asked for
+    // one by one a folder of 80 files took the board longer than a program
+    // is waited for.
+    constexpr int kRun = 8;
     ports::FsError e = ports::FsError::Ok;
-    for (int i = 0;; i++) {
-        ports::DirEntry d;
-        e = os::file::entry(folder, i, d);
+    for (int first = 0; !truncated_;) {
+        ports::DirEntry run[kRun];
+        int got = 0;
+        e = os::file::entries(folder, first, run, kRun, got);
         if (e != ports::FsError::Ok) {
             break;
         }
-        if (d.name[0] == '.' && !show_hidden) {
-            continue;
+        for (int i = 0; i < got; i++) {
+            const ports::DirEntry &d = run[i];
+            if (d.name[0] == '.' && !show_hidden) {
+                continue;
+            }
+            if (count_ == kMax) {
+                truncated_ = true;
+                break;
+            }
+            Item &it = items_[count_];
+            static_assert(sizeof(it.name) == sizeof(d.name), "a name is copied whole");
+            memcpy(it.name, d.name, sizeof(it.name));
+            it.name[sizeof(it.name) - 1] = 0;
+            it.folder = d.folder;
+            it.size = d.size;
+            it.modified = d.modified;
+            drives_[count_] = 0;
+            count_++;
         }
-        if (count_ == kMax) {
-            truncated_ = true;
+        if (got < kRun) {
             break;
         }
-        Item &it = items_[count_];
-        snprintf(it.name, sizeof(it.name), "%s", d.name);
-        it.folder = d.folder;
-        it.size = d.size;
-        it.modified = d.modified;
-        drives_[count_] = 0;
-        count_++;
+        first += got;
     }
     std::sort(items_, items_ + count_, before);
     for (int i = 0; i < count_; i++) {
         names_[i] = items_[i].name;
     }
-    // Running off the end of the folder is how a listing finishes.
-    return e == ports::FsError::NotFound ? ports::FsError::Ok : e;
+    return e;
 }
 
 void Listing::read_drives()

@@ -181,6 +181,9 @@ int drives(char *letters, int capacity);
 Error drive_info(char letter, fs::VolumeInfo &out);
 Error stat(const char *path, fs::DirEntry &out);
 Error entry(const char *folder, int index, fs::DirEntry &out);
+// A run of entries from the first-th on, in one pass over the folder: what
+// a listing asks. `count` fewer than `capacity`: the folder ends there.
+Error entries(const char *folder, int first, fs::DirEntry *out, int capacity, int &count);
 Error make_folder(const char *path);
 Error remove(const char *path);
 Error rename(const char *from, const char *to); // same drive only

@@ -51,6 +51,40 @@ public:
         return ports::FsError::NotFound;
     }
 
+    // One pass over the folder for a run of entries (a listing): opening
+    // it and stepping to the index again for every entry made a folder of
+    // 80 files cost some 3,000 steps on the board's drive.
+    ports::FsError entries(const char *folder, int first, ports::DirEntry *out, int capacity, int &count) override
+    {
+        count = 0;
+        const std::string dir = full(folder);
+        DIR *d = opendir(dir.c_str());
+        if (d == nullptr) {
+            const ports::FsError e = error();
+            return e == ports::FsError::NotFound ? ports::FsError::Ok : e;
+        }
+        int seen = 0;
+        for (dirent *e; count < capacity && (e = readdir(d)) != nullptr;) {
+            if (strcmp(e->d_name, ".") == 0 || strcmp(e->d_name, "..") == 0) {
+                continue;
+            }
+            if (seen++ < first) {
+                continue;
+            }
+            ports::DirEntry &o = out[count++];
+            const size_t n = strnlen(e->d_name, sizeof(o.name) - 1); // longer names are cut
+            memcpy(o.name, e->d_name, n);
+            o.name[n] = 0;
+            struct stat s;
+            const std::string p = dir + "/" + e->d_name;
+            o.folder = ::stat(p.c_str(), &s) == 0 && S_ISDIR(s.st_mode);
+            o.size = o.folder ? 0 : static_cast<uint32_t>(s.st_size);
+            o.modified = when(s);
+        }
+        closedir(d);
+        return ports::FsError::Ok;
+    }
+
     ports::FsError stat(const char *path, ports::DirEntry &out) override
     {
         struct stat s;
