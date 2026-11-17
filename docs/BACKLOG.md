@@ -34,7 +34,7 @@ board or the merge), `done`.
 | 11 | Three priority classes (Low, Normal, High) for jobs and services | S | 10 | Yes | todo |
 | | **Phase 3: the console** | | | | |
 | 12 | TTY object: echo, line editing, Ctrl+C | M | 8 | | on a branch (`claude/project-thread-8q7ksu`), PC tests pass; nothing on the board uses it yet. [Journal](journal/2026-11-17-tty.md) |
-| 13 | Shell with the file and process commands (Linux names, DOS aliases, both slashes), tested on the PC | L | 2, 9, 12 | | todo |
+| 13 | Shell with the file and process commands (Linux names, DOS aliases, both slashes), tested on the PC | L | 2, 9, 12 | | on a branch (`claude/project-thread-8q7ksu`), PC tests pass; runs in a PC terminal (`chinchilla-console`), nothing on the board starts it yet. [Journal](journal/2026-11-17-command-shell.md) |
 | 14 | Serial console sharing the wire with the debug link | M | 12, 13 | Yes, with care | todo |
 | 15 | Terminal window on the desktop | M | 12, 13 | | todo |
 | 16 | `top`, `dmesg`, `edit`, `open`, `run`, and the Run... dialog | S | 3, 13 | | todo |

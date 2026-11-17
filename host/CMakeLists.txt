@@ -113,6 +113,16 @@ add_executable(test_tty tests/test_tty.cpp)
 target_link_libraries(test_tty PRIVATE core Threads::Threads)
 add_test(NAME tty COMMAND test_tty)
 
+# The command shell (backlog item 13): its tests, and the shell itself in a
+# terminal of the PC (build/host/chinchilla-console [FOLDER]).
+add_executable(test_sh tests/test_sh.cpp)
+target_link_libraries(test_sh PRIVATE core Threads::Threads)
+add_test(NAME sh COMMAND test_sh)
+add_executable(chinchilla-console console/main.cpp)
+target_link_libraries(chinchilla-console PRIVATE core Threads::Threads)
+add_test(NAME console_program
+         COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/test_console_program.py $<TARGET_FILE:chinchilla-console>)
+
 # Chinchilla as a desktop program (backlog item 32): the same core in an SDL2
 # window. Its parts that need no window are tested everywhere; the program
 # itself is built only where SDL2 is installed, so the tests above need

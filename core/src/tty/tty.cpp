@@ -45,16 +45,36 @@ void Tty::put(const char *data, size_t size)
     }
 }
 
-void Tty::echo(const char *data, size_t size)
+void Tty::echo(const char *latin1, size_t size)
 {
-    if (echo_ && !raw_) {
-        put(data, size);
+    if (!echo_ || raw_) {
+        return;
     }
+    // The line is Latin-1 inside; the terminal is sent UTF-8.
+    char out[64];
+    size_t used = 0;
+    for (size_t i = 0; i < size; i++) {
+        const uint8_t c = static_cast<uint8_t>(latin1[i]);
+        if (used + 2 > sizeof out) {
+            put(out, used);
+            used = 0;
+        }
+        if (c < 0x80) {
+            out[used++] = static_cast<char>(c);
+        } else {
+            out[used++] = static_cast<char>(0xC0 | (c >> 6));
+            out[used++] = static_cast<char>(0x80 | (c & 0x3F));
+        }
+    }
+    put(out, used);
 }
 
 void Tty::write(const char *data, size_t size)
 {
     const Hold hold(lock_);
+    if (interrupted_) {
+        return; // see the header: nothing after the ^C until the program has taken notice
+    }
     if (raw_) {
         put(data, size);
         return;
@@ -169,7 +189,11 @@ void Tty::replace_line(const char *text, int length)
 
 void Tty::enter()
 {
-    if (queued_free() < length_ + 1) {
+    int size = length_ + 1; // as UTF-8, with its '\n'
+    for (int i = 0; i < length_; i++) {
+        size += static_cast<uint8_t>(line_[i]) >= 0x80 ? 1 : 0;
+    }
+    if (queued_free() < size) {
         bell(); // the program is not reading; the line stays to be sent later
         return;
     }
@@ -177,8 +201,16 @@ void Tty::enter()
     if (length_ > 0 && echo_) { // what was typed unseen is not kept
         remember(line_, length_);
     }
-    line_[length_] = '\n';
-    queue(line_, length_ + 1);
+    for (int i = 0; i < length_; i++) {
+        const uint8_t c = static_cast<uint8_t>(line_[i]);
+        if (c < 0x80) {
+            queue(line_ + i, 1);
+        } else {
+            const char pair[2] = {static_cast<char>(0xC0 | (c >> 6)), static_cast<char>(0x80 | (c & 0x3F))};
+            queue(pair, 2);
+        }
+    }
+    queue("\n", 1);
     length_ = cursor_ = 0;
     browsing_ = 0;
 }
@@ -227,19 +259,45 @@ void Tty::escape_key(uint8_t last, int number)
     }
 }
 
-bool Tty::key(uint8_t c)
+bool Tty::typed(uint8_t byte)
 {
     if (hung_up_) {
         return false;
     }
     if (raw_) {
-        if (c == kCtrlC) {
+        if (byte == kCtrlC) {
             return interrupt();
         }
-        const char byte = static_cast<char>(c);
-        queue(&byte, 1); // dropped if the program has let 512 pile up
+        const char c = static_cast<char>(byte);
+        queue(&c, 1); // dropped if the program has let 512 pile up
         return false;
     }
+    // UTF-8 into characters. Those Latin-1 does not have become '?', and so
+    // does a sequence that breaks off.
+    if (utf8_more_ > 0) {
+        if ((byte & 0xC0) == 0x80) {
+            utf8_code_ = (utf8_code_ << 6) | (byte & 0x3F);
+            if (--utf8_more_ > 0) {
+                return false;
+            }
+            return key(utf8_code_ >= 0xA0 && utf8_code_ <= 0xFF ? static_cast<uint8_t>(utf8_code_) : '?');
+        }
+        utf8_more_ = 0;
+        key('?');
+    }
+    if (byte < 0x80) {
+        return key(byte);
+    }
+    if (byte >= 0xC0) {
+        utf8_more_ = byte >= 0xF0 ? 3 : byte >= 0xE0 ? 2 : 1;
+        utf8_code_ = byte & (0x3F >> utf8_more_);
+        return false;
+    }
+    return key('?'); // a continuation byte with nothing before it
+}
+
+bool Tty::key(uint8_t c)
+{
 
     // Arrow keys and their like arrive as ESC [ numbers letter, or ESC O
     // letter.
@@ -328,12 +386,21 @@ bool Tty::key(uint8_t c)
 
 void Tty::input(const uint8_t *data, size_t size)
 {
+    // Ctrl+C is looked for before the lock is asked for: see
+    // interrupt_arriving_. (The byte 3 is never part of anything else.)
+    for (size_t i = 0; i < size && !hung_up_; i++) {
+        if (data[i] == kCtrlC) {
+            interrupt_arriving_ = true;
+            break;
+        }
+    }
     bool interrupts = false;
     {
         const Hold hold(lock_);
         for (size_t i = 0; i < size; i++) {
-            interrupts |= key(data[i]);
+            interrupts |= typed(data[i]);
         }
+        interrupt_arriving_ = false;
     }
     if (event_ != nullptr) {
         event_->set();
@@ -426,6 +493,7 @@ void Tty::set_raw(bool raw)
         first_ = queued_ = 0;
     }
     raw_ = raw;
+    utf8_more_ = 0;
     length_ = cursor_ = 0;
     browsing_ = 0;
     esc_ = Esc::None;
@@ -439,6 +507,11 @@ void Tty::set_echo(bool echo)
 
 bool Tty::take_interrupt()
 {
+    // The device's task has the Ctrl+C in hand and needs the lock; this
+    // task stays out of its way until it is done.
+    while (interrupt_arriving_ && event_ != nullptr) {
+        event_->wait(1);
+    }
     const Hold hold(lock_);
     const bool was = interrupted_;
     interrupted_ = false;

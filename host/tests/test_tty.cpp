@@ -47,12 +47,13 @@ public:
                 lines_.emplace_back();
             } else if (c == '\a') {
                 bells++;
-            } else if (c >= 0x20 && c != 0x7F) {
-                std::string &line = lines_.back();
-                if (line.size() <= column_) {
-                    line.resize(column_ + 1, ' ');
-                }
-                line[column_++] = static_cast<char>(c);
+            } else if ((c & 0xE0) == 0xC0 && i + 1 < size && (data[i + 1] & 0xC0) == 0x80) {
+                // Two bytes of UTF-8 are one character in one column; the
+                // screen keeps it as Latin-1.
+                cell(static_cast<char>(((c & 0x1F) << 6) | (data[i + 1] & 0x3F)));
+                i++;
+            } else if (c >= 0x20 && c < 0x7F) {
+                cell(static_cast<char>(c));
             } else {
                 unknown++;
             }
@@ -69,6 +70,14 @@ public:
     int bells = 0, unknown = 0, off_the_edge = 0;
 
 private:
+    void cell(char c)
+    {
+        std::string &line = lines_.back();
+        if (line.size() <= column_) {
+            line.resize(column_ + 1, ' ');
+        }
+        line[column_++] = c;
+    }
     static std::string trimmed(std::string s)
     {
         while (!s.empty() && s.back() == ' ') {
@@ -140,10 +149,9 @@ void test_echo_and_lines()
     CHECK(read_one(t) == "first\n");
     CHECK(read_one(t, 6) == "second" && read_one(t, 6) == " line\n" && read_one(t) == "<nothing>");
 
-    // Latin-1 letters are characters like any other; control codes with no
-    // meaning here are dropped.
-    t.input("a\xF1o\x02\x1F\x90\r");
-    CHECK(read_one(t) == "a\xF1o\n");
+    // Control codes with no meaning here are dropped.
+    t.input("a\x02\x1F" "b\r");
+    CHECK(read_one(t) == "ab\n");
     CHECK(screen.unknown == 0 && screen.off_the_edge == 0 && screen.bells == 0);
 }
 
@@ -209,6 +217,61 @@ void test_editing()
     CHECK(screen.unknown == 0 && screen.off_the_edge == 0);
 }
 
+/* ---- Letters beyond ASCII ---------------------------------------------------------- */
+
+void test_utf8()
+{
+    Screen screen;
+    tty::Tty t(screen);
+
+    // Typed as UTF-8, shown as UTF-8, read as UTF-8; each is one column and
+    // one press of backspace or of an arrow.
+    t.input("a\xC3\xB1o caf\xC3\xA9");
+    CHECK(screen.line() == "a\xF1o caf\xE9" && screen.column() == 8);
+    CHECK(screen.raw == "a\xC3\xB1o caf\xC3\xA9");
+    t.input("\x7f" "e" LEFT LEFT LEFT LEFT LEFT LEFT "\x7f" "n\r");
+    CHECK(screen.line(0) == "ano cafe");
+    CHECK(read_one(t) == "ano cafe\n");
+    t.input("ni\xC3\xB1o" LEFT LEFT "\x1b[3~" "n\r");
+    CHECK(read_one(t) == "nino\n");
+    t.input("\xC2\xA1hola, se\xC3\xB1or!\r");
+    CHECK(read_one(t) == "\xC2\xA1hola, se\xC3\xB1or!\n" && screen.line(2) == "\xA1hola, se\xF1or!");
+
+    // A character that arrives in two pieces, as a serial port may cut it.
+    t.input("\xC3");
+    CHECK(screen.column() == 0);
+    t.input("\xBC\r");
+    CHECK(read_one(t) == "\xC3\xBC\n");
+
+    // What Latin-1 lacks (the euro sign, three bytes; a face, four) is a
+    // question mark, and so are bytes that are not UTF-8 at all.
+    t.input("5 \xE2\x82\xAC \xF0\x9F\x98\x80 \xF1 \xB1 \xC3x\r");
+    CHECK(read_one(t) == "5 ? ? ? ? ?x\n");
+
+    // An earlier line comes back as it was.
+    t.input(UP UP UP);
+    CHECK(screen.line() == "\xA1hola, se\xF1or!");
+    t.input("\r");
+    CHECK(read_one(t) == "\xC2\xA1hola, se\xC3\xB1or!\n");
+
+    // The longest line is 159 characters whatever they are: 318 bytes and
+    // the '\n' when read.
+    std::string many;
+    for (int i = 0; i < 170; i++) {
+        many += "\xC3\xB1";
+    }
+    t.input(many.c_str());
+    t.input("\r");
+    char line[tty::Tty::kReadSize];
+    CHECK(t.read(line, sizeof line) == 319 && line[318] == '\n');
+
+    // Raw mode hands bytes over untouched.
+    t.set_raw(true);
+    t.input("\xC3\xB1\xFF");
+    CHECK(read_one(t) == "\xC3\xB1\xFF");
+    CHECK(screen.unknown == 0 && screen.off_the_edge == 0);
+}
+
 /* ---- Ctrl+C and Ctrl+D ------------------------------------------------------------ */
 
 int g_interrupts = 0;
@@ -233,9 +296,15 @@ void test_interrupt_and_end()
     t.input("one\rtwo\r\x03three\r");
     CHECK(read_one(t) == "<interrupted>" && read_one(t) == "three\n" && read_one(t) == "<nothing>");
 
-    // A program that is busy looks at the flag instead of reading.
+    // A program that is busy looks at the flag instead of reading. Until
+    // it has, what it writes is not shown: nothing lands under the ^C.
     t.input("\x03");
+    const size_t shown_at_interrupt = screen.raw.size();
+    t.print("the rest of a long listing\n");
+    CHECK(screen.raw.size() == shown_at_interrupt);
     CHECK(t.interrupted() && t.take_interrupt() && !t.take_interrupt());
+    t.print("after\n");
+    CHECK(screen.line(screen.line_count() - 2) == "after");
     CHECK(read_one(t) == "<nothing>" && g_interrupts == 3);
 
     // Ctrl+D on an empty line is the end of the input, after the lines
@@ -487,6 +556,7 @@ int main()
 {
     test_echo_and_lines();
     test_editing();
+    test_utf8();
     test_interrupt_and_end();
     test_history();
     test_raw();

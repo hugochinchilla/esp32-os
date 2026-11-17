@@ -1394,5 +1394,50 @@ agent under the owner's "dejo a tu criterio" of 2026-11-16.
   `interrupted()`. Making it the INT signal of the process table is the
   shell's job (item 13). Ctrl+D on an empty line, and the device going away,
   are "end of input".
-- Characters are single bytes, Latin-1, like the fonts. A device that speaks
-  UTF-8 converts at its own end.
+- Text is UTF-8 at both ends (typed bytes, echo, `read()`, `write()`), like
+  the rest of the OS's interfaces. Only the line being typed is Latin-1
+  inside, one byte per column; a character Latin-1 lacks becomes `?`. The
+  other options were Latin-1 everywhere and UTF-8 everywhere.
+- After a Ctrl+C, what the program writes is dropped until it has taken
+  notice. `input()` raises the interrupt before asking for the lock, so a
+  command that prints without pause still sees it.
+
+### Chosen for the command shell (2026-11-17, to confirm)
+
+Backlog item 13. Journal: `docs/journal/2026-11-17-command-shell.md`. Chosen
+by the agent under the owner's "dejo a tu criterio" of 2026-11-16.
+
+- The command shell is `sh::Session` in `core/sh/` (`core/shell/` is the
+  desktop). It reads lines from a `tty::Tty` and knows nothing about the
+  device. `run()` is the whole session for a task of its own; `greet()` and
+  `step()` are the same in pieces for whoever has no task to give.
+- Commands are built in, found in any case, each with its Linux name and its
+  DOS names: `ls dir`, `cd chdir`, `pwd`, `cat type`, `cp copy`,
+  `mv move ren rename`, `rm del erase`, `mkdir md`, `rmdir rd`, `touch`,
+  `df`, `echo`, `ps tasklist`, `kill taskkill`, `free mem`, `uptime`,
+  `ver uname`, `cls clear`, `help ?`, `exit logout`. `X:` changes drive.
+- Options are written with `-` only (`ls -l`, `rm -r`, `kill -9`). A `/` is
+  always part of a path, because paths take both slashes. DOS's `/w`, `/s`
+  are not understood. The other options were DOS switches only, or guessing.
+- One folder the session is in, not one per drive as DOS keeps. A path with
+  a drive letter counts from that drive's root.
+- `*` and `?` in the last name of a path, for `ls`, `cat`, `cp`, `mv`, `rm`,
+  `rmdir`. Each command expands them itself (the DOS way); there is no heap
+  to hold a list. A star does not match names that start with a dot, so
+  `del *` leaves `C:\.config` and `C:\.trash` alone.
+- `rm` deletes for good; it does not use the Trash. `rm -r` and `rmdir`
+  refuse the folder the session is in and a drive's root.
+- `mv` onto an existing file replaces it in one step. Between drives it
+  copies and deletes, files only. `cp` writes the safe way (temporary file,
+  then rename).
+- `ps` and `kill` run on the UI task through a `sh::UiCall` (a message into
+  the UI queue and an `Event` to wait on), because the process table is the
+  UI task's. A session on the UI task itself calls straight in.
+- Ctrl+C is the TTY's flag; the commands that loop look at it between
+  pieces. It is not yet a signal of the process table, since built-in
+  commands are not processes.
+- `type` shows a file as Latin-1, as the Editor reads it.
+- No redirection, pipes, `more` or `date` yet (items 23 and 24); `top`,
+  `dmesg`, `edit`, `open`, `run` are item 16.
+- `build/host/chinchilla-console [FOLDER]` is the shell in a terminal of the
+  PC, for trying it without a board.

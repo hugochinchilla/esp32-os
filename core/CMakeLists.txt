@@ -35,6 +35,10 @@ set(CORE_SRCS
     src/net/wifi.cpp
     src/msg/queue.cpp
     src/proc/table.cpp
+    src/sh/files.cpp
+    src/sh/path.cpp
+    src/sh/sh.cpp
+    src/sh/system.cpp
     src/shell/apps.cpp
     src/shell/boot.cpp
     src/shell/cactus_patch.cpp
