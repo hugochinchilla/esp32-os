@@ -1,0 +1,497 @@
+diff --git a/core/include/core/gfx/canvas.hpp b/core/include/core/gfx/canvas.hpp
+index ad2ae66..93f2d59 100644
+--- a/core/include/core/gfx/canvas.hpp
++++ b/core/include/core/gfx/canvas.hpp
+@@ -20,7 +20,10 @@ constexpr Colour rgb(unsigned r, unsigned g, unsigned b)
+ 
+ constexpr Colour kBlack = rgb(0, 0, 0);
+ constexpr Colour kWhite = rgb(7, 7, 3);
+-constexpr Colour kGrey = rgb(5, 5, 2);     // face of windows and buttons
++constexpr Colour kGreyFixed = rgb(5, 5, 2);
++extern Colour kGrey; // PROTOTYPE: the face colour, by theme
++extern int theme_id; // PROTOTYPE: 0 current, 1 one-bit, 2 workbench-like
++constexpr Colour kAccent = rgb(3, 4, 2);
+ constexpr Colour kDarkGrey = rgb(2, 2, 1); // shadow
+ 
+ // A colour in full 8-bit-per-channel RGB, shown with the 4x4 ordered dither
+@@ -29,6 +32,9 @@ struct Rgb {
+     uint8_t r, g, b;
+ };
+ 
++Rgb highlight();
++Colour highlight_ink();
++#define kHighlight ::gfx::highlight()
+ // The board colour used at screen position (x, y) for `c`.
+ Colour dither(Rgb c, int x, int y);
+ // Each channel: the board level below, or the one above when the value is
+diff --git a/core/include/core/wm/wm.hpp b/core/include/core/wm/wm.hpp
+index 42829bf..3471a49 100644
+--- a/core/include/core/wm/wm.hpp
++++ b/core/include/core/wm/wm.hpp
+@@ -388,6 +388,7 @@ private:
+     void paint(bool painter);
+     void paint_desktop(const gfx::RectList &clip);
+     void paint_window(Window &w, const gfx::RectList &clip);
++    void paint_title_proto(gfx::Canvas &c, Window &w, const gfx::Rect &title, bool active);
+     void paint_frame(gfx::Canvas &c, Window &w);
+     void paint_menu_bar(gfx::Canvas &c, Window &w);
+     void paint_popup(int level, const gfx::RectList &clip);
+diff --git a/core/src/desk/icons.cpp b/core/src/desk/icons.cpp
+index cc7682d..445500b 100644
+--- a/core/src/desk/icons.cpp
++++ b/core/src/desk/icons.cpp
+@@ -17,7 +17,6 @@ namespace {
+ // Layout (tools/mockup/desktop.py).
+ constexpr int kIconX = 6, kIconY = 8, kIconStep = 70, kIconColumn = 76;
+ constexpr int kIconW = 72, kIconH = 50;
+-constexpr gfx::Rgb kHighlight = {0, 0, 128};
+ 
+ } // namespace
+ 
+diff --git a/core/src/desk/taskbar.cpp b/core/src/desk/taskbar.cpp
+index dfb56e1..622c64c 100644
+--- a/core/src/desk/taskbar.cpp
++++ b/core/src/desk/taskbar.cpp
+@@ -216,6 +216,10 @@ void Taskbar::paint(const gfx::RectList &clip)
+     screen.layered(bar, [&](Canvas &c) {
+     c.fill(bar, gfx::kGrey);
+     c.hline(0, ty + 1, bar.w, gfx::kWhite);
++    if (gfx::theme_id == 1) {
++        c.hline(0, ty, bar.w, gfx::kBlack);
++        c.hline(0, ty + 1, bar.w, gfx::kBlack);
++    }
+ 
+     // Start button: the mascot and "Start", pressed in while its menu is open.
+     const Rect start = button(-1);
+diff --git a/core/src/gfx/art.cpp b/core/src/gfx/art.cpp
+index 21183db..6bcece1 100644
+--- a/core/src/gfx/art.cpp
++++ b/core/src/gfx/art.cpp
+@@ -130,8 +130,8 @@ constexpr const char *kBinFull16[16] = {
+     "...KKKKKKKKKK...", "................",
+ };
+ 
+-constexpr Ink kBoardInks[] = {{'K', kBlack}, {'P', rgb(0, 3, 1)}, {'G', kGrey}, {'O', rgb(6, 5, 0)}};
+-constexpr Ink kBinInks[] = {{'K', kBlack}, {'G', kGrey}, {'D', kDarkGrey}, {'W', kWhite}};
++constexpr Ink kBoardInks[] = {{'K', kBlack}, {'P', rgb(0, 3, 1)}, {'G', kGreyFixed}, {'O', rgb(6, 5, 0)}};
++constexpr Ink kBinInks[] = {{'K', kBlack}, {'G', kGreyFixed}, {'D', kDarkGrey}, {'W', kWhite}};
+ 
+ constexpr const char *kDrive32[32] = {
+     "................................", "................................",
+@@ -180,7 +180,7 @@ constexpr const char *kDrive16[16] = {
+     "................", "................",
+ };
+ 
+-constexpr Ink kDriveInks[] = {{'K', kBlack}, {'L', kGrey}, {'W', kWhite}, {'D', kDarkGrey}, {'N', rgb(0, 7, 0)}};
++constexpr Ink kDriveInks[] = {{'K', kBlack}, {'L', kGreyFixed}, {'W', kWhite}, {'D', kDarkGrey}, {'N', rgb(0, 7, 0)}};
+ constexpr Ink kFileInks[] = {{'K', kBlack}, {'W', kWhite}};
+ 
+ // Folder toolbar: Back is an arrow pointing left, Up a folder with an arrow
+diff --git a/core/src/gfx/canvas.cpp b/core/src/gfx/canvas.cpp
+index a581ebb..58231e7 100644
+--- a/core/src/gfx/canvas.cpp
++++ b/core/src/gfx/canvas.cpp
+@@ -257,13 +257,25 @@ void Canvas::focus_rect(const Rect &r)
+     }
+ }
+ 
++int theme_id = 0;
++Colour kGrey = kGreyFixed;
++Rgb highlight()
++{
++    if (theme_id == 1) return {0, 0, 0};
++    if (theme_id == 2) return shown(kAccent);
++    return {0, 0, 128};
++}
++Colour highlight_ink() { return theme_id == 2 ? kBlack : kWhite; }
++
+ void Canvas::checker(const Rect &r)
+ {
++    const Colour a = theme_id == 1 ? kBlack : theme_id == 2 ? kDarkGrey : kWhite;
++    const Colour b2 = theme_id == 1 ? kWhite : kGrey;
+     each(r, [&](const Rect &s) {
+         for (int y = s.y; y < s.bottom(); y++) {
+             uint8_t *row = pixels_ + y * width_;
+             for (int x = s.x; x < s.right(); x++) {
+-                row[x] = ((x + y) & 1) ? kWhite : kGrey;
++                row[x] = ((x + y) & 1) ? a : b2;
+             }
+             mark(s.x, y, s.w);
+         }
+@@ -272,6 +284,9 @@ void Canvas::checker(const Rect &r)
+ 
+ void Canvas::edge(const Rect &r, Colour tl, Colour br)
+ {
++    if (theme_id == 1 && tl != br) {
++        tl = br = kBlack; // one-bit: every bevel is a plain black line
++    }
+     // Four lines that never share a pixel.
+     hline(r.x, r.y, r.w - 1, tl);
+     vline(r.x, r.y + 1, r.h - 2, tl);
+@@ -279,20 +294,64 @@ void Canvas::edge(const Rect &r, Colour tl, Colour br)
+     vline(r.right() - 1, r.y, r.h - 1, br);
+ }
+ 
++static void edge2(Canvas &c, const Rect &r, Colour tl, Colour br)
++{
++    c.hline(r.x, r.y, r.w - 1, tl);
++    c.vline(r.x, r.y + 1, r.h - 2, tl);
++    c.hline(r.x, r.bottom() - 1, r.w, br);
++    c.vline(r.right() - 1, r.y, r.h - 1, br);
++}
++
+ void Canvas::raised(const Rect &r)
+ {
++    if (theme_id == 1) { // black line, and a second one below and right: a shadow
++        edge2(*this, r, kBlack, kBlack);
++        edge2(*this, r.inset(1), kWhite, kBlack);
++        return;
++    }
++    if (theme_id == 2) {
++        edge2(*this, r, kWhite, kBlack);
++        edge2(*this, r.inset(1), kGrey, kGrey);
++        return;
++    }
+     edge(r, kGrey, kBlack);
+     edge(r.inset(1), kWhite, kDarkGrey);
+ }
+ 
+ void Canvas::sunken(const Rect &r)
+ {
++    if (theme_id == 1) {
++        edge2(*this, r, kBlack, kBlack);
++        edge2(*this, r.inset(1), kWhite, kWhite);
++        return;
++    }
++    if (theme_id == 2) { // a ridge: up, then down
++        edge2(*this, r, kWhite, kBlack);
++        edge2(*this, r.inset(1), kBlack, kWhite);
++        return;
++    }
+     edge(r, kDarkGrey, kWhite);
+     edge(r.inset(1), kBlack, kGrey);
+ }
+ 
+ void Canvas::button_frame(const Rect &r, ButtonLook look)
+ {
++    if (theme_id == 1) { // a box with its corners cut
++        edge2(*this, r, kBlack, kBlack);
++        edge2(*this, r.inset(1), kWhite, kWhite);
++        for (int i = 0; i < 4; i++) {
++            const int x = (i & 1) ? r.right() - 1 : r.x, y = (i & 2) ? r.bottom() - 1 : r.y;
++            put(x, y, kWhite);
++            put((i & 1) ? x - 1 : x + 1, (i & 2) ? y - 1 : y + 1, kBlack);
++        }
++        return;
++    }
++    if (theme_id == 2) {
++        const bool up = look == ButtonLook::Raised;
++        edge2(*this, r, up ? kWhite : kBlack, up ? kBlack : kWhite);
++        edge2(*this, r.inset(1), up ? kGrey : kAccent, up ? kGrey : kAccent);
++        return;
++    }
+     if (look == ButtonLook::Raised) {
+         edge(r, kWhite, kBlack);
+         edge(r.inset(1), kGrey, kDarkGrey);
+@@ -304,6 +363,19 @@ void Canvas::button_frame(const Rect &r, ButtonLook look)
+ 
+ void Canvas::button(const Rect &r, ButtonLook look)
+ {
++    if (theme_id == 1) {
++        fill(r.inset(2), kWhite);
++        button_frame(r, look);
++        if (look != ButtonLook::Raised) { // a thick outline
++            edge2(*this, r.inset(1), kBlack, kBlack);
++        }
++        return;
++    }
++    if (theme_id == 2) {
++        fill(r.inset(2), look == ButtonLook::Raised ? kGrey : kAccent);
++        button_frame(r, look);
++        return;
++    }
+     if (look == ButtonLook::Raised) {
+         fill(r.inset(2), kGrey);
+         edge(r, kWhite, kBlack);
+diff --git a/core/src/os/ui.cpp b/core/src/os/ui.cpp
+index da06384..83e7630 100644
+--- a/core/src/os/ui.cpp
++++ b/core/src/os/ui.cpp
+@@ -346,7 +346,6 @@ class IconView : public wm::Widget {
+ public:
+     using Callback = void (*)(IconView &view, void *context);
+     static constexpr int kCellW = 76, kCellH = 66;
+-    static constexpr gfx::Rgb kHighlight = {0, 0, 128};
+ 
+     IconView(const gfx::Rect &r, Callback on_open, Callback on_select, Callback on_drag, void *context)
+         : Widget(r), on_open_(on_open), on_select_(on_select), on_drag_(on_drag), context_(context),
+diff --git a/core/src/saver/chinchillas.cpp b/core/src/saver/chinchillas.cpp
+index 7027f56..46b14e1 100644
+--- a/core/src/saver/chinchillas.cpp
++++ b/core/src/saver/chinchillas.cpp
+@@ -18,7 +18,7 @@ constexpr int kMaxScale = 5;
+ 
+ // Fur for the face (white in the mascot): white, standard grey, beige, and
+ // the pale blue-grey breeders call sapphire.
+-constexpr gfx::Colour kFurs[4] = {gfx::kWhite, gfx::kGrey, gfx::rgb(7, 6, 2), gfx::rgb(5, 6, 3)};
++constexpr gfx::Colour kFurs[4] = {gfx::kWhite, gfx::kGreyFixed, gfx::rgb(7, 6, 2), gfx::rgb(5, 6, 3)};
+ 
+ struct Sprite {
+     int16_t x, y, z;
+diff --git a/core/src/wm/text_edit.cpp b/core/src/wm/text_edit.cpp
+index 5dc3978..56a168e 100644
+--- a/core/src/wm/text_edit.cpp
++++ b/core/src/wm/text_edit.cpp
+@@ -11,7 +11,6 @@ using gfx::Canvas;
+ 
+ namespace {
+ 
+-constexpr gfx::Rgb kHighlight = {0, 0, 128};
+ constexpr int kBar = ScrollBar::kThickness;
+ 
+ uint8_t *g_clip = nullptr;
+@@ -921,7 +920,7 @@ void TextEdit::paint(Canvas &c)
+             const int x = 2 + a * 6, w = (b - a) * 6;
+             const int cx = caret_x > x && caret_x < x + w ? caret_x : -1;
+             if (chosen[a]) {
+-                inner.text_opaque(x, y, run, gfx::kWhite, kHighlight, cx);
++                inner.text_opaque(x, y, run, gfx::highlight_ink(), kHighlight, cx);
+                 inner.fill_rgb({x, y + kLineHeight - 1, w, 1}, kHighlight);
+             } else {
+                 inner.text_opaque(x, y, run, gfx::kBlack, gfx::kWhite, cx);
+diff --git a/core/src/wm/widgets.cpp b/core/src/wm/widgets.cpp
+index e4ca85e..16734aa 100644
+--- a/core/src/wm/widgets.cpp
++++ b/core/src/wm/widgets.cpp
+@@ -14,7 +14,6 @@ using gfx::kWhite;
+ 
+ namespace {
+ 
+-constexpr gfx::Rgb kHighlight = {0, 0, 128};
+ constexpr int kTextH = 12;
+ 
+ const char *const kCheckGlyph[] = {"      X", "     XX", "X   XXX", "XX XXX ",
+@@ -57,16 +56,16 @@ void draw_radio(Canvas &c, int x, int y, bool selected)
+             gfx::Colour col;
+             switch (kRadio[r][q]) {
+             case 'D':
+-                col = kDarkGrey;
++                col = gfx::theme_id == 1 ? kBlack : gfx::theme_id == 2 ? kWhite : kDarkGrey;
+                 break;
+             case 'W':
+-                col = kWhite;
++                col = gfx::theme_id == 0 ? kWhite : kBlack;
+                 break;
+             case 'K':
+-                col = kBlack;
++                col = gfx::theme_id == 1 ? kWhite : gfx::theme_id == 2 ? kGrey : kBlack;
+                 break;
+             case 'G':
+-                col = kGrey;
++                col = gfx::theme_id == 1 ? kWhite : kGrey;
+                 break;
+             case 'F':
+                 col = kWhite;
+@@ -405,7 +404,7 @@ void TextField::paint(Canvas &c)
+         run[n] = 0;
+         const int cx = caret_x > x && caret_x < x + count * 6 ? caret_x : -1;
+         if (chosen) {
+-            inner.text_opaque(x, y, run, kWhite, kHighlight, cx);
++            inner.text_opaque(x, y, run, ::gfx::highlight_ink(), kHighlight, cx);
+         } else {
+             inner.text_opaque(x, y, run, kBlack, kWhite, cx);
+         }
+@@ -605,6 +604,9 @@ void ScrollBar::paint(Canvas &c)
+     if (maximum_ > 0) {
+         around(track, thumb(), [&](const Rect &r) { c.checker(r); });
+         c.button(thumb(), gfx::ButtonLook::Raised);
++        if (gfx::theme_id == 2) {
++            c.fill(thumb().inset(1), gfx::kAccent);
++        }
+     } else {
+         c.checker(track);
+     }
+@@ -780,7 +782,7 @@ void ListBox::paint(Canvas &c)
+         const Rect cells = {tx, ty, tw, kTextH};
+         if (chosen) {
+             around(hl, cells, [&](const Rect &a) { inner.fill_rgb(a, kHighlight); });
+-            inner.text_opaque(tx, ty, items_[index], kWhite, kHighlight);
++            inner.text_opaque(tx, ty, items_[index], ::gfx::highlight_ink(), kHighlight);
+             if (has_focus()) {
+                 inner.focus_rect(hl);
+             }
+diff --git a/core/src/wm/wm.cpp b/core/src/wm/wm.cpp
+index 1a826bd..92b406b 100644
+--- a/core/src/wm/wm.cpp
++++ b/core/src/wm/wm.cpp
+@@ -18,7 +18,6 @@ namespace {
+ // Colours from tools/mockup/desktop.py (98 style).
+ constexpr Rgb kActiveFrom = {0, 0, 128}, kActiveTo = {16, 132, 208};
+ constexpr Rgb kInactiveFrom = {128, 128, 128}, kInactiveTo = {192, 192, 192};
+-constexpr Rgb kHighlight = {0, 0, 128};                         // chosen menu item
+ constexpr Rgb kBannerTop = {0, 0, 48}, kBannerBottom = {16, 100, 190}; // Start menu
+ 
+ const char *const kCloseGlyph[] = {"XX    XX", " XX  XX ", "  XXXX  ", "   XX   ",
+@@ -2126,6 +2125,102 @@ void Wm::paint_window(Window &w, const RectList &clip)
+     }
+ }
+ 
++
++namespace {
++const char *const kWbClose[] = {"       ", " XXXXX ", " X   X ", " X X X ", " X   X ", " XXXXX ", "       "};
++const char *const kWbMax[] = {"XXXXXXXXX", "X   X   X", "X   X   X", "XXXXX   X", "X       X",
++                              "X       X", "X       X", "X       X", "XXXXXXXXX"};
++const char *const kWbRestore[] = {"XXXXXXXXX", "X       X", "X XXXXX X", "X X   X X", "X X   X X",
++                                  "X X   X X", "X XXXXX X", "X       X", "XXXXXXXXX"};
++const char *const kWbMin[] = {"         ", "         ", "         ", "         ", "         ",
++                              "XXXXXXXXX", "X       X", "X       X", "XXXXXXXXX"};
++} // namespace
++
++void Wm::paint_title_proto(Canvas &c0, Window &w, const Rect &title, bool active)
++{
++    const Rect &f = w.frame_;
++    c0.layered(title, [&](Canvas &c) {
++    const Rect first = title_button(w, w.dialog_ ? Part::Close : Part::Minimize);
++    const int tw = Canvas::text_width(w.title_, true);
++    if (gfx::theme_id == 1) {
++        // One-bit: white bar, black pinstripes when active, the title in a
++        // gap in the middle, a black line under it.
++        c.fill(title, gfx::kWhite);
++        if (active) {
++            for (int y = title.y + 3; y < title.bottom() - 3; y += 2) {
++                c.hline(title.x + 1, y, title.w - 2, gfx::kBlack);
++            }
++        }
++        c.hline(title.x, title.bottom() - 1, title.w, gfx::kBlack);
++        int tx = title.x + (title.w - tw) / 2;
++        if (tx < f.x + 28) {
++            tx = f.x + 28;
++        }
++        if (w.icon_ != nullptr) {
++            c.fill({f.x + 4, title.y, 19, title.h - 1}, gfx::kWhite);
++            c.blit(*w.icon_, f.x + 5, f.y + 5);
++        }
++        Canvas text = c.sub({title.x, title.y, first.x - 4 - title.x, title.h});
++        text.fill({tx - title.x - 6, 0, tw + 12, title.h - 1}, gfx::kWhite);
++        text.text(tx - title.x, 2, w.title_, active ? gfx::kBlack : gfx::kDarkGrey, true);
++    } else {
++        // Workbench-like: a solid bar in the accent colour when active, a
++        // light line above and a dark one below, black title at the left.
++        c.fill(title, active ? gfx::kAccent : gfx::kGrey);
++        c.hline(title.x, title.y, title.w, gfx::kWhite);
++        c.hline(title.x, title.bottom() - 1, title.w, gfx::kBlack);
++        if (w.icon_ != nullptr) {
++            c.blit(*w.icon_, f.x + 5, f.y + 5);
++        }
++        Canvas text = c.sub({title.x, title.y, first.x - 4 - title.x, title.h});
++        text.text(22, 3, w.title_, gfx::kBlack, active);
++    }
++    for (Part p : {Part::Close, Part::Maximize, Part::Minimize}) {
++        const Rect r = title_button(w, p);
++        if (r.empty()) {
++            continue;
++        }
++        const bool held = capture_ == Capture::TitleButton && captured_ == &w &&
++                          captured_part_ == p && captured_inside_;
++        const gfx::Colour ink = (p == Part::Maximize && !w.resizable_) ? gfx::kDarkGrey : gfx::kBlack;
++        if (gfx::theme_id == 1) {
++            if (!active) {
++                continue; // an inactive window shows no boxes
++            }
++            // A plain box, 13 x 13, with a white gap in the stripes around it.
++            const Rect box = {r.x + 1, title.y + 2, 13, 13};
++            c.fill({box.x - 2, title.y, box.w + 4, title.h - 1}, gfx::kWhite);
++            c.edge(box, gfx::kBlack, gfx::kBlack);
++            if (held) {
++                c.fill(box.inset(1), gfx::kBlack);
++            }
++            const gfx::Colour gi = held ? gfx::kWhite : ink;
++            if (p == Part::Close) {
++                c.pattern(box.x + 3, box.y + 3, kCloseGlyph, 7, gi);
++            } else if (p == Part::Maximize) {
++                c.pattern(box.x + 2, box.y + 2, w.state_ == WindowState::Maximized ? kRestoreGlyph : kMaxGlyph, 9, gi);
++            } else {
++                c.hline(box.x + 3, box.y + 9, 7, gi);
++            }
++            continue;
++        }
++        // Workbench-like: gadgets the full height of the bar.
++        const Rect g = {r.x - 1, title.y, 18, title.h};
++        c.fill(g.inset(1), held ? gfx::kGrey : (active ? gfx::kAccent : gfx::kGrey));
++        c.edge(g, held ? gfx::kBlack : gfx::kWhite, held ? gfx::kWhite : gfx::kBlack);
++        if (p == Part::Close) {
++            c.pattern(g.x + 5, g.y + 5, kWbClose, 7, ink);
++            c.fill({g.x + 7, g.y + 7, 5, 5}, gfx::kWhite);
++            c.edge({g.x + 6, g.y + 6, 7, 7}, ink, ink);
++        } else if (p == Part::Maximize) {
++            c.pattern(g.x + 5, g.y + 4, w.state_ == WindowState::Maximized ? kWbRestore : kWbMax, 9, ink);
++        } else {
++            c.pattern(g.x + 5, g.y + 4, kWbMin, 9, ink);
++        }
++    }
++    });
++}
++
+ void Wm::paint_frame(Canvas &c, Window &w)
+ {
+     const Rect &f = w.frame_;
+@@ -2139,11 +2234,18 @@ void Wm::paint_frame(Canvas &c, Window &w)
+     parts.subtract(title);
+     parts.subtract(w.menu_bar_rect());
+     for (int i = 0; i < parts.size(); i++) {
+-        c.fill(parts[i], gfx::kGrey);
++        c.fill(parts[i], gfx::theme_id == 2 && active_ == &w ? gfx::kAccent : gfx::kGrey);
+     }
+     c.raised(f);
++    if (gfx::theme_id == 2 && active_ == &w) {
++        c.edge(f.inset(1), gfx::kAccent, gfx::kAccent);
++    }
+ 
+     const bool active = active_ == &w;
++    if (gfx::theme_id != 0) {
++        paint_title_proto(c, w, title, active);
++        return;
++    }
+     // The title bar in one pass: fade, icon, title and buttons layered in a
+     // scratch band, each screen pixel written once.
+     c.layered(title, [&](Canvas &c) {
+@@ -2211,8 +2313,15 @@ void Wm::paint_popup(int level, const RectList &clip)
+     c.raised(r);
+     if (p.start) {
+         const Rect banner = {r.x + kMenuEdge, r.y + kMenuEdge, kBannerW, r.h - 2 * kMenuEdge};
+-        c.fill_fade(banner, kBannerTop, kBannerBottom, true);
+-        c.text_up(banner.x + (kBannerW - 12) / 2, banner.bottom() - 6, start_banner_, gfx::kWhite, true);
++        if (gfx::theme_id == 1) {
++            c.fill(banner, gfx::kBlack);
++        } else if (gfx::theme_id == 2) {
++            c.fill(banner, gfx::kAccent);
++            c.edge(banner, gfx::kBlack, gfx::kWhite);
++        } else {
++            c.fill_fade(banner, kBannerTop, kBannerBottom, true);
++        }
++        c.text_up(banner.x + (kBannerW - 12) / 2, banner.bottom() - 6, start_banner_, gfx::theme_id == 2 ? gfx::kBlack : gfx::kWhite, true);
+     }
+     for (int i = 0; i < p.menu->count; i++) {
+         const MenuItem &item = p.menu->items[i];
+@@ -2227,7 +2336,7 @@ void Wm::paint_popup(int level, const RectList &clip)
+         if (hover) {
+             c.fill_rgb(ir, kHighlight);
+         }
+-        const gfx::Colour ink = hover ? (disabled ? gfx::kGrey : gfx::kWhite) : gfx::kBlack;
++        const gfx::Colour ink = hover ? (disabled ? gfx::kGrey : gfx::highlight_ink()) : gfx::kBlack;
+         const bool icons = p.start || has_icons(*p.menu);
+         const int tx = icons ? ir.x + 26 : ir.x + 17;
+         const int ty = ir.y + (ir.h - 12) / 2;
+diff --git a/host/tests/render_scenes.cpp b/host/tests/render_scenes.cpp
+index c797719..1e6e11c 100644
+--- a/host/tests/render_scenes.cpp
++++ b/host/tests/render_scenes.cpp
+@@ -145,6 +145,8 @@ void centre_of(const gfx::Rect &r, int &x, int &y)
+ 
+ int main(int argc, char **argv)
+ {
++    if (const char *t = getenv("THEME")) { gfx::theme_id = atoi(t); if (gfx::theme_id == 1) gfx::kGrey = gfx::kWhite; }
++
+     if (argc != 2) {
+         printf("usage: render_scenes <folder>\n");
+         return 2;
