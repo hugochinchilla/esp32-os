@@ -18,6 +18,7 @@
 
 #include "core/fs/fs.hpp"
 #include "core/fs/ini.hpp"
+#include "core/net/wifi.hpp"
 #include "core/ports.hpp"
 #include "core/proc/table.hpp"
 #include "core/wm/wm.hpp"
@@ -104,6 +105,37 @@ public:
     Busy &operator=(const Busy &) = delete;
 };
 
+/* ---- The desktop --------------------------------------------------------------- */
+
+// What the settings tools set (Display, Screen Saver) and Shut Down asks.
+
+// The desktop's background: a colour and an 8x8 pattern over it.
+void set_backdrop(const wm::Wm::Backdrop &backdrop);
+// The screensaver: which animation (a place in core/saver's list; -1: none)
+// and after how many seconds without a key or the mouse.
+void set_screen_saver(int animation, uint32_t wait_seconds);
+// Shows an animation now, until a key or the mouse. It stays the one in
+// place: set_screen_saver() puts the chosen one back.
+void preview_screen_saver(int animation);
+// How the last run went, a preview or the real thing.
+struct SaverRun {
+    uint32_t frames;     // drawn
+    uint64_t shown_us;   // how long it showed
+    uint32_t slowest_us; // the slowest frame
+};
+SaverRun last_saver_run();
+// Asks every program to close and, if all did, shows the screen that says
+// the power can go. False: one of them has a question open, and it is
+// brought forward.
+bool shut_down();
+
+/* ---- The network ---------------------------------------------------------------- */
+
+// The Wi-Fi service: the networks in range, connecting, the time zone.
+// nullptr: this board has none. A program asks each time and does not keep
+// the pointer.
+net::Manager *network();
+
 /* ---- Files --------------------------------------------------------------------- */
 
 namespace file {
@@ -160,8 +192,11 @@ struct Kit {
     ports::System *system = nullptr;
     fs::Storage *storage = nullptr;
     ports::Memory *memory = nullptr;
+    bool (*shut_down)() = nullptr; // closes every program and takes the screen
 };
 // What the calls work with. The desktop hands it in when it starts.
 void install(const Kit &kit);
+// The Wi-Fi service, when the board has one (before or after install()).
+void install_network(net::Manager *wifi);
 
 } // namespace os

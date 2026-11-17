@@ -18,21 +18,28 @@ MOVED = [
     "culebra.cpp",
     "defrag.cpp",
     "dialogs.cpp",
+    "display.cpp",
     "editor.cpp",
     "file_manager.cpp",
+    "network.cpp",
     "run.cpp",
+    "screensaver.cpp",
     "settings.cpp",
+    "shutdown.cpp",
     "task_manager.cpp",
     "trash.cpp",
     "viewer.cpp",
 ]
 
-# Not programs: the desktop itself, and what the programs share.
+# Not programs: the desktop itself, what it keeps running (the network, the
+# way down to the power-off screen), and what the programs share.
 SYSTEM = [
     "apps.cpp",
     "boot.cpp",
     "desktop.cpp",
     "listing.cpp",
+    "network_service.cpp",
+    "power.cpp",
 ]
 
 # What a moved program may not write, and what to write instead.

@@ -1865,10 +1865,12 @@ Chosen by the agent under the owner's "dejo a tu criterio" of 2026-11-16.
   hears the stop; an idle board's services task wakes once a second where
   it did not wake at all (item 8b). Rejected: a socket to itself.
 
-### Chosen for the OS calls (2026-11-17, to confirm)
+### The OS calls (the owner's decision, 2026-11-17)
 
-Backlog item 20. The owner was asked (a card in the thread, the first
-option recommended); built on it meanwhile.
+Backlog item 20. The owner was asked with the first option recommended and
+decided: the thin layer in C++ for now, and a backlog item (37) to look at
+it again at the end and take it to numbered calls with handles. The
+smaller points below are the agent's and still to confirm.
 [Journal](journal/2026-11-17-os-calls.md), [the list](os-calls.md).
 
 - Programs ask the system through `core/os/os.hpp` (namespace `os`): a thin
@@ -1909,6 +1911,65 @@ the first option recommended); built on it meanwhile.
 - The desktop starts it; there is no line for it in the start-up file.
 - The drawing code is still in the window manager. Cutting that file in
   two is the second part.
+
+### The window server and the desktop shell (the owner's decision, 2026-11-17)
+
+Backlog item 21, second part. The owner was shown three depths (the
+process only; the code cut in two on one task; two tasks that talk by
+messages) and chose the second.
+[Journal](journal/2026-11-17-window-server-and-shell.md).
+
+- The window server (`core/wm`) knows windows, menus, the pointer and the
+  background. The taskbar and the desktop icons are the shell's
+  (`core/desk`), drawn by its code and owned by the `taskbar` process.
+- The order agreed with the owner: this cut, then the OS calls taken to
+  handles (item 37), then separate tasks together with item 26.
+- The shell's surfaces are panels (two places: behind the windows, and the
+  strip in front of them), not windows of a special kind. Proposed by the
+  agent, confirmed by the owner on 2026-11-17 ("yes, panels are ok").
+- The agent's, to confirm: menus, the time of day and the height of the
+  strip stay with the server; the desktop panel paints the background
+  where it has no icon.
+- Painting is not an OS call: the server calls a window or a panel to
+  paint and hands it a canvas. It becomes one with item 37.
+
+### The settings tools ask through the OS calls (2026-11-17, the agent's, to confirm)
+
+Backlog item 20, second part. Display, Screen Saver, Network and Shut Down
+were each half a window and half something the system keeps going. The
+window is a program and asks through new calls (`os::set_backdrop`,
+`os::set_screen_saver`, `os::preview_screen_saver`, `os::last_saver_run`,
+`os::shut_down`, `os::network`); the other half is the system's (the
+screensaver's runner in `core/os`, `network_service.cpp`, `power.cpp`).
+
+- One call for each thing a tool sets, not one general "set a desktop
+  setting by name" call: names would be an interface nothing checks at
+  build time, and the road to a registry, which the settings decision
+  turned down.
+- The network is handed over whole (`os::network()`), as the drives are to
+  the picture decoder, not as a call for each thing the panel does. Those
+  calls belong to item 37 (numbered calls with handles).
+- Display and Screen Saver keep nothing in memory while closed: they read
+  their settings file when they open.
+
+Journal: `docs/journal/2026-11-17-os-calls-settings-tools.md`.
+
+### The PC tool reads the port on a thread (2026-11-17, the agent's, to confirm)
+
+Backlog item 14b: console text was lost while `tools/dbg.py` was busy. The
+tool now reads the port on a thread of its own, into a queue. Pacing on
+the board was not chosen first (it slows every listing to cure what looks
+like the PC tool's fault) and is the next step if the board shows the
+loss again. Flow control on the wire is not possible: the bridge's RTS and
+DTR lines reset the board. Journal:
+`docs/journal/2026-11-17-dbg-reader-thread.md`.
+
+### Restarting moves to init, later (the owner's request, 2026-11-17)
+
+Today the process table restarts a process marked "respawn" and counts
+quick deaths (5 in a row under 2 s: it gives up). The owner asked for a
+backlog item (39) to move that into `init`, as `respawn` in a Unix
+`/etc/inittab`, so `startup.txt` can say what comes back. Not started.
 
 ### Chosen for background jobs (2026-11-17, to confirm)
 

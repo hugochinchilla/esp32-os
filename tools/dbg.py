@@ -22,9 +22,11 @@ import binascii
 import getpass
 import json
 import os
+import queue
 import re
 import struct
 import sys
+import threading
 import time
 import zlib
 
@@ -153,11 +155,76 @@ class Board:
         self.serial.timeout = 0.05
         self.serial.dsrdtr = True
         self.serial.open()
+        # The port is read on a thread of its own, all the time. The link has
+        # no flow control: while this program was busy with something else
+        # (decoding a screenshot, waiting on a file) and did not read, the
+        # PC's buffer filled and console text was lost on the way (backlog
+        # item 14b). What is read waits in a queue of any length; a byte in
+        # the pipe for each piece lets select() wait for it with the keyboard.
+        self.arrived = queue.Queue()
+        self.wake_read, self.wake_write = os.pipe()
+        self.closing = False
+        self.gone = False
+        self.reader = threading.Thread(target=self._pump, daemon=True)
+        self.reader.start()
         if reset:
             self.reset()
 
     def close(self):
+        self.closing = True
+        self.reader.join(1.0)
+        self.gone = True
         self.serial.close()
+        for end in (self.wake_read, self.wake_write):
+            try:
+                os.close(end)
+            except OSError:
+                pass
+
+    # The reader thread: bytes from the port to the queue, nothing else.
+    def _pump(self):
+        try:
+            while not self.closing:
+                data = self.serial.read(1)
+                waiting = self.serial.in_waiting
+                if waiting:
+                    data += self.serial.read(waiting)
+                if data:
+                    self.arrived.put(data)
+                    os.write(self.wake_write, b".")
+        except Exception:
+            pass
+        # The port went away (or the tool is closing): say so, once.
+        self.arrived.put(None)
+        try:
+            os.write(self.wake_write, b".")
+        except OSError:
+            pass
+
+    def fileno(self):
+        """Readable when something has arrived: for select() beside the keyboard."""
+        return self.wake_read
+
+    # What has arrived: waits up to `wait` seconds for the first piece, then
+    # takes every other piece that is already there.
+    def _arrived(self, wait=0.05):
+        if self.gone:
+            raise PortClosed("the serial port went away")
+        data = bytearray()
+        try:
+            piece = self.arrived.get(timeout=wait)
+            while True:
+                os.read(self.wake_read, 1)
+                if piece is None:
+                    self.gone = True
+                    break
+                data += piece
+                piece = self.arrived.get_nowait()
+        except queue.Empty:
+            pass
+        if self.gone and not data:
+            raise PortClosed("the serial port went away")
+        return bytes(data)
 
     def reset(self):
         """Restarts the board through the port's control lines."""
@@ -181,15 +248,7 @@ class Board:
     # Reads what has arrived. Log frames and text outside frames are printed
     # if asked for; other frames are queued for _wait.
     def _read(self):
-        try:
-            # Wait for the first byte (up to the timeout), then take whatever
-            # else has arrived, so a reply is handled as soon as it is in.
-            data = self.serial.read(1)
-            waiting = self.serial.in_waiting
-            if waiting:
-                data += self.serial.read(waiting)
-        except Exception:
-            raise PortClosed("the serial port went away")
+        data = self._arrived()
         shown = bytearray()
         for byte in data:
             if self.console is not None and not self.in_frame:
@@ -597,7 +656,7 @@ def run_console(board):
             tty.setraw(keyboard)
         board.console_send(b"\r")  # a new prompt
         while True:
-            ready = select.select([keyboard, board.serial.fileno()], [], [], 0.2)[0]
+            ready = select.select([keyboard, board.fileno()], [], [], 0.2)[0]
             if keyboard in ready:
                 keys = os.read(keyboard, 256)
                 if not keys or b"\x1d" in keys:

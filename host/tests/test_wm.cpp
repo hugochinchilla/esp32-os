@@ -6,11 +6,13 @@
 #include <algorithm>
 #include <cstring>
 #include <random>
+#include <string>
 #include <vector>
 
 #include "core/gfx/canvas.hpp"
 #include "core/gfx/rect.hpp"
 #include "core/wm/widgets.hpp"
+#include "core/desk/desk.hpp"
 #include "core/wm/wm.hpp"
 #include "core/video/pointer.hpp"
 #include "../host_adapters.hpp"
@@ -202,6 +204,14 @@ struct Rig {
     host::MemoryPointer pointer;
     host::FixedClock clock;
     wm::Wm wm{display, pointer, clock};
+    // The desktop shell's two surfaces, as a machine has them.
+    desk::Icons desk_icons{wm};
+    desk::Taskbar bar{wm};
+    Rig()
+    {
+        desk_icons.attach();
+        bar.attach();
+    }
 
     // Each event moves the clock on, so separate clicks never make a
     // double click by accident; quick() leaves it alone.
@@ -372,7 +382,7 @@ static void test_title_buttons_and_taskbar()
     CHECK(rig.no_stale_pixels());
 
     // Its taskbar button brings it back, on top and focused...
-    Rect tb = rig.wm.taskbar_button(1);
+    Rect tb = rig.bar.button(1);
     rig.click(tb.x + 10, tb.y + 10);
     CHECK(b.state() == wm::WindowState::Normal && rig.wm.active() == &b);
     // ...and clicking it again while focused minimises it.
@@ -863,12 +873,12 @@ static void test_start_menu_and_icons()
     wm::Menu start = {items, 3};
     rig.wm.set_start_menu(&start, "Chinchilla");
     static const char *const labels[2] = {"One", "Two"};
-    wm::DesktopIcon icons[2] = {{labels[0], nullptr, &run1, nullptr}, {labels[1], nullptr, &run2, nullptr}};
-    rig.wm.set_desktop_icons(icons, 2);
+    desk::Icon icons[2] = {{labels[0], nullptr, &run1, nullptr}, {labels[1], nullptr, &run2, nullptr}};
+    rig.desk_icons.set_icons(icons, 2);
     rig.wm.start();
 
     // The Start button opens it above the taskbar; GUI and Ctrl+Esc toggle it.
-    Rect sb = rig.wm.taskbar_button(-1);
+    Rect sb = rig.bar.button(-1);
     rig.click(sb.x + 10, sb.y + 10);
     CHECK(rig.wm.start_menu_open() && rig.wm.popup_rect(0).bottom() == 452);
     CHECK(rig.no_stale_pixels());
@@ -881,13 +891,13 @@ static void test_start_menu_and_icons()
     CHECK(g_runs[0] == 1 && !rig.wm.start_menu_open());
 
     // Icons: a click selects, a double click opens.
-    Rect one = rig.wm.desktop_icon_rect(0), two = rig.wm.desktop_icon_rect(1);
+    Rect one = rig.desk_icons.icon_rect(0), two = rig.desk_icons.icon_rect(1);
     rig.click(one.x + 30, one.y + 20);
-    CHECK(rig.wm.selected_icon() == 0 && rig.wm.active() == nullptr && g_runs[1] == 0);
+    CHECK(rig.desk_icons.selected_icon() == 0 && rig.wm.active() == nullptr && g_runs[1] == 0);
     rig.double_click(two.x + 30, two.y + 20);
-    CHECK(rig.wm.selected_icon() == 1 && g_runs[2] == 1 && g_runs[1] == 0);
+    CHECK(rig.desk_icons.selected_icon() == 1 && g_runs[2] == 1 && g_runs[1] == 0);
     rig.click(200, 300); // empty desktop
-    CHECK(rig.wm.selected_icon() == -1);
+    CHECK(rig.desk_icons.selected_icon() == -1);
     CHECK(rig.no_stale_pixels());
 }
 
@@ -941,8 +951,8 @@ static void test_quick_launch()
     memset(g_runs, 0, sizeof(g_runs));
 
     // None by default: the window buttons start where they always did.
-    CHECK(rig.wm.quick_launch_count() == 0 && rig.wm.quick_launch_rect(0).w == 0);
-    const Rect before = rig.wm.taskbar_button(0);
+    CHECK(rig.bar.quick_launch_count() == 0 && rig.bar.quick_launch_rect(0).w == 0);
+    const Rect before = rig.bar.button(0);
     CHECK(before.x == 72);
 
     // Three: side by side after the Start button, and the window buttons
@@ -950,17 +960,17 @@ static void test_quick_launch()
     // do is left out, and there is room for four at most.
     static uint8_t pixels[16 * 16] = {};
     const gfx::Bitmap icon = {16, 16, pixels, -1};
-    const wm::Wm::QuickLaunch items[6] = {{&icon, &run0, nullptr}, {nullptr, &run1, nullptr}, {&icon, nullptr, nullptr},
+    const desk::Taskbar::QuickLaunch items[6] = {{&icon, &run0, nullptr}, {nullptr, &run1, nullptr}, {&icon, nullptr, nullptr},
                                           {&icon, &run1, nullptr}, {&icon, &run2, nullptr}, {&icon, &run0, nullptr}};
-    rig.wm.set_quick_launch(items, 4);
-    CHECK(rig.wm.quick_launch_count() == 2);
-    rig.wm.set_quick_launch(items, 5);
-    CHECK(rig.wm.quick_launch_count() == 3);
+    rig.bar.set_quick_launch(items, 4);
+    CHECK(rig.bar.quick_launch_count() == 2);
+    rig.bar.set_quick_launch(items, 5);
+    CHECK(rig.bar.quick_launch_count() == 3);
     rig.wait(1000);
-    const Rect start = rig.wm.taskbar_button(-1);
-    const Rect q0 = rig.wm.quick_launch_rect(0), q1 = rig.wm.quick_launch_rect(1), q2 = rig.wm.quick_launch_rect(2);
+    const Rect start = rig.bar.button(-1);
+    const Rect q0 = rig.bar.quick_launch_rect(0), q1 = rig.bar.quick_launch_rect(1), q2 = rig.bar.quick_launch_rect(2);
     CHECK(q0.x > start.right() && q1.x == q0.right() && q2.x == q1.right() && q0.y == start.y && q0.h == start.h);
-    const Rect after = rig.wm.taskbar_button(0);
+    const Rect after = rig.bar.button(0);
     CHECK(after.x > q2.right() && after.x > before.x && after.w == before.w);
     CHECK(rig.no_stale_pixels());
 
@@ -990,9 +1000,9 @@ static void test_quick_launch()
     CHECK(g_runs[2] == 1 && a.state() == wm::WindowState::Minimized);
 
     // Taken away again: as before.
-    rig.wm.set_quick_launch(nullptr, 0);
+    rig.bar.set_quick_launch(nullptr, 0);
     rig.wait(1000);
-    CHECK(rig.wm.quick_launch_count() == 0 && rig.wm.taskbar_button(0).x == before.x && rig.no_stale_pixels());
+    CHECK(rig.bar.quick_launch_count() == 0 && rig.bar.button(0).x == before.x && rig.no_stale_pixels());
 }
 
 static void test_widgets()
@@ -1188,7 +1198,7 @@ static void test_modal()
     rig.click(oc.x + 20, oc.y + 20);
     CHECK(rig.wm.active() == &dialog && owner.clicks == 0);
     // So do its taskbar button and Alt+Tab.
-    Rect tb = rig.wm.taskbar_button(1);
+    Rect tb = rig.bar.button(1);
     rig.click(tb.x + 10, tb.y + 10);
     CHECK(rig.wm.active() == &dialog);
     // Other windows still work.
@@ -1207,15 +1217,182 @@ static void test_modal()
     rig.wm.add(dialog);
     rig.click(450, 150);
     CHECK(rig.wm.active() == &dialog);
-    Rect sb = rig.wm.taskbar_button(-1);
+    Rect sb = rig.bar.button(-1);
     rig.click(sb.x + 5, sb.y + 5);
     CHECK(!rig.wm.menu_open() && rig.wm.active() == &dialog);
     CHECK(rig.no_stale_pixels());
 }
 
+// The server alone, and the server with a panel that is not a taskbar: it
+// knows nothing of what a panel shows, only when to ask it.
+struct ProbePanel : wm::Panel {
+    wm::Wm &wm;
+    wm::PanelPlace place;
+    uint8_t colour;
+    std::string seen; // what it was asked, in order
+    bool takes = false;
+    explicit ProbePanel(wm::Wm &w, wm::PanelPlace p, uint8_t c) : wm(w), place(p), colour(c) {}
+    void paint(const gfx::RectList &clip) override
+    {
+        const Rect area = place == wm::PanelPlace::Bar ? wm.taskbar() : wm.work_area();
+        gfx::Canvas c = wm.canvas(clip, area);
+        c.fill(area, colour);
+    }
+    void mouse(const wm::MouseMsg &m) override
+    {
+        seen += m.kind == wm::MouseKind::Down ? (m.double_click ? "D2 " : "D ")
+                                               : (m.kind == wm::MouseKind::Up ? "U " : "M ");
+    }
+    void right_click(int, int) override { seen += "R "; }
+    bool drag_over(const char *path, int, int) override
+    {
+        seen += path != nullptr ? "over " : "left ";
+        return takes;
+    }
+    void dropped(const char *path, int, int) override { seen += std::string("drop:") + path + " "; }
+    void news(wm::PanelNews what) override
+    {
+        seen += what == wm::PanelNews::Windows ? "W " : (what == wm::PanelNews::Menu ? "S " : "C ");
+    }
+};
+
+struct DragSource final : wm::Window {
+    DragSource(const char *title, const Rect &frame, gfx::Colour colour) : Window(title, frame, nullptr), colour_(colour) {}
+    void paint(gfx::Canvas &c) override { c.fill({0, 0, client().w, client().h}, colour_); }
+    void mouse(const wm::MouseMsg &m) override
+    {
+        if (m.kind == wm::MouseKind::Move && manager() != nullptr) {
+            manager()->begin_drag("C:\\a.txt");
+        }
+    }
+    gfx::Colour colour_;
+};
+
+static void test_panels()
+{
+    host::MemoryDisplay display{640, 480};
+    host::MemoryPointer pointer;
+    host::FixedClock clock;
+    wm::Wm server{display, pointer, clock};
+    server.start();
+    const auto at = [&](int x, int y) { return display.pixels()[y * 640 + x]; };
+    const auto mouse = [&](int x, int y, uint8_t buttons) {
+        clock.now += 200000;
+        server.mouse({true, static_cast<int16_t>(x), static_cast<int16_t>(y), buttons, 0});
+    };
+    const auto click = [&](int x, int y) {
+        mouse(x, y, 0);
+        mouse(x, y, 1);
+        mouse(x, y, 0);
+    };
+
+    // No panels: the background everywhere, the strip included, and a click
+    // or the Start key does nothing.
+    // (The default background is a mixed colour: dots of two palette
+    // entries. What matters is that the strip looks like the rest.)
+    const uint8_t background = at(300, 470);
+    CHECK(at(300, 470) != gfx::kGrey);
+    click(10, 470);
+    click(300, 200);
+    server.key(wm::key::LeftGui, true);
+    server.key(wm::key::LeftGui, false);
+    CHECK(!server.menu_open() && server.window_count() == 0);
+    CHECK(server.panel(wm::PanelPlace::Bar) == nullptr && server.panel_owner(wm::PanelPlace::Bar) == proc::kNone);
+
+    // A bar panel paints the strip and nothing else, and gets the mouse
+    // there: Down, then Move and Up wherever the pointer goes.
+    ProbePanel bar(server, wm::PanelPlace::Bar, 0xE0);
+    server.set_panel(wm::PanelPlace::Bar, &bar);
+    server.update();
+    CHECK(at(300, 470) == 0xE0 && at(300, 451) != 0xE0 && at(300, 452) == 0xE0);
+    mouse(100, 470, 0);
+    mouse(100, 470, 1);
+    mouse(100, 100, 1);
+    mouse(100, 100, 0);
+    CHECK(bar.seen == "D M U ");
+    // A click on the desktop is not the bar's.
+    bar.seen.clear();
+    click(300, 200);
+    CHECK(bar.seen.empty());
+
+    // A desktop panel paints the work area behind the windows, gets the
+    // clicks no window takes, a double click, and the right button.
+    ProbePanel desk(server, wm::PanelPlace::Desktop, 0x1C);
+    server.set_panel(wm::PanelPlace::Desktop, &desk);
+    DragSource a("A", {50, 50, 200, 150}, 0x03);
+    server.add(a);
+    server.update();
+    CHECK(at(300, 300) == 0x1C && at(100, 120) == 0x03 && at(300, 470) == 0xE0);
+    // A window opened and is the one in use: news for both.
+    CHECK(bar.seen.find("W ") == 0 && desk.seen.find("W ") == 0);
+    bar.seen.clear();
+    desk.seen.clear();
+    click(300, 300); // no window is in use now: news, then the press
+    CHECK(desk.seen == "W D U ");
+    desk.seen.clear();
+    mouse(300, 300, 1);
+    mouse(300, 300, 0);
+    clock.now -= 300000; // the next press comes quickly
+    mouse(300, 300, 1);
+    mouse(300, 300, 0);
+    CHECK(desk.seen.find("D2 ") != std::string::npos);
+    desk.seen.clear();
+    mouse(300, 300, 2);
+    mouse(300, 300, 0);
+    CHECK(desk.seen == "R ");
+    click(100, 120); // on the window: not the panel's
+    desk.seen.clear();
+    bar.seen.clear();
+
+    // A file dragged from the window: the desktop panel is shown it, told
+    // when it leaves, and gets it if it said it would take it.
+    desk.takes = true;
+    mouse(100, 120, 0);
+    mouse(100, 120, 1);
+    mouse(110, 125, 1); // the window starts the drag
+    CHECK(server.item_dragging());
+    mouse(300, 300, 1);
+    CHECK(desk.seen == "over ");
+    mouse(300, 470, 1); // over the bar: nowhere to drop
+    CHECK(desk.seen == "over left ");
+    mouse(300, 300, 1);
+    mouse(300, 300, 0);
+    CHECK(desk.seen == "over left over left drop:C:\\a.txt ");
+    // One that does not take it gets no drop.
+    desk.takes = false;
+    desk.seen.clear();
+    mouse(100, 120, 0);
+    mouse(100, 120, 1);
+    mouse(110, 125, 1);
+    mouse(300, 300, 1);
+    mouse(300, 300, 0);
+    CHECK(desk.seen == "over left ");
+
+    // The clock: news when the time is set.
+    bar.seen.clear();
+    server.set_time(10, 30, 0);
+    CHECK(bar.seen == "C ");
+
+    // A panel taken away in the middle of a press: the rest of the press
+    // goes nowhere, and its place is background again.
+    bar.seen.clear();
+    mouse(100, 470, 0);
+    mouse(100, 470, 1);
+    server.set_panel(wm::PanelPlace::Bar, nullptr);
+    mouse(120, 470, 1);
+    mouse(120, 470, 0);
+    server.update();
+    CHECK(bar.seen == "D " && at(300, 470) == background);
+    server.set_panel(wm::PanelPlace::Desktop, nullptr);
+    server.close(a);
+    server.update();
+    CHECK(at(300, 300) != 0x1C && at(300, 300) != 0x03);
+}
+
 int main()
 {
     test_rect_list();
+    test_panels();
     test_dither();
     test_canvas_clip();
     test_stacking_and_focus();

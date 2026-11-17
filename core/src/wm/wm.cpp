@@ -33,21 +33,6 @@ const char *const kCheckGlyph[] = {"      X", "     XX", "X   XXX", "XX XXX ",
                                    "XXXXX  ", " XXX   ", "  X    "};
 const char *const kArrowGlyph[] = {"X   ", "XX  ", "XXX ", "XXXX", "XXX ", "XX  ", "X   "};
 
-// Taskbar layout (tools/mockup/desktop.py).
-constexpr int kStartW = 58;
-constexpr int kButtonsX = 72; // first window button, after a groove (further right with quick-launch icons)
-constexpr int kQuickW = 22;   // a quick-launch icon: 16x16 in a 22x22 button with no edge
-// What taskbar_index_at() and the capture call the quick-launch icons, so
-// they are held and let go like the other buttons of the taskbar: -10, -11...
-constexpr int kQuickIndex = -10;
-constexpr int kNothing = -2;
-constexpr int kButtonW = 150, kButtonGap = 3;
-constexpr int kClockW = 60;
-constexpr int kTrayW = 20; // a tray icon, left of the clock
-
-// Desktop icons (tools/mockup/desktop.py).
-constexpr int kIconX = 6, kIconY = 8, kIconStep = 70, kIconColumn = 76;
-
 // Menus.
 constexpr int kMenuEdge = 3;
 constexpr int kMenuAimSlack = 8; // the aim at a submenu may miss its corners by this much
@@ -135,24 +120,41 @@ void Wm::start()
     update();
 }
 
-void Wm::set_shell(proc::Pid pid)
+void Wm::set_panel(PanelPlace place, Panel *panel, proc::Pid owner)
 {
-    shell_pid_ = pid;
-    shell_gone_ = false;
-    invalidate({0, 0, width_, height_});
+    PanelSlot &slot = panels_[place == PanelPlace::Bar ? 1 : 0];
+    if (slot.panel != nullptr && slot.panel != panel) {
+        // What the old one was in the middle of is over.
+        if (capture_ == Capture::Panel && captured_panel_ == slot.panel) {
+            capture_ = Capture::Swallow; // until the button comes up
+            captured_panel_ = nullptr;
+        }
+        if (place == PanelPlace::Desktop) {
+            desktop_over_ = false;
+            desktop_target_ = false;
+        }
+        if (place == PanelPlace::Bar && start_open_) {
+            close_menus();
+        }
+    }
+    slot.panel = panel;
+    slot.owner = panel != nullptr ? owner : proc::kNone;
+    invalidate(place == PanelPlace::Bar ? taskbar() : work_area());
 }
 
-void Wm::shell_ended()
+void Wm::tell_panels(PanelNews what)
 {
-    if (start_open_) {
-        close_menus();
+    for (int i = 0; i < 2; i++) {
+        if (panels_[i].panel != nullptr) {
+            const proc::Scope as(procs_, owner_of(i == 1 ? PanelPlace::Bar : PanelPlace::Desktop));
+            panels_[i].panel->news(what);
+        }
     }
-    if (capture_ == Capture::Taskbar || capture_ == Capture::Icon) {
-        capture_ = Capture::Swallow; // until the button comes up
-    }
-    shell_pid_ = 0;
-    shell_gone_ = true;
-    invalidate({0, 0, width_, height_});
+}
+
+gfx::Canvas Wm::canvas(const gfx::RectList &clip, const Rect &bounds)
+{
+    return Canvas(display_.pixels(), width_, height_, clip, bounds);
 }
 
 /* ---- Window list --------------------------------------------------------- */
@@ -199,7 +201,7 @@ void Wm::add(Window &w)
     count_++;
     activate(w);
     invalidate(w.frame_);
-    invalidate(taskbar());
+    tell_panels(PanelNews::Windows);
 }
 
 void Wm::close(Window &w)
@@ -232,7 +234,7 @@ void Wm::close(Window &w)
         captured_ = nullptr;
     }
     invalidate(w.frame_);
-    invalidate(taskbar());
+    tell_panels(PanelNews::Windows);
     w.wm_ = nullptr;
     w.captured_ = nullptr;
     if (active_ == &w) {
@@ -532,7 +534,7 @@ void Wm::set_active(Window *w)
     if (w != nullptr) {
         invalidate(w->frame_);
     }
-    invalidate(taskbar());
+    tell_panels(PanelNews::Windows);
 }
 
 void Wm::activate(Window &w)
@@ -560,7 +562,7 @@ void Wm::minimize(Window &w)
     w.was_maximized_ = w.state_ == WindowState::Maximized;
     w.state_ = WindowState::Minimized;
     invalidate(w.frame_);
-    invalidate(taskbar());
+    tell_panels(PanelNews::Windows);
     if (active_ == &w) {
         active_ = nullptr;
         if (Window *next = topmost_visible()) {
@@ -577,7 +579,7 @@ void Wm::restore(Window &w)
     if (w.state_ == WindowState::Minimized) {
         w.state_ = w.was_maximized_ ? WindowState::Maximized : WindowState::Normal;
         invalidate(w.frame_);
-        invalidate(taskbar());
+        tell_panels(PanelNews::Windows);
     }
     activate(w);
 }
@@ -633,20 +635,6 @@ void Wm::cycle_windows()
     if (count_ >= 2) {
         activate(*stack_[0]);
     }
-}
-
-void Wm::set_desktop_icons(const DesktopIcon *icons, int count)
-{
-    icons_ = icons;
-    count = count < kMaxIcons ? count : kMaxIcons;
-    if (count != icon_count_) {
-        // Icons came or went, so the others moved: nothing stays selected.
-        selected_icon_ = -1;
-        drop_icon_ = -1;
-        pressed_icon_ = -1;
-    }
-    icon_count_ = count;
-    invalidate(work_area());
 }
 
 void Wm::set_start_menu(Menu *menu, const char *banner)
@@ -798,71 +786,6 @@ Window *Wm::taskbar_window(int index) const
     return nullptr;
 }
 
-int Wm::buttons_x() const { return kButtonsX + (quick_count_ > 0 ? quick_count_ * kQuickW + 6 : 0); }
-
-Rect Wm::quick_launch_rect(int index) const
-{
-    if (index < 0 || index >= quick_count_) {
-        return {};
-    }
-    return {kButtonsX + index * kQuickW, height_ - kTaskbarHeight + 4, kQuickW, 22};
-}
-
-void Wm::set_quick_launch(const QuickLaunch *items, int count)
-{
-    quick_count_ = 0;
-    for (int i = 0; i < count && quick_count_ < kMaxQuick; i++) {
-        if (items[i].icon != nullptr && items[i].click != nullptr) {
-            quick_[quick_count_++] = items[i];
-        }
-    }
-    invalidate(taskbar());
-}
-
-Rect Wm::taskbar_button(int index) const
-{
-    const int ty = height_ - kTaskbarHeight;
-    if (index <= kQuickIndex) {
-        return quick_launch_rect(kQuickIndex - index);
-    }
-    if (index < 0) {
-        return {2, ty + 4, kStartW, 22};
-    }
-    const int room = width_ - kClockW - 6 - buttons_x() - (tray_icon_ != nullptr ? kTrayW : 0);
-    const int shown = taskbar_count();
-    int w = kButtonW;
-    if (shown > 0 && shown * (kButtonW + kButtonGap) > room) {
-        w = room / shown - kButtonGap;
-    }
-    return {buttons_x() + index * (w + kButtonGap), ty + 4, w, 22};
-}
-
-int Wm::taskbar_index_at(int x, int y) const
-{
-    if (taskbar_button(-1).contains(x, y)) {
-        return -1;
-    }
-    for (int i = 0; i < quick_count_; i++) {
-        if (quick_launch_rect(i).contains(x, y)) {
-            return kQuickIndex - i;
-        }
-    }
-    for (int i = 0; i < taskbar_count(); i++) {
-        if (taskbar_button(i).contains(x, y)) {
-            return i;
-        }
-    }
-    return kNothing;
-}
-
-Rect Wm::desktop_icon_rect(int index) const
-{
-    // Columns down the left, as many rows as fit above the taskbar.
-    const int rows = (height_ - kTaskbarHeight - kIconY) / kIconStep;
-    const int col = rows > 0 ? index / rows : 0, row = rows > 0 ? index % rows : index;
-    return {kIconX - 4 + col * kIconColumn, kIconY + row * kIconStep, 72, 50};
-}
-
 /* ---- Input --------------------------------------------------------------- */
 
 void Wm::key(uint16_t usage, bool pressed)
@@ -953,7 +876,7 @@ void Wm::handle_key(uint16_t usage, bool pressed)
     }
     if (pressed && usage == key::Escape && capture_ == Capture::Item) {
         set_outline(outline_, false);
-        set_drop_icon(-1);
+        leave_desktop_target();
         if (drop_window_ != nullptr) {
             {
                 const proc::Scope as(procs_, drop_window_->owner_);
@@ -961,7 +884,6 @@ void Wm::handle_key(uint16_t usage, bool pressed)
             }
             drop_window_ = nullptr;
         }
-        desktop_target_ = false;
         capture_ = Capture::Swallow; // the release that follows does nothing
         return;
     }
@@ -1193,27 +1115,22 @@ void Wm::on_press()
         return;
     }
     if (taskbar().contains(x, y)) {
-        if (shell_gone_) {
-            capture_ = Capture::Swallow; // no taskbar there now
+        // The bar's strip: the bar panel's, if there is one.
+        Panel *bar = panel(PanelPlace::Bar);
+        if (bar == nullptr) {
+            capture_ = Capture::Swallow; // nothing there now
             return;
         }
-        const proc::Scope as(procs_, shell_or_desktop());
-        if (tray_icon_ != nullptr && tray_icon_rect().contains(x, y)) {
-            capture_ = Capture::Swallow;
-            if (tray_click_ != nullptr) {
-                tray_click_(tray_context_);
-            }
-            return;
+        capture_ = Capture::Panel;
+        captured_panel_ = bar;
+        captured_panel_owner_ = owner_of(PanelPlace::Bar);
+        {
+            const proc::Scope as(procs_, captured_panel_owner_);
+            bar->mouse({MouseKind::Down, x, y, false});
         }
-        const int index = taskbar_index_at(x, y);
-        if (index == -1 && start_menu_ != nullptr) {
-            open_start_menu();
-            capture_ = Capture::Menu;
-        } else if (index != kNothing) {
-            capture_ = Capture::Taskbar;
-            captured_index_ = index;
-            captured_inside_ = true;
-            invalidate(taskbar_button(index));
+        if (capture_ == Capture::Panel && menu_open()) {
+            capture_ = Capture::Menu; // it opened a menu: the held button is the menu's
+            captured_panel_ = nullptr;
         }
         return;
     }
@@ -1221,29 +1138,13 @@ void Wm::on_press()
     if (w == nullptr) {
         // The desktop: maybe an icon; no window keeps the focus.
         set_active(nullptr);
-        int hit = -1;
-        for (int i = 0; i < icon_count_; i++) {
-            if (desktop_icon_rect(i).contains(x, y)) {
-                hit = i;
-            }
-        }
-        if (hit != selected_icon_) {
-            if (selected_icon_ >= 0) {
-                invalidate(desktop_icon_rect(selected_icon_));
-            }
-            selected_icon_ = hit;
-            if (hit >= 0) {
-                invalidate(desktop_icon_rect(hit));
-            }
-        }
-        if (double_click(hit >= 0 ? hit : -2) && hit >= 0 && icons_[hit].open != nullptr) {
-            const proc::Scope as(procs_, shell_or_desktop());
-            icons_[hit].open(icons_[hit].context);
-        } else if (hit >= 0 && icons_[hit].path != nullptr) {
-            capture_ = Capture::Icon;
-            pressed_icon_ = hit;
-            grab_dx_ = x;
-            grab_dy_ = y;
+        if (Panel *desk = panel(PanelPlace::Desktop)) {
+            const bool twice = double_click(-2);
+            capture_ = Capture::Panel;
+            captured_panel_ = desk;
+            captured_panel_owner_ = owner_of(PanelPlace::Desktop);
+            const proc::Scope as(procs_, captured_panel_owner_);
+            desk->mouse({MouseKind::Down, x, y, twice});
         }
         return;
     }
@@ -1334,15 +1235,9 @@ void Wm::on_right_press()
     }
     Window *w = window_under(pointer_x_, pointer_y_);
     Window *sys = system_modal();
-    if (w == nullptr && sys == nullptr && desktop_menu_ != nullptr) {
-        // The desktop itself, away from the icons.
-        for (int i = 0; i < icon_count_; i++) {
-            if (desktop_icon_rect(i).contains(pointer_x_, pointer_y_)) {
-                return;
-            }
-        }
-        const proc::Scope desktop(procs_, shell_or_desktop());
-        desktop_menu_(pointer_x_, pointer_y_, desktop_menu_context_);
+    if (w == nullptr && sys == nullptr && panel(PanelPlace::Desktop) != nullptr) {
+        const proc::Scope as(procs_, owner_of(PanelPlace::Desktop));
+        panel(PanelPlace::Desktop)->right_click(pointer_x_, pointer_y_);
         return;
     }
     if (w == nullptr || (sys != nullptr && sys != w) || blocker(*w) != nullptr || w->locked_ ||
@@ -1458,12 +1353,9 @@ void Wm::on_move()
         }
         break;
     }
-    case Capture::Taskbar: {
-        const bool inside = taskbar_button(captured_index_).contains(x, y);
-        if (inside != captured_inside_) {
-            captured_inside_ = inside;
-            invalidate(taskbar_button(captured_index_));
-        }
+    case Capture::Panel: {
+        const proc::Scope as(procs_, captured_panel_owner_);
+        captured_panel_->mouse({MouseKind::Move, x, y});
         break;
     }
     case Capture::Client: {
@@ -1474,11 +1366,6 @@ void Wm::on_move()
         }
         break;
     }
-    case Capture::Icon:
-        if ((x - grab_dx_) * (x - grab_dx_) + (y - grab_dy_) * (y - grab_dy_) > 16 && pressed_icon_ >= 0 && pressed_icon_ < icon_count_) {
-            begin_drag(icons_[pressed_icon_].path);
-        }
-        break;
     case Capture::Item:
         set_outline({x - 16, y - 16, 32, 32}, true);
         update_drop_target();
@@ -1500,28 +1387,25 @@ void Wm::begin_drag(const char *path)
     update_drop_target();
 }
 
-void Wm::set_drop_icon(int icon)
+// The drag is no longer over the desktop panel: it is told, once.
+void Wm::leave_desktop_target()
 {
-    if (icon == drop_icon_) {
-        return;
+    if (desktop_over_ && panel(PanelPlace::Desktop) != nullptr) {
+        const proc::Scope as(procs_, owner_of(PanelPlace::Desktop));
+        panel(PanelPlace::Desktop)->drag_over(nullptr, -1, -1);
     }
-    if (drop_icon_ >= 0 && drop_icon_ < icon_count_) {
-        invalidate(desktop_icon_rect(drop_icon_));
-    }
-    drop_icon_ = icon;
-    if (icon >= 0) {
-        invalidate(desktop_icon_rect(icon));
-    }
+    desktop_over_ = false;
+    desktop_target_ = false;
 }
 
-// What is under the pointer: a desktop icon that takes files (shown
-// selected), or a window that says it would take this one.
+// What is under the pointer: the desktop panel or a window, either of which
+// says whether it would take this file.
 void Wm::update_drop_target()
 {
     const int x = pointer_x_, y = pointer_y_;
-    int icon = -1;
     Window *target = nullptr;
     bool on_desktop = false;
+    bool over_desktop = false;
     if (!taskbar().contains(x, y)) {
         Window *w = window_under(x, y);
         Window *sys = system_modal();
@@ -1534,22 +1418,17 @@ void Wm::update_drop_target()
                     target = w;
                 }
             }
-        } else if (sys == nullptr) {
-            bool on_icon = false;
-            for (int i = 0; i < icon_count_; i++) {
-                if (desktop_icon_rect(i).contains(x, y)) {
-                    on_icon = true;
-                    if (icons_[i].drop != nullptr &&
-                        (icons_[i].path == nullptr || strcmp(icons_[i].path, drag_path_) != 0)) {
-                        icon = i;
-                    }
-                }
-            }
-            on_desktop = !on_icon && desktop_drop_ != nullptr;
+        } else if (sys == nullptr && panel(PanelPlace::Desktop) != nullptr) {
+            const proc::Scope as(procs_, owner_of(PanelPlace::Desktop));
+            desktop_over_ = true;
+            on_desktop = panel(PanelPlace::Desktop)->drag_over(drag_path_, x, y);
+            over_desktop = true;
         }
     }
+    if (!over_desktop) {
+        leave_desktop_target(); // it stops showing where the file would go
+    }
     desktop_target_ = on_desktop;
-    set_drop_icon(icon);
     if (drop_window_ != nullptr && drop_window_ != target) {
         {
             const proc::Scope as(procs_, drop_window_->owner_);
@@ -1593,12 +1472,13 @@ void Wm::on_release()
             }
         }
         break;
-    case Capture::Taskbar:
-        invalidate(taskbar_button(captured_index_));
-        if (captured_inside_) {
-            taskbar_click(captured_index_);
-        }
+    case Capture::Panel: {
+        Panel *held = captured_panel_;
+        captured_panel_ = nullptr;
+        const proc::Scope as(procs_, captured_panel_owner_);
+        held->mouse({MouseKind::Up, pointer_x_, pointer_y_});
         break;
+    }
     case Capture::Client: {
         const Rect c = w->client();
         {
@@ -1611,18 +1491,14 @@ void Wm::on_release()
         set_outline(outline_, false);
         char path[kDragPath];
         snprintf(path, sizeof(path), "%s", drag_path_);
-        const int icon = drop_icon_;
         Window *target = drop_window_;
         const bool on_desktop = desktop_target_;
-        set_drop_icon(-1);
+        Panel *desk = panel(PanelPlace::Desktop);
+        leave_desktop_target();
         drop_window_ = nullptr;
-        desktop_target_ = false;
-        if (icon >= 0 && icon < icon_count_) {
-            const proc::Scope as(procs_, shell_or_desktop());
-            icons_[icon].drop(path, icons_[icon].context);
-        } else if (on_desktop) {
-            const proc::Scope as(procs_, shell_or_desktop());
-            desktop_drop_(path, desktop_drop_context_);
+        if (on_desktop && desk != nullptr) {
+            const proc::Scope as(procs_, owner_of(PanelPlace::Desktop));
+            desk->dropped(path, pointer_x_, pointer_y_);
         } else if (target != nullptr) {
             const proc::Scope as(procs_, target->owner_);
             target->drag_over(nullptr, -1, -1);
@@ -1697,30 +1573,6 @@ void Wm::lock_changed(Window &w)
         close_menus();
     }
     update_pointer_shape();
-}
-
-void Wm::taskbar_click(int index)
-{
-    if (index <= kQuickIndex) {
-        // A quick-launch icon: the desktop starts something, as itself.
-        const int which = kQuickIndex - index;
-        if (which < quick_count_) {
-            const QuickLaunch item = quick_[which];
-            const proc::Scope as(procs_, shell_or_desktop());
-            item.click(item.context);
-        }
-        return;
-    }
-    Window *tw = index >= 0 ? taskbar_window(index) : nullptr;
-    if (tw == nullptr) {
-        return;
-    }
-    Window &w = *tw;
-    if (active_ == &w && w.state_ != WindowState::Minimized) {
-        minimize(w);
-    } else {
-        restore(w);
-    }
 }
 
 /* ---- Menus ----------------------------------------------------------------- */
@@ -1876,7 +1728,7 @@ void Wm::close_menus()
     }
     if (start_open_) {
         start_open_ = false;
-        invalidate(taskbar_button(-1));
+        tell_panels(PanelNews::Menu);
     }
 }
 
@@ -1888,14 +1740,14 @@ void Wm::open_menu(Menu &menu, int x, int y)
 
 void Wm::open_start_menu()
 {
-    if (start_menu_ == nullptr || shell_gone_) {
+    if (start_menu_ == nullptr) {
         return;
     }
     close_menus();
-    const proc::Scope as(procs_, shell_or_desktop());
+    const proc::Scope as(procs_, owner_of(PanelPlace::Bar));
     open_popup(*start_menu_, 0, height_ - kTaskbarHeight, true, false);
     start_open_ = true;
-    invalidate(taskbar_button(-1));
+    tell_panels(PanelNews::Menu);
 }
 
 void Wm::open_menu_bar(Window &w, int entry)
@@ -2174,7 +2026,14 @@ void Wm::paint(bool painter)
         subtract_overlays(region_, false);
     }
     if (!region_.empty()) {
-        paint_taskbar(region_);
+        if (Panel *bar = panel(PanelPlace::Bar)) {
+            const proc::Scope as(procs_, owner_of(PanelPlace::Bar));
+            bar->paint(region_);
+        } else {
+            // No bar: the background shows in its strip.
+            Canvas strip(display_.pixels(), width_, height_, region_, taskbar());
+            fill_backdrop(strip, {0, 0, width_, height_});
+        }
     }
 
     for (int level = 0; level < popup_count_; level++) {
@@ -2212,52 +2071,14 @@ void Wm::fill_backdrop(Canvas &c, const Rect &r) const
 
 void Wm::paint_desktop(const RectList &clip)
 {
+    if (Panel *desk = panel(PanelPlace::Desktop)) {
+        const proc::Scope as(procs_, owner_of(PanelPlace::Desktop));
+        desk->paint(clip);
+        return;
+    }
     const Rect screen = {0, 0, width_, height_};
-    static RectList around; // ponytail: one UI task
-    around = clip;
-    for (int i = 0; i < icon_count_; i++) {
-        around.subtract(desktop_icon_rect(i));
-    }
-    const bool split = !around.overflowed();
-    Canvas plain(display_.pixels(), width_, height_, split ? around : clip, screen);
+    Canvas plain(display_.pixels(), width_, height_, clip, screen);
     fill_backdrop(plain, screen);
-    Canvas c(display_.pixels(), width_, height_, clip, screen);
-    const Rect bounds = clip.bounds();
-    for (int i = 0; i < icon_count_; i++) {
-        const Rect r = desktop_icon_rect(i);
-        if (!r.overlaps(bounds)) {
-            continue;
-        }
-        const DesktopIcon &icon = icons_[i];
-        const int x = r.x + 4, y = r.y;
-        const bool selected = i == selected_icon_ || i == drop_icon_;
-        const auto draw = [&](Canvas &c) {
-        if (split) {
-            fill_backdrop(c, r);
-        }
-        if (icon.picture != nullptr) {
-            if (selected) {
-                c.blit_selected(*icon.picture, x + 16, y, gfx::rgb(0, 0, 2));
-            } else {
-                c.blit(*icon.picture, x + 16, y);
-            }
-        }
-        const int tw = Canvas::text_width(icon.label);
-        const int tx = x + 32 - tw / 2;
-        if (selected) {
-            c.fill_rgb({tx - 1, y + 33, tw + 2, 14}, kHighlight);
-            c.text(tx, y + 34, icon.label, gfx::kWhite);
-        } else {
-            c.text(tx + 1, y + 35, icon.label, gfx::kBlack);
-            c.text(tx, y + 34, icon.label, gfx::kWhite);
-        }
-        };
-        if (split) {
-            c.layered(r, draw);
-        } else {
-            draw(c); // the background is down already
-        }
-    }
 }
 
 void Wm::paint_window(Window &w, const RectList &clip)
@@ -2403,81 +2224,6 @@ void Wm::paint_popup(int level, const RectList &clip)
     });
 }
 
-void Wm::paint_taskbar(const RectList &clip)
-{
-    uint8_t *pixels = display_.pixels();
-    const Rect bar = taskbar();
-    const int ty = bar.y;
-    Canvas screen(pixels, width_, height_, clip, bar);
-    if (shell_gone_) {
-        // No shell, no taskbar: the desktop shows through.
-        fill_backdrop(screen, {0, 0, width_, height_});
-        return;
-    }
-    screen.layered(bar, [&](Canvas &c) {
-    c.fill(bar, gfx::kGrey);
-    c.hline(0, ty + 1, width_, gfx::kWhite);
-
-    // Start button: the mascot and "Start", pressed in while its menu is open.
-    const Rect start = taskbar_button(-1);
-    const bool start_in = start_open_ ||
-                          (capture_ == Capture::Taskbar && captured_index_ == -1 && captured_inside_);
-    c.button(start, start_in ? ButtonLook::Pressed : ButtonLook::Raised);
-    const int sd = start_in ? 1 : 0;
-    c.blit(gfx::mascot_16(), 5 + sd, ty + 7 + sd);
-    c.text(25 + sd, ty + 9 + sd, "Start", gfx::kBlack, true);
-
-    // A groove, then the quick-launch icons if the desktop has set any
-    // (flat, pressed in while held), another groove, then the window buttons.
-    c.vline(kButtonsX - 4, ty + 5, 20, gfx::kDarkGrey);
-    c.vline(kButtonsX - 3, ty + 5, 20, gfx::kWhite);
-    for (int i = 0; i < quick_count_; i++) {
-        const Rect r = quick_launch_rect(i);
-        const bool held = capture_ == Capture::Taskbar && captured_index_ == kQuickIndex - i && captured_inside_;
-        if (held) {
-            c.edge(r, gfx::kDarkGrey, gfx::kWhite);
-        }
-        c.blit(*quick_[i].icon, r.x + 3 + (held ? 1 : 0), r.y + 3 + (held ? 1 : 0));
-    }
-    if (quick_count_ > 0) {
-        c.vline(buttons_x() - 4, ty + 5, 20, gfx::kDarkGrey);
-        c.vline(buttons_x() - 3, ty + 5, 20, gfx::kWhite);
-    }
-
-    // One button per window, in the order they were opened. A window whose
-    // dialog is open shows pressed while the dialog has the focus.
-    for (int i = 0; i < taskbar_count(); i++) {
-        Window &w = *taskbar_window(i);
-        const Rect r = taskbar_button(i);
-        const bool held = capture_ == Capture::Taskbar && captured_index_ == i && captured_inside_;
-        const bool owns_active = active_ != nullptr && active_->modal_owner_ == &w;
-        const bool on = (active_ == &w || owns_active) && w.state_ != WindowState::Minimized;
-        c.button(r, on ? ButtonLook::Checked : (held ? ButtonLook::Pressed : ButtonLook::Raised));
-        const int d = (on || held) ? 1 : 0;
-        Canvas inner = c.sub(r.inset(3));
-        if (w.icon_ != nullptr) {
-            inner.blit(*w.icon_, 1 + d, 0 + d);
-        }
-        inner.text(21 + d, 2 + d, w.title_, gfx::kBlack, on);
-    }
-
-    // The clock, 12-hour as in the target picture.
-    const Rect clock = clock_rect();
-    if (tray_icon_ != nullptr) {
-        const Rect icon = tray_icon_rect();
-        c.edge({icon.x, clock.y, kTrayW + kClockW, clock.h}, gfx::kDarkGrey, gfx::kWhite);
-        c.blit(*tray_icon_, icon.x + 3, icon.y + 3);
-    } else {
-        c.edge(clock, gfx::kDarkGrey, gfx::kWhite);
-    }
-    int h, m, s;
-    get_time(h, m, s);
-    char time[12];
-    snprintf(time, sizeof(time), "%d:%02d %s", h % 12 == 0 ? 12 : h % 12, m, h < 12 ? "AM" : "PM");
-    c.text(clock.x + (kClockW - Canvas::text_width(time)) / 2, ty + 9, time, gfx::kBlack);
-    });
-}
-
 /* ---- Timers and clock ------------------------------------------------------- */
 
 uint64_t Wm::now_us()
@@ -2617,35 +2363,11 @@ void Wm::set_animations(bool on)
     update();
 }
 
-Rect Wm::clock_rect() const
-{
-    return {width_ - kClockW - 2, height_ - kTaskbarHeight + 4, kClockW, 22};
-}
-
-Rect Wm::tray_icon_rect() const
-{
-    const Rect clock = clock_rect();
-    return tray_icon_ != nullptr ? Rect{clock.x - kTrayW, clock.y, kTrayW, clock.h} : Rect{};
-}
-
-void Wm::set_tray_icon(const gfx::Bitmap *icon, void (*click)(void *context), void *context)
-{
-    tray_click_ = click;
-    tray_context_ = context;
-    if (icon == tray_icon_) {
-        return;
-    }
-    // A first or a last icon moves the window buttons: the whole bar.
-    const bool whole = (icon == nullptr) != (tray_icon_ == nullptr);
-    tray_icon_ = icon;
-    invalidate(whole ? taskbar() : tray_icon_rect());
-}
-
 void Wm::set_time(int hours, int minutes, int seconds)
 {
     time_base_s_ = hours * 3600 + minutes * 60 + seconds;
     time_base_us_ = now_us();
-    invalidate(clock_rect());
+    tell_panels(PanelNews::Clock);
     update();
 }
 
@@ -2664,7 +2386,7 @@ void Wm::clock_tick(void *self)
     wm.get_time(h, m, s);
     if (h * 60 + m != wm.shown_minute_) {
         wm.shown_minute_ = h * 60 + m;
-        wm.invalidate(wm.clock_rect());
+        wm.tell_panels(PanelNews::Clock);
     }
 }
 
@@ -2784,7 +2506,8 @@ size_t Wm::describe_windows(char *out, size_t capacity)
     }
     snprintf(number, sizeof(number),
              "],\"menus\":%d,\"start_menu\":%s,\"selected_icon\":%d,\"update_us\":%u,\"event_us\":%u}",
-             popup_count_, start_open_ ? "true" : "false", selected_icon_,
+             popup_count_, start_open_ ? "true" : "false",
+             panel(PanelPlace::Desktop) != nullptr ? panel(PanelPlace::Desktop)->selected() : -1,
              static_cast<unsigned>(last_update_us_), static_cast<unsigned>(last_event_us_));
     puts(number);
     if (full) {

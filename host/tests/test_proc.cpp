@@ -9,6 +9,7 @@
 #include "core/fs/memory_volume.hpp"
 #include "core/net/wifi.hpp"
 #include "core/proc/table.hpp"
+#include "core/desk/desk.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/widgets.hpp"
 #include "core/wm/wm.hpp"
@@ -827,7 +828,7 @@ void test_shell()
     const Pid desk_pid = desk->pid;
     const proc::Process *bar = process("taskbar");
     CHECK(bar != nullptr && bar->parent == desk_pid && bar->is(proc::kSystem) && !bar->is(proc::kProtected) &&
-          bar->is(proc::kRespawn) && desktop.shell() == bar->pid);
+          bar->is(proc::kRespawn) && desktop.panel_owner(wm::PanelPlace::Bar) == bar->pid);
     const Pid bar_pid = bar != nullptr ? bar->pid : proc::kNone;
     // Timers: the caret and the clock, the screensaver's and the Wi-Fi
     // manager's are the desktop's; the look at the desktop's folder is the
@@ -1008,9 +1009,9 @@ void test_shell()
     // Terminal. One click starts the program, as a child of the desktop,
     // like the Start menu does. The Editor and the Terminal open another
     // copy each time; the File manager comes to the front.
-    CHECK(desktop.quick_launch_count() == 3 && t.count() == 2);
+    CHECK(shell::taskbar()->quick_launch_count() == 3 && t.count() == 2);
     const auto quick = [&](int i) {
-        const wm::Rect r = desktop.quick_launch_rect(i);
+        const wm::Rect r = shell::taskbar()->quick_launch_rect(i);
         desktop.mouse({true, static_cast<int16_t>(r.x + 8), static_cast<int16_t>(r.y + 8), 0, 0});
         desktop.mouse({true, static_cast<int16_t>(r.x + 8), static_cast<int16_t>(r.y + 8), 1, 0});
         desktop.mouse({true, static_cast<int16_t>(r.x + 8), static_cast<int16_t>(r.y + 8), 0, 0});
@@ -1054,7 +1055,7 @@ void test_taskbar()
     wait(3000000); // well past a quick ending
     const Pid desk_pid = t.find_by_name("desktop");
     const Pid first = t.find_by_name("taskbar");
-    CHECK(first != proc::kNone && desktop.shell() == first && desktop.taskbar_shown());
+    CHECK(first != proc::kNone && desktop.panel_owner(wm::PanelPlace::Bar) == first && desktop.panel(wm::PanelPlace::Bar) != nullptr);
     const std::string with_bar = screen();
 
     // Every frame painted while there is no taskbar is counted: the bar is
@@ -1063,7 +1064,7 @@ void test_taskbar()
     frames_without = 0;
     desktop.set_damage_listener(
         [](const gfx::Rect &, void *) {
-            if (!desktop.taskbar_shown()) {
+            if (desktop.panel(wm::PanelPlace::Bar) == nullptr) {
                 frames_without++;
             }
         },
@@ -1087,12 +1088,12 @@ void test_taskbar()
     CHECK(t.signal(first, proc::Signal::Kill) == proc::Sent::Ok);
     wait(10000);
     const Pid second = t.find_by_name("taskbar");
-    CHECK(!t.alive(first) && second != proc::kNone && second != first && desktop.shell() == second);
+    CHECK(!t.alive(first) && second != proc::kNone && second != first && desktop.panel_owner(wm::PanelPlace::Bar) == second);
     CHECK(t.find(second)->parent == desk_pid && t.find(second)->is(proc::kRespawn));
-    CHECK(frames_without >= 1 && desktop.taskbar_shown() && !desktop.menu_open());
+    CHECK(frames_without >= 1 && desktop.panel(wm::PanelPlace::Bar) != nullptr && !desktop.menu_open());
     // Its box went with it; the program it started lives on, as init's.
     CHECK(find("Taskbar") == nullptr && t.alive(about) && t.find(about)->parent == proc::kRoot);
-    CHECK(desktop.timers_of(first) == 0 && desktop.timers_of(second) == 1 && desktop.quick_launch_count() == 3);
+    CHECK(desktop.timers_of(first) == 0 && desktop.timers_of(second) == 1 && shell::taskbar()->quick_launch_count() == 3);
     // The new one works: its menu opens and starts a program.
     close_all();
     wait(10000);
@@ -1110,7 +1111,7 @@ void test_taskbar()
     CHECK(t.signal(second, proc::Signal::Term) == proc::Sent::Ok);
     wait(10000);
     const Pid third = t.find_by_name("taskbar");
-    CHECK(third != proc::kNone && third != second && desktop.taskbar_shown());
+    CHECK(third != proc::kNone && third != second && desktop.panel(wm::PanelPlace::Bar) != nullptr);
 
     // Ended again and again as soon as it is back, it is left ended (the
     // brake of item 18). The screen has no bar, no icons and no Start
@@ -1119,8 +1120,8 @@ void test_taskbar()
         t.signal(t.find_by_name("taskbar"), proc::Signal::Kill);
         wait(10000);
     }
-    CHECK(t.find_by_name("taskbar") == proc::kNone && !desktop.taskbar_shown() && desktop.shell() == proc::kNone);
-    CHECK(desktop.quick_launch_count() == 0 && screen() != with_bar);
+    CHECK(t.find_by_name("taskbar") == proc::kNone && desktop.panel(wm::PanelPlace::Bar) == nullptr && desktop.panel_owner(wm::PanelPlace::Bar) == proc::kNone);
+    CHECK(shell::taskbar() == nullptr && screen() != with_bar);
     key(wm::key::Escape, kCtrl);
     CHECK(!desktop.menu_open());
     const wm::Rect bar = desktop.taskbar();
@@ -1135,7 +1136,7 @@ void test_taskbar()
     wait(3000000);
     CHECK(shell::run_text("taskbar", "C:\\", why, sizeof(why)));
     wait(10000);
-    CHECK(t.find_by_name("taskbar") != proc::kNone && desktop.taskbar_shown() && screen() == with_bar);
+    CHECK(t.find_by_name("taskbar") != proc::kNone && desktop.panel(wm::PanelPlace::Bar) != nullptr && screen() == with_bar);
     CHECK(!shell::run_text("taskbar", "C:\\", why, sizeof(why)) && strstr(why, "already") != nullptr);
     desktop.set_damage_listener(nullptr, nullptr);
 }
