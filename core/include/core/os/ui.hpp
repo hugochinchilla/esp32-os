@@ -33,6 +33,8 @@ constexpr Control kNoControl = 0;
 
 enum class What : uint8_t {
     Command, // a button was pressed: `control`
+    Changed, // a check box, a scroll bar or a list's selection changed: `control`
+    Chosen,  // a row of a list was double-clicked, or Enter on it: `control`
     Key,     // a key the controls did not use: `key`. True: the program used it
     Paint,   // the client area, after the face and the controls are painted: `canvas`
     Closed,  // the window has closed, or never opened; once, and it and its numbers are dead after this
@@ -71,6 +73,38 @@ bool alive(Window window);
 // Controls, in the window's client area. kNoControl: no room (24 a window).
 Control label(Window window, const gfx::Rect &place, const char *text);
 Control button(Window window, const gfx::Rect &place, const char *text);
+Control check_box(Window window, const gfx::Rect &place, const char *text, bool checked = false);
+// One of a group of which one is chosen. `group` is 0 to 3, the window's
+// own; `value` is what radio_value() answers while this one is chosen.
+Control radio(Window window, const gfx::Rect &place, const char *text, int group, int value);
+Control text_field(Window window, const gfx::Rect &place, const char *initial = "");
+Control scroll_bar(Window window, const gfx::Rect &place, bool vertical);
+// The rows are the program's texts and must stay valid while they are shown.
+Control list(Window window, const gfx::Rect &place, const char *const *items, int count);
+Control group(Window window, const gfx::Rect &place, const char *caption); // a frame with a caption
+Control text_area(Window window, const gfx::Rect &place, const char *text); // several lines, read only
+
+// What a control shows: a label, a button, a text area, a text field.
+void set_text(Window window, Control control, const char *text);
+// What is in a text field, as UTF-8.
+void get_text(Window window, Control control, char *out, int capacity);
+void select_all(Window window, Control text_field);
+void set_hidden(Window window, Control text_field, bool hidden); // dots for the characters
+void set_enabled(Window window, Control button, bool enabled);
+bool checked(Window window, Control check_box);
+void set_checked(Window window, Control check_box, bool checked);
+int radio_value(Window window, int group);
+void set_radio_value(Window window, int group, int value);
+// A scroll bar: from 0 to `maximum`, `page` of it in view.
+void set_range(Window window, Control scroll_bar, int maximum, int page);
+int value(Window window, Control scroll_bar);
+void set_value(Window window, Control scroll_bar, int value); // no Changed for it
+// A list.
+void set_items(Window window, Control list, const char *const *items, int count);
+int selected(Window window, Control list); // -1: none
+void select(Window window, Control list, int index);
+// Which control the keys go to.
+void set_focus(Window window, Control control);
 // The button Enter presses.
 void set_default(Window window, Control button);
 // As if it had been clicked.

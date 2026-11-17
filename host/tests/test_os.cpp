@@ -5,6 +5,7 @@
 #include <cstring>
 
 #include "core/fs/memory_volume.hpp"
+#include "core/app/app.hpp"
 #include "core/os/os.hpp"
 #include "core/proc/table.hpp"
 #include "core/shell/shell.hpp"
@@ -374,6 +375,135 @@ void test_desktop_calls()
 
 } // namespace
 
+// Windows and controls by number (core/os/ui.hpp), through the thin
+// classes a program is written with (core/app/app.hpp).
+int sample_made = 0, sample_gone = 0;
+const char *const kRows[] = {"one", "two", "three"};
+
+class Sample : public app::Window {
+public:
+    Sample()
+        : tick_(check_box({10, 10, 100, 16}, "Tick")), a_(radio({10, 30, 60, 16}, "A", 0, 1)),
+          b_(radio({80, 30, 60, 16}, "B", 0, 2)), field_(text_field({10, 50, 120, 20}, "start")),
+          bar_(scroll_bar({10, 76, 120, 16}, false)), rows_(list({10, 96, 120, 50}, kRows, 3)),
+          frame_(group({140, 10, 80, 60}, "Group")), area_(text_area({140, 76, 80, 40}, "some\ntext")),
+          ok_(button({140, 124, 75, 23}, "OK"))
+    {
+        set_default(ok_);
+        sample_made++;
+    }
+    ~Sample() override { sample_gone++; }
+    using app::Window::radio_value;
+    using app::Window::set_focus;
+    using app::Window::set_radio_value;
+
+    void command(app::Control which) override { commands += which == ok_; }
+    void changed(app::Control which) override
+    {
+        ticks += which == tick_;
+        moves += which == bar_;
+        picks += which == rows_;
+    }
+    void chosen(app::Control which) override { chosen_rows += which == rows_; }
+
+    app::CheckBox tick_;
+    app::RadioButton a_, b_;
+    app::TextField field_;
+    app::ScrollBar bar_;
+    app::ListBox rows_;
+    app::GroupFrame frame_;
+    app::TextArea area_;
+    app::Button ok_;
+    int commands = 0, ticks = 0, moves = 0, picks = 0, chosen_rows = 0;
+};
+
+void press(uint8_t usage)
+{
+    desktop.key(usage, true);
+    desktop.key(usage, false);
+}
+
+void test_ui()
+{
+    const uint32_t blocks = os::blocks_out();
+    const proc::Pid pid = os::spawn("Sample");
+    app::Number number = app::kNone;
+    {
+        const os::As as(pid);
+        app::Look look;
+        look.title = "Sample";
+        look.width = 240;
+        look.height = 190;
+        number = app::open<Sample>(look);
+    }
+    CHECK(number != app::kNone && os::ui::alive(number) && sample_made == 1 && sample_gone == 0);
+    // The window and its nine controls are the system's, in memory counted
+    // as the program's; the program's object came with the window.
+    CHECK(os::blocks_out() == blocks + 10 && os::process(pid)->memory > sizeof(Sample));
+    CHECK(desktop.active() != nullptr && strcmp(desktop.active()->title(), "Sample") == 0);
+    CHECK(desktop.active()->owner() == pid && os::main_window(pid) == desktop.active()->id());
+    auto &s = *static_cast<Sample *>(os::ui::state(number));
+
+    // What the controls hold, read and set by number.
+    char text[32];
+    s.field_.get(text, sizeof(text));
+    CHECK(strcmp(text, "start") == 0);
+    s.field_.set("other");
+    s.field_.get(text, sizeof(text));
+    CHECK(strcmp(text, "other") == 0);
+    CHECK(!s.tick_.checked());
+    s.set_radio_value(0, 2);
+    CHECK(s.radio_value(0) == 2);
+    s.bar_.set_range(50, 10);
+    s.bar_.set_value(20);
+    CHECK(s.bar_.value() == 20 && s.moves == 0);
+    CHECK(s.rows_.selected() == -1);
+
+    // What happens reaches the program as events, by the control's number.
+    s.set_focus(s.tick_);
+    press(wm::key::Space);
+    CHECK(s.tick_.checked() && s.ticks == 1);
+    s.set_focus(s.rows_);
+    press(wm::key::Down);
+    press(wm::key::Down);
+    CHECK(s.rows_.selected() == 1 && s.picks == 2);
+    press(wm::key::Enter);
+    CHECK(s.chosen_rows == 1 && s.commands == 0);
+    s.set_focus(s.field_);
+    press(wm::key::Enter); // the default button
+    CHECK(s.commands == 1);
+    s.ok_.press();
+    CHECK(s.commands == 2);
+
+    // A number of another kind, or of no control, does nothing.
+    os::ui::set_checked(number, s.ok_.number(), true);
+    os::ui::select(number, 99, 1);
+    CHECK(os::ui::value(number, s.rows_.number()) == 0 && !os::ui::checked(number, 0));
+
+    // Closed: the program's object is destroyed, everything goes back, the
+    // process ends and the number is dead.
+    s.close();
+    wait(10000);
+    wait(10000);
+    CHECK(sample_gone == 1 && !os::ui::alive(number) && os::ui::state(number) == nullptr);
+    CHECK(os::blocks_out() == blocks && !os::alive(pid));
+    os::ui::close(number);
+    CHECK(!os::ui::show(number) && os::ui::label(number, {0, 0, 1, 1}, "x") == os::ui::kNoControl);
+
+    // A process ended with its window open: the same.
+    const proc::Pid second = os::spawn("Sample");
+    {
+        const os::As as(second);
+        app::Look look;
+        look.title = "Sample";
+        number = app::open<Sample>(look);
+    }
+    CHECK(sample_made == 2 && os::signal(second, proc::Signal::Kill) == proc::Sent::Ok);
+    wait(10000);
+    wait(10000);
+    CHECK(sample_gone == 2 && !os::ui::alive(number) && os::blocks_out() == blocks && !os::alive(second));
+}
+
 int main()
 {
     static fs::MemoryVolume disk(memory.allocate(1 << 18), 1 << 18, "RAM disk");
@@ -389,6 +519,7 @@ int main()
     test_windows_and_time();
     test_process_list();
     test_programs_give_back();
+    test_ui(); // before the last one, which ends with the screen taken by Shut Down
     test_desktop_calls();
 
     if (failures == 0) {

@@ -103,3 +103,30 @@ A window that never reaches the screen (the window manager full) is told
 `Closed` as well, once, so the program's object is destroyed either way.
 
 PC tests pass (41), pictures match. The firmware compiles and links (0x167c60 of 0x1f0000); not run. `dbg_tool` failed once in a full run and passed alone and in the next full run; nothing in it touches this change.
+
+## The same day: the rest of the standard controls
+
+`os::ui` and the thin classes now cover every control the system has:
+check box, radio button, text field, scroll bar, list, group frame and
+text area, beside the label and the button. Two more events: `Changed` (a
+check box, a scroll bar, a list's selection) and `Chosen` (a row
+double-clicked, or Enter on it).
+
+Two things came out differently from the system's own classes:
+
+- Radio buttons shared an `int` that lived in the program. The system
+  cannot point into the program, so a window has four groups of its own
+  and the program asks which value is chosen (`radio_value(group)`).
+- A call with the number of a control of another kind, or of no control,
+  does nothing and answers nothing. There is no error to check after
+  every call; a wrong number is the program's mistake and harms only it.
+
+`test_os` has a program with one of each: what the controls hold is read
+and set by number; a tick, a move down a list, Enter on a row and the
+default button reach the program as events; closing gives back the ten
+blocks (the window and nine controls), destroys the program's object and
+kills the numbers; a process ended with its window open does the same.
+
+Still missing for the programs to come, and to be added as each needs it:
+a menu bar, a window that can be sized, a dialog over another window, icons
+in a list, and an area the program draws and takes the mouse in.
