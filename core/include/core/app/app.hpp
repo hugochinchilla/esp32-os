@@ -121,6 +121,7 @@ constexpr Number kNone = os::ui::kNoWindow;
 using os::ui::kClientSize;
 using os::ui::kDialog;
 using os::ui::kFixedSize;
+using os::ui::kKeys;
 using os::ui::kMenuBar;
 using os::ui::kMouse;
 using os::ui::kOnce;
@@ -213,6 +214,10 @@ class Picture : public Control {
 public:
     using Control::Control;
     using Control::redraw;
+    // For one made with kKeys. Where its text cursor is (all a blink
+    // paints again); whether the keys go to it.
+    void set_caret(const gfx::Rect &caret) const { os::ui::set_caret(window_, number_, caret); }
+    bool has_keys() const { return os::ui::control_has_keys(window_, number_); }
     // A part of it painted again, in its own coordinates.
     void redraw(const gfx::Rect &part) const { os::ui::redraw_control_part(window_, number_, part); }
 };
@@ -264,6 +269,7 @@ public:
     void resize(int client_width, int client_height) { os::ui::resize(number_, client_width, client_height); }
     bool in_front() const { return os::ui::in_front(number_); } // it is the window in use
     bool has_keys() const { return os::ui::has_keys(number_); } // the keys go to it, and it is not minimised
+    bool caret_lit() const { return os::ui::caret_lit(number_); } // the lit half of the text cursor's blink
     // Asks for a part of the client area to be painted again.
     void redraw(const gfx::Rect &part) { os::ui::redraw(number_, part); }
 
@@ -285,6 +291,10 @@ public:
     virtual void paint_in(Control /*which*/, Canvas &) {}
     // A cell of a grid is to be painted.
     virtual void paint_cell(Control /*which*/, int /*index*/, const gfx::Rect & /*cell*/, Canvas &) {}
+    // A key, or characters typed (UTF-8), for the picture made with kKeys
+    // that has the keys. True: the key was used.
+    virtual bool key_in(Control /*which*/, const wm::KeyMsg &) { return false; }
+    virtual void text_in(Control /*which*/, const char * /*utf8*/) {}
     // The left button in a picture made with kMouse, in its coordinates;
     // from Down to Up they all go to the picture that was pressed.
     virtual void mouse(Control /*which*/, const wm::MouseMsg &) {}
@@ -366,7 +376,7 @@ protected:
     void set_radio_value(int group, int value) { os::ui::set_radio_value(number_, group, value); }
 
 private:
-    template <class T, class... Args> friend Number open(const Look &look, Args &&...args);
+    template <class T, class... Args> friend Number make(const Look &look, Args &&...args);
 
     static Number &making()
     {
@@ -388,7 +398,13 @@ private:
             return true;
         case os::ui::What::Chosen:
             return window->chosen(Control(window->number_, event.control));
-        case os::ui::What::Key: return window->key(*event.key);
+        case os::ui::What::Key:
+            return event.control != os::ui::kNoControl
+                       ? window->key_in(Control(window->number_, event.control), *event.key)
+                       : window->key(*event.key);
+        case os::ui::What::Text:
+            window->text_in(Control(window->number_, event.control), event.text);
+            return true;
         case os::ui::What::Painting:
             window->painting();
             return true;
@@ -431,10 +447,10 @@ private:
     Number number_;
 };
 
-// Makes a program's window and shows it. T inherits from app::Window; the
-// arguments after `look` go to its constructor. kNone: there was no memory,
-// or no room on the screen.
-template <class T, class... Args> Number open(const Look &look, Args &&...args)
+// Makes a program's window without showing it yet, for a program that may
+// still find it cannot start: app::show() puts it on the screen, and
+// os::ui::close() takes it back. kNone: there was no memory.
+template <class T, class... Args> Number make(const Look &look, Args &&...args)
 {
     const Number number = os::ui::create(look, &Window::events<T>, sizeof(T));
     if (number == kNone) {
@@ -443,7 +459,18 @@ template <class T, class... Args> Number open(const Look &look, Args &&...args)
     Window::making() = number;
     new (os::ui::state(number)) T(std::forward<Args>(args)...);
     Window::making() = kNone;
-    return os::ui::show(number) ? number : kNone;
+    return number;
+}
+// False: there was no room on the screen, and the window is gone.
+inline bool show(Number number) { return os::ui::show(number); }
+
+// Makes a program's window and shows it. T inherits from app::Window; the
+// arguments after `look` go to its constructor. kNone: there was no memory,
+// or no room on the screen.
+template <class T, class... Args> Number open(const Look &look, Args &&...args)
+{
+    const Number number = make<T>(look, std::forward<Args>(args)...);
+    return number != kNone && os::ui::show(number) ? number : kNone;
 }
 
 // The program's object behind a window it opened as T; nullptr once the

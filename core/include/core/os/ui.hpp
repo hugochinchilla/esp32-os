@@ -42,7 +42,9 @@ enum class What : uint8_t {
     Command, // a button was pressed: `control`
     Changed, // a check box, a scroll bar or a list's selection changed: `control`
     Chosen,  // a row of a list was double-clicked, or Enter on it: `control`. False: press the default button
-    Key,     // a key the controls did not use: `key`. True: the program used it
+    Key,     // a key, before the controls see it: `key`. True: the program used it. With a `control`,
+             // a key for the picture that has the keys (kKeys)
+    Text,    // characters typed into the picture that has the keys: `control`, `text` (UTF-8)
     Painting, // the window is about to be painted: the last moment to change what the controls show
     Paint,   // the client area, after the face and the controls are painted: `drawing`. With a
              // `control`, that picture alone, its corner as (0, 0)
@@ -64,6 +66,7 @@ struct Event {
     int index = 0;
     gfx::Rect part = {};
     const wm::MouseMsg *mouse = nullptr;
+    const char *text = nullptr;
     int x = 0, y = 0;
 };
 
@@ -137,8 +140,16 @@ enum PictureFlag : uint8_t {
     kOnce = 1,  // the program writes every pixel of it exactly once when it paints (a game's board,
                 // a picture), so the system need not paint it through a buffer
     kMouse = 2, // What::Mouse and What::RightClick for it
+    kKeys = 4,  // it can have the keys: What::Key and What::Text with its number
 };
 Control picture(Window window, const gfx::Rect &place, uint8_t how = 0);
+// Where the text cursor is in a picture that takes the keys, in its
+// coordinates: all that a blink paints again. An empty one: none.
+void set_caret(Window window, Control picture, const gfx::Rect &caret);
+// For a picture that paints its own text cursor: whether the keys go to
+// it, and whether the cursor is in the lit half of its blink.
+bool control_has_keys(Window window, Control control);
+bool caret_lit(Window window);
 // A control moved or made another size, in the client area. An empty
 // place: it is not shown.
 void place_control(Window window, Control control, const gfx::Rect &place);
@@ -198,6 +209,7 @@ void press(Window window, Control button);
 // On the screen, or to the front if it is there already. False: the window
 // manager is full, and the window is gone.
 bool show(Window window);
+// One that was never shown is destroyed, and its program hears Closed.
 void close(Window window);
 
 /* ---- Drawing, while a Paint event is being answered ----

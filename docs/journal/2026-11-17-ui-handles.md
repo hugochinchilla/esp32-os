@@ -382,3 +382,25 @@ is none.
 
 PC tests pass (41 of 41), the pictures match. Firmware not compiled
 since, and not run.
+
+## The same day: the Terminal
+
+Program fourteen. Its grid of characters is a `picture` that takes the
+keys. New in the system for it:
+
+- `kKeys`: a picture that can have the keys. Its keys come as the Key
+  event with its number, and the characters typed as the Text event.
+- The text cursor: the program tells where it is (`set_caret`), which is
+  all that a blink paints again, and asks while it paints whether the
+  picture has the keys and whether the cursor is in the lit half of its
+  blink.
+- A window can be made without being shown (`app::make`, then
+  `app::show`): the Terminal has to get its session first, and gives the
+  window back if it cannot. `close` on a window never shown destroys it.
+
+The grid is still read under the session's lock while it is painted; the
+lock is the program's business and the system knows nothing of it.
+
+PC tests pass (41 of 41), the pictures match. A Terminal is four blocks
+of memory now (its window, the grid's picture, the scroll bar and the
+session) where it was two. Firmware not compiled since, and not run.

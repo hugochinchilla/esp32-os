@@ -138,7 +138,7 @@ void test_terminal()
     CHECK(strcmp(title(), "Terminal") == 0 && count("Terminal") == 1);
     // Two processes and two blocks: the window with its grid (the emulator),
     // and the session it is the terminal of, with the TTY and the shell.
-    CHECK(memory.in_use() == blocks + 2 && count("sh") == 1);
+    CHECK(memory.in_use() == blocks + 4 && count("sh") == 1);
     {
         const proc::Process *sh = proc::table().find(proc::table().find_by_name("sh"));
         CHECK(sh != nullptr && sh->parent == desktop.active()->owner() && !sh->is(proc::kWindowed));
@@ -248,7 +248,7 @@ void test_terminal()
     // fourth is refused.
     shell::launch(*app);
     desktop.update();
-    CHECK(count("Terminal") == 2 && count("sh") == 2 && memory.in_use() == blocks + 4);
+    CHECK(count("Terminal") == 2 && count("sh") == 2 && memory.in_use() == blocks + 8);
     CHECK_ROW(3, "C:\\>"); // the new one is in front, in its own folder
     CHECK(no_stale_pixels()); // the first one's cursor is a line now
     shell::launch(*app);
@@ -264,12 +264,12 @@ void test_terminal()
     // exit closes the window and ends the process; the memory comes back.
     enter("exit");
     wait(20000);
-    CHECK(count("Terminal") == 2 && count("sh") == 2 && memory.in_use() == blocks + 4);
+    CHECK(count("Terminal") == 2 && count("sh") == 2 && memory.in_use() == blocks + 8);
     // Ctrl+D on an empty line does the same.
     CHECK(strcmp(title(), "Terminal") == 0);
     key(wm::key::A + 3, wm::key::LeftCtrl);
     wait(20000);
-    CHECK(count("Terminal") == 1 && count("sh") == 1 && memory.in_use() == blocks + 2);
+    CHECK(count("Terminal") == 1 && count("sh") == 1 && memory.in_use() == blocks + 4);
     // The first one is still where it was left.
     CHECK(row(24) == "C:\\Documents>");
     // It can end itself by number, like any other process.

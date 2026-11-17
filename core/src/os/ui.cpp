@@ -107,9 +107,19 @@ class Picture : public wm::Widget {
 public:
     using PaintFn = void (*)(Picture &picture, gfx::Canvas &c, void *context);
     using MouseFn = void (*)(Picture &picture, const wm::MouseMsg &m, void *context);
-    Picture(const gfx::Rect &r, uint8_t how, PaintFn paint, MouseFn mouse, void *context)
-        : Widget(r), how_(how), paint_(paint), mouse_(mouse), context_(context)
+    using KeyFn = bool (*)(Picture &picture, const wm::KeyMsg *k, const char *text, void *context);
+    Picture(const gfx::Rect &r, uint8_t how, PaintFn paint, MouseFn mouse, KeyFn key, void *context)
+        : Widget(r), how_(how), paint_(paint), mouse_(mouse), key_(key), context_(context)
     {
+    }
+    bool focusable() const override { return (how_ & kKeys) != 0; }
+    bool key(const wm::KeyMsg &k) override { return key_(*this, &k, nullptr, context_); }
+    void text(const char *utf8) override { key_(*this, nullptr, utf8, context_); }
+    gfx::Rect caret_rect() const override { return has_caret_ ? caret_ : Widget::caret_rect(); }
+    void set_caret(const gfx::Rect &r)
+    {
+        caret_ = r;
+        has_caret_ = true;
     }
     void paint(gfx::Canvas &c) override { paint_(*this, c, context_); }
     bool layered() const override { return (how_ & kOnce) == 0; }
@@ -121,7 +131,10 @@ private:
     uint8_t how_;
     PaintFn paint_;
     MouseFn mouse_;
+    KeyFn key_;
     void *context_;
+    gfx::Rect caret_ = {0, 0, 0, 0};
+    bool has_caret_ = false;
 };
 
 // A grid of cells to pick one from: the colours, or the patterns. The cell
@@ -479,6 +492,20 @@ public:
             }
         }
     }
+    static bool picture_key(Picture &p, const wm::KeyMsg *k, const char *text, void *context)
+    {
+        auto *w = static_cast<Behind *>(context);
+        for (int i = 0; i < w->count_; i++) {
+            if (w->controls_[i] == &p) {
+                Event e{k != nullptr ? What::Key : What::Text};
+                e.control = i + 1;
+                e.key = k;
+                e.text = text;
+                return w->tell(e);
+            }
+        }
+        return false;
+    }
     // The right button: to the topmost picture under it that takes the mouse.
     void right_click(int x, int y) override
     {
@@ -610,6 +637,14 @@ constexpr size_t kAligned = (sizeof(Behind) + 15) & ~static_cast<size_t>(15);
 
 } // namespace
 
+namespace {
+template <class T> T *control_of(Window window, Control control, Kind kind)
+{
+    Behind *w = behind(window);
+    return w != nullptr ? w->as<T>(control, kind) : nullptr;
+}
+} // namespace
+
 Window create(const Look &look, Events events, size_t state_bytes)
 {
     int slot = -1;
@@ -715,8 +750,29 @@ Control text_area(Window window, const gfx::Rect &place, const char *text)
 Control picture(Window window, const gfx::Rect &place, uint8_t how)
 {
     Behind *w = behind(window);
-    return w != nullptr ? w->make<Picture>(Kind::Picture, place, how, &Behind::paint_picture, &Behind::picture_mouse, w)
+    return w != nullptr ? w->make<Picture>(Kind::Picture, place, how, &Behind::paint_picture, &Behind::picture_mouse,
+                                           &Behind::picture_key, w)
                         : kNoControl;
+}
+
+void set_caret(Window window, Control control, const gfx::Rect &caret)
+{
+    if (auto *p = control_of<Picture>(window, control, Kind::Picture)) {
+        p->set_caret(caret);
+    }
+}
+
+bool control_has_keys(Window window, Control control)
+{
+    Behind *w = behind(window);
+    const wm::Widget *c = w != nullptr ? w->any(control) : nullptr;
+    return c != nullptr && c->has_focus();
+}
+
+bool caret_lit(Window window)
+{
+    Behind *w = behind(window);
+    return w != nullptr && (w->manager() == nullptr || w->manager()->caret_visible());
 }
 
 void place_control(Window window, Control control, const gfx::Rect &place)
@@ -844,14 +900,6 @@ void set_text(Window window, Control control, const char *text)
     default: break;
     }
 }
-
-namespace {
-template <class T> T *control_of(Window window, Control control, Kind kind)
-{
-    Behind *w = behind(window);
-    return w != nullptr ? w->as<T>(control, kind) : nullptr;
-}
-} // namespace
 
 void get_text(Window window, Control control, char *out, int capacity)
 {
@@ -1005,7 +1053,12 @@ bool show(Window window)
 void close(Window window)
 {
     if (Behind *w = behind(window)) {
-        w->close();
+        if (w->open()) {
+            w->close();
+        } else {
+            w->closed(); // the program hears of it now, not when the memory goes back
+            installed_kit().wm->discard(*w);
+        }
     }
 }
 
