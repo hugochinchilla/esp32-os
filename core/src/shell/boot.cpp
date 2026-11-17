@@ -73,6 +73,9 @@ BootSettings boot_settings(const fs::Storage &storage)
     s.hold_s = hold < 0 ? 0u : (hold > 60 ? 60u : static_cast<uint32_t>(hold));
     const int pace = ini.get_int("boot", "selftest_pace", static_cast<int>(kSelfTestPace));
     s.pace_percent = pace < 0 ? 0u : (pace > 400 ? 400u : static_cast<uint32_t>(pace));
+    const int crash_hold = ini.get_int("boot", "crash_hold_s", static_cast<int>(kCrashHoldS));
+    s.crash_hold_s = crash_hold < 0 ? 0u : (crash_hold > 600 ? 600u : static_cast<uint32_t>(crash_hold));
+    s.watchdog_s = ini.get_int("watchdog", "timeout_s", sys::kWatchdogDefaultS);
     return s;
 }
 
@@ -186,13 +189,14 @@ const char *const kSplashMascot[16] = {
     "..GLKLLLLLLKLG..", "..GLLLLNNLLLLG..", "D.GLLLLNNLLLLG.D", ".DDGLLLLLLLLGDD.",
     "D..GGLLLLLLGG..D", "....GGGGGGGG....", "................", "................"};
 
+// `on_its_back`: drawn upside down, for the error screen.
 void splash_mascot(gfx::Canvas &c, int x, int y, int s, gfx::Colour outline = gfx::kDarkGrey,
-                   gfx::Colour fur = gfx::kWhite)
+                   gfx::Colour fur = gfx::kWhite, bool on_its_back = false)
 {
     for (int r = 0; r < 16; r++) {
         for (int q = 0; q < 16; q++) {
             gfx::Colour col;
-            switch (kSplashMascot[r][q]) {
+            switch (kSplashMascot[on_its_back ? 15 - r : r][q]) {
             case 'G':
             case 'D': col = outline; break;
             case 'L': col = fur; break;
@@ -510,6 +514,106 @@ int run_self_test(BootIo &io, bool hold)
         }
     }
     return failures;
+}
+
+// ---- The error screen after a crash. Own design: the self-test's black
+// screen and type, the mascot on its back, a red rule. ----
+
+void draw_crash_screen(gfx::Canvas &c, int w, int h, const sys::CrashRecord &record, bool logged,
+                       uint32_t seconds_left)
+{
+    c.fill({0, 0, w, h}, kBlackC);
+    splash_mascot(c, w - 16 * 5 - 24, 16, 5, kGreyC, kWhiteC, true);
+    line(c, 0, "Chinchilla had to restart", kWhiteC);
+    line(c, 1, "The last session ended badly. This is what was written down:", kGreyC);
+    c.fill({kLeft, kFirstY + 2 * kStepY + 6, 60 * 8, 2}, kRedC);
+
+    // The headline, wrapped at spaces to the 60 columns left of the mascot.
+    char text[400];
+    sys::crash_headline(record, text, sizeof(text));
+    int row = 4;
+    constexpr int kColumns = 60;
+    for (const char *p = text; *p != 0 && row < 8;) {
+        int n = static_cast<int>(strlen(p));
+        if (n > kColumns) {
+            n = kColumns;
+            while (n > 0 && p[n] != ' ') {
+                n--;
+            }
+            n = n == 0 ? kColumns : n;
+        }
+        char piece[kColumns + 1];
+        memcpy(piece, p, static_cast<size_t>(n));
+        piece[n] = 0;
+        line(c, row++, piece, kYellowC);
+        p += n;
+        while (*p == ' ') {
+            p++;
+        }
+    }
+
+    // The record, a line each.
+    row++;
+    sys::crash_details(record, text, sizeof(text), "\n");
+    for (char *p = text; *p != 0 && row < 19;) {
+        char *end = strchr(p, '\n');
+        if (end != nullptr) {
+            *end = 0;
+        }
+        text16(c, kLeft, kFirstY + row++ * kStepY, p, kGreyC);
+        if (end == nullptr) {
+            break;
+        }
+        p = end + 1;
+    }
+
+    row++;
+    if (record.kind != sys::CrashKind::Reset) {
+        line(c, row++, "Work that had not been saved is lost.", kGreyC);
+    }
+    snprintf(text, sizeof(text), logged ? "This report was added to %s." : "This report could not be added to %s.",
+             sys::kCrashLog);
+    line(c, row++, text, kGreyC);
+
+    text16(c, kLeft, h - 58, "Press any key to continue", kGreyC);
+    if (seconds_left > 0) {
+        snprintf(text, sizeof(text), "Continuing in %u", static_cast<unsigned>(seconds_left));
+        text16(c, kLeft, h - 40, text, kWhiteC, 24);
+    }
+}
+
+void show_crash_screen(BootIo &io, const sys::CrashRecord &record, bool logged, bool hold)
+{
+    Screen s(io.display);
+    gfx::Canvas c = s.canvas();
+    const int w = io.display.width(), h = io.display.height();
+    draw_crash_screen(c, w, h, record, logged, hold ? io.crash_hold_s : 0);
+    if (io.log != nullptr) {
+        char t[200];
+        sys::crash_headline(record, t, sizeof(t));
+        io.log(t, io.context);
+    }
+    if (!hold) {
+        return;
+    }
+    io.skipped = false;
+    // A monitor that is slow to show a picture still gets the whole
+    // countdown: it starts when the self-test's lines would.
+    if (io.monitor_wait_ms > 0) {
+        wait_until(io, io.video_start_us + io.monitor_wait_ms * 1000);
+    }
+    if (io.crash_hold_s == 0) {
+        while (!io.skipped) {
+            wait_until(io, io.clock.micros() + 1000000);
+        }
+    }
+    for (uint32_t left = io.crash_hold_s; left > 0 && !io.skipped; left--) {
+        char t[32];
+        snprintf(t, sizeof(t), "Continuing in %u", static_cast<unsigned>(left));
+        text16(c, kLeft, h - 40, t, kWhiteC, 24);
+        wait_until(io, io.clock.micros() + 1000000);
+    }
+    io.skipped = false;
 }
 
 } // namespace shell

@@ -199,6 +199,30 @@ def main():
             assert out.returncode == 0 and os.path.exists(path), out
 
         board = dbg.Board(port, timeout=2.0)
+        # The error screen after a crash, drawn on request (the simulator
+        # shows a made-up report), and the desktop back afterwards.
+        before = board.screenshot(pointer=False)[2]
+        board.boot_screen("crash")
+        crash = board.screenshot(pointer=False)[2]
+        assert crash != before and crash[:640 * 16] == bytes(640 * 16), "the error screen is black at the top"
+        assert sum(1 for p in crash if p != 0) > 2000
+        board.repaint()
+        assert board.screenshot(pointer=False)[2] == before
+        # A fault on purpose: the simulator answers and carries on (a PC
+        # does not crash to order); a PID that is not running is refused.
+        board.fault("hang")
+        board.fault("pointer", pid=1)
+        try:
+            board.fault("abort", pid=999)
+            refused = False
+        except dbg.DebugError as e:
+            refused = "bad arguments" in str(e)
+        assert refused, "a fault for a PID that is not running was accepted"
+        board.close()
+        out = subprocess.run([sys.executable, dbg.__file__, "--port", port, "fault", "hang", "--pid", "1"],
+                             capture_output=True, text=True, timeout=20)
+        assert "fault sent: hang as PID 1" in out.stdout, out
+        board = dbg.Board(port, timeout=2.0)
         board.reboot()
         board.close()
         sim.wait(timeout=5)

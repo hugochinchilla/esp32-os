@@ -248,6 +248,30 @@ static ports::TaskInfo make_task(const char *name, uint16_t id, ports::TaskState
     return t;
 }
 
+// The fault command: answered first, then made in the name of the process
+// asked for; a PID that is not running is refused and nothing fails.
+static void test_fault()
+{
+    proc::table().reset();
+    const proc::Pid root = proc::table().spawn("desktop", proc::kNone);
+    const proc::Pid editor = proc::table().spawn("Editor", root, proc::kWindowed);
+    Rig rig;
+    auto got = rig.request(dbg::kFault, 1, {0});
+    CHECK(got.size() == 1 && got[0].payload == Bytes({dbg::kOk}));
+    CHECK(rig.system.fault_requested == 0 && rig.system.fault_pid == proc::kNone);
+    got = rig.request(dbg::kFault, 2, {1, static_cast<uint8_t>(editor), 0});
+    CHECK(got.size() == 1 && got[0].payload == Bytes({dbg::kOk}));
+    CHECK(rig.system.fault_requested == 1 && rig.system.fault_pid == editor);
+    CHECK(proc::table().current() == proc::kNone); // put back afterwards
+    rig.system.fault_requested = -1;
+    for (const Bytes &bad : {Bytes{}, Bytes{3}, Bytes{0, 1}, Bytes{2, 99, 0}}) {
+        got = rig.request(dbg::kFault, 3, bad);
+        CHECK(got.size() == 1 && got[0].payload == Bytes({dbg::kBadArguments}));
+    }
+    CHECK(rig.system.fault_requested == -1);
+    proc::table().reset();
+}
+
 static void test_tasks()
 {
     // A machine that keeps no task statistics: the command is unknown.
@@ -538,6 +562,7 @@ int main()
     test_ping_and_info();
     test_input();
     test_tasks();
+    test_fault();
     test_bad_frames();
     test_screenshot();
     test_compose_pointer();

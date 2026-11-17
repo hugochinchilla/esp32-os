@@ -1,4 +1,5 @@
 #include "core/dbg/protocol.hpp"
+#include "core/proc/table.hpp"
 #include "core/net/wifi.hpp"
 
 #include <cstring>
@@ -218,13 +219,32 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
             reply(type, seq, kOk, nullptr, 0);
             break;
         }
-        if (boot_show_ == nullptr || args_size != 1 || args[0] > 1) {
+        if (boot_show_ == nullptr || args_size != 1 || (args[0] > 1 && args[0] != 3)) {
             reply(type, seq, boot_show_ == nullptr ? kUnknownCommand : kBadArguments, nullptr, 0);
             break;
         }
         boot_show_(args[0], boot_context_);
         reply(type, seq, kOk, nullptr, 0);
         break;
+
+    case kFault: {
+        // kind, then optionally the PID to charge it to (16 bits): the fault
+        // happens as if that program had made it, so the crash record and
+        // the error screen name it.
+        if (args_size < 1 || args[0] > static_cast<uint8_t>(ports::Fault::Abort) || (args_size != 1 && args_size != 3)) {
+            reply(type, seq, kBadArguments, nullptr, 0);
+            break;
+        }
+        const proc::Pid pid = args_size == 3 ? static_cast<proc::Pid>(get16(args + 1)) : proc::kNone;
+        if (pid != proc::kNone && !proc::table().alive(pid)) {
+            reply(type, seq, kBadArguments, nullptr, 0);
+            break;
+        }
+        reply(type, seq, kOk, nullptr, 0);
+        proc::Scope as(&proc::table(), pid);
+        system_.fault(static_cast<ports::Fault>(args[0]));
+        break;
+    }
 
     case kWifi:
         wifi_command(seq, args, args_size);
