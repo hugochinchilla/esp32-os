@@ -146,6 +146,7 @@ bool menu_open() { return g_kit.wm->menu_open(); }
 void open_menu(wm::Menu &menu, int x, int y) { g_kit.wm->open_menu(menu, x, y); }
 wm::Window *blocker(const wm::Window &window) { return g_kit.wm->blocker(window); }
 bool in_front(const wm::Window &window) { return g_kit.wm->active() == &window; }
+void caret_moved() { g_kit.wm->caret_moved(); }
 wm::Window *main_window(proc::Pid pid) { return g_kit.wm->main_window_of(pid); }
 void begin_drag(const char *path) { g_kit.wm->begin_drag(path); }
 
@@ -189,6 +190,17 @@ bool shut_down() { return g_kit.shut_down != nullptr && g_kit.shut_down(); }
 /* ---- The network ---------------------------------------------------------------- */
 
 net::Manager *network() { return g_network; }
+
+/* ---- Terminal sessions ----------------------------------------------------------- */
+
+sh::TerminalSession *open_session(ports::ByteSink &device, const char *&why)
+{
+    if (g_kit.open_session == nullptr) {
+        why = "This machine has no command shell.";
+        return nullptr;
+    }
+    return g_kit.open_session(device, why);
+}
 
 /* ---- Files --------------------------------------------------------------------- */
 

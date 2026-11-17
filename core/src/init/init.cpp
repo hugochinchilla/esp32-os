@@ -249,7 +249,9 @@ bool Init::needed_first(const char *before, const char *off)
             u.off = true;
         }
         if (u.needed && !u.started && !u.off) {
-            log("init: %s goes before %s", u.name, before);
+            if (!same(u.name, before)) { // its own line: nothing to say
+                log("init: %s goes before %s", u.name, before);
+            }
             if (start(u)) {
                 u.early = true;
             } else {

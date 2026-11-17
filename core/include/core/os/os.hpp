@@ -21,6 +21,7 @@
 #include "core/net/wifi.hpp"
 #include "core/ports.hpp"
 #include "core/proc/table.hpp"
+#include "core/sh/terminal_session.hpp"
 #include "core/wm/wm.hpp"
 
 namespace os {
@@ -91,6 +92,9 @@ void open_menu(wm::Menu &menu, int x, int y); // a free-standing menu at (x, y)
 // The dialog that keeps `window` from being used now; nullptr: none.
 wm::Window *blocker(const wm::Window &window);
 bool in_front(const wm::Window &window); // it is the window in use
+// The text cursor of the window in use has moved: it is shown at once, and
+// its blink starts again.
+void caret_moved();
 // The main window of a process; nullptr: it has none.
 wm::Window *main_window(proc::Pid pid);
 // A file or folder starts being dragged (the File manager).
@@ -135,6 +139,19 @@ bool shut_down();
 // nullptr: this board has none. A program asks each time and does not keep
 // the pointer.
 net::Manager *network();
+
+/* ---- Terminal sessions ----------------------------------------------------------- */
+
+// A command shell on a TTY of its own, as a new process `sh`, child of the
+// one asking (core/sh/terminal_session.hpp). The one asking is its device:
+// what the terminal shows is written to `device`, and the keys go in with
+// the session's typed(). nullptr: it could not be started, and `why` says
+// why in words for a message box.
+//
+// The session is the system's. The device hangs it up when it goes
+// (hang_up()) and from then on does not use the pointer; if the session
+// ends first it says so (on_ended()), and the pointer is dead after that.
+sh::TerminalSession *open_session(ports::ByteSink &device, const char *&why);
 
 /* ---- Files --------------------------------------------------------------------- */
 
@@ -193,6 +210,7 @@ struct Kit {
     fs::Storage *storage = nullptr;
     ports::Memory *memory = nullptr;
     bool (*shut_down)() = nullptr; // closes every program and takes the screen
+    sh::TerminalSession *(*open_session)(ports::ByteSink &device, const char *&why) = nullptr;
 };
 // What the calls work with. The desktop hands it in when it starts.
 void install(const Kit &kit);

@@ -790,6 +790,7 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
     kit.storage = &storage;
     kit.memory = &memory;
     kit.shut_down = &power_down;
+    kit.open_session = &open_session;
     os::install(kit);
     // The desktop is a process too: the Start menu, the icons and the
     // taskbar, and the dialogs they open. (It is the window server and the
