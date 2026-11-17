@@ -36,7 +36,7 @@ board or the merge), `done`.
 | | **Phase 3: the console** | | | | |
 | 12 | TTY object: echo, line editing, Ctrl+C | M | 8 | | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-tty.md) |
 | 13 | Shell with the file and process commands (Linux names, DOS aliases, both slashes), tested on the PC | L | 2, 9, 12 | | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-command-shell.md) |
-| 14 | Serial console sharing the wire with the debug link | M | 12, 13 | Yes, with care | todo |
+| 14 | Serial console sharing the wire with the debug link | M | 12, 13 | Yes, with care | on a branch (`claude/project-thread-8q7ksu`): off unless the start-up file says `start console`; `tools/dbg.py console`; PC tests pass, firmware compiles, not run on the board. [Journal](journal/2026-11-17-serial-console.md) |
 | 15 | Terminal window on the desktop | M | 12, 13 | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-terminal-window.md) |
 | 16 | `top`, `dmesg`, `edit`, `open`, `run`, and the Run... dialog | S | 3, 13 | | in part: Run..., `open`, `run`, `edit` done (checked on the board 2026-11-17); `top` is on a branch with item 3 (`claude/project-thread-8q7ksu`), not run on the board; `dmesg` waits for a log. Journals: [Run](journal/2026-11-17-run.md), [top](journal/2026-11-17-process-figures.md) |
 | 17 | Telnet server, no password. Ask the owner first: on by default, or switched on in a settings file | S | 13 | Yes | on a branch (`claude/project-thread-8q7ksu`): off until `[telnet] enabled = true` in `network.ini` (the owner asked, answer pending); PC tests pass, firmware compiles, not run on the board. [Journal](journal/2026-11-17-telnet.md) |

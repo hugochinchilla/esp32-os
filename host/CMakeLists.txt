@@ -115,6 +115,12 @@ add_test(NAME proc COMMAND test_proc)
 add_executable(test_init tests/test_init.cpp)
 target_link_libraries(test_init PRIVATE core)
 add_test(NAME init COMMAND test_init)
+# The serial console on the debug link's wire (backlog 14).
+add_executable(test_console tests/test_console.cpp)
+target_link_libraries(test_console PRIVATE core)
+add_test(NAME console COMMAND test_console)
+add_test(NAME serial_console
+         COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/test_serial_console.py $<TARGET_FILE:sim>)
 # Programs made when opened and destroyed when closed (backlog 19 and 34).
 add_executable(test_lifecycle tests/test_lifecycle.cpp)
 target_link_libraries(test_lifecycle PRIVATE core)

@@ -40,6 +40,7 @@ set(CORE_SRCS
     src/msg/input.cpp
     src/msg/queue.cpp
     src/proc/table.cpp
+    src/sh/console.cpp
     src/sh/files.cpp
     src/sh/filters.cpp
     src/sh/path.cpp

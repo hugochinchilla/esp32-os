@@ -107,6 +107,28 @@ public:
         counter_count_ = count;
     }
 
+    // The serial console shares the wire (backlog item 14,
+    // docs/journal/2026-11-17-serial-console.md). With a console set, what
+    // arrives outside a frame is what someone typed and goes to `typed` at
+    // once; a frame starts at a zero byte and ends at the next. Without
+    // one, as before, what is not a frame is dropped.
+    //
+    // A zero that no frame follows (line noise, Ctrl+@) would swallow what
+    // is typed after it. line_idle() is the way out: the loop calls it
+    // whenever it found no bytes waiting, and after kFrameWaitUs with none
+    // an unfinished frame is given up and its bytes go to the console.
+    static constexpr uint32_t kFrameWaitUs = 500000;
+    void set_console(ports::ByteSink *typed, ports::Clock *clock)
+    {
+        console_ = typed;
+        clock_ = clock;
+    }
+    void line_idle();
+    // What the console's session shows: sent as it is, between frames,
+    // never inside one. Any task; waits while a frame is being sent.
+    void send_text(const uint8_t *data, size_t size);
+    uint32_t console_bytes() const { return console_bytes_; }
+
     uint32_t frames_received() const { return frames_received_; }
     uint32_t receive_errors() const { return receive_errors_; }
 
@@ -130,6 +152,13 @@ private:
     ports::Desktop *desktop_ = nullptr;
     fs::Storage *storage_ = nullptr;
     net::Manager *wifi_ = nullptr;
+
+    ports::ByteSink *console_ = nullptr;
+    ports::Clock *clock_ = nullptr;
+    bool in_frame_ = false;   // with a console: a zero has opened a frame
+    bool idle_seen_ = false;  // line_idle() was called since the last byte
+    uint32_t idle_since_ = 0;
+    uint32_t console_bytes_ = 0;
 
     bool overflow_ = false;
     size_t rx_size_ = 0;

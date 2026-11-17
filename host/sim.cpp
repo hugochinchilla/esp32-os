@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
+#include <string>
 #include <thread>
 
 #include <fcntl.h>
@@ -19,6 +20,7 @@
 #include "core/init/init.hpp"
 #include "core/msg/input.hpp"
 #include "core/msg/queue.hpp"
+#include "core/sh/console.hpp"
 #include "core/shell/boot.hpp"
 #include "core/shell/shell.hpp"
 #include "core/net/posix_tcp.hpp"
@@ -124,7 +126,7 @@ int main(int argc, char **argv)
     fflush(stdout);
 
     host::MemoryDisplay display(640, 480);
-    host::NoLock lock;
+    static host::ThreadLock lock; // the console's session writes from a thread of its own
     host::HostSystem system;
     system.pretend_tasks = true; // tools/dbg.py tasks has a list to show
     host::MemoryPointer pointer;
@@ -306,6 +308,49 @@ int main(int argc, char **argv)
             return true;
         },
         nullptr);
+    // The command shell on the "serial port" (the pseudo-terminal), sharing
+    // it with the debug link as on the board.
+    first.add(
+        "console",
+        [](void *) {
+            if (!first.started("desktop")) {
+                return false;
+            }
+            class Out : public ports::ByteSink {
+            public:
+                void write(const uint8_t *data, size_t size) override { parts.protocol->send_text(data, size); }
+            };
+            static host::ThreadLock console_lock;
+            static host::ThreadEvent console_typed, console_answered;
+            static host::ThreadTasks console_tasks;
+            static sh::QueueCall console_ui(queue, console_answered);
+            static Out out;
+            static sh::ConsoleKit kit;
+            kit.lock = &console_lock;
+            kit.typed = &console_typed;
+            kit.tasks = &console_tasks;
+            const proc::Pid pid = proc::table().spawn_service("console", proc::kProtected);
+            static sh::Console console(shell::session_environment(&console_ui, pid), kit, out);
+            if (!console.start()) {
+                return false;
+            }
+            static host::SteadyClock idle_clock;
+            parts.protocol->set_console(&console.typed(), &idle_clock);
+            return true;
+        },
+        nullptr);
+    // CHINCHILLA_STARTUP: a start-up file for this run, lines separated by
+    // semicolons ("start desktop;start console"), since the RAM disk is new
+    // every time.
+    if (const char *wanted = getenv("CHINCHILLA_STARTUP")) {
+        std::string text(wanted);
+        for (char &c : text) {
+            c = c == ';' ? '\n' : c;
+        }
+        text += "\n";
+        storage.make_folder("C:\\.config");
+        storage.write_file(init::kPath, text.data(), text.size());
+    }
     first.boot(storage);
 
     // The loop, as on the board (firmware/os/main/main.cpp): take what has
@@ -317,6 +362,8 @@ int main(int argc, char **argv)
         const ssize_t got = read(fd, buffer, sizeof(buffer));
         if (got > 0) {
             protocol.feed(buffer, static_cast<size_t>(got));
+        } else {
+            protocol.line_idle();
         }
         queue.quiet();
         const bool more = inbox.deliver();

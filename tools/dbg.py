@@ -135,6 +135,11 @@ class Board:
         self.buffer = bytearray()
         self.hello = None
         self.pending = []  # frames read but not yet asked for
+        # The serial console (the board's `start console`): with a function
+        # here, what the board sends outside a frame is given to it as it
+        # arrives, instead of waiting for the next frame's zero.
+        self.console = None
+        self.in_frame = False
 
         # The board's reset and boot pins hang off the port's DTR and RTS
         # lines. Linux raises both when the port opens, which leaves the board
@@ -183,7 +188,14 @@ class Board:
                 data += self.serial.read(waiting)
         except Exception:
             raise PortClosed("the serial port went away")
+        shown = bytearray()
         for byte in data:
+            if self.console is not None and not self.in_frame:
+                if byte != 0:
+                    shown.append(byte)
+                else:
+                    self.in_frame = True
+                continue
             if byte != 0:
                 self.buffer.append(byte)
                 continue
@@ -195,6 +207,7 @@ class Board:
                 if frame is None:
                     self._show_text(bytes(self.buffer))
                 else:
+                    self.in_frame = False
                     kind, seq, payload = frame
                     if kind == LOG:
                         if self.show_logs:
@@ -205,6 +218,12 @@ class Board:
                     else:
                         self.pending.append(frame)
             self.buffer.clear()
+        if shown:
+            self.console(bytes(shown))
+
+    def console_send(self, data):
+        """Typed bytes for the board's serial console, as they are."""
+        self.serial.write(data)
 
     def _show_text(self, text):
         if self.show_logs:
@@ -526,6 +545,43 @@ class Board:
         raise DebugError("the screenshot arrived damaged twice")
 
 
+def run_console(board):
+    """This terminal as the board's serial console, until Ctrl+]. Keys go to
+    the board as they are typed; the debug link's frames are told apart from
+    the shell's text on the way back."""
+    import select
+    import termios
+    import tty
+
+    out = sys.stdout.buffer
+
+    def show(text):
+        out.write(text)
+        out.flush()
+
+    board.console = show
+    keyboard = sys.stdin.fileno()
+    before = termios.tcgetattr(keyboard) if os.isatty(keyboard) else None
+    sys.stderr.write("The board's console. Ctrl+] leaves.\r\n")
+    try:
+        if before is not None:
+            tty.setraw(keyboard)
+        board.console_send(b"\r")  # a new prompt
+        while True:
+            ready = select.select([keyboard, board.serial.fileno()], [], [], 0.2)[0]
+            if keyboard in ready:
+                keys = os.read(keyboard, 256)
+                if not keys or b"\x1d" in keys:
+                    break
+                board.console_send(keys)
+            board._read()
+    finally:
+        if before is not None:
+            termios.tcsetattr(keyboard, termios.TCSADRAIN, before)
+        board.console = None
+        sys.stderr.write("\r\n")
+
+
 def wait_for_desktop(board, timeout=15):
     """Waits until the start-up screens are over (the desktop has windows)."""
     end = time.monotonic() + timeout
@@ -736,6 +792,8 @@ def main(argv=None):
     p.add_argument("--password-stdin", action="store_true",
                    help="read the password from standard input instead of asking")
     sub.add_parser("monitor", help="show the board's log text until Ctrl+C")
+    sub.add_parser("console", help="the board's command shell on this wire (needs `start console` in "
+                                   "C:\\.config\\startup.txt); Ctrl+] leaves")
 
     p = sub.add_parser("screenshot", help="save the screen as a PNG")
     p.add_argument("--no-pointer", action="store_true", help="leave out the mouse pointer")
@@ -848,6 +906,8 @@ def main(argv=None):
             print("fault sent: %s%s" % (args.kind, " as PID %d" % args.pid if args.pid else ""))
         elif args.command == "wifi":
             wifi_command(board, args)
+        elif args.command == "console":
+            run_console(board)
         elif args.command == "monitor":
             while True:
                 board._read()

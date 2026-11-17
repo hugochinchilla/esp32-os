@@ -47,8 +47,32 @@ Protocol::Protocol(ports::ByteSink &out, ports::Lock &lock, ports::Display &disp
 
 void Protocol::feed(const uint8_t *data, size_t size)
 {
+    if (size > 0) {
+        idle_seen_ = false;
+    }
+    size_t typed_from = 0; // a run of console bytes starts here
+    bool typing = false;
     for (size_t i = 0; i < size; i++) {
         uint8_t byte = data[i];
+        if (console_ != nullptr && !in_frame_) {
+            // Outside a frame: typed text, until a zero opens a frame.
+            if (byte != 0) {
+                if (!typing) {
+                    typing = true;
+                    typed_from = i;
+                }
+                continue;
+            }
+            if (typing) {
+                console_bytes_ += static_cast<uint32_t>(i - typed_from);
+                console_->write(data + typed_from, i - typed_from);
+                typing = false;
+            }
+            in_frame_ = true;
+            rx_size_ = 0;
+            overflow_ = false;
+            continue;
+        }
         if (byte != 0) {
             if (rx_size_ < sizeof(rx_)) {
                 rx_[rx_size_++] = byte;
@@ -66,6 +90,11 @@ void Protocol::feed(const uint8_t *data, size_t size)
             bool good = raw >= 4 && crc16(rx_, raw - 2) == get16(rx_ + raw - 2);
             if (good) {
                 frames_received_++;
+                // The frame is over: what follows is typed text again, until
+                // the next zero. After a bad one this zero may be the opening
+                // of the frame that follows, so it stays open: a frame's
+                // bytes must never reach the console.
+                in_frame_ = false;
                 handle_frame(rx_, raw - 2);
             } else {
                 receive_errors_++;
@@ -74,6 +103,46 @@ void Protocol::feed(const uint8_t *data, size_t size)
         rx_size_ = 0;
         overflow_ = false;
     }
+    if (typing) {
+        console_bytes_ += static_cast<uint32_t>(size - typed_from);
+        console_->write(data + typed_from, size - typed_from);
+    }
+}
+
+void Protocol::line_idle()
+{
+    if (console_ == nullptr || clock_ == nullptr || !in_frame_) {
+        return;
+    }
+    const uint32_t now = clock_->micros();
+    if (!idle_seen_) {
+        idle_seen_ = true;
+        idle_since_ = now;
+        return;
+    }
+    if (static_cast<uint32_t>(now - idle_since_) < kFrameWaitUs) {
+        return;
+    }
+    // Nothing has arrived for a good while: no frame was coming. What was
+    // kept as its start was typed.
+    in_frame_ = false;
+    idle_seen_ = false;
+    if (rx_size_ > 0 && !overflow_) {
+        console_bytes_ += static_cast<uint32_t>(rx_size_);
+        console_->write(rx_, rx_size_);
+    }
+    rx_size_ = 0;
+    overflow_ = false;
+}
+
+void Protocol::send_text(const uint8_t *data, size_t size)
+{
+    if (size == 0) {
+        return;
+    }
+    lock_.lock();
+    out_.write(data, size);
+    lock_.unlock();
 }
 
 void Protocol::handle_frame(const uint8_t *frame, size_t size)
