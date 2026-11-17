@@ -52,7 +52,9 @@ public:
     // Something `start NAME` can start. `name` must stay valid. `needed`:
     // started after the file's last line if no line started it, so a file
     // that leaves the desktop out does not leave a machine with nothing on
-    // its screen (until there is a console to fall back on, item 14).
+    // its screen (until there is a console to fall back on, item 14). And
+    // started before anything that is not needed, wherever its line is: a
+    // service or a program may count on the desktop being there.
     bool add(const char *name, StartFn start, void *context, bool needed = false);
     void set_run(RunFn run, void *context)
     {
@@ -86,12 +88,14 @@ private:
         void *context = nullptr;
         bool needed = false;
         bool started = false;
+        bool early = false; // started before its line, for something that needs it
     };
 
     void take(const char *text, size_t length);
     void end_line();
     int finish();
     bool line(const char *text);
+    bool needed_first(const char *before);
     bool start(Unit &unit);
     void log(const char *format, ...) __attribute__((format(printf, 2, 3)));
     static void gave_up(const char *name, void *context);

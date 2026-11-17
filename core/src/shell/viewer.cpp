@@ -6,6 +6,7 @@
 #include "core/gfx/art.hpp"
 #include "core/image/convert.hpp"
 #include "core/image/image.hpp"
+#include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/widgets.hpp"
 #include "core/wm/wm.hpp"
@@ -199,8 +200,8 @@ public:
         done_ = done;
         list_.select(static_cast<int>(current));
         set_modal(owner);
-        set_frame(centred(shell::manager(), frame().w, frame().h));
-        shell::manager().add(*this);
+        set_frame(os::centred(frame().w, frame().h));
+        os::show(*this);
         set_focus(&list_);
     }
 
@@ -361,7 +362,7 @@ private:
     void stop()
     {
         if (timer_ != 0) {
-            shell::manager().stop_timer(timer_);
+            os::stop_timer(timer_);
             timer_ = 0;
         }
         decoder_.close();
@@ -370,7 +371,7 @@ private:
     void start()
     {
         stop();
-        const image::Error e = decoder_.open(storage(), path_, program_port(), info_, kBackgroundRgb);
+        const image::Error e = decoder_.open(os::file::storage(), path_, program_port(), info_, kBackgroundRgb);
         snprintf(title_, sizeof(title_), "%s - Picture viewer", fs::path::name(path_));
         set_title(title_);
         if (e != image::Error::None) {
@@ -401,10 +402,10 @@ private:
         shown_h_ = h;
         converter_.begin(info_.width, info_.height, w, h, shown_, dither_);
         view_.show(shown_, w, h);
-        started_us_ = shell::manager().now_us();
+        started_us_ = os::now_us();
         busy_us_ = 0;
         g_timings[0] = g_timings[1] = g_timings[2] = 0;
-        timer_ = shell::manager().start_timer(0, kTickUs, &ViewerWindow::slice, this);
+        timer_ = os::start_timer(0, kTickUs, &ViewerWindow::slice, this);
         status_.set_text("Loading...");
     }
 
@@ -413,17 +414,16 @@ private:
     static void slice(void *context)
     {
         auto *v = static_cast<ViewerWindow *>(context);
-        wm::Wm &wm = shell::manager();
-        const uint64_t start = wm.now_us();
+        const uint64_t start = os::now_us();
         const int before = v->converter_.rows_done();
         image::Error e = image::Error::None;
-        while (!v->decoder_.done() && wm.now_us() - start < kSliceUs) {
+        while (!v->decoder_.done() && os::now_us() - start < kSliceUs) {
             e = v->decoder_.step(v->converter_, 4);
             if (e != image::Error::None) {
                 break;
             }
         }
-        const uint32_t spent = static_cast<uint32_t>(wm.now_us() - start);
+        const uint32_t spent = static_cast<uint32_t>(os::now_us() - start);
         v->busy_us_ += spent;
         if (spent > g_timings[2]) {
             g_timings[2] = spent;
@@ -442,7 +442,7 @@ private:
         }
         if (v->decoder_.done()) {
             g_timings[0] = v->busy_us_;
-            g_timings[1] = static_cast<uint32_t>(wm.now_us() - v->started_us_);
+            g_timings[1] = static_cast<uint32_t>(os::now_us() - v->started_us_);
             v->stop();
             char text[120];
             snprintf(text, sizeof(text), "%s   %d x %d   %s%s", fs::path::name(v->path_), v->info_.width,

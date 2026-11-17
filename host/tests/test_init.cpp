@@ -130,7 +130,7 @@ void test_lines()
         m.set_up(i);
         m.net_works = false;
         run(i,
-            "run terminal\n"   // nothing to run it on yet
+            "run terminal\n"   // the desktop goes first, then this
             "start inetd\n"    // does not start
             "start printer\n"  // no such thing
             "begin desktop\n"  // not a word init knows
@@ -140,20 +140,44 @@ void test_lines()
             "start desktop\n"  // twice
             "run nothing\n"
             "start console\n",
-            8);
-        CHECK(m.order == "desktop console " && m.ran.empty());
-        CHECK(has("init: run terminal: there is no desktop yet") && has("init: inetd did not start"));
+            7);
+        CHECK(m.order == "desktop console " && m.ran == "terminal;");
+        CHECK(has("init: desktop goes before terminal") && has("init: inetd did not start"));
         CHECK(has("init: nothing here is called printer") && has("init: not understood: begin desktop"));
         CHECK(has("init: start what?") && has("init: not understood: startdesktop"));
         CHECK(has("init: desktop is already started") && has("init: run nothing: no such program"));
     }
-    // A file that leaves the desktop out: it is started all the same, last.
+    // A file that leaves the desktop out, or has it after a service or a
+    // program: the desktop goes first all the same (the services count on
+    // it), and its own line a little later is not a mistake.
     {
         Machine m;
         init::Init i(m.procs);
         m.set_up(i);
         run(i, "start inetd\n", 0);
-        CHECK(m.order == "inetd desktop " && has("init: no line starts desktop; started anyway"));
+        CHECK(m.order == "desktop inetd " && has("init: desktop goes before inetd"));
+    }
+    {
+        Machine m;
+        init::Init i(m.procs);
+        m.set_up(i);
+        run(i, "start inetd\nstart desktop\nstart desktop\n", 1);
+        CHECK(m.order == "desktop inetd " && has("init: desktop is already started"));
+    }
+    {
+        Machine m;
+        init::Init i(m.procs);
+        m.set_up(i);
+        run(i, "run terminal\nstart desktop\n", 0);
+        CHECK(m.order == "desktop " && m.ran == "terminal;" && has("init: desktop goes before terminal"));
+    }
+    // A file with nothing to start: the desktop, after its last line.
+    {
+        Machine m;
+        init::Init i(m.procs);
+        m.set_up(i);
+        run(i, "# nothing\n", 0);
+        CHECK(m.order == "desktop " && has("init: no line starts desktop; started anyway"));
     }
     // An empty file, and a line longer than a line may be.
     {
@@ -418,6 +442,21 @@ void test_desktop()
     t.exit(parent);
     CHECK(t.find(child)->parent == proc::kRoot);
     t.exit(child);
+
+    // A line that failed is said on the screen too, in a box of the
+    // desktop's; no failed line, no box.
+    wm::Window *before = desktop.active();
+    shell::startup_trouble(0);
+    wait(10000);
+    CHECK(desktop.active() == before);
+    shell::startup_trouble(1);
+    wait(10000);
+    wm::Window *box = desktop.active();
+    CHECK(box != nullptr && box != before && strcmp(box->title(), "Start-up") == 0 && box->owner() == 2);
+    if (box != nullptr && box != before) {
+        desktop.close(*box);
+    }
+    wait(10000);
 }
 
 } // namespace

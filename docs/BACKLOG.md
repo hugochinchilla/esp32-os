@@ -45,7 +45,7 @@ board or the merge), `done`.
 | 18 | init as PID 1 with a start-up file. Services start after the desktop | M | 2, 8 | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-init.md) |
 | 19 | Program lifecycle: created at launch, destroyed at exit, memory returned, more than one instance | L | 2 | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-program-lifecycle.md) |
 | 34 | Display and the other built-in dialogs and settings tools (Screen Saver, Network, Shut Down, file dialogs, message box, Task Manager) become programs with a life of their own: created when opened, memory given back when closed. Display first. The owner's rule of 2026-11-17 | M | 19 | Yes | done with item 19 (checked on the board 2026-11-17). [Journal](journal/2026-11-17-program-lifecycle.md) (the rule: [dialogs as programs](journal/2026-11-17-dialogs-as-programs.md)) |
-| 20 | A defined set of OS calls, moved to app by app | L | 2 | | todo |
+| 20 | A defined set of OS calls, moved to app by app | L | 2 | | in part, checked on the board 2026-11-17: `core/os/os.hpp`, 11 of 16 programs moved (the other five wait for item 21 or for the shell's commands), a test keeps them moved; PC tests pass, firmware compiles, not run on the board. The list: [docs/os-calls.md](os-calls.md). [Journal](journal/2026-11-17-os-calls.md) |
 | 21 | Split the window manager into window server and desktop shell. The taskbar becomes a process that restarts when killed | L | 18, 20 | Yes | todo |
 | | **Later** | | | | |
 | 22 | Console text editor | M | 13 | | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-console-editor.md) |

@@ -6,6 +6,7 @@
 #include "core/gfx/art.hpp"
 #include "core/net/wifi.hpp"
 #include "core/sh/sh.hpp"
+#include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/widgets.hpp"
 #include "core/wm/wm.hpp"
@@ -528,22 +529,22 @@ public:
     void refresh()
     {
         if (folder_[0] == 0) {
-            listing_.read_drives(storage());
+            listing_.read_drives();
             set_title_text("My Board");
             address_.set_text("My Board");
             free_.set_text("");
         } else {
             ports::DirEntry e;
-            if (fs::path::relative(folder_)[0] != 0 && storage().stat(folder_, e) != ports::FsError::Ok) {
+            if (fs::path::relative(folder_)[0] != 0 && os::file::stat(folder_, e) != ports::FsError::Ok) {
                 folder_[0] = 0; // the folder went away: show My Board
                 refresh();
                 return;
             }
-            listing_.read(storage(), folder_);
+            listing_.read(folder_);
             const char *name = fs::path::name(folder_);
             if (name[0] == 0) {
                 ports::VolumeInfo info = {};
-                storage().info(fs::path::drive(folder_), info);
+                os::file::drive_info(fs::path::drive(folder_), info);
                 char t[48];
                 snprintf(t, sizeof(t), "%s (%c:)", info.label, fs::path::drive(folder_));
                 set_title_text(t);
@@ -552,7 +553,7 @@ public:
             }
             address_.set_text(folder_);
             ports::VolumeInfo info = {};
-            storage().info(fs::path::drive(folder_), info);
+            os::file::drive_info(fs::path::drive(folder_), info);
             char t[40];
             if (info.free_bytes >= 10u * 1024 * 1024) {
                 snprintf(t, sizeof(t), "%u MB free", static_cast<unsigned>(info.free_bytes >> 20));
@@ -680,7 +681,7 @@ private:
         auto *w = static_cast<FolderWindow *>(context);
         char p[fs::kMaxPath];
         if (w->folder_[0] != 0 && w->selected_path(p, sizeof(p))) {
-            shell::manager().begin_drag(p);
+            os::begin_drag(p);
         }
     }
     static void back(void *context) { static_cast<FolderWindow *>(context)->go_back(); }
@@ -723,7 +724,7 @@ private:
         ports::DirEntry e;
         for (int n = 2; n < 100; n++) {
             fs::path::join(w->folder_, name, p, sizeof(p));
-            if (storage().stat(p, e) != ports::FsError::Ok) {
+            if (os::file::stat(p, e) != ports::FsError::Ok) {
                 break;
             }
             snprintf(name, sizeof(name), "New Folder (%d)", n);
@@ -735,7 +736,7 @@ private:
     {
         auto *w = static_cast<FolderWindow *>(context);
         char p[fs::kMaxPath];
-        const ports::FsError e = fs::path::join(w->folder_, name, p, sizeof(p)) ? storage().make_folder(p)
+        const ports::FsError e = fs::path::join(w->folder_, name, p, sizeof(p)) ? os::file::make_folder(p)
                                                                                 : ports::FsError::BadName;
         w->after(e, "New Folder", name);
     }
@@ -757,7 +758,7 @@ private:
         if (!w->selected_path(from, sizeof(from))) {
             return;
         }
-        const ports::FsError e = fs::path::join(w->folder_, name, to, sizeof(to)) ? storage().rename(from, to)
+        const ports::FsError e = fs::path::join(w->folder_, name, to, sizeof(to)) ? os::file::rename(from, to)
                                                                                  : ports::FsError::BadName;
         w->after(e, "Rename", name);
     }
@@ -851,12 +852,12 @@ public:
         // Everything in it, hidden names too: they count as much.
         const bool hidden = Listing::show_hidden;
         Listing::show_hidden = true;
-        listing_.read(storage(), kTrashFolder);
+        listing_.read(kTrashFolder);
         Listing::show_hidden = hidden;
         view_.reset();
         empty_button_.set_enabled(listing_.count() > 0);
         ports::VolumeInfo info = {};
-        storage().info('C', info);
+        os::file::drive_info('C', info);
         char t[40];
         snprintf(t, sizeof(t), "%u KB free", static_cast<unsigned>(info.free_bytes >> 10));
         free_.set_text(t);
@@ -921,7 +922,7 @@ private:
         auto *w = static_cast<TrashWindow *>(context);
         char p[fs::kMaxPath];
         if (w->selected_path(p, sizeof(p))) {
-            shell::manager().begin_drag(p);
+            os::begin_drag(p);
         }
     }
     static void restore(void *context)
@@ -1026,7 +1027,7 @@ void open_folder(const char *path)
     for (FolderWindow *w : g_windows) {
         if (w != nullptr && w->open() && strcmp(w->folder(), want) == 0) {
             w->refresh();
-            manager().activate(*w);
+            os::activate(*w);
             return;
         }
     }

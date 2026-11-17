@@ -30,9 +30,9 @@ public:
 
     // Takes its memory on first use; false if there is none.
     bool ready();
-    ports::FsError read(const fs::Storage &storage, const char *folder);
+    ports::FsError read(const char *folder);
     // The drives, as "RAM disk (C:)", for My Board.
-    void read_drives(const fs::Storage &storage);
+    void read_drives();
 
     int count() const { return count_; }
     const Item &item(int i) const { return items_[i]; }

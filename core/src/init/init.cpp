@@ -118,6 +118,25 @@ bool Init::start(Unit &unit)
     return true;
 }
 
+// What is needed goes before anything else, wherever the file has its line
+// or if it has none: a service or a program may count on the desktop being
+// there. False if something needed did not start.
+bool Init::needed_first(const char *before)
+{
+    bool all = true;
+    for (int i = 0; i < count_; i++) {
+        if (units_[i].needed && !units_[i].started) {
+            log("init: %s goes before %s", units_[i].name, before);
+            if (start(units_[i])) {
+                units_[i].early = true;
+            } else {
+                all = false;
+            }
+        }
+    }
+    return all;
+}
+
 // One line, already without its end. True if there was nothing to do or it
 // was done.
 bool Init::line(const char *text)
@@ -150,6 +169,13 @@ bool Init::line(const char *text)
     if (same(verb, "start")) {
         for (int i = 0; i < count_; i++) {
             if (same(units_[i].name, rest)) {
+                if (units_[i].early) {
+                    units_[i].early = false; // its own line, a little late
+                    return true;
+                }
+                if (!units_[i].needed && !needed_first(rest)) {
+                    return false;
+                }
                 return start(units_[i]);
             }
         }
@@ -159,6 +185,9 @@ bool Init::line(const char *text)
     if (same(verb, "run")) {
         if (run_ == nullptr) {
             log("init: nothing to run %s with", rest);
+            return false;
+        }
+        if (!needed_first(rest)) {
             return false;
         }
         char why[80] = "";

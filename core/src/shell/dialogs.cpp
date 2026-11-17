@@ -3,6 +3,7 @@
 #include <cstring>
 
 #include "core/gfx/art.hpp"
+#include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/widgets.hpp"
 #include "internal.hpp"
@@ -104,8 +105,8 @@ public:
         snprintf(folder_, sizeof(folder_), "%s", folder != nullptr && folder[0] ? folder : "C:\\");
         name_.set(name != nullptr ? name : "");
         refresh();
-        set_frame(centred(shell::manager(), frame().w, frame().h));
-        shell::manager().add(*this);
+        set_frame(os::centred(frame().w, frame().h));
+        os::show(*this);
         set_focus(&name_);
         name_.select_all();
     }
@@ -127,10 +128,10 @@ private:
     void refresh()
     {
         ports::DirEntry e;
-        if (fs::path::relative(folder_)[0] != 0 && storage().stat(folder_, e) != ports::FsError::Ok) {
+        if (fs::path::relative(folder_)[0] != 0 && os::file::stat(folder_, e) != ports::FsError::Ok) {
             snprintf(folder_, sizeof(folder_), "C:\\"); // gone: back to the start
         }
-        listing_.read(storage(), folder_);
+        listing_.read(folder_);
         list_.set_items(listing_.names(), listing_.count());
         look_.set_text(folder_);
     }
@@ -174,7 +175,7 @@ private:
             return;
         }
         ports::DirEntry e;
-        const ports::FsError found = storage().stat(path, e);
+        const ports::FsError found = os::file::stat(path, e);
         if (found == ports::FsError::Ok && e.folder) {
             go_to(path);
             name_.set("");
@@ -252,7 +253,7 @@ private:
         auto *d = static_cast<FileDialog *>(context);
         int n = 0;
         char letters[fs::Storage::kMaxDrives];
-        const int drives = storage().drives(letters, fs::Storage::kMaxDrives);
+        const int drives = os::file::drives(letters, fs::Storage::kMaxDrives);
         for (int i = 0; i < drives && n < kLookMax; i++) {
             snprintf(d->look_paths_[n], sizeof(d->look_paths_[n]), "%c:\\", letters[i]);
             snprintf(d->look_labels_[n], sizeof(d->look_labels_[n]), "%c:\\", letters[i]);
@@ -284,7 +285,7 @@ private:
         }
         d->look_menu_.count = n;
         const gfx::Rect c = d->client();
-        shell::manager().open_menu(d->look_menu_, c.x + d->look_.rect.x, c.y + d->look_.rect.bottom());
+        os::open_menu(d->look_menu_, c.x + d->look_.rect.x, c.y + d->look_.rect.bottom());
     }
 
     struct LookContext {
@@ -355,8 +356,8 @@ public:
         prompt_.set_text(prompt_text_);
         field_.set(initial);
         set_modal(owner);
-        set_frame(centred(shell::manager(), frame().w, frame().h));
-        shell::manager().add(*this);
+        set_frame(os::centred(frame().w, frame().h));
+        os::show(*this);
         set_focus(&field_);
         field_.select_all();
     }
@@ -399,8 +400,8 @@ private:
 // A window that already has a dialog up gets that one brought forward.
 bool busy(wm::Window *owner)
 {
-    if (owner != nullptr && owner->open() && manager().blocker(*owner) != nullptr) {
-        manager().activate(*owner);
+    if (owner != nullptr && owner->open() && os::blocker(*owner) != nullptr) {
+        os::activate(*owner);
         return true;
     }
     return false;

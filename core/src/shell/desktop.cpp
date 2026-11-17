@@ -6,6 +6,7 @@
 #include <strings.h>
 #include "core/fs/ini.hpp"
 #include "core/gfx/art.hpp"
+#include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/text_edit.hpp"
 #include "core/wm/widgets.hpp"
@@ -19,7 +20,6 @@ namespace {
 wm::Wm *g_wm = nullptr;
 ports::System *g_system = nullptr;
 fs::Storage *g_storage = nullptr;
-ports::Memory *g_memory = nullptr;
 
 /* ---- Message box ---------------------------------------------------------------- */
 
@@ -520,58 +520,29 @@ void welcome_file()
 
 } // namespace
 
-// Every block a program asks for is noted on its process's row, so Task
-// Manager can say what each program holds. A few bytes in front of the block
-// remember whose it is and how large, for when it is given back (which may
-// be a moment after the process's row has gone: add_memory() ignores that).
-namespace {
-struct BlockNote {
-    proc::Pid owner;
-    uint32_t bytes;
-    uint32_t pad[2]; // 16 bytes in all: what follows stays aligned as the port gave it
-};
-} // namespace
-
-void *program_memory(size_t bytes)
-{
-    if (g_memory == nullptr) {
-        return nullptr;
-    }
-    auto *note = static_cast<BlockNote *>(g_memory->allocate(bytes + sizeof(BlockNote)));
-    if (note == nullptr) {
-        return nullptr;
-    }
-    note->owner = proc::table().current();
-    note->bytes = static_cast<uint32_t>(bytes);
-    proc::table().add_memory(note->owner, static_cast<int32_t>(bytes));
-    return note + 1;
-}
-
-void free_program_memory(void *block)
-{
-    if (block != nullptr) {
-        BlockNote *note = static_cast<BlockNote *>(block) - 1;
-        proc::table().add_memory(note->owner, -static_cast<int32_t>(note->bytes));
-        g_memory->release(note);
-    }
-}
-
-ports::Memory &program_port()
-{
-    class Port : public ports::Memory {
-    public:
-        void *allocate(size_t bytes) override { return program_memory(bytes); }
-        void release(void *block) override { free_program_memory(block); }
-    };
-    static Port port;
-    return port;
-}
+// A program's memory is the OS's to give and to count (core/os/os.hpp).
+void *program_memory(size_t bytes) { return os::allocate(bytes); }
+void free_program_memory(void *block) { os::release(block); }
+ports::Memory &program_port() { return os::memory(); }
 
 void no_memory_for(const char *program)
 {
     char text[96]; // the box keeps its own copy
     snprintf(text, sizeof(text), "There is not enough memory to open\n%s.", program);
     message_box("Chinchilla", text);
+}
+
+void startup_trouble(int lines)
+{
+    if (lines <= 0 || g_wm == nullptr) {
+        return;
+    }
+    char text[160]; // the box keeps its own copy
+    snprintf(text, sizeof(text),
+             "%d line%s of C:\\.config\\startup.txt could not\nbe done. Type dmesg in a Terminal to see which.", lines,
+             lines == 1 ? "" : "s");
+    const proc::Scope as(&proc::table(), proc::table().find_by_name("desktop"));
+    message_box("Start-up", text);
 }
 
 wm::Wm &manager() { return *g_wm; }
@@ -620,7 +591,12 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
     g_wm = &wm;
     g_system = &system;
     g_storage = &storage;
-    g_memory = &memory;
+    os::Kit kit;
+    kit.wm = &wm;
+    kit.system = &system;
+    kit.storage = &storage;
+    kit.memory = &memory;
+    os::install(kit);
     // The desktop is a process too: the Start menu, the icons and the
     // taskbar, and the dialogs they open. (It is the window server and the
     // desktop shell in one until they are split, backlog item 21.)

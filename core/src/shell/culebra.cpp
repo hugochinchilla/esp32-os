@@ -7,6 +7,7 @@
 #include "core/fs/ini.hpp"
 #include "core/games/snake.hpp"
 #include "core/gfx/art.hpp"
+#include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/widgets.hpp"
 #include "core/wm/wm.hpp"
@@ -287,7 +288,7 @@ public:
         stop_timer();
         // A different game each time, the same in tests (their clock is set).
         games_++;
-        game_.reset(static_cast<uint32_t>(shell::manager().now_us()) + games_ * 2654435761u);
+        game_.reset(static_cast<uint32_t>(os::now_us()) + games_ * 2654435761u);
         score_ = 0;
         show_score();
         board_.invalidate();
@@ -406,7 +407,7 @@ private:
         board_.invalidate();
         if (game_.state() == Snake::State::Playing) {
             if (timer_ == 0) {
-                timer_ = shell::manager().start_timer(kStepUs[speed_], kStepUs[speed_], &CulebraWindow::tick, this);
+                timer_ = os::start_timer(kStepUs[speed_], kStepUs[speed_], &CulebraWindow::tick, this);
             }
         } else {
             stop_timer();
@@ -416,7 +417,7 @@ private:
     void stop_timer()
     {
         if (timer_ != 0) {
-            shell::manager().stop_timer(timer_);
+            os::stop_timer(timer_);
             timer_ = 0;
         }
     }
@@ -425,7 +426,7 @@ private:
     {
         CulebraWindow &w = self(context);
         // Nobody is steering while another window or a menu is in use.
-        if (!w.focused() || w.state() == wm::WindowState::Minimized || shell::manager().menu_open()) {
+        if (!w.focused() || w.state() == wm::WindowState::Minimized || os::menu_open()) {
             if (w.game_.pause()) {
                 w.state_changed();
             }

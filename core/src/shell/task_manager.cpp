@@ -12,6 +12,7 @@
 #include <cstring>
 
 #include "core/gfx/art.hpp"
+#include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/widgets.hpp"
 #include "internal.hpp"
@@ -115,13 +116,13 @@ public:
         have_baseline_ = false;
         refresh();
         if (timer_ == 0) {
-            timer_ = shell::manager().start_timer(kRefreshUs, kRefreshUs, &TaskManager::tick, this);
+            timer_ = os::start_timer(kRefreshUs, kRefreshUs, &TaskManager::tick, this);
         }
     }
 
     void closed() override
     {
-        shell::manager().stop_timer(timer_);
+        os::stop_timer(timer_);
         timer_ = 0;
         ending_ = proc::kNone;
     }
@@ -157,7 +158,7 @@ private:
     static const gfx::Bitmap *icon_of(int index, void *context)
     {
         auto *self = static_cast<TaskManager *>(context);
-        const wm::Window *w = shell::manager().main_window_of(self->pids_[index]);
+        const wm::Window *w = os::main_window(self->pids_[index]);
         return w != nullptr ? w->icon() : &gfx::service_icon_16();
     }
 
@@ -165,7 +166,7 @@ private:
     proc::Pid chosen() const
     {
         const int at = list_.selected();
-        return at >= 0 && at < count_ && proc::table().alive(pids_[at]) ? pids_[at] : proc::kNone;
+        return at >= 0 && at < count_ && os::alive(pids_[at]) ? pids_[at] : proc::kNone;
     }
 
     static void activated(wm::ListBox &, void *context) { switch_pressed(static_cast<TaskManager *>(context)->switch_, context); }
@@ -174,11 +175,10 @@ private:
 
     static void switch_pressed(wm::Button &, void *context)
     {
-        wm::Wm &m = shell::manager();
-        if (wm::Window *w = m.main_window_of(static_cast<TaskManager *>(context)->chosen())) {
+        if (wm::Window *w = os::main_window(static_cast<TaskManager *>(context)->chosen())) {
             // Its dialog, if one holds it, comes forward with it.
-            wm::Window *dialog = m.blocker(*w);
-            m.activate(dialog != nullptr ? *dialog : *w);
+            wm::Window *dialog = os::blocker(*w);
+            os::activate(dialog != nullptr ? *dialog : *w);
         }
     }
 
@@ -187,7 +187,7 @@ private:
     // End Task is greyed out on a protected process: nobody may signal it.
     void update_buttons()
     {
-        const proc::Process *p = proc::table().find(chosen());
+        const proc::Process *p = os::process(chosen());
         const bool allowed = p == nullptr || !p->is(proc::kProtected);
         if (!allowed && focus() == &end_) {
             set_focus(&list_);
@@ -213,11 +213,11 @@ private:
             return;
         }
         static char text[120];
-        const char *name = proc::table().find(pid)->name;
-        switch (proc::table().signal(pid, proc::Signal::Term)) {
+        const char *name = os::process(pid)->name;
+        switch (os::signal(pid, proc::Signal::Term)) {
         case proc::Sent::Ok:
             self->ending_ = pid;
-            self->ending_since_ = shell::manager().now_us();
+            self->ending_since_ = os::now_us();
             self->look_again_soon();
             break;
         case proc::Sent::NotPermitted:
@@ -244,19 +244,18 @@ private:
         if (ending_ == proc::kNone) {
             return;
         }
-        if (!proc::table().alive(ending_)) {
+        if (!os::alive(ending_)) {
             ending_ = proc::kNone;
             return;
         }
-        wm::Wm &m = shell::manager();
-        if (m.now_us() - ending_since_ >= kGraceUs && m.active() == this) {
+        if (os::now_us() - ending_since_ >= kGraceUs && os::in_front(*this)) {
             offer_force();
         }
     }
 
     void offer_force()
     {
-        const proc::Process *p = proc::table().find(ending_);
+        const proc::Process *p = os::process(ending_);
         forcing_ = ending_;
         ending_ = proc::kNone;
         if (p == nullptr) {
@@ -277,7 +276,7 @@ private:
     {
         auto *self = static_cast<TaskManager *>(context);
         if (choice == 0) {
-            proc::table().signal(self->forcing_, proc::Signal::Kill);
+            os::signal(self->forcing_, proc::Signal::Kill);
             self->look_again_soon();
         }
         self->forcing_ = proc::kNone;
@@ -285,7 +284,7 @@ private:
 
     // A signal takes effect after the click that sent it: the list is read
     // again at the next tick, not a second later.
-    void look_again_soon() { shell::manager().start_timer(1, 0, &TaskManager::look_again, this); }
+    void look_again_soon() { os::start_timer(1, 0, &TaskManager::look_again, this); }
     static void look_again(void *context)
     {
         auto *self = static_cast<TaskManager *>(context);
@@ -302,16 +301,14 @@ private:
     // processes changed, so the selection stays put.
     void refresh_programs()
     {
-        wm::Wm &m = shell::manager();
-        proc::table().bring_up_to_date(); // the time of jobs still running
-        const proc::Table &table = proc::table();
+        os::refresh_figures(); // the time of jobs still running
         const bool all = all_.checked();
         proc::Pid now[kMaxRows];
         char text[kMaxRows][kRowText];
         int n = 0;
-        for (int i = 0; i < table.count() && n < kMaxRows; i++) {
-            const proc::Process &p = table.at(i);
-            const wm::Window *w = m.main_window_of(p.pid);
+        for (int i = 0; i < os::process_count() && n < kMaxRows; i++) {
+            const proc::Process &p = os::process_at(i);
+            const wm::Window *w = os::main_window(p.pid);
             if (!all && (p.is(proc::kSystem) || w == nullptr || p.pid == owner())) {
                 continue;
             }
@@ -359,11 +356,10 @@ private:
 
     void refresh_figures()
     {
-        wm::Wm &m = shell::manager();
         ports::SystemStats stats = {};
-        system_port().stats(stats);
-        const uint64_t now = m.now_us();
-        const uint32_t busy = m.busy_us();
+        os::stats(stats);
+        const uint64_t now = os::now_us();
+        const uint32_t busy = os::busy_us();
         int desktop = 0, video = 0;
         if (have_baseline_ && now > last_now_) {
             const uint64_t span = now - last_now_;
@@ -393,8 +389,8 @@ private:
         if (!have_totals_) {
             char unused[4];
             uint32_t value = 0;
-            total_internal_ = system_port().fact(ports::Fact::InternalRam, value, unused, sizeof(unused)) ? value : 0;
-            total_external_ = system_port().fact(ports::Fact::ExternalRam, value, unused, sizeof(unused)) ? value : 0;
+            total_internal_ = os::fact(ports::Fact::InternalRam, value, unused, sizeof(unused)) ? value : 0;
+            total_external_ = os::fact(ports::Fact::ExternalRam, value, unused, sizeof(unused)) ? value : 0;
             have_totals_ = true;
         }
         const uint32_t used_internal =
@@ -456,7 +452,7 @@ void open_task_manager()
     TaskManager &w = *window;
     const bool was_open = w.open();
     if (!was_open) {
-        w.set_frame(centred(manager(), w.frame().w, w.frame().h));
+        w.set_frame(os::centred(w.frame().w, w.frame().h));
     }
     show(w);
     if (!was_open && w.open()) {
