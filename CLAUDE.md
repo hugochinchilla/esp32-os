@@ -55,3 +55,8 @@ in the same change whenever a decision is made or reversed.
   `docs/os-calls.md`; backlog item 20). A new program uses only those and
   goes on the `MOVED` list of `tools/check_os_calls.py`; if a call is
   missing, add it there rather than reaching for `manager()` or `storage()`.
+- After board checks run `tools/dbg.py misses`: a missed video refill not
+  caused by the debug link is a failure to chase, not noise. Do not hold a
+  lock or mask interrupts for more than about 100 us, and do not call
+  `uxTaskGetSystemState` outside the debug link's Tasks request
+  (`docs/journal/2026-11-17-refills.md`).

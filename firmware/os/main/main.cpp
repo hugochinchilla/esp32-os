@@ -16,6 +16,7 @@
 #include "driver/uart.h"
 #include "driver/uart_select.h"
 #include "esp_ota_ops.h"
+#include "esp_rom_sys.h"
 #include "esp_attr.h"
 #include "nvs.h"
 #include "nvs_flash.h"
@@ -47,6 +48,7 @@
 #include "core/init/init.hpp"
 #include "core/sh/console.hpp"
 #include "core/sys/log.hpp"
+#include "core/sys/missed_refills.hpp"
 #include "core/net/web.hpp"
 #include "core/net/wifi.hpp"
 #include "core/proc/table.hpp"
@@ -103,6 +105,11 @@ struct ScanSample {
 };
 EXT_RAM_BSS_ATTR ScanSample s_scan_samples[200]; // written by the scanlog task
 volatile int s_scan_count = 0;
+// Missed refills that happened while the debug link read the task list, a
+// running total, and the worst lateness among them since the scanlog task
+// last looked (it writes the log lines, sys::MissedRefills).
+volatile uint32_t s_debug_missed = 0;
+volatile uint32_t s_debug_missed_worst_us = 0;
 
 // The message queue into the UI task, made in app_main before any task
 // that could post to it. The UI loop also sleeps on it.
@@ -322,7 +329,17 @@ public:
             return 0;
         }
         configRUN_TIME_COUNTER_TYPE clock = 0;
+        // Misses during the walk are counted as the debug link's, so the log
+        // line about them says so (sys::MissedRefills).
+        uint32_t missed_before, missed_after, worst, line;
+        vga_missed_total(&missed_before, &worst, &line);
         const UBaseType_t count = uxTaskGetSystemState(list, room, &clock);
+        // A refill held off on the other core runs a few microseconds after
+        // the lock is given back; wait for it before counting.
+        esp_rom_delay_us(50);
+        vga_missed_total(&missed_after, &worst, &line);
+        s_debug_missed += missed_after - missed_before;
+        s_debug_missed_worst_us = worst > s_debug_missed_worst_us ? worst : s_debug_missed_worst_us;
         int written = 0;
         for (UBaseType_t i = 0; i < count && written < capacity; i++) {
             const TaskStatus_t &from = list[i];
@@ -578,8 +595,27 @@ int log_to_debug_link(const char *format, va_list args)
     return size;
 }
 
+// Once a second: missed video refills since the last look go to the system
+// log, one line per burst (sys::MissedRefills, docs/journal/2026-11-17-
+// missed-refill-log.md). The interrupt only counts; this does the writing.
+void log_missed_refills()
+{
+    static sys::MissedRefills report;
+    uint32_t missed, worst, line;
+    vga_missed_total(&missed, &worst, &line);
+    const uint32_t debug_worst = s_debug_missed_worst_us;
+    s_debug_missed_worst_us = 0;
+    char text[160];
+    const size_t n = report.check(static_cast<uint32_t>(esp_timer_get_time() / 1000), missed, s_debug_missed,
+                                  worst > debug_worst ? worst : debug_worst, line, text, sizeof(text));
+    if (n > 0) {
+        ESP_LOGW(TAG, "%s", text);
+    }
+}
+
 // The scanout counters every 100 ms from start-up to 20 s, kept for
-// tools/dbg.py memory (Wi-Fi's own log lines have the same clock).
+// tools/dbg.py memory (Wi-Fi's own log lines have the same clock). After
+// that the task stays, to log missed refills once a second.
 
 void scan_timeline_task(void *)
 {
@@ -592,6 +628,9 @@ void scan_timeline_task(void *)
         s_scan_samples[s_scan_count] = {static_cast<uint32_t>(esp_timer_get_time() / 1000), s.late, s.missed,
                                         s.max_late_cycles / CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ};
         s_scan_count = s_scan_count + 1;
+        if (s_scan_count % 10 == 0) {
+            log_missed_refills();
+        }
     }
     // The first message of every start: this task hands the news to the UI
     // task, which logs it. It shows on the board that a message crosses
@@ -603,7 +642,10 @@ void scan_timeline_task(void *)
                      static_cast<unsigned>(m.a), pcTaskGetName(nullptr));
         },
         nullptr, static_cast<uint32_t>(s_scan_count), 0, 1000);
-    vTaskDelete(nullptr);
+    while (true) {
+        vTaskDelayUntil(&wake, pdMS_TO_TICKS(1000));
+        log_missed_refills();
+    }
 }
 
 // While the start-up screens show: answer the debug link.
