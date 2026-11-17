@@ -868,11 +868,15 @@ void open_folder(const char *path)
     });
 }
 
-// What opens what, by extension: 1 the Editor, 2 the Picture viewer, 0 nothing.
+// What opens what, by extension: 1 the Editor, 2 the Picture viewer, 3 a
+// program that is loaded and run, 0 nothing.
 static int program_kind(const char *path)
 {
     static const char *const kText[] = {"txt", "log", "ini", "md"};
     static const char *const kPictures[] = {"bmp", "png", "jpg", "jpeg"};
+    if (is_program_file(path)) {
+        return 3;
+    }
     char ext[8];
     fs::path::extension(path, ext, sizeof(ext));
     for (const char *e : kText) {
@@ -899,6 +903,16 @@ bool open_file(const char *path)
     case 2:
         open_picture(path);
         return true;
+    case 3: {
+        // A program in a file: loaded and run.
+        static char text[200];
+        char why[120];
+        if (!run_file(path, why, sizeof(why))) {
+            snprintf(text, sizeof(text), "'%s' could not be run:\n%s.", fs::path::name(path), why);
+            message_box("Run", text);
+        }
+        return true;
+    }
     default:
         break;
     }

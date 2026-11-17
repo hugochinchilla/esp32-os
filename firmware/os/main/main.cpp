@@ -36,6 +36,7 @@
 #include "core/fs/ini.hpp"
 #include "littlefs_volume.hpp"
 #include "rtos_queue.hpp"
+#include "elf_programs.hpp"
 #include "rtos_tasks.hpp"
 #include "core/job/job.hpp"
 #include "core/prog/prog.hpp"
@@ -1171,6 +1172,11 @@ extern "C" void app_main(void)
     }
     prog::runner().set_tasks(&tasks, program_kits, prog::Runner::kMaxTasks);
     prog::runner().set_limit(prog::Runner::kLimitMs);
+    // Programs kept in files, loaded into external RAM (backlog item 27).
+    static ElfLoader programs;
+    if (programs.begin()) {
+        shell::set_loader(&programs);
+    }
 
     ESP_LOGI(TAG, "starting video on core 1");
     static StaticSemaphore_t done_buffer;

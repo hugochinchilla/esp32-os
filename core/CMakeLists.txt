@@ -75,6 +75,7 @@ set(CORE_SRCS
     src/shell/file_manager.cpp
     src/shell/trash.cpp
     src/shell/listing.cpp
+    src/shell/loaded.cpp
     src/shell/screensaver.cpp
     src/shell/network.cpp
     src/shell/network_service.cpp

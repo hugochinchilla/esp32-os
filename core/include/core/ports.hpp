@@ -277,6 +277,26 @@ protected:
     ~Memory() = default;
 };
 
+// Programs kept in files (backlog item 27): machine code compiled apart
+// from the firmware, made ready to run in memory. What the program asks of
+// the system by name (the OS calls) is joined to it as it is loaded. The
+// adapters: Espressif's ELF loader on the board, the PC's own dynamic
+// loader for the tests.
+class Loader {
+public:
+    // Makes the program in `image` (the file's bytes, whole; not kept) ready
+    // to run. nullptr if it cannot be, with `why` in plain words.
+    virtual void *load(const uint8_t *image, size_t size, const char *&why) = 0;
+    // Calls its way in (APP_MAIN in core/app/app.hpp) and returns what it
+    // returned: 0 if it started.
+    virtual int enter(void *module) = 0;
+    // Takes it out of memory. None of its code may run after this.
+    virtual void unload(void *module) = 0;
+
+protected:
+    ~Loader() = default;
+};
+
 struct SystemStats {
     uint32_t uptime_ms;
     uint32_t free_internal_ram;

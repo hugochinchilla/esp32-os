@@ -188,4 +188,14 @@ void startup_trouble(int lines);
 // clipboard, folder lists), once.
 void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memory &memory);
 
+// Programs loaded from files (backlog item 27). The machine gives its
+// loader once, before or after start(); without one no file is a program.
+void set_loader(ports::Loader *loader);
+// A file that is a program by its name: "*.app".
+bool is_program_file(const char *path);
+constexpr uint32_t kMaxProgramBytes = 1024 * 1024;
+// Loads the file and runs it as a new process named after it. False, with
+// `why` in plain words, if it could not be loaded or did not start.
+bool run_file(const char *path, char *why, size_t capacity);
+
 } // namespace shell

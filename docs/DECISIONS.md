@@ -401,7 +401,7 @@ and reasons are in `docs/journal/2026-11-17-program-lifecycle.md`.
 | --- | --- | --- |
 | Window manager details chosen while building step 4, closest to the 98 look; to confirm or overrule | See the list under "Chosen in step 4" below | As built |
 | Remote keyboard, mouse and screen for a person | VNC server, web page, debug tool only | VNC server |
-| How apps are delivered | Built into the firmware, or loadable from disk | Built in first, behind an app interface. Still the owner's question; the shell works on that assumption: programs are entries in a table (`core/include/core/shell/shell.hpp`: name, icon, open function) that the Start menu and desktop icons launch the same way |
+| How apps are delivered | Built into the firmware, or loadable from disk | Decided 2026-11-17: both. The built-in programs stay rows in the program table, and a program can also be a file loaded from a drive ("Programs loaded from files" below, backlog item 27) |
 | Shell details chosen while building menus, the Start menu and widgets; to confirm or overrule | See "Chosen in the shell milestone" below | As built |
 | A RAM disk as well as C: | Drop it, or keep a small one as a separate temporary drive | Dropped with LittleFS, since nothing needs it; the RAM disk code stays for the PC tests and the simulator |
 | Details chosen in the files milestone; to confirm or overrule | See "Chosen in the files milestone" below | As built |
@@ -2279,6 +2279,31 @@ The rest is the agent's, to confirm:
   every OS call by then, so it holds no lock.
 - Not yet: the queue of events (what a late program missed is lost),
   the other programs, programs that call each other's code directly.
+
+### Programs loaded from files (2026-11-17)
+
+Backlog item 27. [Journal](journal/2026-11-17-loaded-programs.md).
+
+- **Native code loaded from C:** (the owner's choice on a card,
+  2026-11-17: "Código nativo cargado de C:"). Rejected: WebAssembly (safe
+  but 10 to 30 times slower), an interpreted language of our own, nothing.
+  A loaded program has no protection, as a built-in one has none.
+
+The rest is the agent's, to confirm:
+
+- A program file is `name.app`: an ELF shared object for the ESP32-S3,
+  built from the same thin classes as the built-in programs
+  (`programs/`, `tools/build_programs.sh`), with `APP_MAIN` as its way in.
+- It reaches the system **by name**: the loader fills in the calls from a
+  table written out of the firmware's core library at build time
+  (`tools/gen_exports.py`). Only the OS calls, the pictures, the shell's
+  dialogs and a short list of libc are in it. The other way, a table of
+  calls by number, is the next question for the owner.
+- The loader on the board is Espressif's `elf_loader` (2.1.0, Apache 2.0)
+  behind `ports::Loader`; its own symbol tables are off.
+- A loaded program is a process named after its file, windowed like the
+  others, entered once on the UI task, and unloaded after its process has
+  ended and its last window is destroyed. 1 MB a file, eight at a time.
 
 ### Missed video refills are logged (2026-11-17, the owner's request)
 

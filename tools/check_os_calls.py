@@ -43,6 +43,7 @@ SYSTEM = [
     "boot.cpp",
     "desktop.cpp",
     "listing.cpp",
+    "loaded.cpp",
     "network_service.cpp",
     "power.cpp",
     "sessions.cpp",

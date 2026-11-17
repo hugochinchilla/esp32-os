@@ -125,6 +125,18 @@ target_link_libraries(test_os PRIVATE core Threads::Threads)
 add_test(NAME os COMMAND test_os)
 add_test(NAME os_calls
          COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/check_os_calls.py ${CMAKE_CURRENT_SOURCE_DIR}/..)
+# Programs loaded from files (backlog 27). The sample program is built as a
+# shared library of the PC and loaded by the PC's own loader; the test
+# program lets it find the OS calls by name, as the firmware does.
+add_library(hello_app MODULE ../programs/hello/hello.cpp)
+target_include_directories(hello_app PRIVATE ../core/include)
+target_compile_options(hello_app PRIVATE -fvisibility=hidden -fno-exceptions -fno-rtti)
+set_target_properties(hello_app PROPERTIES PREFIX "" OUTPUT_NAME "hello" SUFFIX ".app")
+add_executable(test_loaded tests/test_loaded.cpp)
+target_link_libraries(test_loaded PRIVATE core ${CMAKE_DL_LIBS})
+set_target_properties(test_loaded PROPERTIES ENABLE_EXPORTS ON)
+add_dependencies(test_loaded hello_app)
+add_test(NAME loaded COMMAND test_loaded $<TARGET_FILE:hello_app>)
 # The serial console on the debug link's wire (backlog 14).
 add_executable(test_console tests/test_console.cpp)
 target_link_libraries(test_console PRIVATE core)

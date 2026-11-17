@@ -553,3 +553,9 @@ template <class T> T *program(Number number) { return static_cast<T *>(os::ui::s
 inline bool bring_forward(Number number) { return os::ui::alive(number) && os::ui::show(number); }
 
 } // namespace app
+
+// The way into a program that is built by itself and loaded from a file
+// (backlog item 27): `APP_MAIN(int argc, char **argv) { ... }`. The system
+// calls it once, as the program's own process; 0 says it started. A
+// built-in program has a row in the program table instead.
+#define APP_MAIN extern "C" __attribute__((visibility("default"), used)) int app_main
