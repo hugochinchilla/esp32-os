@@ -2036,7 +2036,7 @@ every cascading menu and at every depth:
   it has one, opens in the same move. No wait.
 - **The grace stays**: the parent's borders and separators, and the space off
   the menus, change nothing, so an inaccurate pointer can come back.
-- **One exception, to confirm with the owner**: a pointer on its way *to* the
+- **One exception, chosen by the owner (2026-11-17, over "always at once")**: a pointer on its way *to* the
   open submenu still crosses other parent items on a slant (his report of
   2026-11-16). While it heads for the submenu (its position four moves ago,
   the new one, and the two near corners of the submenu taken 8 px wide make a
