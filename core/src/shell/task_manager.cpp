@@ -440,18 +440,16 @@ private:
     wm::Label external_text_;
 };
 
-TaskManager &task_manager()
-{
-    static TaskManager window;
-    return window;
-}
-
 } // namespace
 
 void open_task_manager()
 {
     const AsProgram as("Task Manager");
-    TaskManager &w = task_manager();
+    TaskManager *window = one<TaskManager>("Task Manager");
+    if (window == nullptr) {
+        return;
+    }
+    TaskManager &w = *window;
     const bool was_open = w.open();
     if (!was_open) {
         w.set_frame(centred(manager(), w.frame().w, w.frame().h));
@@ -461,6 +459,7 @@ void open_task_manager()
         w.opened();
     }
     w.brought_forward();
+    discard(window); // if the window manager had no room for it
 }
 
 } // namespace shell

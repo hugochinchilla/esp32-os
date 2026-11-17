@@ -168,8 +168,11 @@ protected:
     ~Volume() = default;
 };
 
-// Large, long-lived memory (external RAM on the board), asked for once at
-// start-up or on first use, never per event. nullptr when there is none.
+// Large memory (external RAM on the board), zeroed. nullptr when there is
+// none. The OS's own buffers are asked for once at start-up and kept; a
+// program's objects and buffers are asked for when it opens and given back
+// with release() when it closes (docs/journal/2026-11-17-program-lifecycle.md).
+// Never per event or per repaint. One task at a time: the UI task.
 class Memory {
 public:
     virtual void *allocate(size_t bytes) = 0;
@@ -189,6 +192,7 @@ public:
         got = 0;
         return nullptr;
     }
+    // Gives back a block from allocate(), borrow() or borrow_internal().
     virtual void release(void *block) { (void)block; }
 
 protected:
@@ -244,6 +248,14 @@ struct TaskTotals {
     uint8_t left_out;  // tasks that did not fit in the list
 };
 
+// Faults made on purpose, to try the watchdog and the crash record
+// (tools/dbg.py fault). None of them returns on the board.
+enum class Fault : uint8_t {
+    Hang = 0,       // the calling task spins for ever
+    BadPointer = 1, // a write through a null pointer
+    Abort = 2,      // abort()
+};
+
 class System {
 public:
     virtual void stats(SystemStats &out) = 0;
@@ -274,6 +286,8 @@ public:
         return false;
     }
     virtual void reboot() = 0;
+    // Makes the fault happen in the calling task, now.
+    virtual void fault(Fault kind) { (void)kind; }
     // The next start is a fast one (no start-up screens), once.
     virtual void arm_fast_boot() {}
 

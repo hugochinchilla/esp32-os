@@ -66,9 +66,10 @@ and the same sequence number. Every reply payload starts with a status byte:
 | 0x0F | File write | Offset (4), flags (1: bit 0 creates or empties the file first), path length (1), path, data | None |
 | 0x10 | File delete | Path | None. A file, or an empty folder |
 | 0x11 | Make folder | Path | None |
-| 0x12 | Boot screen | One byte: 0 the self-test again, 1 the splash, 2 nothing shown but the next start is a fast one, once | None. Repaint brings the desktop back |
+| 0x12 | Boot screen | One byte: 0 the self-test again, 1 the splash, 2 nothing shown but the next start is a fast one, once, 3 the error screen after a crash (the crash reported at this start, or a made-up one) | None. Repaint brings the desktop back |
 | 0x13 | Memory report | None | Text: heaps, video timing and task stacks |
 | 0x14 | Tasks | None | The kernel's tasks, see below. Unknown command when the firmware keeps no run-time statistics |
+| 0x15 | Fault | Kind (1): 0 hang (the UI task spins for ever), 1 a write through a null pointer, 2 abort. Then optionally a PID (2) to charge it to | None. The board replies, then fails on purpose: the watchdog or the panic handler writes the crash record and restarts it, and the next start shows the error screen. Bad arguments for a PID that is not running |
 
 - The board replies to Key, Mouse and Text before acting on them, so an event
   that restarts the board (Restart in the Shut Down dialog) still gets its

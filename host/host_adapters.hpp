@@ -9,10 +9,12 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <map>
 #include <cstdint>
 #include <vector>
 
 #include "core/ports.hpp"
+#include "core/proc/table.hpp"
 
 namespace host {
 
@@ -70,11 +72,21 @@ public:
     uint32_t now = 0;
 };
 
-// Large buffers from the ordinary heap. ponytail: never freed; they live
-// as long as the program, as on the board.
+// Large buffers from the ordinary heap. Tests count the blocks out
+// (in_use()) to see that a closed program has given everything back.
 class HostMemory : public ports::Memory {
 public:
-    void *allocate(size_t bytes) override { return std::calloc(1, bytes); }
+    void *allocate(size_t bytes) override
+    {
+        void *p = std::calloc(1, bytes);
+        if (p != nullptr) {
+            sizes_[p] = bytes;
+            bytes_ += bytes;
+        }
+        return p;
+    }
+    int in_use() const { return static_cast<int>(sizes_.size()); }
+    size_t bytes_in_use() const { return bytes_; }
     // The start-up memory test borrows from a pretend 4 MB of free memory,
     // in blocks of at most 1.5 MB, so it behaves the same on every PC.
     void *borrow(size_t max, size_t &got) override
@@ -112,6 +124,12 @@ public:
                 return; // what was lent stays counted: the test borrows once
             }
         }
+        const auto found = sizes_.find(block);
+        if (found != sizes_.end()) {
+            bytes_ -= found->second;
+            sizes_.erase(found);
+            std::free(block);
+        }
     }
 
 private:
@@ -119,6 +137,8 @@ private:
     size_t lent_ = 0;
     bool internal_lent_ = false;
     std::vector<std::pair<void *, size_t>> blocks_;
+    std::map<void *, size_t> sizes_;
+    size_t bytes_ = 0;
 };
 
 class NoLock : public ports::Lock {
@@ -169,6 +189,13 @@ public:
         out.frames_shown = out.uptime_ms * 60 / 1000;
     }
     void reboot() override { reboot_requested = true; }
+    // The PC does not fail on purpose: it notes what was asked, and for
+    // which process.
+    void fault(ports::Fault kind) override
+    {
+        fault_requested = static_cast<int>(kind);
+        fault_pid = proc::table().current();
+    }
     // The kernel's tasks: `task_list` as it is (tests fill it), or with
     // `pretend_tasks` a made-up list that moves with the clock, so the
     // simulator has something to show. Neither: not available.
@@ -235,6 +262,8 @@ public:
     }
 
     bool reboot_requested = false;
+    int fault_requested = -1; // the last ports::Fault asked for
+    proc::Pid fault_pid = proc::kNone;
     // Plausible figures for the task manager (the board's after start-up);
     // tests change them.
     uint32_t free_internal_ram = 311u << 10;

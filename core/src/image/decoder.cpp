@@ -40,6 +40,15 @@ void *Decoder::allocate(size_t bytes)
     return p;
 }
 
+void Decoder::release(ports::Memory &memory)
+{
+    close();
+    if (pool_ != nullptr) {
+        memory.release(pool_);
+        pool_ = nullptr;
+    }
+}
+
 Error Decoder::open(const fs::Storage &storage, const char *path, ports::Memory &memory, Info &info,
                     const uint8_t background[3])
 {

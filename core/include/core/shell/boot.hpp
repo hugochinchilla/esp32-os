@@ -9,6 +9,8 @@
 #include "core/fs/fs.hpp"
 #include "core/gfx/canvas.hpp"
 #include "core/ports.hpp"
+#include "core/sys/crash.hpp"
+#include "core/sys/watchdog.hpp"
 
 namespace shell {
 
@@ -24,6 +26,10 @@ constexpr uint32_t kSelfTestHoldS = 5; // the finished self-test counts down thi
 // C:\.config\boot.ini; 0: no waiting). A monitor cannot tell the board it is
 // ready (VGA is one-way), so this is a time.
 constexpr uint32_t kMonitorWaitMs = 2500; // the bench monitor: a picture 2.4 s after the video starts
+// The error screen after a crash counts down this long, then goes on by
+// itself: a board with nothing to press a key on must still start
+// ([boot] crash_hold_s; 0: stays until a key or button).
+constexpr uint32_t kCrashHoldS = 15;
 
 struct MemoryTestResult {
     uint32_t tested_kb = 0;
@@ -51,6 +57,7 @@ struct BootIo {
     uint32_t splash_ms = kSplashMs;
     uint32_t pace_percent = kSelfTestPace;
     uint32_t hold_s = kSelfTestHoldS;
+    uint32_t crash_hold_s = kCrashHoldS;
     // True once a key or mouse button asks to skip the screens (may be nullptr).
     bool (*skip)(void *context) = nullptr;
     bool skipped = false; // set when that happened: the splash is skipped too
@@ -63,6 +70,8 @@ struct BootSettings {
     uint32_t splash_ms = kSplashMs;
     uint32_t pace_percent = kSelfTestPace;
     uint32_t hold_s = kSelfTestHoldS;
+    uint32_t crash_hold_s = kCrashHoldS;
+    int watchdog_s = sys::kWatchdogDefaultS; // [watchdog] timeout_s; 0: off
 };
 BootSettings boot_settings(const fs::Storage &storage);
 
@@ -94,6 +103,17 @@ void show_splash(BootIo &io, bool hold = true);
 // called after each block with the KB done so far.
 MemoryTestResult test_memory(ports::Memory &memory, ports::Clock &clock, uint32_t budget_us,
                              void (*progress)(uint32_t kb, void *context), void *context, bool internal = false);
+
+// The error screen at the start after a crash: what happened, to which
+// program, and the details from the record. `logged`: the report is also in
+// the crash log (sys::kCrashLog). It stays until a key or mouse button, or
+// io.crash_hold_s seconds (0: no limit), and is shown on a fast start too.
+// It leaves io.skipped false: the key that ended it does not skip the
+// screens that follow.
+void show_crash_screen(BootIo &io, const sys::CrashRecord &record, bool logged, bool hold = true);
+// The same without waiting; `seconds_left` is the countdown shown (0: none).
+void draw_crash_screen(gfx::Canvas &c, int w, int h, const sys::CrashRecord &record, bool logged,
+                       uint32_t seconds_left);
 
 // The finished self-test screen with given values (for the PC test against
 // the approved drawing).

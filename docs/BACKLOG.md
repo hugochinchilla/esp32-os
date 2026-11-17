@@ -26,7 +26,7 @@ board or the merge), `done`.
 | 5b | TERM and KILL for services: each gets a stop function, so ending one really stops it. Waits until a service is a real task with a row (their label-only rows were removed, [journal](journal/2026-11-16-only-real-tasks.md)) | S | 5, 18 | Yes | todo |
 | 6 | Atomic saves: temporary file, then rename | S | | Yes | done (checked on the board 2026-11-16) |
 | 6b | Hourglass pointer while a program makes the user wait, first of all during a save (own art) | S | | Yes | done (checked on the board 2026-11-16) |
-| 7 | Watchdog, crash record, and an error screen on the next start | M | 2 | Yes | todo |
+| 7 | Watchdog, crash record, and an error screen on the next start | M | 2 | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-watchdog.md) |
 | | **Phase 2: work off the UI task** | | | | |
 | 8 | Message queue into the UI task. The loop sleeps until there is work | M | | Yes | done (checked on the board 2026-11-16). [Journal](journal/2026-11-16-message-queue.md) |
 | 8b | Services loop: one task for the network services (VNC, the web viewer, later the telnet listener) that sleeps on all their sockets and reaches the desktop only by messages. The network leaves the UI loop | M | 8 | Yes | on a branch (`claude/project-thread-bn0qlc`): PC tests pass, firmware compiled, waiting for the board. [Journal](journal/2026-11-17-services-loop.md) |
@@ -42,8 +42,8 @@ board or the merge), `done`.
 | 17 | Telnet server, no password. Ask the owner first: on by default, or switched on in a settings file | S | 13 | Yes | todo |
 | | **Phase 4: structure** | | | | |
 | 18 | init as PID 1 with a start-up file. Services start after the desktop | M | 2, 8 | Yes | todo |
-| 19 | Program lifecycle: created at launch, destroyed at exit, memory returned, more than one instance | L | 2 | Yes | todo |
-| 34 | Display and the other built-in dialogs and settings tools (Screen Saver, Network, Shut Down, file dialogs, message box, Task Manager) become programs with a life of their own: created when opened, memory given back when closed. Display first. The owner's rule of 2026-11-17 | M | 19 | Yes | todo. [Journal](journal/2026-11-17-dialogs-as-programs.md) |
+| 19 | Program lifecycle: created at launch, destroyed at exit, memory returned, more than one instance | L | 2 | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-program-lifecycle.md) |
+| 34 | Display and the other built-in dialogs and settings tools (Screen Saver, Network, Shut Down, file dialogs, message box, Task Manager) become programs with a life of their own: created when opened, memory given back when closed. Display first. The owner's rule of 2026-11-17 | M | 19 | Yes | done with item 19 (checked on the board 2026-11-17). [Journal](journal/2026-11-17-program-lifecycle.md) (the rule: [dialogs as programs](journal/2026-11-17-dialogs-as-programs.md)) |
 | 20 | A defined set of OS calls, moved to app by app | L | 2 | | todo |
 | 21 | Split the window manager into window server and desktop shell. The taskbar becomes a process that restarts when killed | L | 18, 20 | Yes | todo |
 | | **Later** | | | | |
@@ -69,4 +69,4 @@ at the same time.
 | 35 | Our static objects in external RAM: the core's and the firmware's big ones, about 121 KB out of internal RAM | S | | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-statics-in-psram.md) |
 | | **Chinchilla off the board** | | | | |
 | 32 | Chinchilla as a desktop program for Linux: a window (SDL2) on the same `core/`, the real mouse and keyboard, sound, a folder of the PC as C:. Not an emulator of the ESP32: no real Wi-Fi, no memory limits, much faster than the board | M | | | done on the PC (2026-11-17): built, tested with a real mouse and keyboard on a virtual screen; not yet run on the owner's desktop. No sound: the core makes none yet. [The idea](journal/2026-11-17-chinchilla-on-a-pc.md), [the program](journal/2026-11-17-desktop-program.md) |
-| 33 | Chinchilla in a web browser (WebAssembly): a link anyone can open, C: kept in the browser, the page published somewhere (GitHub Pages?) | M | 32 | | todo |
+| 33 | Chinchilla in a web browser (WebAssembly): a link anyone can open, C: kept in the browser, the page published somewhere (GitHub Pages?) | M | 32 | | built and tested in Chromium on the PC (2026-11-17); **not published yet**: the Pages workflow is in `ci/` and has to be turned on by the owner. [Journal](journal/2026-11-17-chinchilla-in-the-browser.md) |

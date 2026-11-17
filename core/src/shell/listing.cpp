@@ -33,10 +33,12 @@ bool before(const Listing::Item &a, const Listing::Item &b)
 
 bool Listing::show_hidden = false;
 
+Listing::~Listing() { free_program_memory(items_); }
+
 bool Listing::ready()
 {
     if (items_ == nullptr) {
-        items_ = static_cast<Item *>(memory().allocate(sizeof(Item) * kMax));
+        items_ = static_cast<Item *>(program_memory(sizeof(Item) * kMax));
     }
     return items_ != nullptr;
 }
