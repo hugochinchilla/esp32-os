@@ -104,9 +104,36 @@ and "Keep talking". The agent's reason for recommending it: a real second
 stage is what was asked for, and a monitor going black between the BIOS and
 the system is true to a PC of the time.
 
+## Where the BIOS's flash comes from
+
+The first discussion offered two splits of the 4 MB app area, both leaving
+C: alone, because moving C: means formatting it. Since then the owner's rule
+of 2026-11-17 says everything on the board may be wiped at any time, C:
+included, which opened a third way.
+
+| | BIOS | Update slots | C: | Cost |
+| --- | --- | --- | --- | --- |
+| 1 | 1 MB | two of 1.94 MB, as today | 11 MB | C: is wiped once; the saved Wi-Fi networks, in NVS, stay |
+| 2 | 384 KB | two of 1.75 MB | 12 MB, untouched | The OS (1.38 MB and growing) has 21 % of a slot free instead of 29 %; the BIOS is tight for a Setup and USB later |
+| 3 | 1 MB | one of 2.9 MB | 12 MB, untouched | No way back after a bad update over Wi-Fi |
+
+**The owner chose 1: "1 MB from C:".** Reason given with the recommendation:
+room for both the OS and the BIOS to grow, and the way back after a bad
+update kept, for 1 MB of a 12 MB drive. The table that follows from it (to
+be written when the BIOS is built): `nvs` and `phy_init` as now; the BIOS,
+an app of subtype `test`, 0x10000 to 0x100000; `ota_0` 0x100000 and `ota_1`
+0x2f0000, 0x1f0000 each; `otadata` at 0x4e0000; C: from 0x500000, 11 MB.
+
+Three smaller points were put to the owner in the same message as "taken as
+recommended unless you say otherwise", and he did not object:
+
+- the BIOS's settings live in NVS, like a PC's CMOS, not in `boot.ini`;
+- the BIOS shows the crash screen, as its event log;
+- receiving an OS image over serial is in the plan as a later step.
+
 ## What is left
 
-- How the flash is split, put to the owner next.
+- Building it, in steps, each put to the owner.
 - The hook is only read, not built: compile it, and try it on the board.
 - The clips are in the laptop session's scratchpad, for the film:
   `bios-desktop-fast-1..3.mkv`, `bios-desktop-normal-1..3.mkv`,

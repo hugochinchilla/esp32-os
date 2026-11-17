@@ -262,6 +262,20 @@ compiled): our own copy of `bootloader_start.c` starts an app of subtype
 `test`, the BIOS, unless the reserved RTC memory
 (`CONFIG_BOOTLOADER_CUSTOM_RESERVE_RTC`) says it has just run.
 
+### BIOS stage: flash and details (2026-11-17)
+
+Decided by the owner: the BIOS takes 1 MB from C:. The BIOS partition is
+0x10000 to 0x100000, the two update slots stay 1.94 MB each (from 0x100000
+and 0x2f0000), `otadata` at 0x4e0000, C: from 0x500000 with 11 MB; C: is
+wiped once, NVS (the Wi-Fi networks) is not. Not chosen: a 384 KB BIOS with
+two slots of 1.75 MB (tight for both); a 1 MB BIOS with a single OS slot (no
+way back after a bad update). Not applied yet: the table changes when the
+BIOS is built.
+
+Taken as recommended, the owner did not object (to confirm): the BIOS's
+settings live in NVS, not `boot.ini`; the BIOS shows the crash screen;
+an OS image received over serial is a later step.
+
 ### BIOS screen font (2026-11-17)
 
 Decided by the owner: the BIOS's screen is a true text screen, 80 by 30 characters of 8x16 on
@@ -399,7 +413,6 @@ and reasons are in `docs/journal/2026-11-17-program-lifecycle.md`.
 | A PC build of the desktop for testing | Yes, no | Decided: yes. See Decided |
 | How the PC build shows the screen | SDL window, image files only | Open |
 | Clock chip | DS3231 module, another I2C chip | DS3231 |
-| Details of the BIOS stage (`docs/journal/2026-11-17-bios-stage.md`) | How the app area is split (a small BIOS and two smaller update slots, or a larger BIOS and one OS slot); settings in NVS or `boot.ini`; an OS image over serial; who shows the crash screen | Small BIOS and two slots; NVS; yes, later; the BIOS |
 
 ## Ideas kept for later
 
