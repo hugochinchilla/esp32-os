@@ -110,11 +110,11 @@ public:
     // Whether serve() has something to do.
     bool waiting() const;
 
-    // Any task. Around every OS call. Nothing for the UI task, or for a
-    // program that is being waited for; a late program sleeps in enter()
-    // until serve() lets it in.
-    void enter();
-    void leave();
+    // Around every OS call made on a program's own task (InCall): a count
+    // for a program that is being waited for; a late program sleeps in
+    // enter() until serve() lets it in.
+    static void enter(void *slot);
+    static void leave(void *slot);
 
 private:
     enum State : int { Idle, Running, Done, Late, LateDone };
@@ -140,7 +140,6 @@ private:
     static void exited(proc::Pid pid, void *self);
     Slot *slot_of(proc::Pid pid);
     const Slot *slot_of(proc::Pid pid) const;
-    Slot *mine();
     void give_back(Slot &slot);
     void take_back(Slot &slot);
     void wait_out_of_calls(Slot &slot);
@@ -163,13 +162,32 @@ private:
 // The machine's one runner.
 Runner &runner();
 
-// For the first line of an OS call: enter() now, leave() at the end.
+// The slot of the program whose task this is; null on the UI task and on
+// every other task. Thread-local, so that asking costs next to nothing:
+// every OS call asks, twice.
+extern thread_local void *t_slot;
+
+// For the first line of an OS call: enter() now, leave() at the end. On
+// any task but a program's own it is one test of a thread-local pointer.
 class InCall {
 public:
-    InCall() { runner().enter(); }
-    ~InCall() { runner().leave(); }
+    InCall() : slot_(t_slot)
+    {
+        if (slot_ != nullptr) {
+            Runner::enter(slot_);
+        }
+    }
+    ~InCall()
+    {
+        if (slot_ != nullptr) {
+            Runner::leave(slot_);
+        }
+    }
     InCall(const InCall &) = delete;
     InCall &operator=(const InCall &) = delete;
+
+private:
+    void *slot_;
 };
 
 } // namespace prog

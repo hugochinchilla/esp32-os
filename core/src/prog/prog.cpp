@@ -4,6 +4,8 @@
 
 namespace prog {
 
+thread_local void *t_slot = nullptr;
+
 Runner::Runner(proc::Table &procs) : procs_(procs)
 {
     procs_.set_caller(&Runner::call_for_table, this);
@@ -40,24 +42,6 @@ Runner::Slot *Runner::slot_of(proc::Pid pid)
 }
 
 const Runner::Slot *Runner::slot_of(proc::Pid pid) const { return const_cast<Runner *>(this)->slot_of(pid); }
-
-// The slot of the task that is asking, null for the UI task and any other.
-Runner::Slot *Runner::mine()
-{
-    if (tasks_ == nullptr) {
-        return nullptr;
-    }
-    const ports::TaskId me = tasks_->current();
-    if (me == nullptr) {
-        return nullptr;
-    }
-    for (Slot &s : slots_) {
-        if (s.used && s.task == me) {
-            return &s;
-        }
-    }
-    return nullptr;
-}
 
 int Runner::tasks() const
 {
@@ -124,6 +108,7 @@ bool Runner::start(proc::Pid pid)
 void Runner::task(void *context)
 {
     Slot &s = *static_cast<Slot *>(context);
+    t_slot = &s;
     for (;;) {
         s.kit.go->wait(kForever);
         if (s.fn != nullptr) {
@@ -210,6 +195,8 @@ bool Runner::call(proc::Pid pid, proc::CallFn fn, void *context, size_t size)
         owner_.store(before);
         if (!in_time) {
             wait_out_of_calls(*s);
+            // Whatever it is doing, it does with the time nobody else wants.
+            tasks_->set_priority(s->task, ports::Priority::Low);
         }
     }
     if (!in_time) {
@@ -239,6 +226,7 @@ void Runner::take_back(Slot &s)
         give_back(s); // ended meanwhile
         return;
     }
+    tasks_->set_priority(s.task, ports::Priority::High);
     if (news_ != nullptr) {
         news_(s.pid, true, news_context_);
     }
@@ -279,16 +267,14 @@ void Runner::serve()
     }
 }
 
-void Runner::enter()
+void Runner::enter(void *slot)
 {
-    Slot *s = mine();
-    if (s == nullptr) {
-        return;
-    }
+    Slot *s = static_cast<Slot *>(slot);
     if (s->in_call.fetch_add(1) > 0) {
         return; // a call inside a call
     }
-    while (owner_.load() != s) {
+    Runner &r = *s->runner;
+    while (r.owner_.load() != s) {
         // Late, and the desktop has gone on: not now.
         s->in_call.fetch_sub(1);
         if (s->quit.load()) {
@@ -297,8 +283,8 @@ void Runner::enter()
             s->kit.go->wait(1000);
         } else {
             s->wants.store(true);
-            if (wake_ != nullptr) {
-                wake_(wake_context_);
+            if (r.wake_ != nullptr) {
+                r.wake_(r.wake_context_);
             }
             s->kit.go->wait(5);
         }
@@ -307,13 +293,7 @@ void Runner::enter()
     s->wants.store(false);
 }
 
-void Runner::leave()
-{
-    Slot *s = mine();
-    if (s != nullptr) {
-        s->in_call.fetch_sub(1);
-    }
-}
+void Runner::leave(void *slot) { static_cast<Slot *>(slot)->in_call.fetch_sub(1); }
 
 // The task of a process that is not in the middle of anything: told to
 // leave, waited for, given back.

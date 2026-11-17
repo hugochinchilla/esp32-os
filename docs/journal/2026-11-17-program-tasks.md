@@ -209,3 +209,49 @@ reported it here. The 7 % while playing is accepted. `kStackBytes` is
 1.2 KB; the board thread checks the headroom in the deepest paths (the
 hang and the three ways of ending it) before merging. One size for
 every program still: a program that needs more will need its own.
+
+## On the board, second step: three failures (2026-11-17)
+
+The board thread ran the second step (2c3341d) and did not merge it.
+What worked: a hang made on purpose in Culebra froze the desktop once,
+for 2.00 s, and then the desktop answered in 1 to 3 ms; the board went
+grey; the Task Manager said "Not responding"; the watchdog did not
+trip; the close button, End Task and `kill` each ended it with the RAM
+back; a hung Editor (no task of its own) still got the watchdog. The
+stack: about 2.7 KB used in every path. What failed:
+
+1. **Cost.** Playing Culebra took 344 ms of processor time per 10 s
+   against 169 with the first step and 164 on `main`; a repaint with
+   Culebra open 30.9 ms against 25.9. Other programs were unchanged.
+   The cause (reasoned, not measured here): `enter()` and `leave()`
+   asked the kernel which task was running and looked it up among the
+   slots, on every OS call, and a paint makes hundreds of them. Now a
+   program's task keeps its slot in a thread-local pointer
+   (`prog::t_slot`), so on any other task an OS call tests one pointer,
+   and on a program's task it adds one to a count and reads another
+   word.
+2. **Missed video refills while Culebra hung**: about one every 5 s,
+   1.7 ms late, none once it was closed. A task that spins at the
+   desktop's priority breaks the refill rule. Now a program that goes
+   late is put at Low priority (`ports::Tasks::set_priority`) and back
+   at High when it answers. Whether that is enough is for the board to
+   say; if not, the next thing to try is keeping program tasks on the
+   core the video is not on. The cause is not understood: the video
+   task has a higher priority than either.
+3. **Tasks left behind.** Closing Culebra sometimes left its task in
+   the kernel with its stack, about 2 times in 15, never with the first
+   step. The cause (reasoned from FreeRTOS's code, to be confirmed on
+   the board): a task that has finished puts itself to sleep, and its
+   starter then deletes it. If the delete comes while the task is still
+   on its way to sleep on the other core, the kernel only marks it, and
+   the task's own `vTaskSuspend()` takes it off the list of tasks to
+   clear away. The second step made this likely: on the board a wait of
+   5 ms was a wait of no ticks at all (the tick is 10 ms), so the loop
+   that gives a task back spun and deleted it at once. Two changes in
+   the board's adapter: `end()` waits until the task is asleep before
+   deleting it (jobs' tasks had the same flaw, unseen), and a wait
+   shorter than a tick is one tick.
+
+PC tests could not have shown any of the three: none exists without
+FreeRTOS, two cores and a real paint's worth of calls. A loop of 400
+launches and closes of Culebra on threads leaked nothing.

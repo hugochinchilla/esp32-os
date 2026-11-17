@@ -60,8 +60,22 @@ public:
 
     // The task is asleep for good after its function (see run()), or about
     // to be: deleting it from here gives its stack back.
-    void end(ports::TaskId task) override { vTaskDelete(static_cast<TaskHandle_t>(task)); }
-    ports::TaskId current() override { return xTaskGetCurrentTaskHandle(); }
+    // Not before the task has put itself to sleep. Deleted while it is
+    // still on its way there on the other core, it is only marked, and its
+    // own vTaskSuspend() then takes it off the list of tasks to clear away:
+    // it stays for ever, with its stack (seen on the board, 2026-11-17).
+    void end(ports::TaskId task) override
+    {
+        const TaskHandle_t handle = static_cast<TaskHandle_t>(task);
+        while (eTaskGetState(handle) != eSuspended) {
+            vTaskDelay(1);
+        }
+        vTaskDelete(handle);
+    }
+    void set_priority(ports::TaskId task, ports::Priority priority) override
+    {
+        vTaskPrioritySet(static_cast<TaskHandle_t>(task), rtos_priority(priority));
+    }
     // A program that hangs: the caller has made sure it is not inside an OS
     // call, so it holds no lock.
     bool kill(ports::TaskId task) override
@@ -117,7 +131,12 @@ public:
     void set() override { xSemaphoreGive(semaphore_); }
     bool wait(uint32_t max_ms) override
     {
-        const TickType_t ticks = max_ms == 0xFFFFFFFF ? portMAX_DELAY : pdMS_TO_TICKS(max_ms);
+        // A wait shorter than a tick is a tick, not none: whoever waits a
+        // few ms in a loop must sleep, not spin.
+        TickType_t ticks = max_ms == 0xFFFFFFFF ? portMAX_DELAY : pdMS_TO_TICKS(max_ms);
+        if (max_ms != 0 && ticks == 0) {
+            ticks = 1;
+        }
         return xSemaphoreTake(semaphore_, ticks) == pdTRUE;
     }
 

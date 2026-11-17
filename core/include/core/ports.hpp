@@ -72,9 +72,9 @@ public:
     // The processor time a task has used so far, in µs; 0 where it cannot
     // be told. Between start() and end() only.
     virtual uint64_t run_time_us(TaskId) { return 0; }
-    // The task that is asking, as start() named it; null, or a name start()
-    // never gave, for any other task.
-    virtual TaskId current() { return nullptr; }
+    // Changes how a task stands against the desktop (a program that has
+    // stopped answering goes to Low until it answers again).
+    virtual void set_priority(TaskId, Priority) {}
     // Takes away a task whose fn has not returned (a program that hangs).
     // True if it is gone and its stack given back: end() is then not called.
     // False where a task cannot be taken away (a thread of the PC): it is

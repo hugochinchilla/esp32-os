@@ -34,9 +34,8 @@ struct Slow {
         if (!calls) {
             return;
         }
-        runner->enter(); // an OS call
+        const prog::InCall os_call; // as every OS call begins
         ++*touched;
-        runner->leave();
     }
 };
 
@@ -94,6 +93,7 @@ void test_late()
         CHECK(!proc::call_as(&procs, a, slow));
         CHECK(slow.out == 0); // nothing is copied back from a call that did not finish
         CHECK(runner.late(a) && news.stopped == 1 && news.last == a && procs.current() == proc::kNone);
+        CHECK(tasks.last_priority == ports::Priority::Low); // it has the time nobody else wants
         CHECK(!runner.waiting());
     }
     // While it is late no call is made for it: not there, and not here.
@@ -117,6 +117,7 @@ void test_late()
         return !runner.late(a);
     }));
     CHECK(news.back == 1 && !runner.waiting() && procs.current() == proc::kNone);
+    CHECK(tasks.last_priority == ports::Priority::High);
     {
         runner.set_limit(2000);
         gate.set();
