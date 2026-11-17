@@ -431,14 +431,20 @@ public:
 
     void go_to(const char *folder, bool remember)
     {
+        // `folder` may be folder_ itself (a refresh of the same place) or a
+        // history entry about to be overwritten: copy it out first, since
+        // snprintf from a buffer into itself is undefined.
+        char to[fs::kMaxPath], from[fs::kMaxPath];
+        snprintf(to, sizeof(to), "%s", folder != nullptr ? folder : "");
+        snprintf(from, sizeof(from), "%s", folder_);
         if (remember && open()) {
             if (history_count_ == kHistory) {
                 memmove(history_[0], history_[1], sizeof(history_[0]) * (kHistory - 1));
                 history_count_--;
             }
-            snprintf(history_[history_count_++], fs::kMaxPath, "%s", folder_);
+            snprintf(history_[history_count_++], fs::kMaxPath, "%s", from);
         }
-        snprintf(folder_, sizeof(folder_), "%s", folder != nullptr ? folder : "");
+        snprintf(folder_, sizeof(folder_), "%s", to);
         refresh();
         view_.reset();
     }
