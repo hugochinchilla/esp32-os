@@ -241,6 +241,21 @@ public:
     void menu(wm::Menu &menu) const { os::ui::menu_under(window_, number_, menu); }
 };
 
+// Icons in a grid with their names under them: what a folder holds.
+class IconView : public Control {
+public:
+    using Control::Control;
+    // The program's tables, which must stay valid; what is picked stays.
+    void set_items(const char *const *names, int count, const gfx::Bitmap *const *icons) const
+    {
+        os::ui::set_items(window_, number_, names, count, icons);
+    }
+    void reset() const { os::ui::reset_view(window_, number_); } // nothing picked, back at the top
+    int selected() const { return os::ui::selected(window_, number_); } // -1: none
+    void select(int index) const { os::ui::select(window_, number_, index); } // tells of it (changed)
+    int item_at(int x, int y) const { return os::ui::item_at(window_, number_, x, y); } // in its coordinates
+};
+
 // The text editor: a whole text file, with its own memory for the text
 // and for undo. made(): false when there was no memory for it.
 class TextEdit : public Control {
@@ -334,6 +349,14 @@ public:
     virtual void right_click(Control /*which*/, int /*x*/, int /*y*/) {}
     // The client area has another size: the controls go where they belong now.
     virtual void resized(int /*width*/, int /*height*/) {}
+    // An entry of an icon view was held and moved: the program starts the
+    // drag of what it stands for (os::begin_drag).
+    virtual void drag(Control /*which*/) {}
+    // A file dragged over the client area (client coordinates): true if
+    // it would be taken there. nullptr: the drag left the window, or ended.
+    virtual bool drag_over(const char * /*path*/, int /*x*/, int /*y*/) { return false; }
+    // The file let go there, after drag_over() said yes.
+    virtual void dropped(const char * /*path*/, int /*x*/, int /*y*/) {}
     // The close button, Alt+F4, a TERM signal. True: the program deals
     // with it (asks about unsaved work, and closes itself later).
     virtual bool closing() { return false; }
@@ -379,6 +402,7 @@ protected:
     {
         return {number_, os::ui::drop_down(number_, icon, place)};
     }
+    IconView icon_view(const gfx::Rect &place) { return {number_, os::ui::icon_view(number_, place)}; }
     TextEdit text_edit(const gfx::Rect &place, size_t text_bytes, size_t undo_bytes)
     {
         return {number_, os::ui::text_edit(number_, place, text_bytes, undo_bytes)};
@@ -471,6 +495,13 @@ private:
             return true;
         case os::ui::What::Resized:
             window->resized(event.x, event.y);
+            return true;
+        case os::ui::What::Drag:
+            window->drag(Control(window->number_, event.control));
+            return true;
+        case os::ui::What::DragOver: return window->drag_over(event.text, event.x, event.y);
+        case os::ui::What::Dropped:
+            window->dropped(event.text, event.x, event.y);
             return true;
         case os::ui::What::Closing: return window->closing();
         case os::ui::What::Menu:

@@ -54,6 +54,11 @@ enum class What : uint8_t {
     RightClick, // the right button went down in a picture that asked for the mouse: `control`, `x`, `y`
     Resized, // the client area has another size (the user pulled an edge, or maximised): `x`, `y` are
              // its width and height. The program puts its controls where they go now
+    Drag,    // an entry of an icon view was held and moved a little: `control`. The program starts
+             // the drag of what it stands for
+    DragOver, // a file is dragged over the client area: `text` its path, `x`, `y`. True: it would be
+              // taken there. `text` is nullptr when the drag has left the window or ended
+    Dropped, // the file was let go there, after DragOver said yes: `text`, `x`, `y`
     Closing, // the close button, Alt+F4, a TERM signal. True: the program deals with it (asks about
              // unsaved work, closes itself later); otherwise the window closes
     Menu,    // a menu of the menu bar is about to open: `index`, which. A chance to grey items out
@@ -207,6 +212,16 @@ size_t clipboard_size();
 void set_locked(Window window, bool locked);
 bool locked(Window window);
 
+// Icons in a grid with their names under them: what a folder holds. The
+// names and the pictures (32 by 32) are the program's tables and must stay
+// valid; set_items() is a list's, and keeps what is picked. One entry is
+// picked: selected() and select() are a list's, and select() tells of it
+// (Changed), as a click or an arrow key does. Chosen: Enter or a double
+// click. Drag: an entry held and moved.
+Control icon_view(Window window, const gfx::Rect &place);
+void reset_view(Window window, Control icon_view); // nothing picked, back at the top
+int item_at(Window window, Control icon_view, int x, int y); // the entry at a point of it, or -1
+
 // A bar that fills from the left in blocks, in a sunken box: progress, or
 // how full something is.
 Control meter(Window window, const gfx::Rect &place, gfx::Colour colour);
@@ -230,7 +245,7 @@ int value(Window window, Control scroll_bar);
 void set_value(Window window, Control scroll_bar, int value); // no Changed for it
 // A list.
 // `icons`: a picture for each row, or nullptr for none. One list with
-// pictures a window.
+// pictures a window. For an icon view too, where they are not optional.
 void set_items(Window window, Control list, const char *const *items, int count,
                const gfx::Bitmap *const *icons = nullptr);
 int selected(Window window, Control list); // -1: none. A grid's too

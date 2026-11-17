@@ -3,13 +3,12 @@
 #include <cstdio>
 #include <cstring>
 
+#include "core/app/app.hpp"
 #include "core/gfx/art.hpp"
 #include "core/net/wifi.hpp"
 #include "core/sh/sh.hpp"
 #include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
-#include "core/wm/widgets.hpp"
-#include "core/wm/wm.hpp"
 #include "internal.hpp"
 #include "listing.hpp"
 
@@ -18,404 +17,139 @@ namespace shell {
 namespace {
 
 constexpr uint16_t kF2 = 0x3B, kF5 = 0x3E;
-constexpr gfx::Rgb kHighlight = {0, 0, 128};
 
-// A flat toolbar button with an icon over its caption (target picture).
-class ToolButton : public wm::Widget {
-public:
-    using Callback = void (*)(void *context);
-    ToolButton(const gfx::Rect &r, const char *text, const gfx::Bitmap *icon, Callback fn, void *context)
-        : Widget(r), text_(text), icon_(icon), fn_(fn), context_(context)
-    {
-    }
+// A flat toolbar button with an icon over its caption (target picture): a
+// picture of the window's that takes the mouse, and what it shows.
+struct ToolButton {
+    app::Picture picture;
+    gfx::Rect place;
+    const char *text;
+    const gfx::Bitmap *icon;
+    bool enabled = true, held = false, inside = false;
+
     void set_enabled(bool on)
     {
-        if (on != enabled_) {
-            enabled_ = on;
-            invalidate();
+        if (on != enabled) {
+            enabled = on;
+            picture.redraw();
         }
     }
-    void paint(gfx::Canvas &c) override
+    void paint(app::Canvas &c) const
     {
-        const gfx::Rect r = {0, 0, rect.w, rect.h};
+        const gfx::Rect r = {0, 0, place.w, place.h};
         c.fill(r, gfx::kGrey);
-        if (held_ && inside_) {
+        if (held && inside) {
             c.edge(r, gfx::kDarkGrey, gfx::kWhite);
         }
-        const int d = held_ && inside_ ? 1 : 0;
-        c.blit(*icon_, (rect.w - 16) / 2 + d, 2 + d);
-        const int tx = (rect.w - gfx::Canvas::text_width(text_)) / 2 + d;
-        if (enabled_) {
-            c.text(tx, 20 + d, text_, gfx::kBlack);
+        const int d = held && inside ? 1 : 0;
+        c.blit(*icon, (place.w - 16) / 2 + d, 2 + d);
+        const int tx = (place.w - app::Canvas::text_width(text)) / 2 + d;
+        if (enabled) {
+            c.text(tx, 20 + d, text, gfx::kBlack);
         } else {
-            c.text(tx + 1, 21, text_, gfx::kWhite);
-            c.text(tx, 20, text_, gfx::kDarkGrey);
+            c.text(tx + 1, 21, text, gfx::kWhite);
+            c.text(tx, 20, text, gfx::kDarkGrey);
         }
     }
-    bool wants_mouse() const override { return true; }
-    void mouse(const wm::MouseMsg &m) override
+    // True: it was pressed and let go inside.
+    bool mouse(const wm::MouseMsg &m)
     {
-        if (!enabled_) {
-            return;
+        if (!enabled) {
+            return false;
         }
-        const bool in = m.x >= 0 && m.y >= 0 && m.x < rect.w && m.y < rect.h;
+        const bool in = m.x >= 0 && m.y >= 0 && m.x < place.w && m.y < place.h;
         if (m.kind == wm::MouseKind::Down) {
-            held_ = true;
+            held = true;
         }
-        const bool was = inside_;
-        inside_ = in;
+        const bool was = inside;
+        inside = in;
         if (m.kind == wm::MouseKind::Up) {
-            held_ = false;
-            invalidate();
-            if (in) {
-                fn_(context_);
-            }
-            return;
+            held = false;
+            picture.redraw();
+            return in;
         }
-        if (was != inside_ || m.kind == wm::MouseKind::Down) {
-            invalidate();
+        if (was != inside || m.kind == wm::MouseKind::Down) {
+            picture.redraw();
         }
+        return false;
     }
-
-private:
-    const char *text_;
-    const gfx::Bitmap *icon_;
-    Callback fn_;
-    void *context_;
-    bool enabled_ = true, held_ = false, inside_ = false;
 };
 
-// Icons in a grid, 76 x 66 per entry as in the target picture.
-class FolderView : public wm::Widget {
-public:
-    using Callback = void (*)(void *context);
-    static constexpr int kCellW = 76, kCellH = 66;
+// A sunken box with a line of text (address bar, status bar panels): a
+// picture of the window's, and what it shows.
+struct Panel {
+    app::Picture picture;
+    gfx::Rect place;
+    bool white;
+    const gfx::Bitmap *icon;
+    char text[fs::kMaxPath] = "";
 
-    FolderView(const gfx::Rect &r, Listing &listing, Callback on_open, Callback on_select, Callback on_drag,
-               void *context)
-        : Widget(r), listing_(listing), on_open_(on_open), on_select_(on_select), on_drag_(on_drag),
-          context_(context),
-          bar_({0, 0, wm::ScrollBar::kThickness, 10}, true, &FolderView::scrolled, this)
+    void set_text(const char *to)
     {
-        bar_.set_parent(this);
+        snprintf(text, sizeof(text), "%.*s", static_cast<int>(sizeof(text)) - 1, to);
+        picture.redraw();
     }
-    int selected() const { return selected_; }
-    // The entry at a point of the view, or -1.
-    int item_at(int x, int y) const
+    void move(const gfx::Rect &to)
     {
-        const int col = (x - 2 - 10) / kCellW, row = (y - 2 - 8) / kCellH;
-        const int i = (row + top_row_) * columns() + col;
-        return x >= 12 && y >= 10 && col < columns() && i < listing_.count() ? i : -1;
+        place = to;
+        picture.place(to);
     }
-    void select(int i)
+    void paint(app::Canvas &c) const
     {
-        i = i < -1 ? -1 : (i >= listing_.count() ? listing_.count() - 1 : i);
-        if (i == selected_) {
-            return;
-        }
-        selected_ = i;
-        if (i >= 0) {
-            const int row = i / columns();
-            if (row < top_row_) {
-                top_row_ = row;
-            } else if (row >= top_row_ + visible_rows()) {
-                top_row_ = row - visible_rows() + 1;
-            }
-        }
-        layout();
-        if (on_select_ != nullptr) {
-            on_select_(context_);
-        }
-    }
-    void reset()
-    {
-        selected_ = -1;
-        top_row_ = 0;
-        layout();
-    }
-    void layout()
-    {
-        bar_.rect = {rect.w - 2 - wm::ScrollBar::kThickness, 2, wm::ScrollBar::kThickness, rect.h - 4};
-        const int rows = (listing_.count() + columns() - 1) / columns();
-        bar_.set_range(rows > visible_rows() ? rows - visible_rows() : 0, visible_rows());
-        bar_.set_value_quietly(top_row_);
-        invalidate();
-    }
-    int columns() const
-    {
-        const int c = (rect.w - 4 - wm::ScrollBar::kThickness - 8) / kCellW;
-        return c < 1 ? 1 : c;
-    }
-    int visible_rows() const
-    {
-        const int r = (rect.h - 4 - 10) / kCellH;
-        return r < 1 ? 1 : r;
-    }
-
-    void paint(gfx::Canvas &c) override
-    {
-        const gfx::Rect r = {0, 0, rect.w, rect.h};
-        c.sunken(r);
-        const gfx::Rect area = {2, 2, rect.w - 4 - (bar_.maximum() > 0 ? wm::ScrollBar::kThickness : 0), rect.h - 4};
-        c.fill(area, gfx::kWhite);
-        gfx::Canvas inner = c.sub(area);
-        const int cols = columns();
-        for (int i = top_row_ * cols; i < listing_.count(); i++) {
-            const int row = i / cols - top_row_, col = i % cols;
-            if (row > visible_rows()) {
-                break;
-            }
-            const int x = 10 + col * kCellW, y = 8 + row * kCellH;
-            const gfx::Bitmap *icon = listing_.icon(i, true);
-            const bool chosen = i == selected_;
-            if (chosen) {
-                inner.blit_selected(*icon, x + 22, y, gfx::rgb(0, 0, 2));
-            } else {
-                inner.blit(*icon, x + 22, y);
-            }
-            // The name under it, on two lines if it must (broken at a space
-            // when there is one), cut with "..." beyond that.
-            char lines[2][48];
-            split_name(listing_.item(i).name, lines);
-            for (int l = 0; l < 2 && lines[l][0] != 0; l++) {
-                const int tw = gfx::Canvas::text_width(lines[l]);
-                const int tx = x + 38 - tw / 2, ty = y + 36 + l * 12;
-                if (chosen) {
-                    inner.fill_rgb({tx - 1, ty - 1, tw + 2, 13}, kHighlight);
-                }
-                inner.text(tx, ty, lines[l], chosen ? gfx::kWhite : gfx::kBlack);
-            }
-        }
-        if (bar_.maximum() > 0) {
-            gfx::Canvas bc = c.sub(bar_.rect);
-            bar_.paint(bc);
-        }
-    }
-
-    bool wants_mouse() const override { return true; }
-    bool focusable() const override { return true; }
-    void mouse(const wm::MouseMsg &m) override
-    {
-        if (m.kind == wm::MouseKind::Down) {
-            in_bar_ = bar_.maximum() > 0 && bar_.rect.contains(m.x, m.y);
-        }
-        if (in_bar_) {
-            bar_.mouse({m.kind, m.x - bar_.rect.x, m.y - bar_.rect.y});
-            invalidate();
-            return;
-        }
-        if (m.kind == wm::MouseKind::Move) {
-            // Held on an entry and moved a little: it is dragged.
-            const int dx = m.x - press_x_, dy = m.y - press_y_;
-            if (pressed_ && dx * dx + dy * dy > 16 && on_drag_ != nullptr) {
-                pressed_ = false;
-                on_drag_(context_);
-            }
-            return;
-        }
-        if (m.kind != wm::MouseKind::Down) {
-            pressed_ = false;
-            return;
-        }
-        const int i = item_at(m.x, m.y);
-        select(i);
-        pressed_ = i >= 0 && !m.double_click;
-        press_x_ = m.x;
-        press_y_ = m.y;
-        if (i >= 0 && m.double_click && on_open_ != nullptr) {
-            on_open_(context_);
-        }
-    }
-    bool key(const wm::KeyMsg &k) override
-    {
-        if (!k.pressed) {
-            return false;
-        }
-        const int cols = columns();
-        switch (k.usage) {
-        case wm::key::Left:
-            select(selected_ < 0 ? 0 : selected_ - 1);
-            return true;
-        case wm::key::Right:
-            select(selected_ + 1);
-            return true;
-        case wm::key::Up:
-            select(selected_ < 0 ? 0 : (selected_ - cols >= 0 ? selected_ - cols : selected_));
-            return true;
-        case wm::key::Down:
-            select(selected_ < 0 ? 0 : (selected_ + cols < listing_.count() ? selected_ + cols : selected_));
-            return true;
-        case wm::key::Home:
-            select(0);
-            return true;
-        case wm::key::End:
-            select(listing_.count() - 1);
-            return true;
-        case wm::key::Enter:
-            if (selected_ >= 0 && on_open_ != nullptr) {
-                on_open_(context_);
-            }
-            return true;
-        default:
-            return false;
-        }
-    }
-
-private:
-    static constexpr int kChars = (kCellW - 4) / 6; // characters per line
-
-    // Up to kChars characters per line; byte offsets, as names are UTF-8.
-    static void split_name(const char *name, char (&lines)[2][48])
-    {
-        lines[0][0] = lines[1][0] = 0;
-        const char *p = name;
-        const char *cut = nullptr, *space = nullptr;
-        int n = 0;
-        while (*p != 0) {
-            const char *before = p;
-            const uint8_t c = gfx::next_latin1(p);
-            if (n == kChars) {
-                cut = before;
-                break;
-            }
-            if (c == ' ') {
-                space = before;
-            }
-            n++;
-        }
-        if (cut == nullptr) {
-            snprintf(lines[0], sizeof(lines[0]), "%.47s", name);
-            return;
-        }
-        const char *second = space != nullptr ? space + 1 : cut;
-        const int first_len = static_cast<int>((space != nullptr ? space : cut) - name);
-        snprintf(lines[0], sizeof(lines[0]), "%.*s", first_len, name);
-        // The rest, cut to a line with "..." if longer.
-        const char *q = second;
-        int m = 0;
-        while (*q != 0 && m < kChars) {
-            gfx::next_latin1(q);
-            m++;
-        }
-        if (*q == 0) {
-            snprintf(lines[1], sizeof(lines[1]), "%.47s", second);
-        } else {
-            const char *r = second;
-            for (int k = 0; k < kChars - 3; k++) {
-                gfx::next_latin1(r);
-            }
-            snprintf(lines[1], sizeof(lines[1]), "%.*s...", static_cast<int>(r - second), second);
-        }
-    }
-
-    static void scrolled(wm::ScrollBar &bar, void *context)
-    {
-        auto *v = static_cast<FolderView *>(context);
-        v->top_row_ = bar.value();
-        v->invalidate();
-    }
-
-    Listing &listing_;
-    Callback on_open_, on_select_, on_drag_;
-    void *context_;
-    bool pressed_ = false;
-    int press_x_ = 0, press_y_ = 0;
-    int selected_ = -1;
-    int top_row_ = 0;
-    bool in_bar_ = false;
-    wm::ScrollBar bar_;
-};
-
-// A sunken box with a line of text (address bar, status bar panels).
-class Panel : public wm::Widget {
-public:
-    Panel(const gfx::Rect &r, bool white, const gfx::Bitmap *icon = nullptr)
-        : Widget(r), white_(white), icon_(icon)
-    {
-    }
-    void set_text(const char *text)
-    {
-        snprintf(text_, sizeof(text_), "%.*s", static_cast<int>(sizeof(text_)) - 1, text);
-        invalidate();
-    }
-    void paint(gfx::Canvas &c) override
-    {
-        const gfx::Rect r = {0, 0, rect.w, rect.h};
-        if (white_) {
+        const gfx::Rect r = {0, 0, place.w, place.h};
+        if (white) {
             c.sunken(r);
             c.fill(r.inset(2), gfx::kWhite);
         } else {
             c.fill(r, gfx::kGrey);
             c.edge(r, gfx::kDarkGrey, gfx::kWhite);
         }
-        gfx::Canvas inner = c.sub(r.inset(2));
+        app::Canvas inner = c.sub(r.inset(2));
         int x = 4;
-        if (icon_ != nullptr) {
-            inner.blit(*icon_, 2, (rect.h - 4 - 16) / 2);
+        if (icon != nullptr) {
+            inner.blit(*icon, 2, (place.h - 4 - 16) / 2);
             x = 22;
         }
-        inner.text(x, (rect.h - 4 - 12) / 2, text_, gfx::kBlack);
+        inner.text(x, (place.h - 4 - 12) / 2, text, gfx::kBlack);
     }
-
-private:
-    bool white_;
-    const gfx::Bitmap *icon_;
-    char text_[fs::kMaxPath] = "";
 };
 
-// The groove under the toolbar: a dark line over a white one. A widget, so
+// The groove under the toolbar: a dark line over a white one. A picture, so
 // the window's grey is not painted under it first.
-class Groove : public wm::Widget {
-public:
-    explicit Groove(const gfx::Rect &r) : Widget(r) {}
-    void paint(gfx::Canvas &c) override
-    {
-        c.hline(0, 0, rect.w, gfx::kDarkGrey);
-        c.hline(0, 1, rect.w, gfx::kWhite);
-    }
-};
+void paint_groove(app::Canvas &c, int width)
+{
+    c.hline(0, 0, width, gfx::kDarkGrey);
+    c.hline(0, 1, width, gfx::kWhite);
+}
 
-void close_window(void *context) { static_cast<wm::Window *>(context)->close(); }
+// The pictures of a folder's entries, as the icon view takes them.
+void large_icons(const Listing &listing, const gfx::Bitmap **icons)
+{
+    for (int i = 0; i < listing.count(); i++) {
+        icons[i] = listing.icon(i, true);
+    }
+}
 
 // The folder windows there can be at once; nullptr where there is none now.
 // Each is made when it opens and gone once it has closed.
 constexpr int kWindows = 3;
-class FolderWindow;
-FolderWindow *g_windows[kWindows] = {};
+app::Number g_windows[kWindows] = {}; // their numbers: dead once closed
 
-class FolderWindow : public wm::Window {
+class FolderWindow : public app::Window {
 public:
     static constexpr int kHistory = 8;
-
-    ~FolderWindow()
-    {
-        for (FolderWindow *&w : g_windows) {
-            if (w == this) {
-                w = nullptr;
-            }
-        }
-    }
+    static constexpr int kViewTop = 64;
 
     FolderWindow()
-        : Window("My Board", {96, 28, 400, 300}, &gfx::folder_icon_16()),
-          back_({4, 0, 44, 34}, "Back", &gfx::back_icon_16(), &FolderWindow::back, this),
-          up_({50, 0, 44, 34}, "Up", &gfx::up_icon_16(), &FolderWindow::up, this),
-          groove_({0, 36, 100, 2}),
-          address_label_({4, 44, 46, 14}, "Address"),
-          address_({50, 40, 100, 20}, true, &gfx::folder_icon_16()),
-          view_({0, 64, 100, 100}, listing_, &FolderWindow::opened, &FolderWindow::selected, &FolderWindow::dragged,
-                this),
-          objects_({0, 0, 100, 20}, false),
-          free_({0, 0, 100, 20}, false)
+        : view_(icon_view({0, kViewTop, 100, 100})),
+          back_{picture({4, 0, 44, 34}, app::kMouse), {4, 0, 44, 34}, "Back", &gfx::back_icon_16()},
+          up_{picture({50, 0, 44, 34}, app::kMouse), {50, 0, 44, 34}, "Up", &gfx::up_icon_16()},
+          groove_(picture({0, 36, 100, 2})),
+          address_label_(label({4, 44, 46, 14}, "Address")),
+          address_{picture({50, 40, 100, 20}), {50, 40, 100, 20}, true, &gfx::folder_icon_16()},
+          objects_{picture({0, 0, 100, 20}), {0, 0, 100, 20}, false, nullptr},
+          free_{picture({0, 0, 100, 20}), {0, 0, 100, 20}, false, nullptr}
     {
-        add(view_);
-        add(back_);
-        add(up_);
-        add(groove_);
-        add(address_label_);
-        add(address_);
-        add(objects_);
-        add(free_);
         file_items_[0] = {"&Open", &FolderWindow::open_selected, this, nullptr, nullptr, 0};
         file_items_[1] = {nullptr, nullptr, nullptr, nullptr, nullptr, wm::kMenuSeparator};
         file_items_[2] = {"New &Folder...", &FolderWindow::new_folder, this, nullptr, nullptr, 0};
@@ -424,10 +158,12 @@ public:
         file_items_[5] = {nullptr, nullptr, nullptr, nullptr, nullptr, wm::kMenuSeparator};
         file_items_[6] = {"Re&fresh", &FolderWindow::refresh_action, this, nullptr, nullptr, 0};
         file_items_[7] = {nullptr, nullptr, nullptr, nullptr, nullptr, wm::kMenuSeparator};
-        file_items_[8] = {"&Close", &close_window, this, nullptr, nullptr, 0};
+        file_items_[8] = {"&Close", &FolderWindow::close_action, this, nullptr, nullptr, 0};
         view_items_[0] = {"Show &hidden files", &FolderWindow::toggle_hidden, this, nullptr, nullptr, 0};
         set_menu_bar(&bar_);
-        resized();
+        set_title(title_text_);
+        const gfx::Rect c = client_size();
+        resized(c.w, c.h);
     }
 
     const char *folder() const { return folder_; }
@@ -440,7 +176,7 @@ public:
         char to[fs::kMaxPath], from[fs::kMaxPath];
         snprintf(to, sizeof(to), "%s", folder != nullptr ? folder : "");
         snprintf(from, sizeof(from), "%s", folder_);
-        if (remember && open()) {
+        if (remember && on_screen()) {
             if (history_count_ == kHistory) {
                 memmove(history_[0], history_[1], sizeof(history_[0]) * (kHistory - 1));
                 history_count_--;
@@ -454,15 +190,53 @@ public:
 
     void forget_history() { history_count_ = 0; }
 
-    void resized() override
+    void resized(int w, int h) override
     {
-        const gfx::Rect c = client();
-        address_.rect = {50, 40, c.w - 54, 20};
-        groove_.rect = {0, 36, c.w, 2};
-        view_.rect = {0, 64, c.w, c.h - 64 - 22};
-        objects_.rect = {0, c.h - 20, c.w - 120, 20};
-        free_.rect = {c.w - 118, c.h - 20, 118, 20};
-        view_.layout();
+        width_ = w;
+        address_.move({50, 40, w - 54, 20});
+        groove_.place({0, 36, w, 2});
+        view_.place({0, kViewTop, w, h - kViewTop - 22});
+        objects_.move({0, h - 20, w - 120, 20});
+        free_.move({w - 118, h - 20, 118, 20});
+    }
+
+    void paint_in(app::Control which, app::Canvas &c) override
+    {
+        if (which == back_.picture) {
+            back_.paint(c);
+        } else if (which == up_.picture) {
+            up_.paint(c);
+        } else if (which == groove_) {
+            paint_groove(c, width_);
+        } else if (which == address_.picture) {
+            address_.paint(c);
+        } else if (which == objects_.picture) {
+            objects_.paint(c);
+        } else if (which == free_.picture) {
+            free_.paint(c);
+        }
+    }
+    void mouse(app::Control which, const wm::MouseMsg &m) override
+    {
+        if (which == back_.picture && back_.mouse(m)) {
+            go_back();
+        } else if (which == up_.picture && up_.mouse(m)) {
+            go_up();
+        }
+    }
+    // The icon view: an entry picked, opened, dragged.
+    void changed(app::Control) override { status(); }
+    bool chosen(app::Control) override
+    {
+        open_selected(this);
+        return true;
+    }
+    void drag(app::Control) override
+    {
+        char p[fs::kMaxPath];
+        if (folder_[0] != 0 && selected_path(p, sizeof(p))) {
+            os::begin_drag(p);
+        }
     }
 
 
@@ -486,7 +260,7 @@ public:
                 return true;
             }
         }
-        return Window::key(k);
+        return false;
     }
 
     // Dragged files: into the folder under the pointer, else into this one.
@@ -564,7 +338,8 @@ public:
         }
         back_.set_enabled(history_count_ > 0);
         up_.set_enabled(folder_[0] != 0);
-        view_.layout();
+        large_icons(listing_, icons_);
+        view_.set_items(listing_.names(), listing_.count(), icons_);
         status();
     }
 
@@ -619,7 +394,7 @@ private:
         if (folder_[0] == 0) {
             return false;
         }
-        const int i = view_.item_at(x - view_.rect.x, y - view_.rect.y);
+        const int i = view_.item_at(x, y - kViewTop);
         const bool onto = i >= 0 && listing_.item(i).folder &&
                           fs::path::join(folder_, listing_.item(i).name, target, fs::kMaxPath) &&
                           strcmp(target, path) != 0;
@@ -642,7 +417,6 @@ private:
         return ok;
     }
 
-    static void opened(void *context) { open_selected(context); }
     // The left of the status bar: "3 objects", or about the chosen one: its
     // size and when it was last written ("1,234 bytes, 2026-11-17 14:05").
     void status()
@@ -675,17 +449,7 @@ private:
         }
         objects_.set_text(t);
     }
-    static void selected(void *context) { static_cast<FolderWindow *>(context)->status(); }
-    static void dragged(void *context)
-    {
-        auto *w = static_cast<FolderWindow *>(context);
-        char p[fs::kMaxPath];
-        if (w->folder_[0] != 0 && w->selected_path(p, sizeof(p))) {
-            os::begin_drag(p);
-        }
-    }
-    static void back(void *context) { static_cast<FolderWindow *>(context)->go_back(); }
-    static void up(void *context) { static_cast<FolderWindow *>(context)->go_up(); }
+    static void close_action(void *context) { static_cast<FolderWindow *>(context)->close(); }
     static void refresh_action(void *context) { static_cast<FolderWindow *>(context)->refresh(); }
     // Kept in C:\.config\files.ini.
     static void toggle_hidden(void *context)
@@ -729,7 +493,7 @@ private:
             }
             snprintf(name, sizeof(name), "New Folder (%d)", n);
         }
-        input_dialog(w->id(), "New Folder", "Name of the new folder:", name, &FolderWindow::new_folder_named, w);
+        input_dialog(w->number(), "New Folder", "Name of the new folder:", name, &FolderWindow::new_folder_named, w);
     }
 
     static void new_folder_named(const char *name, void *context)
@@ -747,7 +511,7 @@ private:
         if (w->folder_[0] == 0 || w->view_.selected() < 0) {
             return;
         }
-        input_dialog(w->id(), "Rename", "New name:", w->listing_.item(w->view_.selected()).name,
+        input_dialog(w->number(), "Rename", "New name:", w->listing_.item(w->view_.selected()).name,
                      &FolderWindow::renamed, w);
     }
 
@@ -797,11 +561,13 @@ private:
     char title_text_[64] = "My Board";
     char message_[200] = "";
     Listing listing_;
+    const gfx::Bitmap *icons_[Listing::kMax] = {};
+    int width_ = 100; // of the client area
+    app::IconView view_;
     ToolButton back_, up_;
-    Groove groove_;
-    wm::Label address_label_;
+    app::Picture groove_;
+    app::Label address_label_;
     Panel address_;
-    FolderView view_;
     Panel objects_, free_;
     wm::MenuItem file_items_[9];
     wm::Menu file_ = {file_items_, 9};
@@ -813,38 +579,69 @@ private:
 
 // The Trash: what is in C:\.trash, with Restore, Delete (for good) and
 // Empty Trash; files dragged onto it are moved there.
-class TrashWindow : public wm::Window {
+class TrashWindow : public app::Window {
 public:
     TrashWindow()
-        : Window("Trash", {120, 60, 400, 280}, &gfx::bin_icon_16()),
-          view_({0, 0, 100, 100}, listing_, &TrashWindow::opened, &TrashWindow::selected, &TrashWindow::dragged, this),
-          status_({0, 0, 100, 20}, false), free_({0, 0, 100, 20}, false),
-          empty_button_({4, 0, 72, 34}, "Empty Trash", &gfx::bin_icon_16(), &TrashWindow::empty, this),
-          groove_({0, 36, 100, 2})
+        : view_(icon_view({0, 0, 100, 100})),
+          status_{picture({0, 0, 100, 20}), {0, 0, 100, 20}, false, nullptr},
+          free_{picture({0, 0, 100, 20}), {0, 0, 100, 20}, false, nullptr},
+          empty_button_{picture({4, 0, 72, 34}, app::kMouse), {4, 0, 72, 34}, "Empty Trash", &gfx::bin_icon_16()},
+          groove_(picture({0, 36, 100, 2}))
     {
-        add(view_);
-        add(status_);
-        add(free_);
-        add(empty_button_);
-        add(groove_);
         file_items_[0] = {"&Restore", &TrashWindow::restore, this, nullptr, nullptr, 0};
         file_items_[1] = {"&Delete", &TrashWindow::remove, this, nullptr, nullptr, 0};
         file_items_[2] = {nullptr, nullptr, nullptr, nullptr, nullptr, wm::kMenuSeparator};
         file_items_[3] = {"&Empty Trash", &TrashWindow::empty, this, nullptr, nullptr, 0};
         file_items_[4] = {nullptr, nullptr, nullptr, nullptr, nullptr, wm::kMenuSeparator};
-        file_items_[5] = {"&Close", &close_window, this, nullptr, nullptr, 0};
+        file_items_[5] = {"&Close", &TrashWindow::close_action, this, nullptr, nullptr, 0};
         set_menu_bar(&bar_);
-        resized();
+        const gfx::Rect c = client_size();
+        resized(c.w, c.h);
     }
 
-    void resized() override
+    void resized(int w, int h) override
     {
-        const gfx::Rect c = client();
-        groove_.rect = {0, 36, c.w, 2};
-        view_.rect = {0, 40, c.w, c.h - 40 - 22};
-        status_.rect = {0, c.h - 20, c.w - 120, 20};
-        free_.rect = {c.w - 118, c.h - 20, 118, 20};
-        view_.layout();
+        width_ = w;
+        groove_.place({0, 36, w, 2});
+        view_.place({0, 40, w, h - 40 - 22});
+        status_.move({0, h - 20, w - 120, 20});
+        free_.move({w - 118, h - 20, 118, 20});
+    }
+
+    void paint_in(app::Control which, app::Canvas &c) override
+    {
+        if (which == empty_button_.picture) {
+            empty_button_.paint(c);
+        } else if (which == groove_) {
+            paint_groove(c, width_);
+        } else if (which == status_.picture) {
+            status_.paint(c);
+        } else if (which == free_.picture) {
+            free_.paint(c);
+        }
+    }
+    void mouse(app::Control which, const wm::MouseMsg &m) override
+    {
+        if (which == empty_button_.picture && empty_button_.mouse(m)) {
+            empty(this);
+        }
+    }
+    // The icon view: an entry picked, opened, dragged.
+    void changed(app::Control) override { status(); }
+    bool chosen(app::Control) override
+    {
+        char p[fs::kMaxPath];
+        if (selected_path(p, sizeof(p)) && !listing_.item(view_.selected()).folder) {
+            open_file(p);
+        }
+        return true;
+    }
+    void drag(app::Control) override
+    {
+        char p[fs::kMaxPath];
+        if (selected_path(p, sizeof(p))) {
+            os::begin_drag(p);
+        }
     }
 
     void refresh()
@@ -854,6 +651,8 @@ public:
         Listing::show_hidden = true;
         listing_.read(kTrashFolder);
         Listing::show_hidden = hidden;
+        large_icons(listing_, icons_);
+        view_.set_items(listing_.names(), listing_.count(), icons_);
         view_.reset();
         empty_button_.set_enabled(listing_.count() > 0);
         ports::VolumeInfo info = {};
@@ -870,7 +669,7 @@ public:
             remove(this);
             return true;
         }
-        return Window::key(k);
+        return false;
     }
 
     void menu_opening(int) override
@@ -908,23 +707,7 @@ private:
         return i >= 0 && fs::path::join(kTrashFolder, listing_.item(i).name, out, capacity);
     }
 
-    static void selected(void *context) { static_cast<TrashWindow *>(context)->status(); }
-    static void opened(void *context)
-    {
-        auto *w = static_cast<TrashWindow *>(context);
-        char p[fs::kMaxPath];
-        if (w->selected_path(p, sizeof(p)) && !w->listing_.item(w->view_.selected()).folder) {
-            open_file(p);
-        }
-    }
-    static void dragged(void *context)
-    {
-        auto *w = static_cast<TrashWindow *>(context);
-        char p[fs::kMaxPath];
-        if (w->selected_path(p, sizeof(p))) {
-            os::begin_drag(p);
-        }
-    }
+    static void close_action(void *context) { static_cast<TrashWindow *>(context)->close(); }
     static void restore(void *context)
     {
         auto *w = static_cast<TrashWindow *>(context);
@@ -981,10 +764,12 @@ private:
     }
 
     Listing listing_;
-    FolderView view_;
+    const gfx::Bitmap *icons_[Listing::kMax] = {};
+    int width_ = 100; // of the client area
+    app::IconView view_;
     Panel status_, free_;
     ToolButton empty_button_; // the owner: Empty Trash in the toolbar too
-    Groove groove_;
+    app::Picture groove_;
     char name_[fs::kMaxPath] = "";
     char message_[fs::kMaxPath + 80] = "";
     wm::MenuItem file_items_[6];
@@ -993,17 +778,21 @@ private:
     const wm::MenuBar bar_ = {entries_, 1};
 };
 
+app::Number g_trash = app::kNone; // the Trash window's number: dead once closed
+
 } // namespace
 
 void refresh_folder_windows()
 {
-    for (FolderWindow *w : g_windows) {
-        if (w != nullptr && w->open()) {
-            w->refresh();
+    for (const app::Number number : g_windows) {
+        if (FolderWindow *w = app::program<FolderWindow>(number)) {
+            if (w->on_screen()) {
+                w->refresh();
+            }
         }
     }
-    if (TrashWindow *trash = the<TrashWindow>()) {
-        if (trash->open()) {
+    if (TrashWindow *trash = app::program<TrashWindow>(g_trash)) {
+        if (trash->on_screen()) {
             trash->refresh();
         }
     }
@@ -1012,11 +801,26 @@ void refresh_folder_windows()
 void open_trash()
 {
     const AsProgram as("File manager");
-    if (TrashWindow *w = one<TrashWindow>("Trash")) {
+    if (TrashWindow *w = app::program<TrashWindow>(g_trash)) {
         w->refresh();
-        show(*w);
-        discard(w); // if the window manager had no room for it
+        app::bring_forward(g_trash);
+        return;
     }
+    app::Look look;
+    look.title = "Trash";
+    look.x = 120;
+    look.y = 60;
+    look.width = 400;
+    look.height = 280;
+    look.icon = &gfx::bin_icon_16();
+    look.flags = app::kMenuBar;
+    g_trash = app::make<TrashWindow>(look);
+    if (g_trash == app::kNone) {
+        no_memory_for("Trash");
+        return;
+    }
+    app::program<TrashWindow>(g_trash)->refresh();
+    app::show(g_trash);
 }
 
 void open_folder(const char *path)
@@ -1024,37 +828,41 @@ void open_folder(const char *path)
     const AsProgram as("File manager");
     const char *want = path != nullptr ? path : "";
     // Already shown: bring that window forward.
-    for (FolderWindow *w : g_windows) {
-        if (w != nullptr && w->open() && strcmp(w->folder(), want) == 0) {
+    for (const app::Number number : g_windows) {
+        FolderWindow *w = app::program<FolderWindow>(number);
+        if (w != nullptr && w->on_screen() && strcmp(w->folder(), want) == 0) {
             w->refresh();
-            os::activate(*w);
+            app::bring_forward(number);
             return;
         }
     }
     // A place with no open window, else the first window is reused.
     int n = 0;
     for (int i = 0; i < kWindows; i++) {
-        if (g_windows[i] == nullptr || !g_windows[i]->open()) {
+        if (!os::ui::alive(g_windows[i])) {
             n = i;
             break;
         }
     }
-    if (g_windows[n] == nullptr) {
-        g_windows[n] = make_window<FolderWindow>();
-        if (g_windows[n] == nullptr) {
+    if (!os::ui::alive(g_windows[n])) {
+        app::Look look;
+        look.title = "My Board";
+        look.x = 96 + n * 24;
+        look.y = 28 + n * 24;
+        look.width = 400;
+        look.height = 300;
+        look.icon = &gfx::folder_icon_16();
+        look.flags = app::kMenuBar;
+        g_windows[n] = app::make<FolderWindow>(look);
+        if (g_windows[n] == app::kNone) {
             no_memory_for("File manager");
             return;
         }
     }
-    FolderWindow *use = g_windows[n];
+    FolderWindow *use = app::program<FolderWindow>(g_windows[n]);
     use->forget_history();
     use->go_to(want, false);
-    if (!use->open()) {
-        use->set_frame({96 + n * 24, 28 + n * 24, 400, 300});
-        use->resized();
-    }
-    show(*use);
-    discard(use); // if the window manager had no room for it
+    app::show(g_windows[n]);
 }
 
 // What opens what, by extension: 1 the Editor, 2 the Picture viewer, 0 nothing.

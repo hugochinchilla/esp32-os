@@ -430,3 +430,38 @@ By number it is a control of the system's:
 
 PC tests pass (41 of 41), the pictures match. Firmware not compiled
 since, and not run.
+
+## The same day: the File manager, and the last of the 17
+
+Programs sixteen and seventeen: the folder windows and the Trash window
+(one file, `file_manager.cpp`).
+
+- The view of icons with names (`FolderView`) was a widget of the File
+  manager's. It is a control of the system's now (`icon_view`): the
+  program hands it the names and the icons, and asks which is selected
+  and which is under a point (`item_at`). Large and small icons, the
+  scrolling and the selection are the control's.
+- Dragging files out of a window and dropping them on one are three
+  events: Drag (the control says a drag began on an item), DragOver (a
+  file is over the window: the program answers whether it would take it)
+  and Dropped.
+- The toolbar buttons and the two panels (the path, the status line) are
+  pictures the File manager paints itself, with the mouse sent to them.
+  Options: system controls for a tool button and a panel (two more kinds
+  for one program), or pictures (chosen: the calls were there already).
+  The agent's, to confirm.
+- A folder window is made, filled and only then shown (`app::make`,
+  `app::show`), so a folder that cannot be read never flashes a window.
+
+What it costs: the Task Manager's row for the File manager says 20K
+where it said 18K (the controls are blocks of their own). The three
+reference pictures of the Task Manager were drawn again for that number
+and nothing else changed in them (24 pixels, the figure).
+
+All 17 programs on the list of `tools/check_os_calls.py` are on the thin
+classes. Still on `core/wm`'s classes: the desktop and its own windows
+(About, Welcome, the widget gallery, the message box), which are the
+system's side.
+
+PC tests pass (41 of 41), the pictures match. Firmware not compiled
+since, and not run.
