@@ -6,8 +6,8 @@
  * Espressif's components/bootloader/subproject/main/bootloader_start.c
  * (ESP-IDF v5.5), with one change: selected_boot_partition() starts the
  * BIOS (the app of subtype "test" in the partition table) unless the BIOS
- * has just run. The factory-reset and test-pin options, which this project
- * does not use, are removed.
+ * has just run. The factory-reset and test-pin options, the deep-sleep short
+ * cut and the optional hooks, which this project does not use, are removed.
  */
 #include <stdbool.h>
 #include <string.h>
@@ -17,7 +17,6 @@
 #include "bootloader_init.h"
 #include "bootloader_utility.h"
 #include "bootloader_common.h"
-#include "bootloader_hooks.h"
 #include "boot_flag.h"
 
 static const char *TAG = "boot";
@@ -32,19 +31,9 @@ static int selected_boot_partition(const bootloader_state_t *bs);
  */
 void __attribute__((noreturn)) call_start_cpu0(void)
 {
-    // (0. Call the before-init hook, if available)
-    if (bootloader_before_init) {
-        bootloader_before_init();
-    }
-
     // 1. Hardware initialization
     if (bootloader_init() != ESP_OK) {
         bootloader_reset();
-    }
-
-    // (1.1 Call the after-init hook, if available)
-    if (bootloader_after_init) {
-        bootloader_after_init();
     }
 
     // 2. Select the number of boot partition
