@@ -64,3 +64,4 @@ Plain words, real numbers, no summaries of summaries.
 | 2026-11-17 | [Our statics in external RAM](2026-11-17-statics-in-psram.md) | 121 KB of internal RAM freed, what stayed internal and why, before and after |
 | 2026-11-17 | [The desktop program](2026-11-17-desktop-program.md) | Backlog item 32: Chinchilla in an SDL2 window on Linux. How the picture is scaled, whose pointer is shown, which keys the PC keeps, where C: lives, why there is no sound, and what is ready for the browser |
 | 2026-11-17 | [A folder name copied into itself](2026-11-17-folder-copy-overlap.md) | The snprintf overlap GCC found in the Release build, and the fix |
+| 2026-11-17 | [Chinchilla in the browser](2026-11-17-chinchilla-in-the-browser.md) | Backlog item 33: the desktop program built to WebAssembly. How a program that waits lives in a browser, where C: is kept, one file of 1.7 MB, and what publishing it on GitHub Pages still needs |

@@ -8,9 +8,11 @@
 // limits or its speed. This file is to the PC what firmware/os/main/main.cpp
 // is to the board: the adapters behind core/ports.hpp, and the loop.
 //
-// Kept ready for the browser (backlog item 33): SDL2 is also what
-// Emscripten offers, and the loop is one call, step(), that never waits
-// longer than it is told to.
+// The same file is the browser version (backlog item 33, built by
+// web/CMakeLists.txt with Emscripten, which brings its own SDL2). What
+// differs there is marked __EMSCRIPTEN__: the page's canvas is the window,
+// C: is kept in the browser's own storage, the browser calls step() once a
+// frame, and Restart loads the page again.
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
@@ -23,6 +25,9 @@
 #include <unistd.h>
 
 #include <SDL.h>
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 
 #include "core/fs/fs.hpp"
 #include "core/fs/samples.hpp"
@@ -40,6 +45,39 @@ namespace {
 constexpr int kWidth = 640, kHeight = 480;
 constexpr uint32_t kFrameMs = 16; // the window is redrawn at most this often
 constexpr uint32_t kForceCloseMs = 3000;
+
+#ifdef __EMSCRIPTEN__
+constexpr bool kWeb = true;
+// Where C: is in the page's own file system. The browser keeps it under
+// this name too (IndexedDB), so it is not a name another page would pick.
+constexpr const char *kWebDrive = "/chinchilla-c";
+
+// Makes the folder, ties it to the browser's storage and waits until what
+// an earlier visit left there has been read back. From then on every change
+// is written back by itself a moment later (autoPersist).
+EM_ASYNC_JS(int, web_mount_drive, (const char *path), {
+    const where = UTF8ToString(path);
+    try {
+        FS.mkdir(where);
+        FS.mount(IDBFS, {autoPersist: true}, where);
+        await new Promise((done, failed) => FS.syncfs(true, (error) => (error ? failed(error) : done())));
+        return 1;
+    } catch (error) {
+        console.error('Chinchilla: C: cannot be kept in this browser', error);
+        return 0; // private windows of some browsers: C: lasts until the page closes
+    }
+});
+
+// The size the canvas has on the page, in the screen's real pixels.
+EM_JS(int, web_canvas_width, (), {
+    return Math.max(1, Math.round(Module.canvas.clientWidth * (window.devicePixelRatio || 1)));
+});
+EM_JS(int, web_canvas_height, (), {
+    return Math.max(1, Math.round(Module.canvas.clientHeight * (window.devicePixelRatio || 1)));
+});
+#else
+constexpr bool kWeb = false;
+#endif
 
 // The pointer is not in the picture: it is mixed in as the picture goes to
 // the window, as on the board. This one also says when it has changed.
@@ -94,7 +132,10 @@ struct Options {
 
 class Machine {
 public:
-    Machine(const Options &options, char **argv) : options_(options), argv_(argv), volume_(options.drive) {}
+    Machine(const Options &options, char **argv)
+        : options_(options), argv_(argv), volume_(options.drive, kWeb ? "in the browser" : "PC folder")
+    {
+    }
 
     bool open_window();
     void start();
@@ -153,7 +194,7 @@ bool Machine::open_window()
         return false;
     }
     int scale = options_.scale;
-    if (scale <= 0) {
+    if (scale <= 0 && !kWeb) {
         // The largest whole size, up to three times, that leaves room for
         // the PC's own panels and the window's frame.
         SDL_Rect usable = {0, 0, kWidth, kHeight};
@@ -163,12 +204,19 @@ bool Machine::open_window()
             scale++;
         }
     }
+    int width = kWidth * scale, height = kHeight * scale;
     uint32_t flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI;
     if (options_.fullscreen) {
         flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
     }
-    window_ = SDL_CreateWindow("Chinchilla", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, kWidth * scale,
-                               kHeight * scale, flags);
+#ifdef __EMSCRIPTEN__
+    // The page lays the canvas out (web/shell.html); the window is as many
+    // real pixels as that takes, and follows it (step()).
+    flags = SDL_WINDOW_RESIZABLE;
+    width = web_canvas_width();
+    height = web_canvas_height();
+#endif
+    window_ = SDL_CreateWindow("Chinchilla", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, width, height, flags);
     if (window_ == nullptr) {
         fprintf(stderr, "chinchilla: no window: %s\n", SDL_GetError());
         return false;
@@ -293,14 +341,14 @@ void Machine::key(const SDL_KeyboardEvent &e)
 {
     const bool pressed = e.state == SDL_PRESSED;
     // Two keys belong to the window, not to Chinchilla.
-    if (e.keysym.scancode == SDL_SCANCODE_F11) {
+    if (!kWeb && e.keysym.scancode == SDL_SCANCODE_F11) {
         if (pressed && e.repeat == 0) {
             const bool full = (SDL_GetWindowFlags(window_) & SDL_WINDOW_FULLSCREEN_DESKTOP) != 0;
             SDL_SetWindowFullscreen(window_, full ? 0 : SDL_WINDOW_FULLSCREEN_DESKTOP);
         }
         return;
     }
-    if (e.keysym.scancode == SDL_SCANCODE_F12) {
+    if (!kWeb && e.keysym.scancode == SDL_SCANCODE_F12) {
         if (pressed && e.repeat == 0) {
             // The first number not used yet in the current folder.
             char name[40];
@@ -385,7 +433,9 @@ void Machine::handle(const SDL_Event &e)
 {
     switch (e.type) {
     case SDL_QUIT:
-        close_asked();
+        if (!kWeb) { // a page that closes asks nobody
+            close_asked();
+        }
         break;
     case SDL_KEYDOWN:
     case SDL_KEYUP:
@@ -440,9 +490,15 @@ void Machine::boot_idle(void *self)
     }
     if (SDL_GetTicks() - m.presented_ms_ >= kFrameMs) {
         m.present();
-    } else {
-        SDL_Delay(1);
     }
+#ifdef __EMSCRIPTEN__
+    // Hands the processor back to the browser, which cannot show a picture
+    // or deliver a key while the program keeps it (this is what Asyncify
+    // is built in for).
+    emscripten_sleep(4);
+#else
+    SDL_Delay(1);
+#endif
 }
 
 void Machine::start()
@@ -494,10 +550,16 @@ void Machine::start()
 // the board does.
 void Machine::restart()
 {
+#ifdef __EMSCRIPTEN__
+    (void)argv_;
+    emscripten_cancel_main_loop();
+    EM_ASM({ setTimeout(() => location.reload(), 300); }); // after C: has been written back
+#else
     close_window();
     execv("/proc/self/exe", argv_);
     perror("chinchilla: restart");
     exit(1);
+#endif
 }
 
 // One round, as the board's UI loop: sleep until there is input, the
@@ -505,6 +567,31 @@ void Machine::restart()
 // let the desktop run its timers and paint; show the result.
 bool Machine::step()
 {
+#ifdef __EMSCRIPTEN__
+    // The browser calls this once for every frame it shows, so nothing
+    // here waits. The window follows the canvas when the page changes size.
+    int have_w = 0, have_h = 0;
+    SDL_GetWindowSize(window_, &have_w, &have_h);
+    const int want_w = web_canvas_width(), want_h = web_canvas_height();
+    if (want_w != have_w || want_h != have_h) {
+        SDL_SetWindowSize(window_, want_w, want_h);
+        dirty_ = true;
+    }
+    SDL_Event event;
+    while (SDL_PollEvent(&event) != 0) {
+        handle(event);
+    }
+    screen_.tick();
+    if (system_.reboot_requested) {
+        system_.reboot_requested = false;
+        restart();
+        return false;
+    }
+    if (dirty_ || pointer_.changed) {
+        present();
+    }
+    return true;
+#endif
     uint32_t wait_ms = screen_.idle_us() / 1000;
     wait_ms = wait_ms > 1000 ? 1000 : wait_ms;
     if (dirty_ || pointer_.changed) {
@@ -583,6 +670,11 @@ void usage()
 int main(int argc, char **argv)
 {
     Options options;
+#ifdef __EMSCRIPTEN__
+    options.drive = std::string(kWebDrive) + "/C";
+    web_mount_drive(kWebDrive);
+    argc = 1; // the page has no command line
+#endif
     for (int i = 1; i < argc; i++) {
         const std::string arg = argv[i];
         const bool more = i + 1 < argc;
@@ -615,6 +707,9 @@ int main(int argc, char **argv)
         return 1;
     }
     machine.start();
+#ifdef __EMSCRIPTEN__
+    emscripten_set_main_loop_arg([](void *m) { static_cast<Machine *>(m)->step(); }, &machine, 0, true);
+#endif
     while (machine.step()) {
     }
     machine.close_window();
