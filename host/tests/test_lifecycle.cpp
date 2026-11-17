@@ -407,21 +407,22 @@ void test_dialogs()
         const char *process;
         const char *title;
         void (*open)();
+        int blocks; // while open
     };
     const Tool tools[] = {
-        {"Display", "Display", &shell::display_dialog},
-        {"Screen Saver", "Screen Saver", &shell::screen_saver_dialog},
-        {"Network", "Network", &shell::open_network},
-        {"Shut Down", "Shut Down Chinchilla", &shell::shut_down_dialog},
-        {"Task Manager", "Task Manager", &shell::open_task_manager},
+        {"Display", "Display", &shell::display_dialog, 1},
+        {"Screen Saver", "Screen Saver", &shell::screen_saver_dialog, 1},
+        {"Network", "Network", &shell::open_network, 1},
+        {"Shut Down", "Shut Down Chinchilla", &shell::shut_down_dialog, 6}, // by number (os::ui): the window and five controls
+        {"Task Manager", "Task Manager", &shell::open_task_manager, 1},
     };
     for (const Tool &tool : tools) {
         tool.open();
         CHECK(strcmp(title(), tool.title) == 0 && processes_named(tool.process) == 1);
         CHECK(desktop.active()->owner() == t.find_by_name(tool.process));
-        CHECK(memory.in_use() == base + 1); // one object: the window with its widgets
-        tool.open();                        // asked for again: the same one
-        CHECK(memory.in_use() == base + 1 && desktop.window_count() == 1);
+        CHECK(memory.in_use() == base + tool.blocks); // one object for a window class with its widgets
+        tool.open();                                  // asked for again: the same one
+        CHECK(memory.in_use() == base + tool.blocks && desktop.window_count() == 1);
         wait(1500000);
         key(wm::key::Escape);
         wait(10000);
