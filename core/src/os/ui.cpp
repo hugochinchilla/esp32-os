@@ -17,6 +17,8 @@ namespace ui {
 
 namespace {
 
+static_assert(kScrollBarThickness == wm::ScrollBar::kThickness, "the scroll bar's thickness, as programs are told it");
+
 // The drawings in progress: the canvas of the Paint event being answered
 // and the parts the program has asked of it. Numbers are given afresh for
 // each event, never the same twice running, so one kept past its event
@@ -540,6 +542,13 @@ public:
         e.key = &k;
         return tell(e) || Window::key(k);
     }
+    void resized() override
+    {
+        Event e{What::Resized};
+        e.x = client().w;
+        e.y = client().h;
+        tell(e);
+    }
     void menu_opening(int entry) override
     {
         Event e{What::Menu};
@@ -718,6 +727,12 @@ void place_control(Window window, Control control, const gfx::Rect &place)
         c->rect = place;
         c->invalidate();
     }
+}
+
+gfx::Rect client_size(Window window)
+{
+    Behind *w = behind(window);
+    return w != nullptr ? gfx::Rect{0, 0, w->client().w, w->client().h} : gfx::Rect{0, 0, 0, 0};
 }
 
 void resize(Window window, int client_width, int client_height)

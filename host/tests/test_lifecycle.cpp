@@ -496,7 +496,7 @@ void test_dialogs()
     const int viewer = memory.in_use();
     letter('v', kAlt);
     letter('o');
-    CHECK(strcmp(title(), "Options") == 0 && memory.in_use() == viewer + 1);
+    CHECK(strcmp(title(), "Options") == 0 && memory.in_use() == viewer + 6); // the dialog and its five controls
     key(wm::key::Escape);
     CHECK(strcmp(title(), "Options") != 0 && memory.in_use() == viewer);
     letter('v', kAlt);

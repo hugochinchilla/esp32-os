@@ -136,6 +136,8 @@ public:
     bool operator!=(const Control &other) const { return !(*this == other); }
     os::ui::Control number() const { return number_; }
     void redraw() const { os::ui::redraw_control(window_, number_); } // painted again
+    // Moved, or made another size; an empty place hides it.
+    void place(const gfx::Rect &where) const { os::ui::place_control(window_, number_, where); }
 
 protected:
     Number window_ = kNone;
@@ -211,7 +213,6 @@ class Picture : public Control {
 public:
     using Control::Control;
     using Control::redraw;
-    void place(const gfx::Rect &where) const { os::ui::place_control(window_, number_, where); }
     // A part of it painted again, in its own coordinates.
     void redraw(const gfx::Rect &part) const { os::ui::redraw_control_part(window_, number_, part); }
 };
@@ -258,6 +259,7 @@ public:
     Number number() const { return number_; }
     void close() { os::ui::close(number_); }
     bool on_screen() const { return os::ui::on_screen(number_); }
+    gfx::Rect client_size() const { return os::ui::client_size(number_); } // as w and h
     // Another size for the client area (see os::ui::resize).
     void resize(int client_width, int client_height) { os::ui::resize(number_, client_width, client_height); }
     bool in_front() const { return os::ui::in_front(number_); } // it is the window in use
@@ -288,6 +290,8 @@ public:
     virtual void mouse(Control /*which*/, const wm::MouseMsg &) {}
     // The right button went down in a picture made with kMouse.
     virtual void right_click(Control /*which*/, int /*x*/, int /*y*/) {}
+    // The client area has another size: the controls go where they belong now.
+    virtual void resized(int /*width*/, int /*height*/) {}
     // A menu of the menu bar is about to open: a chance to grey items out.
     virtual void menu_opening(int /*which*/) {}
     // The window has closed; the object is destroyed after this.
@@ -409,6 +413,9 @@ private:
             return true;
         case os::ui::What::RightClick:
             window->right_click(Control(window->number_, event.control), event.x, event.y);
+            return true;
+        case os::ui::What::Resized:
+            window->resized(event.x, event.y);
             return true;
         case os::ui::What::Menu:
             window->menu_opening(event.index);

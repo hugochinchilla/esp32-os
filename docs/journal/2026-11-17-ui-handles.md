@@ -362,3 +362,23 @@ where it is but inside the screen), for the three sizes of the field.
 
 PC tests pass (41 of 41) and the pictures match with no change to the
 tests. Firmware not compiled since, and not run.
+
+## The same day: the Picture viewer, the first window that changes size
+
+Program thirteen, with its Options dialog. New in the system:
+
+- The Resized event: the client area has another size, and the program
+  puts its controls where they go now (`place`, on any control; an empty
+  place hides one). `client_size` tells the size when the window is made.
+- The scroll bars of the picture are the system's, placed by the viewer
+  beside the picture when it is larger than its area. They were two
+  scroll bars kept inside the viewer's own widget, which passed the mouse
+  on to them by hand.
+- The status line is a `picture` the viewer paints.
+
+The viewer no longer makes a window before it knows it has the memory
+for a picture and throws it away: it opens, and closes at once if there
+is none.
+
+PC tests pass (41 of 41), the pictures match. Firmware not compiled
+since, and not run.

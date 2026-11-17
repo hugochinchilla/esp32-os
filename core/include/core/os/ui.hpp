@@ -50,6 +50,8 @@ enum class What : uint8_t {
     Mouse,   // the left button in a picture that asked for it (kMouse): `control`, `mouse`, in the
              // picture's coordinates. From Down to Up they all go to the picture pressed
     RightClick, // the right button went down in a picture that asked for the mouse: `control`, `x`, `y`
+    Resized, // the client area has another size (the user pulled an edge, or maximised): `x`, `y` are
+             // its width and height. The program puts its controls where they go now
     Menu,    // a menu of the menu bar is about to open: `index`, which. A chance to grey items out
     Closed,  // the window has closed, or never opened; once, and it and its numbers are dead after this
 };
@@ -97,6 +99,8 @@ bool alive(Window window);
 bool on_screen(Window window); // shown, and not closed
 void set_title(Window window, const char *title); // the text must stay valid
 bool in_front(Window window);                     // it is the window in use
+// The size of the client area, as `w` and `h`.
+gfx::Rect client_size(Window window);
 // Another size for the client area. A window on the screen stays where it
 // is, but inside the screen; one not yet shown is centred again unless it
 // was given a place.
@@ -121,6 +125,7 @@ Control check_box(Window window, const gfx::Rect &place, const char *text, bool 
 // own; `value` is what radio_value() answers while this one is chosen.
 Control radio(Window window, const gfx::Rect &place, const char *text, int group, int value);
 Control text_field(Window window, const gfx::Rect &place, const char *initial = "");
+constexpr int kScrollBarThickness = 16;
 Control scroll_bar(Window window, const gfx::Rect &place, bool vertical);
 // The rows are the program's texts and must stay valid while they are shown.
 Control list(Window window, const gfx::Rect &place, const char *const *items, int count);
@@ -134,7 +139,8 @@ enum PictureFlag : uint8_t {
     kMouse = 2, // What::Mouse and What::RightClick for it
 };
 Control picture(Window window, const gfx::Rect &place, uint8_t how = 0);
-// A control moved or made another size, in the client area.
+// A control moved or made another size, in the client area. An empty
+// place: it is not shown.
 void place_control(Window window, Control control, const gfx::Rect &place);
 // Asks for a control to be painted again.
 void redraw_control(Window window, Control control);
