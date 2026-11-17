@@ -121,6 +121,30 @@ add_executable(test_msg tests/test_msg.cpp)
 target_link_libraries(test_msg PRIVATE core Threads::Threads)
 add_test(NAME msg COMMAND test_msg)
 
+# The TTY (backlog item 12), with a session on a thread of its own.
+add_executable(test_tty tests/test_tty.cpp)
+target_link_libraries(test_tty PRIVATE core Threads::Threads)
+add_test(NAME tty COMMAND test_tty)
+
+# The command shell (backlog item 13): its tests, and the shell itself in a
+# terminal of the PC (build/host/chinchilla-console [FOLDER]).
+add_executable(test_job tests/test_job.cpp)
+target_link_libraries(test_job PRIVATE core Threads::Threads)
+add_test(NAME job COMMAND test_job)
+
+add_executable(test_sh tests/test_sh.cpp)
+target_link_libraries(test_sh PRIVATE core Threads::Threads)
+add_test(NAME sh COMMAND test_sh)
+add_executable(chinchilla-console console/main.cpp)
+target_link_libraries(chinchilla-console PRIVATE core Threads::Threads)
+add_test(NAME console_program
+         COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/test_console_program.py $<TARGET_FILE:chinchilla-console>)
+
+# The Terminal window (backlog item 15).
+add_executable(test_terminal tests/test_terminal.cpp)
+target_link_libraries(test_terminal PRIVATE core Threads::Threads)
+add_test(NAME terminal COMMAND test_terminal)
+
 # The services loop: its rounds and rests, input as messages, and a viewer on
 # a real socket while one thread paints and another serves.
 add_executable(test_services tests/test_services.cpp)

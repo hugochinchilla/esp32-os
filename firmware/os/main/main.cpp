@@ -33,6 +33,8 @@
 #include "core/fs/ini.hpp"
 #include "littlefs_volume.hpp"
 #include "rtos_queue.hpp"
+#include "rtos_tasks.hpp"
+#include "core/job/job.hpp"
 #include "core/msg/input.hpp"
 #include "core/msg/queue.hpp"
 #include "core/net/posix_tcp.hpp"
@@ -744,6 +746,17 @@ void ui_task(void *)
         ESP_LOGI(TAG, "answers to chinchilla.local (mDNS)");
     }
 
+    // What a Terminal's session needs to run on a task of its own: one set
+    // for each Terminal that can be open at once.
+    static RtosMutex session_locks[3];
+    static RtosEvent session_events[6];
+    static shell::SessionKit session_kits[3];
+    for (int i = 0; i < 3; i++) {
+        session_kits[i].lock = &session_locks[i];
+        session_kits[i].typed = &session_events[2 * i];
+        session_kits[i].answered = &session_events[2 * i + 1];
+    }
+    shell::set_session_kits(session_kits, 3);
     shell::start(desktop, system, storage, memory);
     protocol.set_counters(shell::picture_timings(), shell::kPictureTimings);
     desktop.start();
@@ -846,6 +859,9 @@ extern "C" void app_main(void)
     static RtosQueue queue;
     s_queue = &queue;
     msg::set_queue(&queue);
+    // Background jobs (the Editor's save) get tasks of their own.
+    static RtosTasks tasks;
+    job::jobs().set_tasks(&tasks);
 
     ESP_LOGI(TAG, "starting video on core 1");
     static StaticSemaphore_t done_buffer;

@@ -80,6 +80,22 @@ python3 tools/check_pictures.py build/host/render_scenes --update
 The font table `core/src/gfx/font_spleen6x12.cpp` is generated:
 `python3 tools/gen_font.py third_party/fonts/spleen/spleen-6x12.bdf core/src/gfx/font_spleen6x12.cpp`.
 
+## The command shell on a PC
+
+Chinchilla's command shell (`dir`, `ls`, `type`, `copy`, `ps`, `kill`...) in
+a terminal of the PC. It is the same code that will run on the board's serial
+port and in a terminal window; here the PC's terminal is the device. Needs
+only CMake and a C++ compiler.
+
+```sh
+cmake -S host -B build/host && cmake --build build/host --target chinchilla-console
+build/host/chinchilla-console                 # C: is a RAM disk with the sample files
+build/host/chinchilla-console ~/some/folder   # that folder is C:, for real
+```
+
+`help` lists the commands. The line editing, the up arrow and Ctrl+C are
+Chinchilla's own, not the PC's. Ctrl+D or `exit` leaves.
+
 ## Chinchilla as a desktop program (Linux)
 
 The same `core/` in a window on a PC: the window is the monitor, the PC's

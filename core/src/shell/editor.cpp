@@ -4,6 +4,7 @@
 #include <strings.h>
 
 #include "core/gfx/art.hpp"
+#include "core/job/job.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/text_edit.hpp"
 #include "core/wm/wm.hpp"
@@ -212,39 +213,75 @@ private:
             save_as(continue_after);
             return;
         }
-        // The text goes to a temporary file that takes the place of the old
-        // one at the end, so a power cut, a full disk or a failed write
-        // leaves the document as it was last saved. Nothing else runs until
-        // this returns, so the pointer shows the hourglass meanwhile.
-        ports::FsError e;
-        {
-            const wm::Wait hourglass(shell::manager());
-            fs::Save save;
-            e = storage().begin_save(path_, save);
-            uint8_t piece[1024];
-            size_t at = 0;
-            while (e == ports::FsError::Ok) {
-                const size_t n = edit_.save_bytes(at, piece, sizeof(piece));
-                if (n == 0) {
-                    break;
-                }
-                e = storage().write(save.file, piece, n);
-                at += n;
-            }
-            if (save.file.open()) {
-                const ports::FsError c = storage().finish_save(save, e == ports::FsError::Ok);
-                e = e != ports::FsError::Ok ? e : c;
-            }
+        if (locked()) {
+            return; // a save is already running
         }
-        if (e != ports::FsError::Ok) {
+        // The file is written by a job on a task of the Editor's own, so the
+        // rest of the desktop goes on meanwhile. The job reads the text, so
+        // the window is locked until it has finished: nothing can change the
+        // text or close the window, and the pointer shows the hourglass over
+        // it. Everything is set before start(), which on a machine without
+        // tasks does the work and calls saved() before it returns.
+        continue_after_save_ = continue_after;
+        set_locked(true);
+        job::Spec spec;
+        spec.name = "save";
+        spec.work = &EditorWindow::write_out;
+        spec.done = &EditorWindow::saved;
+        spec.context = this;
+        spec.stack_bytes = 8192; // the file system's calls, a 1 KB piece and the paths
+        // Where the caller does the work, the whole desktop waits as it used to.
+        const wm::Wait hourglass(shell::manager());
+        if (!job::jobs().start(spec)) {
+            set_locked(false);
             next_ = Then::Nothing;
-            report("save", path_, e);
+            snprintf(message_, sizeof(message_), "Cannot save %s:\nthe system is too busy. Try again in a moment.",
+                     name());
+            message_box("Editor", message_);
+        }
+    }
+
+    // The job: on its own task. It only reads the text and the path, which
+    // the locked window keeps as they are. The text goes to a temporary file
+    // that takes the place of the old one at the end, so a power cut, a full
+    // disk or a failed write leaves the document as it was last saved.
+    static uint32_t write_out(const job::Job &, void *context)
+    {
+        auto *w = static_cast<EditorWindow *>(context);
+        fs::Save save;
+        ports::FsError e = storage().begin_save(w->path_, save);
+        uint8_t piece[1024];
+        size_t at = 0;
+        while (e == ports::FsError::Ok) {
+            const size_t n = w->edit_.save_bytes(at, piece, sizeof(piece));
+            if (n == 0) {
+                break;
+            }
+            e = storage().write(save.file, piece, n);
+            at += n;
+        }
+        if (save.file.open()) {
+            const ports::FsError c = storage().finish_save(save, e == ports::FsError::Ok);
+            e = e != ports::FsError::Ok ? e : c;
+        }
+        return static_cast<uint32_t>(e);
+    }
+
+    // Back on the UI task, when the job has finished.
+    static void saved(void *context, uint32_t result, bool /*stopped*/)
+    {
+        auto *w = static_cast<EditorWindow *>(context);
+        w->set_locked(false);
+        const ports::FsError e = static_cast<ports::FsError>(result);
+        if (e != ports::FsError::Ok) {
+            w->next_ = Then::Nothing;
+            w->report("save", w->path_, e);
             return;
         }
-        edit_.set_modified(false);
-        retitle();
-        if (continue_after) {
-            perform(next_);
+        w->edit_.set_modified(false);
+        w->retitle();
+        if (w->continue_after_save_) {
+            w->perform(w->next_);
         }
     }
 
@@ -324,6 +361,7 @@ private:
     char message_[200] = "";
     Then next_ = Then::Nothing;
     bool continue_after_save_as_ = false;
+    bool continue_after_save_ = false;
     bool shown_modified_ = false;
     uint8_t *text_ = nullptr, *undo_ = nullptr;
     wm::TextEdit edit_;

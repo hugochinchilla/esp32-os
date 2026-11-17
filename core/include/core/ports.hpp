@@ -33,6 +33,35 @@ protected:
     ~Lock() = default;
 };
 
+// Something a task sleeps on until another task has work for it: a shell
+// session waiting for a typed line (tty::Tty). A set() that comes before the
+// wait() is not lost: that wait() returns at once. One sleeper at a time.
+class Event {
+public:
+    // Any task. Wakes the sleeper, now or at its next wait().
+    virtual void set() = 0;
+    // Sleeps until a set() or until max_ms have gone by. True if it was set.
+    virtual bool wait(uint32_t max_ms) = 0;
+
+protected:
+    ~Event() = default;
+};
+
+// Starts tasks: a FreeRTOS task on the board, a thread on the PC. Background
+// jobs run on these (core/job/job.hpp). A machine without tasks, like the
+// browser build, has no adapter and the work is done by the caller.
+using TaskFn = void (*)(void *context);
+class Tasks {
+public:
+    // Any task. Runs fn(context) on a new task with a stack of its own; the
+    // task ends when fn returns. False if it could not be started (no memory
+    // for the stack), and then fn is never called.
+    virtual bool start(const char *name, TaskFn fn, void *context, uint32_t stack_bytes) = 0;
+
+protected:
+    ~Tasks() = default;
+};
+
 // The screen: one byte per pixel, RRRGGGBB, rows top to bottom, no padding.
 class Display {
 public:

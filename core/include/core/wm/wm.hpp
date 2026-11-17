@@ -150,6 +150,9 @@ public:
     void begin_wait();
     void end_wait();
     bool waiting() const { return waiting_ > 0; }
+    // For Window::set_locked(): a menu of the window goes, and the pointer
+    // takes the shape that fits where it is now.
+    void lock_changed(Window &w);
 
     // The desktop and the Start menu, supplied by the shell.
     void set_desktop_icons(const DesktopIcon *icons, int count);

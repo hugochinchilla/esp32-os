@@ -1025,25 +1025,42 @@ void open_folder(const char *path)
     discard(use); // if the window manager had no room for it
 }
 
-bool open_file(const char *path)
+// What opens what, by extension: 1 the Editor, 2 the Picture viewer, 0 nothing.
+static int program_kind(const char *path)
 {
-    // What opens what, by extension.
     static const char *const kText[] = {"txt", "log", "ini", "md"};
     static const char *const kPictures[] = {"bmp", "png", "jpg", "jpeg"};
     char ext[8];
     fs::path::extension(path, ext, sizeof(ext));
     for (const char *e : kText) {
         if (strcmp(ext, e) == 0) {
-            open_in_editor(path);
-            return true;
+            return 1;
         }
     }
     for (const char *e : kPictures) {
         if (strcmp(ext, e) == 0) {
-            open_picture(path);
-            return true;
+            return 2;
         }
     }
+    return 0;
+}
+
+bool has_program_for(const char *path) { return program_kind(path) != 0; }
+
+bool open_file(const char *path)
+{
+    switch (program_kind(path)) {
+    case 1:
+        open_in_editor(path);
+        return true;
+    case 2:
+        open_picture(path);
+        return true;
+    default:
+        break;
+    }
+    char ext[8];
+    fs::path::extension(path, ext, sizeof(ext));
     static char text[160];
     snprintf(text, sizeof(text), "There is no program for %s%s files yet.", ext[0] ? "." : "",
              ext[0] ? ext : "these");

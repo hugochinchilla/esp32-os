@@ -23,6 +23,7 @@ const Bitmap &tasks_icon_32();
 const Bitmap &defrag_icon_16();
 const Bitmap &defrag_icon_32();
 const Bitmap &snake_icon_16(); // Culebra
+const Bitmap &terminal_icon_16(); // the Terminal
 const Bitmap &snake_icon_32();
 const Bitmap &cactus_icon_16(); // Cactus Patch
 const Bitmap &cactus_icon_32();

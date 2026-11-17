@@ -1499,3 +1499,193 @@ confusing". The story is in `docs/journal/2026-11-16-only-real-tasks.md`.
   for the process table", and "init is PID 1" under "OS architecture" holds
   again from item 18.
 - The other option was to keep the rows marked "(part of the desktop)".
+
+### Chosen for the TTY (2026-11-17, to confirm)
+
+Backlog item 12. Journal: `docs/journal/2026-11-17-tty.md`. Chosen by the
+agent under the owner's "dejo a tu criterio" of 2026-11-16.
+
+- `tty::Tty` (`core/include/core/tty/tty.hpp`) sits between a device (it
+  calls `input()` with typed bytes and is a `ports::ByteSink` for what is
+  shown) and a program (`read()` a line, `write()` text).
+- The TTY edits the line, as Unix's cooked mode does, so every device and
+  every program gets the same editing. The other options were the shell
+  (readline's way) and each device. A raw mode hands keys over as they come.
+- More editing than Unix: arrows, Home, End, Delete, Ctrl+A/E/W/U/K, and
+  earlier lines with up and down (384 bytes of them), all in the TTY. Tab
+  does nothing until the shell can complete names.
+- The line is redrawn with characters, spaces and backspaces only, no escape
+  codes. Known limit: editing the middle of a line that has wrapped looks
+  wrong on a real terminal. Lines stop at 159 characters.
+- A program waits for a line on a new port, `ports::Event` (`set()`,
+  `wait(ms)`); without one `read()` never waits. The board's adapter comes
+  with item 14.
+- Ctrl+C drops the typed line and the lines typed ahead, shows `^C` and
+  raises a flag: `read()` answers `kInterrupted` once, a busy program looks at
+  `interrupted()`. Making it the INT signal of the process table is the
+  shell's job (item 13). Ctrl+D on an empty line, and the device going away,
+  are "end of input".
+- Text is UTF-8 at both ends (typed bytes, echo, `read()`, `write()`), like
+  the rest of the OS's interfaces. Only the line being typed is Latin-1
+  inside, one byte per column; a character Latin-1 lacks becomes `?`. The
+  other options were Latin-1 everywhere and UTF-8 everywhere.
+- After a Ctrl+C, what the program writes is dropped until it has taken
+  notice. `input()` raises the interrupt before asking for the lock, so a
+  command that prints without pause still sees it.
+
+### Chosen for the command shell (2026-11-17, to confirm)
+
+Backlog item 13. Journal: `docs/journal/2026-11-17-command-shell.md`. Chosen
+by the agent under the owner's "dejo a tu criterio" of 2026-11-16.
+
+- The command shell is `sh::Session` in `core/sh/` (`core/shell/` is the
+  desktop). It reads lines from a `tty::Tty` and knows nothing about the
+  device. `run()` is the whole session for a task of its own; `greet()` and
+  `step()` are the same in pieces for whoever has no task to give.
+- Commands are built in, found in any case, each with its Linux name and its
+  DOS names: `ls dir`, `cd chdir`, `pwd`, `cat type`, `cp copy`,
+  `mv move ren rename`, `rm del erase`, `mkdir md`, `rmdir rd`, `touch`,
+  `df`, `echo`, `ps tasklist`, `kill taskkill`, `free mem`, `uptime`,
+  `ver uname`, `cls clear`, `help ?`, `exit logout`. `X:` changes drive.
+- Options are written with `-` only (`ls -l`, `rm -r`, `kill -9`). A `/` is
+  always part of a path, because paths take both slashes. DOS's `/w`, `/s`
+  are not understood. The other options were DOS switches only, or guessing.
+- One folder the session is in, not one per drive as DOS keeps. A path with
+  a drive letter counts from that drive's root.
+- `*` and `?` in the last name of a path, for `ls`, `cat`, `cp`, `mv`, `rm`,
+  `rmdir`. Each command expands them itself (the DOS way); there is no heap
+  to hold a list. A star does not match names that start with a dot, so
+  `del *` leaves `C:\.config` and `C:\.trash` alone.
+- `rm` deletes for good; it does not use the Trash. `rm -r` and `rmdir`
+  refuse the folder the session is in and a drive's root.
+- `mv` onto an existing file replaces it in one step. Between drives it
+  copies and deletes, files only. `cp` writes the safe way (temporary file,
+  then rename).
+- `ps` and `kill` run on the UI task through a `sh::UiCall` (a message into
+  the UI queue and an `Event` to wait on), because the process table is the
+  UI task's. A session on the UI task itself calls straight in.
+- Ctrl+C is the TTY's flag; the commands that loop look at it between
+  pieces. It is not yet a signal of the process table, since built-in
+  commands are not processes.
+- `type` shows a file as Latin-1, as the Editor reads it.
+- No `date` yet (item 24); redirection, pipes and `more` came with item 23
+  ("Chosen for pipes and redirection" below); `open`,
+  `run` and `edit` came with item 16; `top` and `dmesg` are still to come.
+- `build/host/chinchilla-console [FOLDER]` is the shell in a terminal of the
+  PC, for trying it without a board.
+
+### Chosen for the Terminal window (2026-11-17, to confirm)
+
+Backlog item 15. Journal: `docs/journal/2026-11-17-terminal-window.md`.
+Chosen by the agent under the owner's "dejo a tu criterio" of 2026-11-16.
+
+- "Terminal" in Start > Programs (`core/src/shell/terminal.cpp`): a window
+  that is the device of a TTY, with a `sh::Session` behind it. Up to three at
+  once, each a process.
+- **Its session is a job of the Terminal's process, on a task of its own**,
+  wherever the machine has tasks (2026-11-17,
+  `docs/journal/2026-11-17-terminal-task.md`): the desktop goes on while a
+  command works and Ctrl+C stops it. Closing the window, or End Task, hangs
+  up the TTY; the process goes when the session's task has returned. The
+  TTY's lock guards the grid as well, and the session's task tells the UI
+  task to paint with one message until it has looked. The lock and the two
+  events of a session come from a pool the machine hands in
+  (`shell::set_session_kits`, three on the board). Its task asks for a 12 KB
+  stack, to be measured.
+- Without tasks (the browser, the PC desktop program) the session runs on
+  the UI task, a line at a time (`Session::step()`), as it was first built:
+  the desktop waits while a command works.
+- The grid is `tty::Screen`: 80 by 25, fixed, 6x12 font. It knows CR, LF,
+  backspace, tab, bell, and the ANSI sequences to erase (`J`, `K`) and to
+  place and move the cursor (`H`, `A` to `D`); others are ignored. A line
+  wraps at the right edge and a backspace goes back over the wrap. The other
+  options were a glass teletype and a full VT100.
+- 175 lines above the screen are kept (16 KB with the screen, in the
+  window's own memory). Page Up and Page Down look back. No scroll bar.
+- Light grey on black, a blinking block cursor, a line under the character
+  when another window has the keyboard. The icon was drawn by the agent.
+  Both are for the owner to overrule.
+- Escape is not sent to the session.
+
+### Chosen for pipes and redirection (2026-11-17, to confirm)
+
+Backlog item 23. Journal: `docs/journal/2026-11-17-pipes.md`. Chosen by the
+agent under the owner's "dejo a tu criterio" of 2026-11-16.
+
+- **A pipe is a hidden file and the commands run one after the other**, as
+  on MS-DOS: `A | B` runs A with its output in `.~pipeNa.tmp` in the root of
+  the session's drive, then B with that file as input, then removes it. Up
+  to six commands on a line. Rejected for now: real pipes with a task per
+  command (the right way once a program that never ends needs one; the
+  commands would not change), and a buffer in memory (it has a size).
+- `> FILE` writes a file, `>> FILE` adds to it, `< FILE` reads one; anywhere
+  on the command, quoted names allowed. `<` only on the first command of a
+  pipe and `>` only on the last. No `2>`, `&&`, `;` or variables.
+- **Errors always go to the terminal**, never into the file or the pipe.
+- A file gets Latin-1 and the terminal UTF-8: the session converts what a
+  command prints when its output is a file, and typed input when a command
+  reads it. The filters work in Latin-1.
+- The filters: `more`; `grep` with the DOS names `find` and `findstr`
+  (plain text, not patterns; `-i -v -n -c`); `head` and `tail` (`-n N`;
+  `tail` shows 2 KB at most); `wc` (`-l -w -c`); `cat`/`type` without a file
+  copies its input. `ls` writes one name a line into a file or pipe. No
+  `sort` yet.
+- A command reads typed lines (until Ctrl+D) only where the session has a
+  task of its own. On the UI task it says what it needs instead of waiting,
+  and `more` does not stop between screens.
+
+### Chosen for Run and the shell's open, run and edit (2026-11-17, to confirm)
+
+Backlog item 16 in part. Journal: `docs/journal/2026-11-17-run.md`. Chosen
+by the agent under the owner's "dejo a tu criterio" of 2026-11-16.
+
+- **Start > Run...** is a program of its own (`core/src/shell/run.cpp`). It
+  takes a program's name (any case, or the start of it when only one begins
+  so) or a path (a folder opens in the File manager, a file with its
+  program; without a drive it is looked for on C:). It does not take shell
+  commands. When nothing can be opened the dialog stays, under a message
+  that says why. The last thing run is kept in `C:\.config\run.ini` and is
+  there, selected, the next time. No list of earlier entries.
+- **The shell reaches the desktop through a port**, `sh::Desktop`, so it
+  still builds and runs without one. `open PATH...` (DOS name `start`),
+  `run [PROGRAM]` (alone: the list) and `edit [FILE...]`. A failure is a
+  line on the terminal, not a message box.
+- `edit` opens the desktop's Editor, and a name that is not there yet is
+  made as an empty file. A console editor is item 22.
+- A program started from Run or from a Terminal is the desktop's child.
+- `top` waits for item 3 and `dmesg` for a log kept in memory.
+
+### Chosen for background jobs (2026-11-17, to confirm)
+
+Backlog item 10. Journal: `docs/journal/2026-11-17-jobs.md`. Chosen by the
+agent under the owner's "dejo a tu criterio" of 2026-11-16, within what "OS
+architecture" above already says about saves and signals.
+
+- **A job is a task of its own for as long as its work takes**
+  (`core/job/`, `ports::Tasks`): made when the job starts, gone when the
+  work returns. No worker task waits for work and no stack is held between
+  jobs. Eight jobs at most in the machine. Rejected: one worker with a queue
+  (holds its stack for ever; a long job blocks the saves behind it), a pool.
+- The work runs on the job's task and may read the program's memory; it may
+  not touch windows, timers or the process table. Its result comes back
+  through the UI message queue and `done` runs on the UI task as the owner.
+- **A process cannot end while it has a job**: the count is on its row
+  (`proc::Process::jobs`). A KILL stays waiting on the row, the job is told
+  to stop, and the KILL takes effect once the job has returned. A window
+  program that has closed its last window stays in the table, and its
+  closed windows are not destroyed, until then. Rejected: deleting the
+  job's task on KILL (it may hold the file system's lock).
+- **A locked window** (`Window::set_locked`) is enforced by the window
+  manager, not by each program: no keys, text, clicks in the client area or
+  menu bar, dropped files or requests to close (close button, Alt+F4, TERM,
+  Shut Down, which is called off). It can still be moved, sized and
+  minimised. The pointer is the hourglass over it and the arrow elsewhere.
+  Nothing else shows the lock. Rejected: a "saving" flag checked by the
+  program in each action; a modal "Saving..." dialog.
+- **The Editor saves through a job** with its window locked. The save does
+  not stop early on a KILL: the file is finished first.
+- On a machine without tasks (the browser, the PC desktop program, most
+  tests) there is no `ports::Tasks` and the caller does the work inside
+  `start()`, under the whole-desktop hourglass, as before.
+- On the board a job's task has priority 4, one below the UI task; the
+  three classes are item 11.

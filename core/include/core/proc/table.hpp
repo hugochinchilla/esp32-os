@@ -58,6 +58,9 @@ enum class Sent : uint8_t {
     NotSupported,  // a service without windows: nothing can end those yet
 };
 
+// Tells a process's jobs to stop early (see Table::set_stop_jobs).
+using StopJobsFn = void (*)(Pid pid, void *context);
+
 // Starts a program again (see Table::set_restart).
 using StartFn = void (*)(void *context);
 
@@ -69,6 +72,7 @@ struct Process {
     State state = State::Free;
     uint8_t flags = 0;
     uint8_t pending = 0; // Signal bits sent and not yet acted on
+    uint8_t jobs = 0;    // background jobs running for it (core/job/job.hpp)
     char name[kNameSize] = "";
     StartFn restart = nullptr; // for kRespawn
     void *restart_context = nullptr;
@@ -117,6 +121,25 @@ public:
     uint8_t take_signals(Pid pid);
     bool signals_waiting() const { return waiting_ != 0; }
 
+    // Background jobs. A process with jobs running is not ended: whoever
+    // acts on signals leaves a KILL waiting on the row, and a window program
+    // that has lost its last window stays in the table, until the count is
+    // back to zero. A job reads and writes the program's memory from another
+    // task, so the memory must outlive it, and a task is never taken away
+    // while it may hold an OS lock (docs/DECISIONS.md, "Signals").
+    // job_started() answers false for a process that is gone or has a KILL
+    // waiting. The job runner (job::Jobs) calls these; nobody else should.
+    bool job_started(Pid pid);
+    void job_finished(Pid pid);
+    int jobs(Pid pid) const;
+    // Called from signal() when a KILL is sent to a process with jobs: the
+    // jobs are asked to stop early, and the KILL takes effect when they have.
+    void set_stop_jobs(StopJobsFn fn, void *context)
+    {
+        stop_jobs_ = fn;
+        stop_jobs_context_ = context;
+    }
+
     // Respawn: sets the flag and remembers how to start the program again.
     // When the process ends, by a signal or by itself, `start` is put on a
     // list, and restart_due() runs the list with the root as the current process
@@ -151,6 +174,8 @@ private:
     Pid current_ = kNone;
     uint32_t changes_ = 0;
     int waiting_ = 0; // rows with a signal pending
+    StopJobsFn stop_jobs_ = nullptr;
+    void *stop_jobs_context_ = nullptr;
 
     struct Restart {
         StartFn start;

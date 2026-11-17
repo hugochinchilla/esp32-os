@@ -34,9 +34,15 @@ set(CORE_SRCS
     src/net/viewer_page.cpp
     src/net/web.cpp
     src/net/wifi.cpp
+    src/job/job.cpp
     src/msg/input.cpp
     src/msg/queue.cpp
     src/proc/table.cpp
+    src/sh/files.cpp
+    src/sh/filters.cpp
+    src/sh/path.cpp
+    src/sh/sh.cpp
+    src/sh/system.cpp
     src/sys/crash.cpp
     src/shell/apps.cpp
     src/shell/boot.cpp
@@ -53,9 +59,13 @@ set(CORE_SRCS
     src/shell/screensaver.cpp
     src/shell/network.cpp
     src/shell/power.cpp
+    src/shell/run.cpp
     src/shell/settings.cpp
     src/shell/task_manager.cpp
+    src/shell/terminal.cpp
     src/shell/viewer.cpp
+    src/tty/screen.cpp
+    src/tty/tty.cpp
     src/wm/text_edit.cpp
     src/wm/widgets.cpp
     src/wm/window.cpp

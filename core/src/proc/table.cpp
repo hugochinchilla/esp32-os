@@ -138,7 +138,34 @@ Sent Table::signal(Pid pid, Signal signal)
         waiting_++;
     }
     p->pending |= static_cast<uint8_t>(signal);
+    if (signal == Signal::Kill && p->jobs > 0 && stop_jobs_ != nullptr) {
+        stop_jobs_(pid, stop_jobs_context_);
+    }
     return Sent::Ok;
+}
+
+bool Table::job_started(Pid pid)
+{
+    Process *p = row(pid);
+    if (p == nullptr || p->jobs == 255 || (p->pending & static_cast<uint8_t>(Signal::Kill)) != 0) {
+        return false;
+    }
+    p->jobs++;
+    return true;
+}
+
+void Table::job_finished(Pid pid)
+{
+    Process *p = row(pid);
+    if (p != nullptr && p->jobs > 0) {
+        p->jobs--;
+    }
+}
+
+int Table::jobs(Pid pid) const
+{
+    const Process *p = find(pid);
+    return p != nullptr ? p->jobs : 0;
 }
 
 uint8_t Table::take_signals(Pid pid)

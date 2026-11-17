@@ -664,6 +664,27 @@ const Bitmap &tasks_icon_16()
     return bitmap;
 }
 
+// The Terminal: a small window with a dark screen and a prompt, ">_".
+const Bitmap &terminal_icon_16()
+{
+    static constexpr const char *rows[16] = {
+        "................", ".DDDDDDDDDDDDDD.", ".DBBBBBBBBBGGGD.", ".DDDDDDDDDDDDDD.",
+        ".DKKKKKKKKKKKKD.", ".DKKKKKKKKKKKKD.", ".DKWWKKKKKKKKKD.", ".DKKKWWKKKKKKKD.",
+        ".DKKKKKWWKKKKKD.", ".DKKKWWKKKKKKKD.", ".DKWWKKKWWWWKKD.", ".DKKKKKKKKKKKKD.",
+        ".DKKKKKKKKKKKKD.", ".DDDDDDDDDDDDDD.", "................", "................",
+    };
+    static constexpr Ink inks[] = {
+        {'D', rgb(2, 2, 1)},
+        {'B', rgb(0, 0, 2)},
+        {'G', rgb(5, 5, 2)},
+        {'K', rgb(0, 0, 0)},
+        {'W', rgb(7, 7, 3)},
+    };
+    static constexpr Pixels<16> pixels = paint<16>(rows, inks);
+    static constexpr Bitmap bitmap = {16, 16, pixels.p, kClear};
+    return bitmap;
+}
+
 const Bitmap &defrag_icon_32()
 {
     static constexpr const char *rows[32] = {

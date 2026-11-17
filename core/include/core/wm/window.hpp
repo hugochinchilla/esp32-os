@@ -205,6 +205,14 @@ public:
     void set_frame(const Rect &r); // before the window is opened, or to move it
     void set_title(const char *title); // the text must stay valid
 
+    // Locked: the window is shown and can be moved, sized and minimised,
+    // but it takes no keys, no clicks in its client area or menu bar, no
+    // dropped files and no request to close, and the pointer is an hourglass
+    // over it. For a program whose background job is using what the window
+    // shows (the Editor while it saves). The program unlocks it itself.
+    void set_locked(bool on);
+    bool locked() const { return locked_; }
+
     void add(Widget &w);
     // Keyboard focus inside the window.
     void set_focus(Widget *w);
@@ -278,6 +286,7 @@ private:
     bool dialog_ = false;
     bool modal_ = false;
     bool system_modal_ = false;
+    bool locked_ = false;
     Window *modal_owner_ = nullptr;
     const MenuBar *menu_bar_ = nullptr;
     Wm *wm_ = nullptr;

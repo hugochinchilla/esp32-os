@@ -265,9 +265,17 @@ void Wm::keep(Window &w)
 // process goes, and so do timers that would call back into it.
 void Wm::dispose_closed()
 {
+    // The windows of a process with a job running are left for a later safe
+    // point: the job may be reading what they hold.
+    Window *held[kMaxWindows];
+    int held_count = 0;
     while (closed_ != nullptr) {
         Window &w = *closed_;
         keep(w);
+        if (procs_ != nullptr && procs_->jobs(w.owner_) > 0 && held_count < kMaxWindows) {
+            held[held_count++] = &w;
+            continue;
+        }
         for (int z = count_ - 1; z >= 0; z--) {
             if (stack_[z]->modal_owner_ == &w) {
                 close(*stack_[z]); // its closed() runs while `w` still exists
@@ -286,6 +294,9 @@ void Wm::dispose_closed()
             }
         }
         w.dispose_(w);
+    }
+    for (int i = 0; i < held_count; i++) {
+        discard(*held[i]); // nothing happens to one that was opened again
     }
 }
 
@@ -347,8 +358,8 @@ void Wm::reap()
     const bool signalled = deliver_signals();
     for (int i = procs_->count() - 1; i >= 0; i--) {
         const proc::Process &p = procs_->at(i);
-        if (!p.is(proc::kWindowed) || windows_of(p.pid) != 0) {
-            continue;
+        if (!p.is(proc::kWindowed) || windows_of(p.pid) != 0 || p.jobs > 0) {
+            continue; // one with a job running waits for it (proc::Table::job_started)
         }
         end_process(p.pid);
     }
@@ -370,7 +381,19 @@ bool Wm::deliver_signals()
     for (int i = 0; i < n; i++) {
         pids[i] = procs_->at(i).pid;
     }
+    bool acted = false;
     for (int i = 0; i < n; i++) {
+        const proc::Process *p = procs_->find(pids[i]);
+        if (p == nullptr || p->pending == 0) {
+            continue;
+        }
+        if (p->jobs > 0 && (p->pending & static_cast<uint8_t>(proc::Signal::Kill)) != 0) {
+            // Its jobs have been told to stop (proc::Table::signal). The
+            // KILL stays on the row until they have: a task is not taken
+            // away while it may be half way through a file.
+            continue;
+        }
+        acted = true;
         const uint8_t bits = procs_->take_signals(pids[i]);
         if (bits & static_cast<uint8_t>(proc::Signal::Kill)) {
             end_process(pids[i]); // a TERM sent with it no longer matters
@@ -378,7 +401,7 @@ bool Wm::deliver_signals()
             ask_to_close(pids[i]);
         }
     }
-    return true;
+    return acted;
 }
 
 // TERM: the close button of every window of the process that has one.
@@ -403,8 +426,8 @@ void Wm::ask_to_close(proc::Pid pid)
         // is not asked; activating it brings the dialog forward.
         Window *const before = active_;
         activate(w);
-        if (blocker(w) != nullptr) {
-            continue;
+        if (blocker(w) != nullptr || w.locked_) {
+            continue; // a locked one is busy: it is not asked, and it stays
         }
         const proc::Scope as(procs_, pid);
         if (w.close_requested()) {
@@ -891,7 +914,7 @@ void Wm::handle_key(uint16_t usage, bool pressed)
         } else if (menu_open()) {
             used = menu_key(k);
         } else if ((mods_ & kAlt) && usage == key::F4) {
-            if (active_ != nullptr) {
+            if (active_ != nullptr && !active_->locked_) {
                 const proc::Scope as(procs_, active_->owner_);
                 if (active_->close_requested()) {
                     close(*active_);
@@ -902,7 +925,7 @@ void Wm::handle_key(uint16_t usage, bool pressed)
             cycle_windows();
             used = true;
         } else if ((mods_ & kAlt) && key::letter(usage) != 0 && active_ != nullptr &&
-                   active_->menu_bar_ != nullptr) {
+                   active_->menu_bar_ != nullptr && !active_->locked_) {
             const char letter = key::letter(usage);
             for (int i = 0; i < active_->menu_bar_->count; i++) {
                 if (access_letter(active_->menu_bar_->entries[i].label) == letter) {
@@ -916,7 +939,7 @@ void Wm::handle_key(uint16_t usage, bool pressed)
     } else if (menu_open()) {
         used = true;
     }
-    if (!used && bit == 0 && active_ != nullptr) {
+    if (!used && bit == 0 && active_ != nullptr && !active_->locked_) {
         const proc::Scope as(procs_, active_->owner_);
         used = active_->key(k);
         // Keys the window did not use may type a character.
@@ -938,7 +961,7 @@ void Wm::text(const char *utf8)
         stop_screen_saver();
         return;
     }
-    if (!menu_open() && active_ != nullptr && screen_fn_ == nullptr) {
+    if (!menu_open() && active_ != nullptr && !active_->locked_ && screen_fn_ == nullptr) {
         caret_moved();
         const proc::Scope as(procs_, active_->owner_);
         active_->text(utf8);
@@ -1154,6 +1177,11 @@ void Wm::on_press()
     }
     activate(*w);
     const Part part = part_at(*w, x, y);
+    if (w->locked_ && part != Part::Title && part != Part::Minimize && part != Part::Maximize &&
+        part != Part::Border) {
+        capture_ = Capture::Swallow; // busy: only the frame answers
+        return;
+    }
     captured_ = w;
     switch (part) {
     case Part::Close:
@@ -1240,7 +1268,7 @@ void Wm::on_right_press()
         desktop_menu_(pointer_x_, pointer_y_, desktop_menu_context_);
         return;
     }
-    if (w == nullptr || (sys != nullptr && sys != w) || blocker(*w) != nullptr ||
+    if (w == nullptr || (sys != nullptr && sys != w) || blocker(*w) != nullptr || w->locked_ ||
         part_at(*w, pointer_x_, pointer_y_) != Part::Client) {
         return;
     }
@@ -1416,7 +1444,8 @@ void Wm::update_drop_target()
         Window *w = window_under(x, y);
         Window *sys = system_modal();
         if (w != nullptr) {
-            if ((sys == nullptr || sys == w) && blocker(*w) == nullptr && part_at(*w, x, y) == Part::Client) {
+            if ((sys == nullptr || sys == w) && blocker(*w) == nullptr && !w->locked_ &&
+                part_at(*w, x, y) == Part::Client) {
                 const Rect c = w->client();
                 const proc::Scope as(procs_, w->owner_);
                 if (w->drag_over(drag_path_, x - c.x, y - c.y)) {
@@ -1537,16 +1566,18 @@ void Wm::on_release()
 void Wm::update_pointer_shape()
 {
     uint8_t edges = 0;
+    bool over_locked = false; // a busy window: the hourglass, except on its borders
     if (capture_ == Capture::Resize) {
         edges = resize_edges_;
     } else if (capture_ == Capture::None && !menu_open()) {
         if (Window *w = window_under(pointer_x_, pointer_y_)) {
             edges = edges_at(*w, pointer_x_, pointer_y_);
+            over_locked = w->locked_ && edges == 0;
         }
     }
     const video::PointerShape *shape = &video::arrow_pointer();
     const bool horizontal = edges & (kLeft | kRight), vertical = edges & (kTop | kBottom);
-    if (waiting_ > 0) {
+    if (waiting_ > 0 || over_locked) {
         shape = &video::busy_pointer();
     } else if (horizontal && vertical) {
         const bool falling = (edges & kLeft) == ((edges & kTop) ? kLeft : 0);
@@ -1574,6 +1605,14 @@ void Wm::end_wait()
     if (waiting_ > 0 && --waiting_ == 0) {
         update_pointer_shape();
     }
+}
+
+void Wm::lock_changed(Window &w)
+{
+    if (w.locked_ && menu_window_ == &w) {
+        close_menus();
+    }
+    update_pointer_shape();
 }
 
 void Wm::taskbar_click(int index)

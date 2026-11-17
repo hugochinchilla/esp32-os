@@ -3,6 +3,7 @@
 #pragma once
 
 #include <atomic>
+#include <condition_variable>
 #include <mutex>
 #include <thread>
 #include <algorithm>
@@ -174,6 +175,96 @@ public:
 private:
     std::mutex mutex_;
     std::atomic<std::thread::id> owner_{};
+};
+
+// A real event for tests with several threads, as a FreeRTOS binary
+// semaphore is on the board.
+class ThreadEvent : public ports::Event {
+public:
+    void set() override
+    {
+        {
+            const std::lock_guard<std::mutex> hold(mutex_);
+            set_ = true;
+        }
+        changed_.notify_one();
+    }
+    bool wait(uint32_t max_ms) override
+    {
+        std::unique_lock<std::mutex> hold(mutex_);
+        const auto is_set = [this] { return set_; };
+        if (max_ms == 0xFFFFFFFF) {
+            changed_.wait(hold, is_set);
+        } else if (!changed_.wait_for(hold, std::chrono::milliseconds(max_ms), is_set)) {
+            return false;
+        }
+        set_ = false;
+        return true;
+    }
+
+private:
+    std::mutex mutex_;
+    std::condition_variable changed_;
+    bool set_ = false;
+};
+
+// Tasks as threads of the PC. For the tests it can hold the tasks back:
+// while held, a started task waits, as a job that has not got far yet, until
+// release() lets it run. join() waits for every task that was let run.
+class ThreadTasks : public ports::Tasks {
+public:
+    ~ThreadTasks()
+    {
+        release();
+        join();
+    }
+    bool start(const char *, ports::TaskFn fn, void *context, uint32_t) override
+    {
+        if (refuse) {
+            return false;
+        }
+        started++;
+        if (held_) {
+            waiting_.push_back({fn, context});
+        } else {
+            threads_.emplace_back(fn, context);
+        }
+        return true;
+    }
+    void hold() { held_ = true; }
+    void release()
+    {
+        held_ = false;
+        for (const Waiting &w : waiting_) {
+            threads_.emplace_back(w.fn, w.context);
+        }
+        waiting_.clear();
+    }
+    void join()
+    {
+        for (std::thread &t : threads_) {
+            t.join();
+        }
+        threads_.clear();
+    }
+    // release() and join(): the held tasks run to their end.
+    void finish()
+    {
+        release();
+        join();
+    }
+
+    bool refuse = false; // "no memory for the stack"
+    int started = 0;
+
+private:
+    struct Waiting {
+        ports::TaskFn fn;
+        void *context;
+    };
+    bool held_ = false;
+    std::vector<Waiting> waiting_;
+    std::vector<std::thread> threads_;
 };
 
 class HostSystem : public ports::System {
