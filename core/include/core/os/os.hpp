@@ -149,6 +149,9 @@ SaverRun last_saver_run();
 // the power can go. False: one of them has a question open, and it is
 // brought forward.
 bool shut_down();
+// Starts one of the system's own programs by its name ("About Chinchilla"),
+// or brings it forward if it runs. False: there is none of that name.
+bool launch(const char *program);
 
 /* ---- The network ---------------------------------------------------------------- */
 
@@ -248,6 +251,7 @@ struct Kit {
     fs::Storage *storage = nullptr;
     ports::Memory *memory = nullptr;
     bool (*shut_down)() = nullptr; // closes every program and takes the screen
+    bool (*launch)(const char *program) = nullptr; // a row of the program table, by name
     sh::TerminalSession *(*open_session)(ports::ByteSink &device, const char *&why) = nullptr;
 };
 // What the calls work with. The desktop hands it in when it starts.

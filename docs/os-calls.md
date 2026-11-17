@@ -48,6 +48,7 @@ The journal entry with the reasons is
 | Desktop | `os::set_backdrop(backdrop)` | The desktop's colour and pattern (Display) |
 | | `os::set_screen_saver(animation, seconds)` | Which animation and after how long; -1 for none (Screen Saver) |
 | | `os::preview_screen_saver(animation)`, `os::last_saver_run()` | Shows one now; how the last run went |
+| | `os::launch(program)` | Starts one of the system's own programs by name, or brings it forward |
 | | `os::shut_down()` | Asks every program to close and shows the power-off screen; false if one called it off |
 | Network | `os::network()` | The Wi-Fi service, or nothing on a board with no radio; asked for each time, not kept |
 | Sessions | `os::open_session(device, why)` | A command shell on a TTY of its own, as a process `sh`, child of the one asking, which is its device (the Terminal). `nullptr` and the reason if it cannot start |

@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "core/fs/memory_volume.hpp"
+#include "core/gfx/art.hpp"
 #include "core/os/os.hpp"
 #include "core/prog/prog.hpp"
 #include "core/proc/table.hpp"
@@ -56,8 +57,8 @@ const char *title() { return desktop.active() != nullptr ? desktop.active()->tit
 
 int main(int argc, char **argv)
 {
-    if (argc < 2) {
-        printf("usage: test_loaded hello.app\n");
+    if (argc < 4) {
+        printf("usage: test_loaded hello.app culebra.app cactus_patch.app\n");
         return 2;
     }
     std::ifstream file(argv[1], std::ios::binary);
@@ -201,6 +202,40 @@ int main(int argc, char **argv)
     CHECK(programs->count == built_in);
     desktop.close_menus();
     CHECK(t.count() == processes);
+
+    // The two games in the form the board has them in: a file each, with
+    // the name and the pictures of the built-in ones, one copy at a time.
+    for (int game = 0; game < 2; game++) {
+        const char *const name = game == 0 ? "Culebra" : "Cactus Patch";
+        const char *const path = game == 0 ? "C:\\Programs\\culebra.app" : "C:\\Programs\\cactus_patch.app";
+        std::ifstream in(argv[2 + game], std::ios::binary);
+        const std::vector<char> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        CHECK(!bytes.empty() && storage.write_file(path, bytes.data(), bytes.size()) == ports::FsError::Ok);
+        CHECK(shell::program_info(path, info) && strcmp(info.title, name) == 0);
+        CHECK(info.has16 == 1 && info.has32 == 1 && info.many == 0);
+        CHECK(memcmp(info.icon16, (game == 0 ? gfx::snake_icon_16() : gfx::cactus_icon_16()).pixels, 256) == 0);
+        CHECK(memcmp(info.icon32, (game == 0 ? gfx::snake_icon_32() : gfx::cactus_icon_32()).pixels, 1024) == 0);
+        CHECK(shell::open_file(path));
+        wait(10000);
+        const proc::Pid pid = t.find_by_name(name);
+        CHECK(loader.loaded == 1 && pid != proc::kNone && strcmp(title(), name) == 0);
+        CHECK(desktop.active() != nullptr && desktop.active()->owner() == pid);
+        // A second time: the one that runs comes forward, nothing is loaded.
+        CHECK(shell::run_file(path, why, sizeof(why)));
+        wait(10000);
+        CHECK(loader.loaded == 1 && t.count() == processes + 1 && strcmp(title(), name) == 0);
+        // It plays: keys reach it and time passes in it.
+        press(wm::key::Right);
+        for (int i = 0; i < 20; i++) {
+            wait(100000);
+        }
+        CHECK(t.alive(pid));
+        desktop.close(*desktop.active());
+        wait(10000);
+        wait(10000);
+        CHECK(!t.alive(pid) && loader.loaded == 0 && t.count() == processes);
+        CHECK(storage.remove(path) == ports::FsError::Ok);
+    }
 
     // On a task of its own (backlog item 26), a real thread here: its way
     // in and its events run there, and the program is not taken out of

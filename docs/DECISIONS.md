@@ -2339,6 +2339,14 @@ The rest is the agent's, to confirm:
   them). A bundled program deleted by the user comes back at the next
   start.
 
+- **Culebra and Cactus Patch are files on the board and built in on the
+  PC** (the owner's choice on a card, 2026-11-17: "Archivo en placa,
+  integrado en PC"): one source with two forms (`APP_FILE`). Rejected: a
+  file everywhere (the browser build cannot load files and would lose
+  them) and leaving them built in. A program file runs one copy at a time
+  unless its header says `many`. The firmware does not shrink by this:
+  the files are carried in it.
+
 ### Missed video refills are logged (2026-11-17, the owner's request)
 
 - `dbg.py tasks` stays as it is (the owner, 2026-11-17: "we can leave the

@@ -192,6 +192,19 @@ bool run_file(const char *path, char *why, size_t capacity)
     if (ours) {
         memcpy(&info, image, sizeof(info));
     }
+    // One copy at a time unless the program says otherwise: opened again,
+    // the one that runs comes forward.
+    if (ours && app::is_program(info) && info.many == 0) {
+        char name[proc::Process::kNameSize];
+        process_name(path, info, name, sizeof(name));
+        const proc::Pid running = proc::table().find_by_name(name);
+        wm::Window *window = running != proc::kNone ? manager().main_window_of(running) : nullptr;
+        if (window != nullptr) {
+            os::release(image);
+            os::activate(*window);
+            return true;
+        }
+    }
     void *module = ours && app::is_program(info)
                        ? g_loader->load(static_cast<const uint8_t *>(image) + sizeof(info), size - sizeof(info), reason)
                        : nullptr;

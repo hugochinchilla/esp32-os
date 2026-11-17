@@ -32,7 +32,7 @@ for dir in "$HERE"/programs/*/; do
         -fPIC -shared -nostartfiles -nostdlib -e app_main \
         -fdata-sections -ffunction-sections -Wl,--gc-sections -fvisibility=hidden \
         -Wl,-T,"$HERE/tools/program.ld" \
-        -I"$HERE/core/include" "$dir"*.cpp -o "$OUT/$name.elf"
+        -I"$HERE/core/include" -I"$HERE/core/src/shell" "$dir"*.cpp -o "$OUT/$name.elf"
     "$STRIP" --strip-unneeded --remove-section=.comment --remove-section=.xt.lit \
         --remove-section=.xt.prop --remove-section=.xtensa.info "$OUT/$name.elf"
     # The file: the program's header, then the code.

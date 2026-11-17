@@ -128,19 +128,27 @@ add_test(NAME os_calls
 # Programs loaded from files (backlog 27). The sample program is built as a
 # shared library of the PC and loaded by the PC's own loader; the test
 # program lets it find the OS calls by name, as the firmware does.
-add_library(hello_app MODULE ../programs/hello/hello.cpp)
-target_include_directories(hello_app PRIVATE ../core/include)
-target_compile_options(hello_app PRIVATE -fvisibility=hidden -fno-exceptions -fno-rtti)
-set_target_properties(hello_app PROPERTIES PREFIX "" OUTPUT_NAME "hello" SUFFIX ".so")
-# The program file: its header, then the code (tools/pack_app.sh).
-add_custom_command(TARGET hello_app POST_BUILD
-                   COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../tools/pack_app.sh ${CMAKE_OBJCOPY} $<TARGET_FILE:hello_app>
-                           ${CMAKE_CURRENT_BINARY_DIR}/hello.app)
+function(add_program name source)
+    add_library(${name}_app MODULE ${source})
+    target_include_directories(${name}_app PRIVATE ../core/include ../core/src/shell)
+    target_compile_options(${name}_app PRIVATE -fvisibility=hidden -fno-exceptions -fno-rtti)
+    set_target_properties(${name}_app PROPERTIES PREFIX "" OUTPUT_NAME "${name}" SUFFIX ".so")
+    # The program file: its header, then the code (tools/pack_app.sh).
+    add_custom_command(TARGET ${name}_app POST_BUILD
+                       COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../tools/pack_app.sh ${CMAKE_OBJCOPY}
+                               $<TARGET_FILE:${name}_app> ${CMAKE_CURRENT_BINARY_DIR}/${name}.app)
+endfunction()
+add_program(hello ../programs/hello/hello.cpp)
+# The two games in the form the board has them in (a file each); the PC's
+# system also has them built in.
+add_program(culebra ../programs/culebra/culebra.cpp)
+add_program(cactus_patch ../programs/cactus_patch/cactus_patch.cpp)
 add_executable(test_loaded tests/test_loaded.cpp)
 target_link_libraries(test_loaded PRIVATE core ${CMAKE_DL_LIBS} Threads::Threads)
 set_target_properties(test_loaded PROPERTIES ENABLE_EXPORTS ON)
-add_dependencies(test_loaded hello_app)
-add_test(NAME loaded COMMAND test_loaded ${CMAKE_CURRENT_BINARY_DIR}/hello.app)
+add_dependencies(test_loaded hello_app culebra_app cactus_patch_app)
+add_test(NAME loaded COMMAND test_loaded ${CMAKE_CURRENT_BINARY_DIR}/hello.app ${CMAKE_CURRENT_BINARY_DIR}/culebra.app
+         ${CMAKE_CURRENT_BINARY_DIR}/cactus_patch.app)
 # The serial console on the debug link's wire (backlog 14).
 add_executable(test_console tests/test_console.cpp)
 target_link_libraries(test_console PRIVATE core)

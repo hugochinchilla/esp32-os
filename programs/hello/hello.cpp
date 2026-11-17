@@ -57,7 +57,7 @@ private:
 // Where the system comes in: once, as the program's own process. The
 // window it opens keeps the program loaded; when the window has closed the
 // process ends and the system takes the program out of memory.
-APP_INFO(app::file_info("Hello", 0, kSmall, kInks));
+APP_INFO(app::many(app::file_info("Hello", 0, kSmall, kInks)));
 
 APP_MAIN(int, char **)
 {

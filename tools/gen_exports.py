@@ -25,9 +25,11 @@ import sys
 CORE = [
     r"^_ZN2os",  # the OS calls: os::, os::ui::, os::file::...
     r"^_ZN5shell(11message_box|3ask|16open_file_dialog|16save_file_dialog|12input_dialog|13colour_dialog)E",
+    r"^_ZN5shell(13load_settings|13save_settings)E",  # a program's own settings file
+    r"^_ZNK?2fs3Ini",  # the settings file's sections and keys
 ]
 # From the core library: every function of these files.
-CORE_FILES = ["art.cpp"]
+CORE_FILES = ["art.cpp", "rect.cpp"]
 
 # From the C and C++ libraries and the compiler's own helpers.
 RUNTIME = """
@@ -61,7 +63,9 @@ def core_names(nm, archive):
 
 
 def needed(nm, program):
-    out = subprocess.run([nm, "-u", program], check=True, capture_output=True, text=True).stdout
+    # The dynamic names: a program file is stripped of the others, and
+    # without -D a stripped file seems to need nothing.
+    out = subprocess.run([nm, "-D", "-u", program], check=True, capture_output=True, text=True).stdout
     return [line.split()[-1] for line in out.splitlines() if line.split()]
 
 

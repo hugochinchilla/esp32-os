@@ -923,6 +923,13 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
     kit.memory = &memory;
     kit.shut_down = &power_down;
     kit.open_session = &open_session;
+    kit.launch = [](const char *program) {
+        const App *found = find_app(program);
+        if (found != nullptr) {
+            launch(*found);
+        }
+        return found != nullptr;
+    };
     os::install(kit);
     // The desktop is a process too: the Start menu, the icons and the
     // taskbar, and the dialogs they open. (It is the window server and the

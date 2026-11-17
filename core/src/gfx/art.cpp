@@ -1,5 +1,7 @@
 #include "core/gfx/art.hpp"
 
+#include "core/gfx/game_art.hpp"
+
 namespace gfx {
 
 namespace {
@@ -19,6 +21,24 @@ template <int S> struct Pixels {
 };
 
 template <int S, int N> constexpr Pixels<S> paint(const char *const (&rows)[S], const Ink (&inks)[N])
+{
+    Pixels<S> out;
+    for (int r = 0; r < S; r++) {
+        for (int q = 0; q < S; q++) {
+            uint8_t v = kClear;
+            for (int i = 0; i < N; i++) {
+                if (rows[r][q] == inks[i].key) {
+                    v = inks[i].colour;
+                }
+            }
+            out.p[r * S + q] = v;
+        }
+    }
+    return out;
+}
+
+// The same from the inks a program file's header is written with.
+template <int S, int N> constexpr Pixels<S> paint(const char *const (&rows)[S], const app::Ink (&inks)[N])
 {
     Pixels<S> out;
     for (int r = 0; r < S; r++) {
@@ -742,112 +762,28 @@ const Bitmap &defrag_icon_16()
 
 const Bitmap &snake_icon_32()
 {
-    static constexpr const char *rows[32] = {
-        "..........................K.....", "..........................WW....",
-        ".........................BSSW...", "........................WSSSSW..",
-        "........................WSSSSW..", ".........................WSSW...",
-        "..........................WW....", "..................KKKKKKKK......",
-        "......KKKKKKKKKKKKKRRRRRRK......", "......KYRRRRRRRRRRKYYYOOYK......",
-        "......KYYKKYYKKYYKKYYYOPYK...S..", "......KYYKKYYKKYYKKYYYYYYKSSS...",
-        "......KRYYKKKKKKKKKYYYYYYK...S..", "......KRYYK.......KKKKKKKK......",
-        "......KRYYK.....................", "......KRYYK.....................",
-        "......KRYYKKKKKKKKKKKKKKKKKKK...", "......KRYYRRRRRRRRRRRRRRRRRYK...",
-        "......KRYYKYYKKYYKKYYKKYYKKYK...", "......KYYYKYYKKYYKKYYKKYYKKYK...",
-        "......KKKKKKKKKKKKKKKKKKKRYYK...", "........................KRYYK...",
-        "........................KRYYK...", "........................KRYYK...",
-        "....KKKKKKKKKKKKKKKKKKKKKRYYK...", "....KYRRRRRRRRRRRRRRRRRRRRYYK...",
-        "....KYYKKYYKKYYKKYYKKYYKKRYYK...", "....KYYKKYYKKYYKKYYKKYYKKYYYK...",
-        "....KKKKKKKKKKKKKKKKKKKKKKKKK...", "................................",
-        "................................", "................................",
-    };
-    static constexpr Ink inks[] = {
-        {'K', rgb(0, 3, 0)},
-        {'W', rgb(4, 0, 0)},
-        {'B', rgb(7, 4, 2)},
-        {'S', rgb(7, 0, 0)},
-        {'R', rgb(4, 7, 1)},
-        {'Y', rgb(1, 5, 0)},
-        {'O', rgb(7, 7, 3)},
-        {'P', rgb(0, 0, 0)},
-    };
-    static constexpr Pixels<32> pixels = paint<32>(rows, inks);
+    static constexpr Pixels<32> pixels = paint<32>(game_art::kSnake32, game_art::kSnake32Inks);
     static constexpr Bitmap bitmap = {32, 32, pixels.p, kClear};
     return bitmap;
 }
 
 const Bitmap &snake_icon_16()
 {
-    static constexpr const char *rows[16] = {
-        "............KKKK", "............KWWK", "............KWWK", "............KKKK",
-        "...BBBBBBBB.....", "...BSSSSSRBWW...", "...BSBBBBBB.....", "...BSB..........",
-        "...BSBBBBBBBBB..", "...BSSSSSSSSSB..", "...BBBBBBBBBSB..", "...........BSB..",
-        "..BBBBBBBBBBSB..", "..BSSSSSSSSSSB..", "..BBBBBBBBBBBB..", "................",
-    };
-    static constexpr Ink inks[] = {
-        {'K', rgb(4, 0, 0)},
-        {'W', rgb(7, 0, 0)},
-        {'B', rgb(0, 3, 0)},
-        {'S', rgb(1, 5, 0)},
-        {'R', rgb(7, 7, 3)},
-    };
-    static constexpr Pixels<16> pixels = paint<16>(rows, inks);
+    static constexpr Pixels<16> pixels = paint<16>(game_art::kSnake16, game_art::kSnake16Inks);
     static constexpr Bitmap bitmap = {16, 16, pixels.p, kClear};
     return bitmap;
 }
 
 const Bitmap &cactus_icon_32()
 {
-    static constexpr const char *rows[32] = {
-        "..............KKK...............", ".............KWWWK..............",
-        ".............KWWWK..............", ".............KWWWKB.............",
-        "............BSKKKRYB............", "............BSRRRRYB............",
-        "............BSRRORYB............", "............BSRRRRYB....BBB.....",
-        "....BBB.....BSRRRRYB...BSRYB....", "...BSRYB....BSRORRYB...BSRYB....",
-        "...BSRYB....BSRRRRYB...BSRYB....", "...BSRYB....BSRRRRYB...BSRYB....",
-        "...BSRYB....BSRRRRYBBBBBRRYB....", "...BSRYB....BSRRORRRRRRRRRYB....",
-        "...BSRRBBBBBBSRRRRRRRRRRRYB.....", "...BSRRRRRRRRRRRRRYBBBBBBB......",
-        "....BSRRRRRRRRORRRYB............", ".....BBBBBBBBSRRRRYB............",
-        "............BSRRRRYB............", "............BSRRRRYB............",
-        "............BSRORRYB............", "............BSRRRRYB............",
-        ".......BBBBBBBBBBBBBBBBBB.......", ".......BPPPPPPPPPPPPPPPPB.......",
-        ".......BBBBBBBBBBBBBBBBBB.......", "........BGPPPPPPPPPPPPDB........",
-        "........BGPPPPPPPPPPPPDB........", ".........BGPPPPPPPPPPDB.........",
-        ".........BGPPPPPPPPPPDB.........", "..........BGPPPPPPPPDB..........",
-        "..........BBBBBBBBBBBB..........", "................................",
-    };
-    static constexpr Ink inks[] = {
-        {'K', rgb(4, 0, 0)},
-        {'W', rgb(7, 3, 2)},
-        {'B', rgb(0, 0, 0)},
-        {'S', rgb(4, 7, 1)},
-        {'R', rgb(1, 5, 0)},
-        {'Y', rgb(0, 3, 0)},
-        {'O', rgb(7, 7, 3)},
-        {'P', rgb(7, 4, 0)},
-        {'G', rgb(6, 4, 1)},
-        {'D', rgb(4, 2, 0)},
-    };
-    static constexpr Pixels<32> pixels = paint<32>(rows, inks);
+    static constexpr Pixels<32> pixels = paint<32>(game_art::kCactus32, game_art::kCactus32Inks);
     static constexpr Bitmap bitmap = {32, 32, pixels.p, kClear};
     return bitmap;
 }
 
 const Bitmap &cactus_icon_16()
 {
-    static constexpr const char *rows[16] = {
-        "......KKK.......", ".....KWWWK......", "......KKKK......", "......KBSK......",
-        "......KBSK.KK...", "..KK..KBSK.KSK..", ".KBSK.KBSK.KSK..", ".KBSK.KBSKKKSK..",
-        ".KBSKKKBSSSSK...", ".KBSSSSBSKKK....", "..KKKKKBSK......", "....KKKKKKKK....",
-        "....KRRRRRRK....", ".....KRRRRK.....", ".....KRRRRK.....", ".....KKKKKK.....",
-    };
-    static constexpr Ink inks[] = {
-        {'K', rgb(0, 0, 0)},
-        {'W', rgb(7, 3, 2)},
-        {'B', rgb(4, 7, 1)},
-        {'S', rgb(1, 5, 0)},
-        {'R', rgb(7, 4, 0)},
-    };
-    static constexpr Pixels<16> pixels = paint<16>(rows, inks);
+    static constexpr Pixels<16> pixels = paint<16>(game_art::kCactus16, game_art::kCactus16Inks);
     static constexpr Bitmap bitmap = {16, 16, pixels.p, kClear};
     return bitmap;
 }

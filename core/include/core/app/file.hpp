@@ -22,7 +22,7 @@ struct FileInfo {
     uint8_t clear;    // the colour of the pictures that is seen through
     uint8_t has16;    // 0: no small picture (the system's own stands in)
     uint8_t has32;    // 0: no large picture
-    uint8_t spare;
+    uint8_t many;     // 0: one copy runs at a time (opened again, its window comes forward)
     uint8_t icon16[16 * 16]; // RRRGGGBB, a row after another
     uint8_t icon32[32 * 32];
 };
@@ -92,14 +92,21 @@ constexpr FileInfo file_info(const char *title, uint32_t stack, const char *cons
     info.has16 = 1;
     return info;
 }
-// With a small and a large one (32 rows of 32), in the same inks.
-template <int N>
+// With a small and a large one (32 rows of 32), each in its own inks.
+template <int N, int M>
 constexpr FileInfo file_info(const char *title, uint32_t stack, const char *const (&small)[16],
-                             const char *const (&large)[32], const Ink (&inks)[N])
+                             const Ink (&small_inks)[N], const char *const (&large)[32], const Ink (&large_inks)[M])
 {
-    FileInfo info = file_info(title, stack, small, inks);
-    detail::paint(info.icon32, large, inks);
+    FileInfo info = file_info(title, stack, small, small_inks);
+    detail::paint(info.icon32, large, large_inks);
     info.has32 = 1;
+    return info;
+}
+// For a program that may run several copies at a time:
+//   APP_INFO(app::many(app::file_info(...)));
+constexpr FileInfo many(FileInfo info)
+{
+    info.many = 1;
     return info;
 }
 

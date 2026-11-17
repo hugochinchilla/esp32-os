@@ -220,3 +220,68 @@ One thing to change: the desktop came up 83 ms later than on `main`. The
 install check is no longer made on the way to the desktop but two seconds
 after it (`docs/journal/2026-11-17-folder-listing.md` has that turn's
 other finding).
+
+## The two games leave the firmware (the same day)
+
+Moving built-in programs out is the point of item 27, and it raised a
+question the owner had not been asked: the PC simulator and the build that
+runs in a browser cannot load program files, so a program that is only a
+file is gone from both. Asked on a card, "Decide cómo sacar Culebra y
+Cactus Patch del firmware a archivos", he chose **"Archivo en placa,
+integrado en PC"**.
+
+| Option | Chosen | Why, or why not |
+|---|---|---|
+| **A file on the board, built in on the PC**: one source, compiled as a `.app` for the board and into the system for the PC simulator and the browser | Yes (the owner) | The board's firmware is where the room matters; the games stay in the browser; the 450 lines of tests of the games keep their worth |
+| A file everywhere | No | The simulator would need the PC's loader, the browser build would lose the games, and their tests and reference pictures would be written again |
+| Leave them built in | No | Files only for new programs: item 27 would end here |
+
+Built:
+
+- `core/src/shell/culebra.cpp` and `cactus_patch.cpp` end in two forms.
+  With `APP_FILE` defined they have `APP_INFO` and `APP_MAIN`; without, the
+  `open_...` function of the program table and the tests' accessors, as
+  before. `programs/culebra/culebra.cpp` and
+  `programs/cactus_patch/cactus_patch.cpp` are three lines each: they
+  define `APP_FILE` and include the game (`core/src/games/`) and its
+  window, so each program is one file with its own copy of its game.
+- On the board (`core/CMakeLists.txt`, `CHINCHILLA_GAMES_IN_FILES`) the
+  four sources are not part of the core library and the two rows are not
+  in the program table. The firmware carries `culebra.app` (14,748 bytes)
+  and `cactus_patch.app` (19,500) beside `hello.app` and installs them.
+  The firmware is 0x182ae0 bytes: 19 KB **more** than with the games built
+  in, as the owner's choice of delivery said it would be (the files are
+  data in the firmware, with a 1.3 KB header and their own tables each).
+  What is gained is not flash: the games' code is in memory only while
+  they run, and they are replaced without a new firmware.
+- **The pictures** of the two games moved to
+  `core/include/core/gfx/game_art.hpp` as rows of text; `art.cpp` makes
+  the PC's bitmaps from them and the files' headers are written from the
+  same rows. The test compares the two byte for byte.
+- **One copy at a time.** The header's spare byte is `many`: 0, the
+  default, and a program opened again has its window brought forward
+  instead of being loaded twice (`shell::run_file`). `hello` says
+  `app::many(...)`.
+- **`os::launch(program)`**, a new OS call: Cactus Patch opens About
+  Chinchilla from its Help menu, and reached for the program table to do
+  it. `docs/os-calls.md` has it.
+- **The check of exported names was checking nothing.**
+  `tools/gen_exports.py --check` asked `nm -u` what a program needs, and a
+  stripped program file answers nothing to that: every program passed. It
+  asks `nm -D -u` now. The first honest run found what Culebra and Cactus
+  Patch need beyond the OS calls: the settings file (`fs::Ini`,
+  `shell::load_settings`, `save_settings`) and rectangles (`rect.cpp`).
+  They are exported: 319 names. `hello` had been fine by luck.
+
+Tested on the PC (`test_loaded`): each game's file carries the name and
+both pictures of the built-in one; it runs through the loader as its own
+process, takes a key, lives through two seconds of its timer; opened again
+nothing is loaded and its window is in front; closed, it is unloaded. The
+gate passes; the firmware compiles and links without the games in it and
+with the three files. **Not run on the board**: there the two games have
+only ever run built in. Their stacks are the 4 KB minimum, of which the
+board saw about 1.4 KB never used when they were built in.
+
+What is left: the board; then the other programs, which need more than
+the games did (a path to open handed to `APP_MAIN`, programs that call
+each other by name).
