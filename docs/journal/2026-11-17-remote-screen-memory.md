@@ -86,7 +86,16 @@ tests pass; flashed with a fast start.
    connected -183,612, after it disconnected +0; the browser page's viewer
    -199,956, after the browser closed -444; after ten connections in a row
    (the tenth opened Documents with a double click and closed it with Alt+F4
-   through VNC) +40.
+   through VNC) +40. The 444 bytes after the browser closed are not a leak
+   of ours (the author's reading of the web path, added afterwards):
+   `core/src/net/web.cpp` and `net::PosixTcpPool` take nothing from the
+   Memory port or the heap, and the server's three blocks (182,370 bytes) all
+   return, as the VNC figure shows. The extra 16 KB while a browser is
+   connected and the 444 bytes afterwards are the network stack's own: the
+   browser opens several connections, and lwIP keeps a closed connection's
+   control block for a while before freeing it. The +40 after ten connections
+   agrees: the 444 had come back by then. Look again only if a later
+   measurement shows it growing per browser visit.
 2. A second viewer while the first was on took over and worked (its double
    click opened Documents); after both closed the memory was back.
 3. A viewer killed without closing (SIGKILL on the client): its memory came
