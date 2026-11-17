@@ -177,3 +177,29 @@ still ends each wait. Both times belong in Setup one day: another monitor
 will want less.
 
 Compiled (BIOS 304,128 bytes), all 42 PC tests pass. Not run on the board.
+
+## On the board: seen
+
+e98209c on the board (the board thread's report). After a reset by the EN
+pin: the first screen's first image at 5.5 s, steady from about 5.7 to
+6.5 s, the change of screen between 6.5 and 7.0 s without black, the
+self-test's lines from 7.0 to 8.5 s, whole, and seen from "Main
+Processor" on. On serial the title at 6.97 s, "Main Processor" at 7.33 s,
+the handover at 13.95 s, the OS loaded at 14.25 s; the screen black from
+13.0 to 17.0 s and the desktop at about 17.0 s. After a restart by
+software the picture is continuous, without the 2 s of black of the
+measuring build. Handover, `fault abort` and the count of missed refills
+(0) as before.
+
+The quick ways round the BIOS, which the owner asked about ("do we still
+have a quick restart way for the agents?"):
+
+| Way | From | Desktop after |
+|---|---|---|
+| `tools/dbg.py reboot --fast` | the request | 3.2 s |
+| A byte on serial during the BIOS (sent at 3.0 s) | the reset | 4.5 s (handover at 3.56 s) |
+| Cable flash with a fast start armed, then the EN reset | the reset | 1.5 s (the BIOS says "fast start asked for" at 0.50 s, hands over at 0.55 s) |
+| The whole BIOS | the reset | about 17 s |
+
+Not tested, and not possible from the laptop: the physical button and a
+real power cut.
