@@ -334,8 +334,12 @@ private:
     /* ---- Where it has been ---- */
 
     // Opens an address and remembers it after the one shown.
-    void visit(const char *url)
+    void visit(const char *address)
     {
+        // A copy: the address may be one of the history's own lines, which
+        // are about to move.
+        char url[www::kMaxUrl];
+        snprintf(url, sizeof(url), "%s", address);
         remember_top();
         if (count_ > 0 && at_ + 1 < count_) {
             count_ = at_ + 1; // what lay ahead is forgotten

@@ -165,9 +165,10 @@ On the PC:
 
 Not tested, and it matters:
 
-- **Nothing ran on the board.** The firmware change is three lines in
-  `main.cpp` (a `PosixDialer` installed); see the pull request for whether
-  it compiled.
+- **Nothing ran on the board.** The firmware compiles and links in the
+  cloud container (ESP-IDF v5.5: `esp32-os.bin` is 0x17dde0 bytes, 23% of
+  the app partition free). Its change is a `PosixDialer` installed in
+  `main.cpp`.
 - **The whole web page was not built**: the container cannot download SDL
   for Emscripten. Only the adapter was compiled and run.
 - **FrogFind on plain port 80 was never reached from here**: the cloud
@@ -185,6 +186,10 @@ Not tested, and it matters:
 - FrogFind's refusal of unknown User-Agents would have looked like "the
   browser does not work" on the first try. The browser calls itself
   `Mozilla/4.0 (compatible; Vizcacha 1.0; Chinchilla; ESP32-S3)`.
+- The board's compiler (GCC 14) refused what the PC's accepted: `visit()`
+  copied an address into the history after moving the history's lines, and
+  the address could be one of those lines (a favourite never is, but Back
+  could have been). It takes a copy first now.
 - The desktop moves `C:\docs` to `C:\Documents` at start, which made a test
   page written before start-up vanish.
 
