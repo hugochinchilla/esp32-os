@@ -172,10 +172,10 @@ Sent Table::signal(Pid pid, Signal signal)
     if (p->is(kProtected)) {
         return Sent::NotPermitted;
     }
-    if (!p->is(kWindowed)) {
-        // Only window programs can be ended so far. A process without
-        // windows will be a real task with a way to stop it; until that is
-        // built, saying "ended" would be a lie.
+    if (!p->is(kWindowed) && p->stop == nullptr) {
+        // A process without windows is ended by its stop function, the code
+        // that really stops what the row stands for. Without one, saying
+        // "ended" would be a lie.
         return Sent::NotSupported;
     }
     if (p->pending == 0) {
@@ -222,6 +222,29 @@ uint8_t Table::take_signals(Pid pid)
     p->pending = 0;
     waiting_--;
     return bits;
+}
+
+void Table::set_stop(Pid pid, StopFn stop, void *context)
+{
+    if (Process *p = row(pid)) {
+        p->stop = stop;
+        p->stop_context = context;
+    }
+}
+
+bool Table::stop_service(Pid pid, Signal signal)
+{
+    Process *p = row(pid);
+    if (p == nullptr || p->stop == nullptr) {
+        return false;
+    }
+    // Once: a second signal while it is on its way out finds no function
+    // and is refused. The row may be gone when the function returns.
+    const StopFn stop = p->stop;
+    void *const context = p->stop_context;
+    p->stop = nullptr;
+    stop(pid, signal, context);
+    return true;
 }
 
 void Table::set_restart(Pid pid, StartFn start, void *context)

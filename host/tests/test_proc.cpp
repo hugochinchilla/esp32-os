@@ -236,6 +236,47 @@ void test_signals_in_the_table()
     CHECK(t.signal(service, proc::Signal::Kill) == proc::Sent::NotSupported);
     CHECK(!t.signals_waiting() && t.take_signals(guarded) == 0 && t.take_signals(service) == 0);
 
+    // A service with a stop function can be signalled (backlog 5b). The
+    // function is called by whoever acts on signals, once; it ends the
+    // service and removes the row. A protected service still cannot be.
+    struct Stopped {
+        proc::Table *table;
+        int times = 0;
+        Pid pid = proc::kNone;
+        proc::Signal with = proc::Signal::Term;
+        bool leave = true;
+    };
+    static Stopped stopped;
+    stopped = Stopped{&t};
+    const auto stop = [](Pid pid, proc::Signal signal, void *context) {
+        auto *seen = static_cast<Stopped *>(context);
+        seen->times++;
+        seen->pid = pid;
+        seen->with = signal;
+        if (seen->leave) {
+            seen->table->exit(pid);
+        }
+    };
+    const Pid daemon = t.spawn_service("inetd");
+    t.set_stop(daemon, stop, &stopped);
+    t.set_stop(99, stop, &stopped); // nobody: nothing
+    CHECK(t.signal(daemon, proc::Signal::Term) == proc::Sent::Ok && t.signals_waiting() && stopped.times == 0);
+    CHECK(t.take_signals(daemon) == static_cast<uint8_t>(proc::Signal::Term));
+    CHECK(t.stop_service(daemon, proc::Signal::Term) && stopped.times == 1 && stopped.pid == daemon);
+    CHECK(!t.alive(daemon) && !t.stop_service(daemon, proc::Signal::Term) && !t.stop_service(service, proc::Signal::Kill));
+    // One that takes its time to end: a second signal meanwhile is refused.
+    const Pid slow = t.spawn_service("slow");
+    stopped.leave = false;
+    t.set_stop(slow, stop, &stopped);
+    CHECK(t.signal(slow, proc::Signal::Kill) == proc::Sent::Ok && t.take_signals(slow) != 0);
+    CHECK(t.stop_service(slow, proc::Signal::Kill) && stopped.times == 2 && stopped.with == proc::Signal::Kill);
+    CHECK(t.alive(slow) && t.signal(slow, proc::Signal::Kill) == proc::Sent::NotSupported && !t.signals_waiting());
+    t.exit(slow);
+    const Pid kept = t.spawn_service("console", proc::kProtected);
+    t.set_stop(kept, stop, &stopped);
+    CHECK(t.signal(kept, proc::Signal::Kill) == proc::Sent::NotPermitted);
+    t.exit(kept);
+
     // A signal waits on the row until it is taken. Sending does nothing to
     // the process, and the same signal twice is one signal.
     CHECK(t.signal(program, proc::Signal::Term) == proc::Sent::Ok);
@@ -631,6 +672,29 @@ void test_owners()
     // it says so (this test's desktop does not, so it reads as a service).
     CHECK(procs.signal(desktop, proc::Signal::Kill) == proc::Sent::NotSupported);
     CHECK(procs.signal(proc::kRoot, proc::Signal::Kill) == proc::Sent::NotPermitted);
+    // A service with a stop function: the window manager calls it at the
+    // safe point after the signal, with the signal that was sent.
+    {
+        struct Seen {
+            proc::Table *table;
+            int times;
+            proc::Signal with;
+        };
+        static Seen seen;
+        seen = {&procs, 0, proc::Signal::Term};
+        const Pid daemon = procs.spawn_service("inetd");
+        procs.set_stop(
+            daemon,
+            [](Pid pid, proc::Signal signal, void *) {
+                seen.times++;
+                seen.with = signal;
+                seen.table->exit(pid);
+            },
+            nullptr);
+        CHECK(procs.signal(daemon, proc::Signal::Kill) == proc::Sent::Ok && seen.times == 0 && procs.alive(daemon));
+        wait(10);
+        CHECK(seen.times == 1 && seen.with == proc::Signal::Kill && !procs.alive(daemon) && !procs.signals_waiting());
+    }
 
     // Respawn: killed, the process is back after the same safe point, as
     // the root's child with a new number, with its window open again.

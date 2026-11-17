@@ -1826,6 +1826,41 @@ The last piece of backlog item 16. Journal:
 - **A task that finds the log busy drops its text** rather than wait.
 - `dmesg` shows it oldest first, without colour codes. No `-c`, no follow.
 
+### Chosen for updates over Wi-Fi (2026-11-17, to confirm)
+
+Backlog item 25. Journal: `docs/journal/2026-11-17-updates.md`. Chosen by
+the agent under the owner's "dejo a tu criterio" of 2026-11-16.
+
+- **The app area is now two slots of 1.94 MB** (`ota_0`, `ota_1`) and
+  `otadata`, as "Flash layout" foresaw. C: has not moved. The first flash
+  with this table is by cable.
+- **The PC sends the update**: `tools/ota.py <address>`, port 3232, one line
+  of text, the image, one line back. Rejected: the board fetching it; an
+  upload page; HTTP.
+- **Checked twice** (CRC-32 of what arrived, then ESP-IDF's image check)
+  before the next start changes.
+- **A new version is on trial for ten seconds**; if it does not last them,
+  the bootloader starts the one before at the next reset. Rejected:
+  confirming at once; confirming by hand.
+- **Off unless `[update] enabled = true` in `C:\.config\network.ini`.**
+  No password, by the owner's rule. Rejected: always on.
+
+### Chosen for ending services (2026-11-17, to confirm)
+
+Backlog item 5b. Journal: `docs/journal/2026-11-17-stopping-services.md`.
+Chosen by the agent under the owner's "dejo a tu criterio" of 2026-11-16.
+
+- **A process without windows can be signalled only if its row has a stop
+  function**, which really ends what the row stands for and then removes
+  the row. The window manager calls it at the safe point. Rejected:
+  deleting the task from outside.
+- **`inetd` has one.** Ending it lets the viewer and the telnet session go,
+  returns their memory, closes the ports and removes `inetd` and `telnetd`.
+  It does not come back until the next start. TERM and KILL are the same.
+- **The services loop's sleep is at most one second on the board**, so it
+  hears the stop; an idle board's services task wakes once a second where
+  it did not wake at all (item 8b). Rejected: a socket to itself.
+
 ### Chosen for background jobs (2026-11-17, to confirm)
 
 Backlog item 10. Journal: `docs/journal/2026-11-17-jobs.md`. Chosen by the

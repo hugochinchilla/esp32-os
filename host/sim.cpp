@@ -28,6 +28,7 @@
 #include "core/net/rfb.hpp"
 #include "core/net/services.hpp"
 #include "core/net/telnet.hpp"
+#include "core/net/update.hpp"
 #include "core/net/web.hpp"
 #include "core/net/wifi.hpp"
 #include "core/proc/table.hpp"
@@ -104,7 +105,7 @@ private:
 
 } // namespace
 
-// ./sim [folder [vnc-port [web-port [telnet-port]]]]: the folder, if given, is drive D:;
+// ./sim [folder [vnc-port [web-port [telnet-port [update-port]]]]]: the folder, if given, is drive D:;
 // with a port, the remote screen (VNC) is offered on it, and with a second
 // one the viewer page for a browser (http://localhost:web-port/). Both to
 // this computer only.
@@ -250,6 +251,14 @@ int main(int argc, char **argv)
         fprintf(stderr, "cannot listen on port %s\n", argv[4]);
     }
 
+    // Updates over the network (tools/ota.py localhost --port update-port):
+    // the image goes to memory, and to the file CHINCHILLA_UPDATE_OUT names
+    // if there is one; a restart ends this program.
+    static net::PosixTcpListener update_port;
+    if (argc > 5 && !update_port.listen(atoi(argv[5]), true)) {
+        fprintf(stderr, "cannot listen on port %s\n", argv[5]);
+    }
+
     // init, as on the board: PID 1, which starts the desktop and the network
     // services from C:\.config\startup.txt (the RAM disk is new at every
     // run, so the file is the usual one unless D: has put another there).
@@ -259,7 +268,8 @@ int main(int argc, char **argv)
         bool any_port;
     };
     static Parts parts = {&system, &protocol,
-                          vnc_port.listening() || web_port.listening() || telnet_port.listening()};
+                          vnc_port.listening() || web_port.listening() || telnet_port.listening() ||
+                              update_port.listening()};
     static init::Init first(proc::table());
     first.set_log(
         [](const char *line, void *) {
@@ -304,11 +314,55 @@ int main(int argc, char **argv)
                 telnet.set_listener(&telnet_port);
                 services.add(telnet);
             }
-            proc::table().spawn_service("inetd");
+            if (update_port.listening()) {
+                static host::MemoryUpdater updater;
+                static host::SteadyClock update_clock;
+                static net::Update update(updater, update_clock);
+                update.set_listener(&update_port);
+                update.set_log(
+                    [](const char *line, void *) {
+                        char text[200];
+                        const int n = snprintf(text, sizeof(text), "%s\n", line);
+                        parts.protocol->send_log(text, static_cast<size_t>(n));
+                    },
+                    nullptr);
+                update.on_written(
+                    [](bool restart, void *) {
+                        if (const char *out = getenv("CHINCHILLA_UPDATE_OUT")) {
+                            if (FILE *f = fopen(out, "wb")) {
+                                fwrite(updater.installed.data(), 1, updater.installed.size(), f);
+                                fclose(f);
+                            }
+                        }
+                        if (restart) {
+                            parts.system->reboot();
+                            queue.wake(); // the loop looks at once
+                        }
+                    },
+                    nullptr);
+                services.add(update);
+            }
+            static proc::Pid inetd_pid, telnetd_pid;
+            inetd_pid = proc::table().spawn_service("inetd");
+            telnetd_pid = proc::table().find_by_name("telnetd");
+            // Stoppable, as on the board: End Task or kill on inetd.
+            services.set_longest_sleep(200000);
+            proc::table().set_stop(
+                inetd_pid, [](proc::Pid, proc::Signal, void *) { services.request_stop(); }, nullptr);
             std::thread([] {
-                while (true) {
-                    services.round();
+                while (services.round()) {
                 }
+                vnc_port.stop();
+                web_port.stop();
+                telnet_port.stop();
+                update_port.stop();
+                msg::post(
+                    proc::kNone,
+                    [](const msg::Message &) {
+                        proc::table().exit(inetd_pid);
+                        proc::table().exit(telnetd_pid);
+                    },
+                    nullptr, 0, 0, 1000);
             }).detach();
             return true;
         },

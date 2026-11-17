@@ -67,11 +67,38 @@ public:
         watch.add(7, true, false);
         return wants;
     }
+    void stop() override { stops++; }
     host::FixedClock *clock = nullptr;
-    int polls = 0;
+    int polls = 0, stops = 0;
     uint32_t wants = net::kNever;
     uint32_t poll_costs_us = 0;
 };
+
+// Stopping the loop (backlog 5b): asked from any task, done at the next
+// round, each service told once.
+void test_stop()
+{
+    host::FixedClock clock;
+    FakeWait wait;
+    wait.clock = &clock;
+    net::Services services(wait, clock);
+    FakeService a, b;
+    a.clock = b.clock = &clock;
+    services.add(a);
+    services.add(b);
+    CHECK(services.round() && !services.stopped() && wait.slept.back() == net::kNever);
+    // A limit on the sleep, so a stop is noticed in time; a shorter wish
+    // still wins.
+    services.set_longest_sleep(1000000);
+    CHECK(services.round() && wait.slept.back() == 1000000);
+    a.wants = 5000;
+    CHECK(services.round() && wait.slept.back() == 5000);
+    services.request_stop();
+    const size_t sleeps = wait.slept.size();
+    CHECK(!services.round() && services.stopped() && a.stops == 1 && b.stops == 1);
+    CHECK(a.polls == 3 && wait.slept.size() == sleeps); // no more turns, no more sleeps
+    CHECK(!services.round() && a.stops == 1 && b.stops == 1);
+}
 
 void test_rounds()
 {
@@ -618,6 +645,7 @@ void test_two_tasks()
 int main()
 {
     test_rounds();
+    test_stop();
     test_posted_input();
     test_watch_sockets();
     test_two_tasks();

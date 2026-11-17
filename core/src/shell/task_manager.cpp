@@ -225,7 +225,7 @@ private:
             message_box("Task Manager", text);
             break;
         case proc::Sent::NotSupported:
-            snprintf(text, sizeof(text), "%s (PID %d) is a service without windows.\nServices cannot be ended yet.",
+            snprintf(text, sizeof(text), "%s (PID %d) is a service that cannot be ended\nwhile Chinchilla is running.",
                      name, pid);
             message_box("Task Manager", text);
             break;

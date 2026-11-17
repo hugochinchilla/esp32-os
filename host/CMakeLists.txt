@@ -119,6 +119,12 @@ add_test(NAME init COMMAND test_init)
 add_executable(test_console tests/test_console.cpp)
 target_link_libraries(test_console PRIVATE core)
 add_test(NAME console COMMAND test_console)
+# Updates over the network (backlog 25).
+add_executable(test_update tests/test_update.cpp)
+target_link_libraries(test_update PRIVATE core)
+add_test(NAME update COMMAND test_update)
+add_test(NAME ota_tool
+         COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/test_ota_sim.py $<TARGET_FILE:sim>)
 add_test(NAME serial_console
          COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/test_serial_console.py $<TARGET_FILE:sim>)
 # Programs made when opened and destroyed when closed (backlog 19 and 34).

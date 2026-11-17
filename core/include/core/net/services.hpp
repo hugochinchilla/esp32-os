@@ -15,6 +15,7 @@
 // msg::post().
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 
 #include "core/net/stream.hpp"
@@ -32,6 +33,10 @@ public:
     // may sleep, in µs, if none of that happens. kNever: as long as it takes.
     // 0: there is work left, come straight back.
     virtual uint32_t watch(Watch &watch) = 0;
+    // The loop is ending (backlog item 5b): whoever is connected is let go
+    // and what was borrowed is given back. Called once, on the services
+    // task; poll() is not called again.
+    virtual void stop() {}
 
 protected:
     ~Service() = default;
@@ -72,8 +77,15 @@ public:
 
     bool add(Service &service);
     // One round: every service's turn, then the sleep. The task is this in a
-    // loop.
-    void round();
+    // loop, while it answers true. False once a stop has been asked for:
+    // every service has been stopped and the task should end.
+    bool round();
+    // Any task: the loop ends at its next round. It is noticed when the
+    // sleep ends, so a machine that wants its services stoppable gives the
+    // sleep a limit (set_longest_sleep) and pays one short wake per limit.
+    void request_stop() { stop_ = true; }
+    bool stopped() const { return stopped_; }
+    void set_longest_sleep(uint32_t us) { longest_us_ = us; }
     const Stats &stats() const { return stats_; }
 
 private:
@@ -84,6 +96,9 @@ private:
     uint32_t working_since_ = 0;
     bool working_ = false;
     Stats stats_ = {};
+    std::atomic<bool> stop_{false};
+    std::atomic<bool> stopped_{false};
+    uint32_t longest_us_ = kNever;
 };
 
 } // namespace net
