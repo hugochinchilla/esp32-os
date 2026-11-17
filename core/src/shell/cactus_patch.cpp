@@ -244,7 +244,7 @@ public:
         const Rect wanted = c.limit().offset(-c.origin_x(), -c.origin_y());
 
         // The face colour where nothing else paints: each pixel once.
-        static gfx::RectList background; // one UI task, so one list will do
+        gfx::RectList &background = background_; // the window's own, gone with it
         background.set(all);
         background.subtract(counter_rect(0));
         background.subtract(counter_rect(1));
@@ -590,6 +590,7 @@ private:
     CactusField field_;
     int level_ = 0;
     int saved_level_ = 0;
+    gfx::RectList background_; // paint()'s working list
     fs::Ini settings_; // C:\.config\cactus.ini
     int seconds_ = 0;
     int games_ = 0;

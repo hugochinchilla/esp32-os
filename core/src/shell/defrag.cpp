@@ -47,12 +47,7 @@ void DefragModel::scramble(uint32_t seed)
     }
     // Files of 2 to 29 blocks until the disk is about 60 % full.
     constexpr int kTarget = kCells * 60 / 100;
-    struct Piece {
-        uint8_t file; // 0: free blocks
-        uint8_t length;
-        uint16_t first;
-    };
-    static Piece pieces[kCells]; // ponytail: one UI task, one list
+    Piece *const pieces = pieces_; // the model's own, gone with its window
     int count = 0;
     files_ = 0;
     used_ = 0;

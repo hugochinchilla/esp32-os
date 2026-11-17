@@ -62,3 +62,4 @@ Plain words, real numbers, no summaries of summaries.
 | 2026-11-17 | [Chinchilla on a PC](2026-11-17-chinchilla-on-a-pc.md) | Where the screenshots come from, and the owner's idea of a desktop program and a web page (backlog 32, 33) |
 | 2026-11-17 | [Dialogs as programs](2026-11-17-dialogs-as-programs.md) | The owner's rule that new dialogs are programs of their own; how programs really run today; what frees memory and what does not |
 | 2026-11-17 | [Our statics in external RAM](2026-11-17-statics-in-psram.md) | 121 KB of internal RAM freed, what stayed internal and why, before and after |
+| 2026-11-17 | [Programs made when opened, gone when closed](2026-11-17-program-lifecycle.md) | Backlog 19 and 34: every window is created on open and destroyed on close, where the memory comes from, who destroys it and when, several Editors at once, and what a program now has to save |
