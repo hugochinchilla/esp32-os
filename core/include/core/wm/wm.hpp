@@ -443,7 +443,7 @@ private:
     Window *drop_window_ = nullptr;
     bool desktop_over_ = false;   // the desktop panel has been shown the drag
     bool desktop_target_ = false; // and it would take the file
-    Backdrop backdrop_ = {{58, 110, 165}, {0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0}};
+    Backdrop backdrop_ = {{73, 109, 182}, {0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0}};
 
     // Double clicks: the target of the last press and when it happened.
     int last_target_ = -1;

@@ -2057,8 +2057,9 @@ Backlog item 41, asked by the owner. Journal:
 - The Start button is 60 wide: two clear pixels on each side (the owner
   suggested one; one leaves the sides unequal).
 - Display's list is 15 colours the board shows exactly, plus "Chinchilla
-  blue (dithered)", still the default. Whether the default becomes solid is
-  open, the owner's. "Lilac" is gone from the list.
+  blue (dithered)". The default was left dithered here and made solid the
+  same day (see "The default desktop colour is solid"). "Lilac" is gone
+  from the list.
 - "Other..." opens a grid of the board's 256 colours, not a 24-bit picker
   and not sliders: everything it offers is undithered. The grid is one
   sheet of 16 by 16: a square of 8 by 8 for each level of blue, red
@@ -2113,3 +2114,11 @@ every cascading menu and at every depth:
   submenu of that menu is open (unchanged).
 
 test_submenu_switches_at_once and test_slow_submenu in `host/tests/test_wm.cpp`.
+
+### The default desktop colour is solid (the owner's decision, 2026-11-17)
+
+Backlog item 43. "yes, solid steel blue": the default is Steel blue (73,
+109, 182, a colour the board has), first in Display's list. The dithered
+"Chinchilla blue" stays in the list, second, and a `desktop.ini` that
+names it keeps it. This closes the question left open in the second
+review round. Journal: `docs/journal/2026-11-17-solid-default.md`.
