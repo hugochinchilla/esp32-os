@@ -119,6 +119,10 @@ add_test(NAME tty COMMAND test_tty)
 
 # The command shell (backlog item 13): its tests, and the shell itself in a
 # terminal of the PC (build/host/chinchilla-console [FOLDER]).
+add_executable(test_job tests/test_job.cpp)
+target_link_libraries(test_job PRIVATE core Threads::Threads)
+add_test(NAME job COMMAND test_job)
+
 add_executable(test_sh tests/test_sh.cpp)
 target_link_libraries(test_sh PRIVATE core Threads::Threads)
 add_test(NAME sh COMMAND test_sh)

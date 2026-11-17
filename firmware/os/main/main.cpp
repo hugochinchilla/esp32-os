@@ -33,6 +33,8 @@
 #include "core/fs/ini.hpp"
 #include "littlefs_volume.hpp"
 #include "rtos_queue.hpp"
+#include "rtos_tasks.hpp"
+#include "core/job/job.hpp"
 #include "core/msg/queue.hpp"
 #include "core/net/posix_tcp.hpp"
 #include "core/net/rfb.hpp"
@@ -762,6 +764,9 @@ extern "C" void app_main(void)
     static RtosQueue queue;
     s_queue = &queue;
     msg::set_queue(&queue);
+    // Background jobs (the Editor's save) get tasks of their own.
+    static RtosTasks tasks;
+    job::jobs().set_tasks(&tasks);
 
     ESP_LOGI(TAG, "starting video on core 1");
     static StaticSemaphore_t done_buffer;

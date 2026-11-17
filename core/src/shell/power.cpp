@@ -108,8 +108,8 @@ bool power_down()
         open[n++] = m.taskbar_window(i);
     }
     for (int i = 0; i < n; i++) {
-        if (m.blocker(*open[i]) != nullptr) {
-            m.activate(*open[i]); // brings its dialog forward
+        if (m.blocker(*open[i]) != nullptr || open[i]->locked()) {
+            m.activate(*open[i]); // brings its dialog forward; a locked one is still saving
             return false;
         }
     }

@@ -167,6 +167,16 @@ void Window::invalidate_client(const Rect &r)
     }
 }
 
+void Window::set_locked(bool on)
+{
+    if (locked_ != on) {
+        locked_ = on;
+        if (wm_ != nullptr) {
+            wm_->lock_changed(*this);
+        }
+    }
+}
+
 void Window::close()
 {
     if (wm_ != nullptr) {

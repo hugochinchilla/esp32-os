@@ -30,7 +30,7 @@ board or the merge), `done`.
 | | **Phase 2: work off the UI task** | | | | |
 | 8 | Message queue into the UI task. The loop sleeps until there is work | M | | Yes | done (checked on the board 2026-11-16). [Journal](journal/2026-11-16-message-queue.md) |
 | 9 | Lock on the file system | S | | | done (checked on the board 2026-11-16). [Journal](journal/2026-11-16-file-system-lock.md) |
-| 10 | Jobs owned by a process, and "cannot exit until jobs finish". The Editor saves through a job, its window locked meanwhile | M | 2, 8, 9 | Yes | todo |
+| 10 | Jobs owned by a process, and "cannot exit until jobs finish". The Editor saves through a job, its window locked meanwhile | M | 2, 8, 9 | Yes | on a branch (`claude/project-thread-8q7ksu`), PC tests pass, firmware compiles; not run on the board. [Journal](journal/2026-11-17-jobs.md) |
 | 11 | Three priority classes (Low, Normal, High) for jobs and services | S | 10 | Yes | todo |
 | | **Phase 3: the console** | | | | |
 | 12 | TTY object: echo, line editing, Ctrl+C | M | 8 | | on a branch (`claude/project-thread-8q7ksu`), PC tests pass; nothing on the board uses it yet. [Journal](journal/2026-11-17-tty.md) |
