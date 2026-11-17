@@ -4,6 +4,9 @@ Read `docs/DECISIONS.md` before proposing or changing anything. It records what
 has been decided, what was rejected and why, and what is still open. Update it
 in the same change whenever a decision is made or reversed.
 
+- Language (the owner's rule, 2026-11-17): code, comments, commit messages and
+  all documentation in the repo are written in English, whatever language the
+  owner uses in conversation. Reply to the owner in the language he writes in.
 - Work runs in parallel threads since 2026-11-16 (the owner's request). Which
   rule applies depends on the thread:
   - The thread that drives the owner's laptop and the board commits directly to
