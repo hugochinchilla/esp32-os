@@ -167,6 +167,7 @@ public:
         time_context_ = context;
     }
     void set_zone(const TimeZone &zone) { zone_ = zone; }
+    const TimeZone &zone() const { return zone_; }
     bool time_known() const { return time_known_; }
 
     // The remembered networks as stored (tests).

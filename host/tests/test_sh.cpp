@@ -13,6 +13,7 @@
 #include "core/fs/fs.hpp"
 #include "core/fs/memory_volume.hpp"
 #include "core/msg/queue.hpp"
+#include "core/net/wifi.hpp"
 #include "core/proc/table.hpp"
 #include "core/sh/sh.hpp"
 #include "core/shell/boot.hpp"
@@ -462,20 +463,20 @@ void test_folders()
     std::string free_grouped = free_text; // 6 digits: one comma
     free_grouped.insert(free_grouped.size() - 3, ",");
     const std::string listing = " Folder C:\\Documents\n\n"
-                                " <DIR>           Letters\n"
-                                "              6  notes.txt\n"
-                                "              6  todo.txt\n"
-                                "         70,000  picture.bmp\n"
-                                "              1  a\xC3\xB1o.txt\n"
+                                "                  <DIR>           Letters\n"
+                                "                               6  notes.txt\n"
+                                "                               6  todo.txt\n"
+                                "                          70,000  picture.bmp\n"
+                                "                               1  a\xC3\xB1o.txt\n"
                                 "      4 files           70,013 bytes\n"
                                 "      1 folder         " + free_grouped + " bytes free\n";
     CHECK(free_grouped.size() == 7);
     CHECK_TEXT(run(m, s, "dir"), listing);
     CHECK_TEXT(run(m, s, "ls -l"), listing);
     CHECK_TEXT(run(m, s, "DIR c:/documents/"), " Folder C:\\documents" + listing.substr(20));
-    CHECK_TEXT(run(m, s, "dir *.bmp"), " Folder C:\\Documents\n\n         70,000  picture.bmp\n"
+    CHECK_TEXT(run(m, s, "dir *.bmp"), " Folder C:\\Documents\n\n                          70,000  picture.bmp\n"
                                        "      1 file            70,000 bytes\n      0 folders        " + free_grouped + " bytes free\n");
-    CHECK_TEXT(run(m, s, "dir \\readme.txt"), "          1,234  readme.txt\n");
+    CHECK_TEXT(run(m, s, "dir \\readme.txt"), "                           1,234  readme.txt\n");
     CHECK(run(m, s, "dir -a").find("              1  .hidden\n") != std::string::npos);
     CHECK(run(m, s, "ls -la /").find(" <DIR>           .config\n") != std::string::npos);
 
@@ -624,6 +625,63 @@ void test_files()
     CHECK(m.contents("C:\\.config\\desktop.ini") == "x");
 }
 
+/* ---- Dates --------------------------------------------------------------------------- */
+
+// When a file was last written, in dir and ls -l, in local time; and date.
+void test_dates()
+{
+    Machine m;
+    sh::Session s(m.terminal, m.env);
+    m.c.set_clock(&m.system);
+
+    // A machine that does not know the time: no dates, and date says so.
+    m.file("C:\\early.txt", "x");
+    CHECK_TEXT(run(m, s, "dir early.txt"), "                               1  early.txt\n");
+    CHECK_TEXT(run(m, s, "date", 1), "date: the machine does not know the time yet (it learns it from the network)\n");
+
+    // 13:05:09 UTC on 17 November 2026 is 14:05 in the default zone (Spain).
+    m.system.utc = 1794920709;
+    CHECK_TEXT(run(m, s, "date"), "Tue 17 Nov 2026 14:05:09\n");
+    CHECK_TEXT(run(m, s, "time"), run(m, s, "date"));
+    m.file("C:\\notes.txt", "hello");
+    CHECK_TEXT(run(m, s, "mkdir Letters"), "");
+    CHECK_TEXT(run(m, s, "dir notes.txt"), "2026-11-17 14:05               5  notes.txt\n");
+    CHECK_TEXT(run(m, s, "ls -l"), " Folder C:\\\n\n"
+                                   "                               1  early.txt\n"
+                                   "2026-11-17 14:05               5  notes.txt\n"
+                                   "2026-11-17 14:05  <DIR>           Letters\n"
+                                   "      2 files                6 bytes\n"
+                                   "      1 folder         498,688 bytes free\n");
+
+    // In summer the zone is an hour further on: 07:30 UTC is 09:30.
+    m.system.utc = 1783150200;
+    CHECK_TEXT(run(m, s, "date"), "Sat 4 Jul 2026 09:30:00\n");
+    // A new name keeps the date; a copy is a new file; adding to a file
+    // gives it the date of the addition.
+    CHECK_TEXT(run(m, s, "ren notes.txt old.txt"), "");
+    CHECK_TEXT(run(m, s, "dir old.txt"), "2026-11-17 14:05               5  old.txt\n");
+    CHECK_TEXT(run(m, s, "copy old.txt new.txt"), "");
+    CHECK_TEXT(run(m, s, "dir new.txt"), "2026-07-04 09:30               5  new.txt\n");
+    CHECK_TEXT(run(m, s, "echo more >> early.txt"), "");
+    CHECK_TEXT(run(m, s, "dir early.txt"), "2026-07-04 09:30               6  early.txt\n");
+    // Reading changes nothing.
+    CHECK_TEXT(run(m, s, "type old.txt"), "hello");
+    CHECK_TEXT(run(m, s, "dir old.txt"), "2026-11-17 14:05               5  old.txt\n");
+
+    // Another zone, given to the session: UTC, no summer time.
+    static const net::TimeZone utc = {0, false};
+    m.env.zone = &utc;
+    sh::Session other(m.terminal, m.env);
+    CHECK_TEXT(run(m, other, "date"), "Sat 4 Jul 2026 07:30:00\n");
+    CHECK_TEXT(run(m, other, "dir old.txt"), "2026-11-17 13:05               5  old.txt\n");
+    m.env.zone = nullptr;
+
+    // The text by itself.
+    char text[24];
+    CHECK(strcmp(sh::date_text(0, nullptr, text, sizeof text), "") == 0);
+    CHECK(strcmp(sh::date_text(1794920709, nullptr, text, sizeof text), "2026-11-17 14:05") == 0);
+}
+
 /* ---- Processes and the machine ------------------------------------------------------ */
 
 void test_processes()
@@ -635,12 +693,35 @@ void test_processes()
     const proc::Pid game = m.procs.spawn("culebra", desktop, proc::kWindowed | proc::kRespawn);
     CHECK(desktop == 1 && editor == 2 && game == 3);
 
-    CHECK_TEXT(run(m, s, "ps"), "  PID  PPID  FLAGS  NAME\n"
-                                "    1     0  SP--   desktop\n"
-                                "    2     1  ---W   editor\n"
-                                "    3     1  --RW   culebra\n"
+    CHECK_TEXT(run(m, s, "ps"), "  PID  PPID  FLAGS     TIME    MEM  NAME\n"
+                                "    1     0  SP--     0.0s      -  desktop\n"
+                                "    2     1  ---W     0.0s      -  editor\n"
+                                "    3     1  --RW     0.0s      -  culebra\n"
                                 "S system  P protected  R restarts  W has windows\n");
     CHECK_TEXT(run(m, s, "tasklist"), run(m, s, "ps"));
+
+    // The figures: processor time and memory, in ps and in top. Where top
+    // cannot wait for a key (here; or sent to a file) it shows one table of
+    // the totals and returns.
+    m.procs.add_cpu(editor, 4200000);
+    m.procs.add_memory(editor, 640 * 1024);
+    m.procs.add_cpu(game, 187000000);
+    m.procs.add_memory(game, 1200 * 1024);
+    CHECK(run(m, s, "ps").find("    2     1  ---W     4.2s   640K  editor\n"
+                               "    3     1  --RW     3:07   1.2M  culebra\n") != std::string::npos);
+    const std::string table = run(m, s, "top");
+    CHECK(table.rfind("3 processes, on for 0:00:0", 0) == 0);
+    CHECK(table.find("\n\n  PID     TIME    MEM  NAME\n"
+                     "    1     0.0s      -  desktop\n"
+                     "    2     4.2s   640K  editor\n"
+                     "    3     3:07   1.2M  culebra\n") != std::string::npos);
+    CHECK(table.find("q to leave") == std::string::npos);
+    CHECK_TEXT(run(m, s, "top -n 2"), table);
+    CHECK_TEXT(run(m, s, "top > t.txt"), "");
+    CHECK(m.contents("C:\\t.txt").find("    3     3:07   1.2M  culebra") != std::string::npos);
+    CHECK_TEXT(run(m, s, "top -x", 1), "top: -x: it takes -n and a number of screens\n");
+    CHECK_TEXT(run(m, s, "top -n 0", 1), "top: -n: it takes -n and a number of screens\n");
+    m.procs.add_cpu(editor, 0);
 
     // kill leaves the signal on the row, for whoever runs the process.
     CHECK_TEXT(run(m, s, "kill 2"), "");
@@ -669,7 +750,7 @@ void test_processes()
     }
     CHECK(m.procs.count() == proc::Table::kMaxProcesses);
     const std::string full = run(m, s, "ps");
-    CHECK(full.find("   32     1  ---W   a process with a long n\n") != std::string::npos);
+    CHECK(full.find("   32     1  ---W     0.0s      -  a process with a long n\n") != std::string::npos);
 
     m.system.free_internal_ram = 123456;
     m.system.free_external_ram = 7654321;
@@ -808,7 +889,7 @@ void test_session_on_a_thread()
     // ps and kill are done by the UI thread, and the session waits for them.
     terminal.input("ps\r");
     const std::string list = wait_for("has windows\nC:\\> ");
-    CHECK(list.find("    2     1  ---W   editor\n") != std::string::npos);
+    CHECK(list.find("    2     1  ---W     0.0s      -  editor\n") != std::string::npos);
     CHECK(ui_ran == 1);
     terminal.input("kill 2\rkill 1\r");
     wait_for("kill: 1: it is protected\nC:\\> ");
@@ -865,6 +946,24 @@ void test_session_on_a_thread()
     page = wait_for("C:\\> ");
     CHECK(page.find("row 48") == std::string::npos);
 
+    // top has a task to wait on here: it clears the screen, shows each
+    // process's share of the processor since its last look, and comes back
+    // every two seconds until q. -n 1: one screen and back to the prompt.
+    terminal.input("top -n 1\r");
+    page = wait_for("C:\\> ");
+    CHECK(page.find("(q to leave)\n\n  PID   CPU     TIME    MEM  NAME\n") != std::string::npos);
+    CHECK(page.find("    1   0.0%    0.0s      -  desktop\n") != std::string::npos);
+    CHECK(page.find("\x1b[2J") != std::string::npos);
+    terminal.input("top\r");
+    wait_for("NAME\n");
+    wait_for("desktop\n");
+    terminal.input("q");
+    wait_for("C:\\> ");
+    terminal.input("top\r");
+    wait_for("desktop\n");
+    terminal.input("\x03");
+    wait_for("C:\\> ");
+
     terminal.input("exit\r");
     session.join();
     CHECK(s.ended());
@@ -886,6 +985,7 @@ int main()
     test_files();
     test_pipes();
     test_desktop_commands();
+    test_dates();
     test_processes();
     test_typed_session();
     test_session_on_a_thread();

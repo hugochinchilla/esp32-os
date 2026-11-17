@@ -181,6 +181,7 @@ FsError MemoryVolume::entry(const char *folder, int index, DirEntry &out)
             snprintf(out.name, sizeof(out.name), "%s", nodes_[i].name);
             out.folder = nodes_[i].folder;
             out.size = nodes_[i].size;
+            out.modified = nodes_[i].modified;
             return FsError::Ok;
         }
     }
@@ -196,6 +197,7 @@ FsError MemoryVolume::stat(const char *path, DirEntry &out)
     snprintf(out.name, sizeof(out.name), "%s", nodes_[at].name);
     out.folder = nodes_[at].folder;
     out.size = nodes_[at].size;
+    out.modified = nodes_[at].modified;
     return FsError::Ok;
 }
 
@@ -220,6 +222,7 @@ FsError MemoryVolume::make_folder(const char *path)
     nodes_[n].parent = static_cast<int16_t>(parent);
     nodes_[n].folder = 1;
     nodes_[n].used = 1;
+    nodes_[n].modified = now();
     return FsError::Ok;
 }
 
@@ -300,6 +303,7 @@ FsError MemoryVolume::replace(const char *from, const char *to)
     free_chain(nodes_[old].first);
     nodes_[old].first = nodes_[at].first;
     nodes_[old].size = nodes_[at].size;
+    nodes_[old].modified = nodes_[at].modified;
     nodes_[at].used = 0;
     return FsError::Ok;
 }
@@ -339,14 +343,16 @@ FsError MemoryVolume::open(const char *path, OpenMode mode, int &file)
         snprintf(nodes_[at].name, sizeof(nodes_[at].name), "%s", leaf);
         nodes_[at].parent = static_cast<int16_t>(parent);
         nodes_[at].used = 1;
+        nodes_[at].modified = now();
     } else if (mode != OpenMode::Read && in_use(at)) {
         return FsError::InUse;
     } else if (mode == OpenMode::Write) {
         free_chain(nodes_[at].first);
         nodes_[at].first = -1;
         nodes_[at].size = 0;
+        nodes_[at].modified = now();
     }
-    handles_[slot] = {true, mode != OpenMode::Read, at, 0, nodes_[at].first, 0};
+    handles_[slot] = {true, mode != OpenMode::Read, false, at, 0, nodes_[at].first, 0};
     file = slot;
     return FsError::Ok;
 }
@@ -418,6 +424,7 @@ FsError MemoryVolume::write(int file, const void *data, size_t size)
         return FsError::InUse;
     }
     Node &n = nodes_[h.node];
+    h.wrote = true;
     const uint8_t *in = static_cast<const uint8_t *>(data);
     size_t done = 0;
     while (done < size) {
@@ -455,8 +462,17 @@ FsError MemoryVolume::close(int file)
     if (file < 0 || file >= kMaxOpen || !handles_[file].used) {
         return FsError::NotFound;
     }
+    if (handles_[file].wrote) {
+        nodes_[handles_[file].node].modified = now();
+    }
     handles_[file].used = false;
     return FsError::Ok;
+}
+
+uint32_t MemoryVolume::now() const
+{
+    int64_t seconds = 0;
+    return clock_ != nullptr && clock_->utc_time(seconds) && seconds > 0 ? static_cast<uint32_t>(seconds) : 0;
 }
 
 } // namespace fs

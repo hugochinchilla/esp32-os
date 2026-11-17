@@ -56,8 +56,8 @@ private:
 
 class TaskManager : public wm::Window {
 public:
-    static constexpr int kClientW = 336, kClientH = 332;
-    static constexpr int kMaxRows = proc::Table::kMaxProcesses, kRowText = 48;
+    static constexpr int kClientW = 404, kClientH = 332;
+    static constexpr int kMaxRows = proc::Table::kMaxProcesses, kRowText = 64;
     static constexpr uint32_t kRefreshUs = 1000000;
     // How long a program gets to close after End Task before force is offered.
     static constexpr uint32_t kGraceUs = 5000000;
@@ -66,18 +66,18 @@ public:
         : Window("Task Manager", {0, 0, kClientW + 2 * kBorder, kClientH + kClientTop + kBorder},
                  &gfx::tasks_icon_16()),
           heading_({8, 6, 200, 14}, "&Processes running:"),
-          columns_({30, 22, 290, 14}, "  PID  Name              Window"),
-          list_({8, 36, 320, 94}, titles_, 0, &TaskManager::row_picked, this),
+          columns_({30, 22, kClientW - 46, 14}, "  PID  Name            Time    Mem  Window"),
+          list_({8, 36, kClientW - 16, 94}, titles_, 0, &TaskManager::row_picked, this),
           end_({8, 136, 75, 23}, "&End Task", &TaskManager::end_pressed, this),
           switch_({89, 136, 75, 23}, "&Switch To", &TaskManager::switch_pressed, this),
           shut_down_({kClientW - 8 - 96, 136, 96, 23}, "Shut &Down...", &TaskManager::shut_down_pressed, this),
           all_({8, 164, 200, 18}, "Show &all processes", false, &TaskManager::all_changed, this),
-          processor_({8, 184, 320, 74}, "Processor"),
+          processor_({8, 184, kClientW - 16, 74}, "Processor"),
           history_(18, 202, 46),
           desktop_({152, 202, 168, 14}, desktop_text_),
           video_({152, 218, 168, 14}, video_text_),
           uptime_({152, 234, 168, 14}, uptime_text_),
-          memory_({8, 262, 320, 62}, "Memory"),
+          memory_({8, 262, kClientW - 16, 62}, "Memory"),
           internal_label_({18, 280, 54, 14}, "Internal"),
           internal_({76, 280, 100, 14}),
           internal_text_({184, 280, 138, 14}, internal_line_),
@@ -303,6 +303,7 @@ private:
     void refresh_programs()
     {
         wm::Wm &m = shell::manager();
+        proc::table().bring_up_to_date(); // the time of jobs still running
         const proc::Table &table = proc::table();
         const bool all = all_.checked();
         proc::Pid now[kMaxRows];
@@ -316,7 +317,10 @@ private:
             }
             const char *what = w != nullptr ? w->title() : (p.is(proc::kSystem) ? "(system)" : "");
             now[n] = p.pid;
-            snprintf(text[n], kRowText, "%5d  %-16.16s  %s", p.pid, p.name, what);
+            char time[16], held[16];
+            snprintf(text[n], kRowText, "%5d  %-12.12s %7s %6s  %s", p.pid, p.name,
+                     proc::time_text(p.cpu_us, time, sizeof(time)), proc::memory_text(p.memory, held, sizeof(held)),
+                     what);
             n++;
         }
         bool same = n == count_;

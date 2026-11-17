@@ -197,7 +197,7 @@ void test_terminal()
     enter("ps");
     bool listed = false;
     for (int r = 0; r < tty::Screen::kRows; r++) {
-        listed = listed || row(r).find("---W   Terminal") != std::string::npos;
+        listed = listed || (row(r).find("---W ") != std::string::npos && row(r).find("  Terminal") != std::string::npos);
     }
     CHECK(listed);
 

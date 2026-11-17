@@ -7,6 +7,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -234,6 +235,14 @@ public:
         out.free_external_ram = static_cast<uint32_t>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
         out.frames_shown = vga_frame_count();
         out.scanout_us = vga_fill_us();
+    }
+    // The board has no clock that keeps going without power: it counts from
+    // 1970 until the network has told it the time. Files written before
+    // that get no date (fs::PosixVolume treats so old a date as not known).
+    bool utc_time(int64_t &seconds) override
+    {
+        seconds = static_cast<int64_t>(time(nullptr));
+        return seconds > 1700000000;
     }
     // Every FreeRTOS task. The kernel adds up each task's processor time
     // at every task switch (the run-time statistics settings in
@@ -764,7 +773,7 @@ void ui_task(void *)
 
     // The network services, after the desktop: one task for all of them. Not
     // started when there is nothing to listen on. Its stack is in internal
-    // RAM, like every task's here; priority just under this task's, so a
+    // RAM, like every task's here; the Normal class, just under this task, so a
     // viewer that asks for a lot never holds the desktop back.
     if (vnc_port.listening() || web_port.listening()) {
         static net::PosixWait sockets;
@@ -773,7 +782,8 @@ void ui_task(void *)
         services.add(remote);
         s_remote_input = &remote_input;
         s_services = &services;
-        if (xTaskCreate(services_task, "inetd", kServicesStack, &context, 4, nullptr) == pdPASS) {
+        if (xTaskCreate(services_task, "inetd", kServicesStack, &context, rtos_priority(ports::Priority::Normal), nullptr) ==
+            pdPASS) {
             proc::table().spawn_service("inetd");
             ESP_LOGI(TAG, "network services (inetd) started");
         } else {

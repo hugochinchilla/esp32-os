@@ -79,13 +79,24 @@ protected:
 
 // What a session can reach. Anything left null makes the commands that need
 // it say so.
+} // namespace sh
+namespace net {
+struct TimeZone;
+}
+namespace sh {
+
 struct Env {
     fs::Storage *storage = nullptr;
     proc::Table *procs = nullptr;   // ps, kill
     ports::System *system = nullptr; // free, uptime
     UiCall *ui = nullptr;            // null: the session is on the UI task and calls straight in
     Desktop *desktop = nullptr;      // open, run, edit; null where there is no desktop (a serial console on a PC)
+    const net::TimeZone *zone = nullptr; // for dates as text; null: the default zone
 };
+
+// A date as it is shown everywhere, in local time: "2026-11-17 14:05", or ""
+// for one that is not known (0). `zone` null: the default zone.
+const char *date_text(int64_t utc_seconds, const net::TimeZone *zone, char *out, int capacity);
 
 namespace path {
 // The full path for what was typed, from the folder the session is in:
@@ -184,7 +195,7 @@ private:
     int have_ = 0;
     bool prompted_ = false, ended_ = false;
     bool at_line_start_ = true; // nothing written since the last '\n'
-    char buffer_[kBufferSize];
+    alignas(8) char buffer_[kBufferSize]; // aligned: commands keep records in it
     char walk_from_[fs::kMaxPath], walk_to_[fs::kMaxPath];
 
     // Redirection, for the command that is running.

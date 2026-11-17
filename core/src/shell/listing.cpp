@@ -68,6 +68,7 @@ ports::FsError Listing::read(const fs::Storage &storage, const char *folder)
         snprintf(it.name, sizeof(it.name), "%s", d.name);
         it.folder = d.folder;
         it.size = d.size;
+        it.modified = d.modified;
         drives_[count_] = 0;
         count_++;
     }
@@ -95,6 +96,7 @@ void Listing::read_drives(const fs::Storage &storage)
         snprintf(it.name, sizeof(it.name), "%s (%c:)", info.label, letters[i]);
         it.folder = true;
         it.size = 0;
+        it.modified = 0;
         drives_[count_] = letters[i];
         names_[count_] = it.name;
         count_++;

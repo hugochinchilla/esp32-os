@@ -4,9 +4,21 @@
 #include <cstring>
 
 #include "commands.hpp"
+#include "core/net/wifi.hpp"
 #include "core/shell/boot.hpp"
 
 namespace sh {
+
+const char *date_text(int64_t utc_seconds, const net::TimeZone *zone, char *out, int capacity)
+{
+    if (utc_seconds <= 0) {
+        snprintf(out, static_cast<size_t>(capacity), "%s", "");
+        return out;
+    }
+    const net::LocalTime t = net::local_time(utc_seconds, zone != nullptr ? *zone : net::kDefaultZone);
+    snprintf(out, static_cast<size_t>(capacity), "%04d-%02d-%02d %02d:%02d", t.year, t.month, t.day, t.hour, t.minute);
+    return out;
+}
 
 namespace {
 
@@ -23,13 +35,17 @@ struct ListJob {
 void list_processes(void *context)
 {
     const ListJob &job = *static_cast<const ListJob *>(context);
-    int at = snprintf(job.out, static_cast<size_t>(job.capacity), "  PID  PPID  FLAGS  NAME\n");
+    job.table->bring_up_to_date(); // the time of jobs still running
+    int at = snprintf(job.out, static_cast<size_t>(job.capacity), "  PID  PPID  FLAGS     TIME    MEM  NAME\n");
     for (int i = 0; i < job.table->count() && at < job.capacity - 1; i++) {
         const proc::Process &p = job.table->at(i);
         const char flags[] = {p.is(proc::kSystem) ? 'S' : '-', p.is(proc::kProtected) ? 'P' : '-',
                               p.is(proc::kRespawn) ? 'R' : '-', p.is(proc::kWindowed) ? 'W' : '-', 0};
-        at += snprintf(job.out + at, static_cast<size_t>(job.capacity - at), "%5d %5d  %s   %s%s\n", p.pid, p.parent,
-                       flags, p.name, p.state == proc::State::Exiting ? " (ending)" : "");
+        char time[16], held[16];
+        at += snprintf(job.out + at, static_cast<size_t>(job.capacity - at), "%5d %5d  %s  %7s %6s  %s%s\n", p.pid,
+                       p.parent, flags, proc::time_text(p.cpu_us, time, sizeof time),
+                       proc::memory_text(p.memory, held, sizeof held), p.name,
+                       p.state == proc::State::Exiting ? " (ending)" : "");
     }
 }
 
@@ -144,9 +160,166 @@ int cmd_uptime(Session &s, int, char **argv)
     return 0;
 }
 
+int cmd_date(Session &s, int, char **argv)
+{
+    int64_t utc = 0;
+    if (s.env().system == nullptr || !s.env().system->utc_time(utc)) {
+        return s.fail(argv[0], nullptr, "the machine does not know the time yet (it learns it from the network)");
+    }
+    static const char *const kDays[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+    static const char *const kMonths[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+    const net::LocalTime t = net::local_time(utc, s.env().zone != nullptr ? *s.env().zone : net::kDefaultZone);
+    s.printf("%s %d %s %d %02d:%02d:%02d\n", kDays[t.weekday % 7], t.day, kMonths[(t.month + 11) % 12], t.year, t.hour,
+             t.minute, t.second);
+    return 0;
+}
+
 int cmd_ver(Session &s, int, char **)
 {
     s.printf("Chinchilla %s\n", shell::kVersion);
+    return 0;
+}
+
+/* ---- top -------------------------------------------------------------------------- */
+
+namespace {
+
+struct Reading {
+    proc::Pid pid;
+    uint64_t cpu_us;
+    uint32_t memory;
+    uint32_t share; // tenths of a percent of one processor, over the last interval
+    char name[proc::Process::kNameSize];
+};
+
+struct Readings {
+    proc::Table *table;
+    Reading rows[proc::Table::kMaxProcesses];
+    int count;
+};
+
+// The UI task: the figures of every process, copied out.
+void read_processes(void *context)
+{
+    Readings &r = *static_cast<Readings *>(context);
+    r.table->bring_up_to_date(); // the jobs still running
+    r.count = 0;
+    for (int i = 0; i < r.table->count(); i++) {
+        const proc::Process &p = r.table->at(i);
+        Reading &to = r.rows[r.count++];
+        to.pid = p.pid;
+        to.cpu_us = p.cpu_us;
+        to.memory = p.memory;
+        to.share = 0;
+        snprintf(to.name, sizeof to.name, "%s", p.name);
+    }
+}
+
+} // namespace
+
+int cmd_top(Session &s, int argc, char **argv)
+{
+    if (s.env().procs == nullptr || s.env().system == nullptr) {
+        return s.fail(argv[0], nullptr, "there is no process table here");
+    }
+    // "-n 3": that many screens and then back to the prompt.
+    long screens = 0;
+    if (argc > 1) {
+        char *end = nullptr;
+        const char *digits = strcmp(argv[1], "-n") == 0 && argc > 2 ? argv[2] : (argv[1][0] == '-' ? argv[1] + 1 : "");
+        screens = strtol(digits, &end, 10);
+        if (*digits == 0 || *end != 0 || screens < 1) {
+            return s.fail(argv[0], argv[1], "it takes -n and a number of screens");
+        }
+    }
+    tty::Tty &terminal = s.terminal();
+    // It comes back every two seconds only where there is someone to press
+    // q and a terminal that can be waited on; otherwise it shows the table
+    // once, with the totals and no shares.
+    const bool live = terminal.can_wait() && !s.output_redirected();
+    static constexpr uint32_t kEveryMs = 2000;
+
+    // Two readings a moment apart give the first shares.
+    Readings *now = static_cast<Readings *>(static_cast<void *>(s.buffer()));
+    static_assert(sizeof(Readings) <= Session::kBufferSize, "the readings live in the session's working room");
+    static_assert(alignof(Readings) <= 8, "and it is aligned for them");
+    Reading before[proc::Table::kMaxProcesses];
+    int before_count = 0;
+    uint32_t before_ms = 0;
+    for (long shown = 0; !s.stopped();) {
+        now->table = s.env().procs;
+        s.on_ui(&read_processes, now);
+        ports::SystemStats stats = {};
+        s.env().system->stats(stats);
+        const uint32_t span_ms = stats.uptime_ms - before_ms;
+        for (int i = 0; i < now->count; i++) {
+            for (int j = 0; j < before_count && span_ms > 0; j++) {
+                if (before[j].pid == now->rows[i].pid && now->rows[i].cpu_us >= before[j].cpu_us) {
+                    now->rows[i].share = static_cast<uint32_t>((now->rows[i].cpu_us - before[j].cpu_us) / span_ms);
+                }
+            }
+        }
+        const bool first = before_count == 0;
+        before_count = now->count;
+        memcpy(before, now->rows, sizeof(Reading) * static_cast<size_t>(now->count));
+        before_ms = stats.uptime_ms;
+        if (first && live) {
+            // Nothing to show yet: wait a moment for a second reading.
+            char key = 0;
+            terminal.set_raw(true);
+            const int got = terminal.read(&key, 1, 400);
+            terminal.set_raw(false);
+            if (got == 1 && (key == 'q' || key == 'Q')) {
+                break;
+            }
+            if (got == tty::kInterrupted || got == tty::kEnd) {
+                break;
+            }
+            continue;
+        }
+
+        // The busiest first; ties in the order of the table.
+        for (int i = 1; i < now->count; i++) {
+            const Reading moved = now->rows[i];
+            int j = i;
+            for (; j > 0 && now->rows[j - 1].share < moved.share; j--) {
+                now->rows[j] = now->rows[j - 1];
+            }
+            now->rows[j] = moved;
+        }
+        if (live) {
+            s.clear_screen();
+        }
+        const uint32_t up = stats.uptime_ms / 1000;
+        s.printf("%d processes, on for %u:%02u:%02u%s\n\n", now->count, static_cast<unsigned>(up / 3600),
+                 static_cast<unsigned>(up / 60 % 60), static_cast<unsigned>(up % 60), live ? "   (q to leave)" : "");
+        s.print(live ? "  PID   CPU     TIME    MEM  NAME\n" : "  PID     TIME    MEM  NAME\n");
+        const int room = live && terminal.rows() > 5 ? terminal.rows() - 4 : now->count;
+        for (int i = 0; i < now->count && i < room; i++) {
+            const Reading &r = now->rows[i];
+            char time[16], held[16];
+            if (live) {
+                s.printf("%5d %3u.%u%% %7s %6s  %s\n", r.pid, static_cast<unsigned>(r.share / 10),
+                         static_cast<unsigned>(r.share % 10), proc::time_text(r.cpu_us, time, sizeof time),
+                         proc::memory_text(r.memory, held, sizeof held), r.name);
+            } else {
+                s.printf("%5d  %7s %6s  %s\n", r.pid, proc::time_text(r.cpu_us, time, sizeof time),
+                         proc::memory_text(r.memory, held, sizeof held), r.name);
+            }
+        }
+        shown++;
+        if (!live || (screens > 0 && shown >= screens)) {
+            break;
+        }
+        char key = 0;
+        terminal.set_raw(true);
+        const int got = terminal.read(&key, 1, kEveryMs);
+        terminal.set_raw(false);
+        if ((got == 1 && (key == 'q' || key == 'Q')) || got == tty::kInterrupted || got == tty::kEnd) {
+            break;
+        }
+    }
     return 0;
 }
 

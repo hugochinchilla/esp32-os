@@ -12,6 +12,8 @@
 #include "../host_adapters.hpp"
 #include <atomic>
 #include <thread>
+#include <fcntl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 static int failures = 0;
@@ -276,6 +278,74 @@ static void test_drives_behave_alike()
     }
     host::FolderVolume folder(dir);
     check_drive(folder, "POSIX folder");
+    rmdir(dir);
+}
+
+// When a file was last written (ports::DirEntry::modified).
+static void test_dates()
+{
+    // The RAM disk asks the machine for the time. Without a clock, or
+    // while the clock does not know, there is no date.
+    std::vector<uint8_t> pool(64 * 1024);
+    fs::MemoryVolume ram(pool.data(), pool.size(), "RAM disk");
+    fs::Storage s;
+    s.mount('C', ram);
+    fs::DirEntry e;
+    CHECK(s.write_file("C:\\a.txt", "one", 3) == FsError::Ok);
+    CHECK(s.stat("C:\\a.txt", e) == FsError::Ok && e.modified == 0);
+    host::HostSystem machine;
+    ram.set_clock(&machine);
+    CHECK(s.write_file("C:\\a.txt", "two", 3) == FsError::Ok);
+    CHECK(s.stat("C:\\a.txt", e) == FsError::Ok && e.modified == 0);
+
+    // Made, written, saved over: the date of that moment.
+    machine.utc = 1000;
+    CHECK(s.make_folder("C:\\docs") == FsError::Ok && s.stat("C:\\docs", e) == FsError::Ok && e.modified == 1000);
+    fs::File f;
+    CHECK(s.open("C:\\b.txt", OpenMode::Write, f) == FsError::Ok);
+    machine.utc = 2000;
+    CHECK(s.write(f, "x", 1) == FsError::Ok);
+    machine.utc = 3000;
+    CHECK(s.close(f) == FsError::Ok); // the date is that of the close
+    CHECK(s.stat("C:\\b.txt", e) == FsError::Ok && e.modified == 3000);
+    CHECK(s.entry("C:\\", 2, e) == FsError::Ok && strcmp(e.name, "b.txt") == 0 && e.modified == 3000);
+    machine.utc = 4000;
+    CHECK(s.write_file("C:\\a.txt", "three", 5) == FsError::Ok); // the safe way: a temporary file takes its place
+    CHECK(s.stat("C:\\a.txt", e) == FsError::Ok && e.modified == 4000);
+    // Reading, or opening to change and changing nothing, leaves it; a new
+    // name or folder keeps it; a change in the middle moves it.
+    machine.utc = 5000;
+    char back[8];
+    size_t n = 0;
+    CHECK(s.read_file("C:\\b.txt", back, sizeof back, n) == FsError::Ok);
+    CHECK(s.open("C:\\b.txt", OpenMode::Update, f) == FsError::Ok && s.close(f) == FsError::Ok);
+    CHECK(s.rename("C:\\b.txt", "C:\\docs\\c.txt") == FsError::Ok);
+    CHECK(s.stat("C:\\docs\\c.txt", e) == FsError::Ok && e.modified == 3000);
+    CHECK(s.open("C:\\docs\\c.txt", OpenMode::Update, f) == FsError::Ok);
+    CHECK(s.write(f, "y", 1) == FsError::Ok && s.close(f) == FsError::Ok);
+    CHECK(s.stat("C:\\docs\\c.txt", e) == FsError::Ok && e.modified == 5000);
+
+    // A folder of the PC (the same code as the board's flash disk): the
+    // file system's own date. One from before 2000 is "not known": the
+    // board writes those while it has not been told the time.
+    char dir[] = "/tmp/chinchilla-dates-XXXXXX";
+    if (mkdtemp(dir) == nullptr) {
+        CHECK(false);
+        return;
+    }
+    host::FolderVolume folder(dir);
+    fs::Storage d;
+    d.mount('D', folder);
+    const int64_t now = static_cast<int64_t>(time(nullptr));
+    CHECK(d.write_file("D:\\a.txt", "one", 3) == FsError::Ok);
+    CHECK(d.stat("D:\\a.txt", e) == FsError::Ok && e.modified >= now - 2 && e.modified <= now + 5);
+    CHECK(d.entry("D:\\", 0, e) == FsError::Ok && e.modified >= now - 2 && e.modified <= now + 5);
+    const std::string file = std::string(dir) + "/a.txt";
+    const struct timespec old[2] = {{631152000, 0}, {631152000, 0}}; // 1990
+    CHECK(utimensat(AT_FDCWD, file.c_str(), old, 0) == 0);
+    CHECK(d.stat("D:\\a.txt", e) == FsError::Ok && e.modified == 0);
+    CHECK(d.entry("D:\\", 0, e) == FsError::Ok && e.modified == 0);
+    CHECK(d.remove("D:\\a.txt") == FsError::Ok);
     rmdir(dir);
 }
 
@@ -611,6 +681,7 @@ int main()
     test_the_watch_sees_two_tasks();
     test_save_on_a_full_disk();
     test_drives_behave_alike();
+    test_dates();
     test_ini();
     test_paths();
     test_memory_volume();

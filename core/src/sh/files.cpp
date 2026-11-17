@@ -120,13 +120,16 @@ bool shown(const DirEntry &entry, const char *pattern, bool hidden)
     return hidden || entry.name[0] != '.';
 }
 
+// "2026-11-17 14:05         1,234  notes.txt": when it was last written (in
+// local time; blank if not known), its size or <DIR>, its name.
 void detail_line(Session &s, const DirEntry &entry)
 {
-    char size[32];
+    char size[32], when[24];
+    date_text(entry.modified, s.env().zone, when, sizeof when);
     if (entry.folder) {
-        s.printf(" <DIR>           %s\n", entry.name);
+        s.printf("%-16s  <DIR>           %s\n", when, entry.name);
     } else {
-        s.printf(" %14s  %s\n", grouped(entry.size, size, sizeof size), entry.name);
+        s.printf("%-16s  %14s  %s\n", when, grouped(entry.size, size, sizeof size), entry.name);
     }
 }
 

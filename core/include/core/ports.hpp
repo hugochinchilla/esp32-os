@@ -51,12 +51,27 @@ protected:
 // jobs run on these (core/job/job.hpp). A machine without tasks, like the
 // browser build, has no adapter and the work is done by the caller.
 using TaskFn = void (*)(void *context);
+// How a task stands against the desktop (docs/DECISIONS.md, "Priorities").
+// Low: only when the desktop and the Normal tasks are waiting. Normal: just
+// under the desktop, which is never kept from an event. High: level with the
+// desktop, taking turns with it. All three are below the video, Wi-Fi and
+// the network stack.
+enum class Priority : uint8_t { Low, Normal, High };
+// What names a started task to the adapter that started it.
+using TaskId = void *;
 class Tasks {
 public:
-    // Any task. Runs fn(context) on a new task with a stack of its own; the
-    // task ends when fn returns. False if it could not be started (no memory
-    // for the stack), and then fn is never called.
-    virtual bool start(const char *name, TaskFn fn, void *context, uint32_t stack_bytes) = 0;
+    // Any task. Runs fn(context) on a new task with a stack of its own.
+    // Null if it could not be started (no memory for the stack), and then
+    // fn is never called. The task and its stack are kept after fn returns,
+    // so its figures can still be read, until the starter calls end().
+    virtual TaskId start(const char *name, TaskFn fn, void *context, uint32_t stack_bytes, Priority priority) = 0;
+    // Gives back a task whose fn has returned, or is at its last statement.
+    // Once for every task started.
+    virtual void end(TaskId task) = 0;
+    // The processor time a task has used so far, in µs; 0 where it cannot
+    // be told. Between start() and end() only.
+    virtual uint64_t run_time_us(TaskId) { return 0; }
 
 protected:
     ~Tasks() = default;
@@ -157,6 +172,9 @@ struct DirEntry {
     char name[64];
     bool folder;
     uint32_t size;
+    // When it was last written: seconds since 1970, UTC. 0: not known (the
+    // machine did not know the time then, or the drive keeps no dates).
+    int64_t modified = 0;
 };
 
 struct VolumeInfo {
@@ -288,6 +306,14 @@ enum class Fault : uint8_t {
 class System {
 public:
     virtual void stats(SystemStats &out) = 0;
+    // The date and time: seconds since 1970, UTC. False while the machine
+    // does not know (the board has no clock of its own: it learns the time
+    // from the network).
+    virtual bool utc_time(int64_t &seconds)
+    {
+        seconds = 0;
+        return false;
+    }
     // Every task of the kernel, in no particular order; returns how many
     // were written (0: not available, as when the kernel does not keep
     // run-time statistics).

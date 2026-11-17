@@ -10,17 +10,31 @@
 
 #include "core/ports.hpp"
 
+// The three classes as FreeRTOS priorities (docs/DECISIONS.md, "Priorities").
+// The UI task has 5 and the video 10; Wi-Fi and the network stack are far
+// above. Low and Normal never keep the desktop from an event; High takes
+// turns with it. Services use the same numbers.
+inline UBaseType_t rtos_priority(ports::Priority p)
+{
+    switch (p) {
+    case ports::Priority::Low:
+        return 3;
+    case ports::Priority::High:
+        return 5;
+    case ports::Priority::Normal:
+    default:
+        return 4;
+    }
+}
+
 class RtosTasks : public ports::Tasks {
 public:
-    // One below the UI task (5): a job never keeps the desktop from an
-    // event, and it runs whenever the desktop is waiting for one. The three
-    // priority classes are backlog item 11.
-    static constexpr UBaseType_t kPriority = 4;
     // ponytail: at most this many starting at the same moment; jobs are
     // started by the UI task one at a time, so one would do.
     static constexpr int kStarting = 4;
 
-    bool start(const char *name, ports::TaskFn fn, void *context, uint32_t stack_bytes) override
+    ports::TaskId start(const char *name, ports::TaskFn fn, void *context, uint32_t stack_bytes,
+                        ports::Priority priority) override
     {
         // What the new task needs to know is kept here until it has read
         // it, since start() returns before the task first runs.
@@ -32,15 +46,36 @@ public:
             }
         }
         if (slot == nullptr) {
-            return false;
+            return nullptr;
         }
         slot->fn = fn;
         slot->context = context;
-        if (xTaskCreate(&RtosTasks::run, name, stack_bytes, slot, kPriority, nullptr) != pdPASS) {
+        TaskHandle_t task = nullptr;
+        if (xTaskCreate(&RtosTasks::run, name, stack_bytes, slot, rtos_priority(priority), &task) != pdPASS) {
             slot->fn = nullptr;
-            return false;
+            return nullptr;
         }
-        return true;
+        return task;
+    }
+
+    // The task is asleep for good after its function (see run()), or about
+    // to be: deleting it from here gives its stack back.
+    void end(ports::TaskId task) override { vTaskDelete(static_cast<TaskHandle_t>(task)); }
+
+    // What the scheduler has counted for the task, in µs, as set up for the
+    // task statistics (backlog item 1). For a task that is running this
+    // moment it is up to the last time it was switched in: a little under.
+    uint64_t run_time_us(ports::TaskId task) override
+    {
+#if CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS && CONFIG_FREERTOS_USE_TRACE_FACILITY
+        TaskStatus_t status = {};
+        // A state is given so that it is not looked up: only the counter is wanted.
+        vTaskGetInfo(static_cast<TaskHandle_t>(task), &status, pdFALSE, eReady);
+        return static_cast<uint64_t>(status.ulRunTimeCounter);
+#else
+        (void)task;
+        return 0;
+#endif
     }
 
 private:
@@ -56,7 +91,11 @@ private:
         void *const context = slot->context;
         slot->fn = nullptr; // free for the next start()
         fn(context);
-        vTaskDelete(nullptr); // the idle task gives the stack back
+        // It does not delete itself: its figures are read once more, and
+        // then whoever started it calls end().
+        for (;;) {
+            vTaskSuspend(nullptr);
+        }
     }
 
     Start starting_[kStarting];

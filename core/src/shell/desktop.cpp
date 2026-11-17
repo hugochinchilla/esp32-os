@@ -520,12 +520,39 @@ void welcome_file()
 
 } // namespace
 
-void *program_memory(size_t bytes) { return g_memory != nullptr ? g_memory->allocate(bytes) : nullptr; }
+// Every block a program asks for is noted on its process's row, so Task
+// Manager can say what each program holds. A few bytes in front of the block
+// remember whose it is and how large, for when it is given back (which may
+// be a moment after the process's row has gone: add_memory() ignores that).
+namespace {
+struct BlockNote {
+    proc::Pid owner;
+    uint32_t bytes;
+    uint32_t pad[2]; // 16 bytes in all: what follows stays aligned as the port gave it
+};
+} // namespace
+
+void *program_memory(size_t bytes)
+{
+    if (g_memory == nullptr) {
+        return nullptr;
+    }
+    auto *note = static_cast<BlockNote *>(g_memory->allocate(bytes + sizeof(BlockNote)));
+    if (note == nullptr) {
+        return nullptr;
+    }
+    note->owner = proc::table().current();
+    note->bytes = static_cast<uint32_t>(bytes);
+    proc::table().add_memory(note->owner, static_cast<int32_t>(bytes));
+    return note + 1;
+}
 
 void free_program_memory(void *block)
 {
     if (block != nullptr) {
-        g_memory->release(block);
+        BlockNote *note = static_cast<BlockNote *>(block) - 1;
+        proc::table().add_memory(note->owner, -static_cast<int32_t>(note->bytes));
+        g_memory->release(note);
     }
 }
 
@@ -603,6 +630,9 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
         desktop = processes.spawn_service("desktop", proc::kProtected);
     }
     wm.set_processes(&processes, desktop);
+    // Processor time is charged to whichever process the UI task is working
+    // for (proc::Table::set_clock).
+    processes.set_clock([](void *) { return static_cast<uint32_t>(g_wm->now_us()); }, nullptr);
     const proc::Scope as(&processes, desktop);
     constexpr size_t kClipboard = 64 * 1024;
     wm::clipboard::init(static_cast<uint8_t *>(memory.allocate(kClipboard)), kClipboard);

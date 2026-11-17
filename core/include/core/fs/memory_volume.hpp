@@ -18,6 +18,9 @@ public:
     static constexpr int kMaxOpen = 6;
 
     MemoryVolume(void *pool, size_t bytes, const char *label);
+    // Where the time comes from for the dates of files; without one, or
+    // while it does not know, what is written has no date.
+    void set_clock(ports::System *clock) { clock_ = clock; }
 
     ports::FsError info(ports::VolumeInfo &out) override;
     ports::FsError entry(const char *folder, int index, ports::DirEntry &out) override;
@@ -40,10 +43,12 @@ private:
         uint8_t folder;
         uint32_t size;
         int32_t first; // first data block, -1 none
+        uint32_t modified; // seconds since 1970, UTC; 0 not known
     };
     struct Handle {
         bool used;
         bool writable;
+        bool wrote; // something was written through it: the date is set at close
         int node;
         uint32_t pos;
         int32_t block;       // the block holding pos (cached), -1 unknown
@@ -60,6 +65,7 @@ private:
     int32_t new_block();
     void free_chain(int32_t block);
     bool locate(Handle &h, bool grow);
+    uint32_t now() const;
 
     Node *nodes_;
     int32_t *next_; // per block: the next block, -1 end, -2 free
@@ -67,6 +73,7 @@ private:
     int blocks_ = 0;
     int free_blocks_ = 0;
     char label_[24];
+    ports::System *clock_ = nullptr;
     Handle handles_[kMaxOpen] = {};
 };
 

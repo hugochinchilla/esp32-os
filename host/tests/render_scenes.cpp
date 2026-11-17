@@ -155,6 +155,10 @@ int main(int argc, char **argv)
     // The same size as on the board, so "KB free" matches too.
     static fs::MemoryVolume ram_disk(memory.allocate(2 << 20), 2 << 20, "RAM disk");
     storage.mount('C', ram_disk);
+    // The machine knows the time (17 November 2026, 14:05 in Spain), so the
+    // sample files have a date.
+    system_.utc = 1794920709;
+    ram_disk.set_clock(&system_);
     fs::add_samples(storage, 'C');
     // The start-up screens (the clock stands still: the memory test takes
     // all 4 MB the PC adapter lends, and nothing waits).
@@ -314,6 +318,7 @@ int main(int argc, char **argv)
     key(wm::key::Home);
     key(wm::key::Right);
     key(wm::key::Right);
+    save("17b-file-chosen"); // the status bar: its size and when it was written
     key(wm::key::Enter);
     key(wm::key::End, false);
     desktop.text(" (añadido)");
