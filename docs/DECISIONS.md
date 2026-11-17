@@ -1923,13 +1923,35 @@ messages) and chose the second.
   (`core/desk`), drawn by its code and owned by the `taskbar` process.
 - The order agreed with the owner: this cut, then the OS calls taken to
   handles (item 37), then separate tasks together with item 26.
-- The agent's, to confirm: the shell's surfaces are panels (two places:
-  behind the windows, and the strip in front of them), not windows of a
-  special kind; menus, the time of day and the height of the strip stay
-  with the server; the desktop panel paints the background where it has no
-  icon.
+- The shell's surfaces are panels (two places: behind the windows, and the
+  strip in front of them), not windows of a special kind. Proposed by the
+  agent, confirmed by the owner on 2026-11-17 ("yes, panels are ok").
+- The agent's, to confirm: menus, the time of day and the height of the
+  strip stay with the server; the desktop panel paints the background
+  where it has no icon.
 - Painting is not an OS call: the server calls a window or a panel to
   paint and hands it a canvas. It becomes one with item 37.
+
+### The settings tools ask through the OS calls (2026-11-17, the agent's, to confirm)
+
+Backlog item 20, second part. Display, Screen Saver, Network and Shut Down
+were each half a window and half something the system keeps going. The
+window is a program and asks through new calls (`os::set_backdrop`,
+`os::set_screen_saver`, `os::preview_screen_saver`, `os::last_saver_run`,
+`os::shut_down`, `os::network`); the other half is the system's (the
+screensaver's runner in `core/os`, `network_service.cpp`, `power.cpp`).
+
+- One call for each thing a tool sets, not one general "set a desktop
+  setting by name" call: names would be an interface nothing checks at
+  build time, and the road to a registry, which the settings decision
+  turned down.
+- The network is handed over whole (`os::network()`), as the drives are to
+  the picture decoder, not as a call for each thing the panel does. Those
+  calls belong to item 37 (numbered calls with handles).
+- Display and Screen Saver keep nothing in memory while closed: they read
+  their settings file when they open.
+
+Journal: `docs/journal/2026-11-17-os-calls-settings-tools.md`.
 
 ### Chosen for background jobs (2026-11-17, to confirm)
 

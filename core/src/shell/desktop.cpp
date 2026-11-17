@@ -1,4 +1,4 @@
-// The desktop: Start menu, desktop icons, message box and Shut Down dialog.
+// The desktop: Start menu, desktop icons and message box.
 #include <cstdio>
 #include <cstring>
 
@@ -179,63 +179,6 @@ MessageBox *message_window()
     }
     return the<MessageBox>();
 }
-
-/* ---- Shut Down dialog ----------------------------------------------------------- */
-
-class ShutDownDialog : public wm::Window {
-public:
-    ShutDownDialog()
-        : Window("Shut Down Chinchilla", {0, 0, 320, 150}, &gfx::power_icon_16()),
-          question_({56, 16, 240, 14}, "What do you want the computer to do?"),
-          detail_({56, 34, 240, 14}, "Shut Down gets it ready to be unplugged."),
-          shut_down_({312 - 3 * 75 - 2 * 6 - 10, 122 - 23 - 10, 75, 23}, "&Shut Down", &ShutDownDialog::shut_down, this),
-          restart_({312 - 2 * 75 - 6 - 10, 122 - 23 - 10, 75, 23}, "&Restart", &ShutDownDialog::restart, this),
-          cancel_({312 - 75 - 10, 122 - 23 - 10, 75, 23}, "Cancel", &ShutDownDialog::cancel, this)
-    {
-        set_dialog(true);
-        set_modal(nullptr, true); // the whole desktop waits for an answer
-        set_frame(centred(shell::manager(), frame().w, frame().h));
-        add(question_);
-        add(detail_);
-        add(shut_down_);
-        add(restart_);
-        add(cancel_);
-        shut_down_.set_default(true);
-        set_default(&shut_down_);
-    }
-
-    bool layered() const override { return true; } // the picture over the face
-    void paint(gfx::Canvas &c) override
-    {
-        Window::paint(c);
-        c.blit(gfx::mascot_32(), 12, 12);
-    }
-
-    bool key(const wm::KeyMsg &k) override
-    {
-        if (k.pressed && k.usage == wm::key::Escape) {
-            close();
-            return true;
-        }
-        if (k.pressed && (k.mods & wm::kAlt) && k.usage == wm::key::A + ('r' - 'a')) {
-            restart_.click();
-            return true;
-        }
-        return Window::key(k);
-    }
-
-private:
-    static void shut_down(wm::Button &, void *context)
-    {
-        static_cast<ShutDownDialog *>(context)->close();
-        power_down();
-    }
-    static void restart(wm::Button &, void *) { system_port().reboot(); }
-    static void cancel(wm::Button &, void *context) { static_cast<ShutDownDialog *>(context)->close(); }
-
-    wm::Label question_, detail_;
-    wm::Button shut_down_, restart_, cancel_;
-};
 
 /* ---- Start menu and desktop ------------------------------------------------------ */
 
@@ -594,11 +537,6 @@ void ask(const char *title, const char *text, const char *const *buttons, int co
     }
 }
 
-void shut_down_dialog()
-{
-    const AsProgram as("Shut Down");
-    open_one<ShutDownDialog>("Shut Down");
-}
 
 namespace {
 
@@ -739,6 +677,7 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
     kit.system = &system;
     kit.storage = &storage;
     kit.memory = &memory;
+    kit.shut_down = &power_down;
     os::install(kit);
     // The desktop is a process too: the Start menu, the icons and the
     // taskbar, and the dialogs they open. (It is the window server and the

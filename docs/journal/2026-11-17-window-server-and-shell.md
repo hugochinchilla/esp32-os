@@ -68,6 +68,8 @@ order that follows: cut 2, then item 37, then cut 3 with item 26.
   the paint-once rule does not allow. Panels give the same separation
   with two slots and no special cases in the window list. The visible
   result is the same.
+  The owner was told of the change once it was built and confirmed it the
+  same day: "yes, panels are ok".
 - The shell painting through the window manager's private parts (a friend
   class). No cut at all.
 
