@@ -137,3 +137,24 @@ cloud container; nothing here has run on the board.
   the games' boards, the Defragmenter's map.
 
 Backlog item 47.
+
+## On the board (2026-11-17, fb5add3)
+
+Flashed app-only on the old layout, no wipe. Passed:
+
+- A `desktop.ini` without `[look]` came up as Classic; `repaint` 13.7 to
+  13.9 ms. Display lists Classic, Sky, Glacier and Midnight; Alt+T, Down,
+  Alt+A applied Sky without closing, Escape went back to Classic.
+- Each of Sky, Glacier and Midnight, picked and confirmed with OK, drew the
+  Start menu, Widget gallery, File manager and Editor in its own look;
+  `repaint` stayed at 13.1 to 14.0 ms in every theme (no measurable
+  difference from Classic). `desktop.ini` kept `[look]` `theme = key`.
+- A restart with Midnight came back as Midnight.
+- Six open and close rounds of Display in Midnight: internal and external
+  memory identical after every round.
+- `dbg.py misses`: none after the theme switches.
+- On the webcam the Sky cream reads cream, not green.
+- Not checked: flicker while switching (no film of a switch).
+
+Classic was set again before leaving. Merged into `main` on the board
+thread's turn.
