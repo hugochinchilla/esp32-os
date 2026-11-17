@@ -145,7 +145,7 @@ kept.
   most) are copied with it.
 - A late program must not touch the desktop's things while the desktop
   is using them. Every OS call now begins with `enter()` and ends with
-  `leave()` (`prog::InCall`, first line of each of the 163 functions of
+  `leave()` (`prog::InCall`, first line of each of the 168 functions of
   `os` and `os::ui`, and of the eight helpers of the shell that
   programs call). For the UI task and for a program being waited for,
   that is a count going up and down, no lock. A late program sleeps in
