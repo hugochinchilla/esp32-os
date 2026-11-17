@@ -39,6 +39,11 @@ The journal entry with the reasons is
 | | `os::blocker(window)`, `os::in_front(window)`, `os::main_window(pid)` | The dialog in a window's way; whether it is the one in use; a process's main window |
 | | `os::begin_drag(path)` | A file starts being dragged |
 | | `os::Busy busy;` | The hourglass until the end of the block |
+| Desktop | `os::set_backdrop(backdrop)` | The desktop's colour and pattern (Display) |
+| | `os::set_screen_saver(animation, seconds)` | Which animation and after how long; -1 for none (Screen Saver) |
+| | `os::preview_screen_saver(animation)`, `os::last_saver_run()` | Shows one now; how the last run went |
+| | `os::shut_down()` | Asks every program to close and shows the power-off screen; false if one called it off |
+| Network | `os::network()` | The Wi-Fi service, or nothing on a board with no radio; asked for each time, not kept |
 | Files | `os::file::stat`, `entry`, `make_folder`, `remove`, `rename` | Folders and names |
 | | `os::file::open`, `read`, `write`, `close` | A file a piece at a time |
 | | `os::file::begin_save`, `finish_save` | Saving without putting the old file at risk |
@@ -63,18 +68,20 @@ background job: the drives have their own lock.
 the drives, the System port or the process table again, and prints how far
 the move has got.
 
-Moved (11 of 16): Cactus Patch, Culebra, Defrag, the file dialogs and the
-message box, the Editor, the File manager, the Picture viewer, Run, the
-settings files, the Task Manager, the Trash.
+Moved (15 of 16): Cactus Patch, Culebra, Defrag, the file dialogs and the
+message box, Display, the Editor, the File manager, Network, the Picture
+viewer, Run, Screen Saver, the settings files, Shut Down, the Task Manager,
+the Trash.
 
-Still to move (5), and why they wait:
+Display, Screen Saver, Network and Shut Down were each half a window and
+half something the system keeps going. The window is the program; the
+other half is the system's: the screensaver's runner in `core/os`, the
+network's tick and tray icon in `network_service.cpp`, the closing of
+every program in `power.cpp`
+([journal](journal/2026-11-17-os-calls-settings-tools.md)).
 
-- Display, Screen Saver, Network: half of each is a settings window and
-  half is something the desktop keeps running (the background, the
-  screensaver, the tray icon and the clock). The halves are split with
-  item 21.
-- Shut Down and Ctrl+Alt+Del: closing every program and taking the screen
-  over is the desktop's own work, also item 21.
+Still to move (1), and why it waits:
+
 - The Terminal: the command shell inside it is handed the drives and the
   process table whole (`sh::Env`). It moves when the shell's commands do.
 

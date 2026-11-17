@@ -229,6 +229,62 @@ void test_programs_give_back()
     CHECK(opened >= 5);
 }
 
+// What the settings tools and Shut Down ask: the background, the
+// screensaver, the network, the way down.
+void test_desktop_calls()
+{
+    wm::Wm::Backdrop b = desktop.backdrop();
+    b.colour = {1, 2, 3};
+    b.pattern[0] = 0x55;
+    os::set_backdrop(b);
+    CHECK(desktop.backdrop().colour.g == 2 && desktop.backdrop().pattern[0] == 0x55);
+
+    // No screensaver set: a preview shows one, and a key ends it.
+    os::set_screen_saver(-1, 60);
+    os::preview_screen_saver(99); // there is no such animation
+    CHECK(!desktop.screen_saver_active());
+    os::preview_screen_saver(0);
+    CHECK(desktop.screen_saver_active());
+    for (int i = 0; i < 10; i++) {
+        wait(40000);
+    }
+    desktop.key(wm::key::Escape, true);
+    desktop.key(wm::key::Escape, false);
+    wait(10000);
+    CHECK(!desktop.screen_saver_active());
+    CHECK(os::last_saver_run().frames > 0 && os::last_saver_run().shown_us > 0);
+    // One set: it starts by itself after the wait, and not when taken away.
+    os::set_screen_saver(1, 2);
+    wait(2100000);
+    CHECK(desktop.screen_saver_active());
+    desktop.key(wm::key::Escape, true);
+    desktop.key(wm::key::Escape, false);
+    os::set_screen_saver(1, 0);
+    wait(3000000);
+    CHECK(!desktop.screen_saver_active());
+
+    // The Display and Screen Saver tools keep nothing while they are closed.
+    const uint32_t blocks = os::blocks_out();
+    shell::display_dialog();
+    shell::screen_saver_dialog();
+    wait(10000);
+    CHECK(os::blocks_out() == blocks + 2);
+    while (desktop.active() != nullptr) {
+        desktop.close(*desktop.active());
+        wait(10000);
+    }
+    CHECK(os::blocks_out() == blocks);
+    // Closing Display put back what the settings file says, not what was
+    // set behind its back.
+    CHECK(desktop.backdrop().pattern[0] != 0x55);
+
+    CHECK(os::network() == nullptr); // this machine has no radio
+
+    // Shut Down with nothing open: the screen is taken (what stops it is in
+    // test_system). Last: there is no way back from it.
+    CHECK(os::shut_down() && desktop.taken_over());
+}
+
 } // namespace
 
 int main()
@@ -246,6 +302,7 @@ int main()
     test_windows_and_time();
     test_process_list();
     test_programs_give_back();
+    test_desktop_calls();
 
     if (failures == 0) {
         printf("os: all passed\n");

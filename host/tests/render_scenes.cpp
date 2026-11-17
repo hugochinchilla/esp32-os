@@ -12,6 +12,7 @@
 #include "core/fs/memory_volume.hpp"
 #include "core/shell/boot.hpp"
 #include "core/shell/defrag.hpp"
+#include "core/desk/desk.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/wm.hpp"
 #include "../host_adapters.hpp"
@@ -243,12 +244,12 @@ int main(int argc, char **argv)
     save("06-about-closed-welcome-minimized");
 
     // Bring it back from the taskbar.
-    gfx::Rect button = desktop.taskbar_button(0);
+    gfx::Rect button = shell::taskbar()->button(0);
     click(button.x + 20, button.y + 10);
     save("07-restored-from-taskbar");
 
     // Start menu, with Programs open.
-    centre_of(desktop.taskbar_button(-1), x, y);
+    centre_of(shell::taskbar()->button(-1), x, y);
     click(x, y);
     centre_of(desktop.popup_item(0, 0), x, y);
     mouse(x, y, 0);
@@ -286,13 +287,13 @@ int main(int argc, char **argv)
     save("12-resized");
 
     // A desktop icon: double-click Network for its message box.
-    centre_of(desktop.desktop_icon_rect(2), x, y);
+    centre_of(shell::desktop_icons()->icon_rect(2), x, y);
     double_click(x, y);
     save("13-icon-message-box");
     key(wm::key::Enter);
 
     // Shut Down dialog from the Start menu.
-    centre_of(desktop.taskbar_button(-1), x, y);
+    centre_of(shell::taskbar()->button(-1), x, y);
     click(x, y);
     centre_of(desktop.popup_item(0, 4), x, y);
     click(x, y);
@@ -303,7 +304,7 @@ int main(int argc, char **argv)
     while (desktop.active() != nullptr) {
         desktop.close(*desktop.active());
     }
-    centre_of(desktop.desktop_icon_rect(0), x, y);
+    centre_of(shell::desktop_icons()->icon_rect(0), x, y);
     double_click(x, y);
     save("15-my-board");
 
@@ -543,7 +544,7 @@ int main(int argc, char **argv)
     while (desktop.active() != nullptr) {
         desktop.close(*desktop.active());
     }
-    centre_of(desktop.taskbar_button(-1), x, y);
+    centre_of(shell::taskbar()->button(-1), x, y);
     click(x, y);
     centre_of(desktop.popup_item(0, 1), x, y);
     mouse(x, y, 0);
@@ -643,7 +644,7 @@ int main(int argc, char **argv)
             failures++;
         }
     };
-    centre_of(desktop.desktop_icon_rect(3), x, y);
+    centre_of(shell::desktop_icons()->icon_rect(3), x, y);
     double_click(x, y);
     save("37g-trash-empty");
     while (desktop.active() != nullptr) {
@@ -661,7 +662,7 @@ int main(int argc, char **argv)
     while (desktop.active() != nullptr) {
         desktop.close(*desktop.active());
     }
-    centre_of(desktop.desktop_icon_rect(3), x, y);
+    centre_of(shell::desktop_icons()->icon_rect(3), x, y);
     double_click(x, y);
     key(wm::key::Home);
     save("37i-trash-full"); // with where it came from
@@ -675,8 +676,8 @@ int main(int argc, char **argv)
     // A desktop file dragged onto the Trash: an outline follows the pointer
     // and the Trash is highlighted; let go, the file is in the Trash.
     int tx, ty;
-    centre_of(desktop.desktop_icon_rect(4), x, y); // welcome.txt
-    centre_of(desktop.desktop_icon_rect(3), tx, ty);
+    centre_of(shell::desktop_icons()->icon_rect(4), x, y); // welcome.txt
+    centre_of(shell::desktop_icons()->icon_rect(3), tx, ty);
     mouse(x, y, 0);
     mouse(x, y, 1);
     mouse(x + 10, y - 10, 1);
@@ -728,7 +729,7 @@ int main(int argc, char **argv)
         desktop.close(*desktop.active());
     }
     // Empty Trash asks first, saying how many.
-    centre_of(desktop.desktop_icon_rect(3), x, y);
+    centre_of(shell::desktop_icons()->icon_rect(3), x, y);
     double_click(x, y);
     {
         // The Empty Trash button in the toolbar (File > Empty Trash does the same).
@@ -811,7 +812,7 @@ int main(int argc, char **argv)
 
     // Shut Down from the Start menu: Enter picks Shut Down, and the screen
     // says the power can go.
-    centre_of(desktop.taskbar_button(-1), x, y);
+    centre_of(shell::taskbar()->button(-1), x, y);
     click(x, y);
     centre_of(desktop.popup_item(0, 4), x, y);
     click(x, y);

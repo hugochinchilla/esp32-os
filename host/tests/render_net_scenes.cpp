@@ -9,6 +9,7 @@
 #include "core/init/init.hpp"
 #include "core/fs/memory_volume.hpp"
 #include "core/net/wifi.hpp"
+#include "core/desk/desk.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/wm.hpp"
 #include "../fake_wifi.hpp"
@@ -124,11 +125,11 @@ int main(int argc, char **argv)
     wait(4);
     // Nothing remembered: not connected, a cross on the tray icon.
     CHECK(wifi.link().link == net::Link::Idle && radio.connects == 0);
-    CHECK(!desktop.tray_icon_rect().empty());
+    CHECK(!shell::taskbar()->tray_icon_rect().empty());
     save("net-01-tray-not-connected");
 
     // A click on the tray icon opens the panel, which looks for networks.
-    const gfx::Rect tray = desktop.tray_icon_rect();
+    const gfx::Rect tray = shell::taskbar()->tray_icon_rect();
     click(tray.x + 8, tray.y + 8);
     CHECK(title() == "Network" && wifi.scanning());
     save("net-02-panel-looking");
@@ -222,7 +223,7 @@ int main(int argc, char **argv)
     // Closed with Escape; Start > Settings > Network opens it again.
     key(wm::key::Escape);
     CHECK(title() == "");
-    const gfx::Rect start = desktop.taskbar_button(-1);
+    const gfx::Rect start = shell::taskbar()->button(-1);
     click(start.x + 10, start.y + 10);
     gfx::Rect item = desktop.popup_item(0, 1);
     clock_.now += 300000;

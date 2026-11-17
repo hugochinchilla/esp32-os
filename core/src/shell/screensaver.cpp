@@ -7,6 +7,7 @@
 
 #include "core/fs/ini.hpp"
 #include "core/gfx/art.hpp"
+#include "core/os/os.hpp"
 #include "core/saver/saver.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/widgets.hpp"
@@ -16,60 +17,48 @@ namespace shell {
 
 namespace {
 
-int g_choice = 1 + saver::kChinchillas; // 0: none, 1.. the animations
-int g_minutes = kScreenSaverMinutes;
+// What is in force: 0 for none, 1.. the animations, and the wait. Nothing
+// is kept in memory while the dialog is closed; the settings file has it.
+struct Choice {
+    int saver = 1 + saver::kChinchillas;
+    int minutes = kScreenSaverMinutes;
+};
 
 // Kept in C:\\.config\\screensaver.ini (docs/settings.md): written when OK is
-// pressed, read at start-up.
+// pressed, read at start-up and when the dialog opens.
 constexpr const char *kKeys[1 + saver::kCount] = {"none", "starfield", "chinchillas", "curves"};
 
-fs::Ini &settings()
-{
-    static fs::Ini ini;
-    return ini;
-}
+int in_range(int minutes) { return minutes > kScreenSaverMaxMinutes ? kScreenSaverMaxMinutes : minutes; }
 
-void read_settings()
+Choice read_settings(fs::Ini &ini)
 {
-    if (!load_settings("screensaver", settings())) {
-        return;
+    Choice c;
+    if (!load_settings("screensaver", ini)) {
+        return c;
     }
     char value[32];
-    if (settings().get("saver", "saver", value, sizeof(value))) {
+    if (ini.get("saver", "saver", value, sizeof(value))) {
         for (int i = 0; i <= saver::kCount; i++) {
             if (strcmp(value, kKeys[i]) == 0) {
-                g_choice = i;
+                c.saver = i;
             }
         }
     }
-    const int minutes = settings().get_int("saver", "wait_minutes", g_minutes);
+    const int minutes = ini.get_int("saver", "wait_minutes", c.minutes);
     if (minutes >= 1) {
-        g_minutes = minutes > kScreenSaverMaxMinutes ? kScreenSaverMaxMinutes : minutes;
+        c.minutes = in_range(minutes);
     }
+    return c;
 }
 
-void write_settings()
+void write_settings(fs::Ini &ini, const Choice &c)
 {
-    settings().set("saver", "saver", kKeys[g_choice]);
-    settings().set_int("saver", "wait_minutes", g_minutes);
-    save_settings("screensaver", settings());
+    ini.set("saver", "saver", kKeys[c.saver]);
+    ini.set_int("saver", "wait_minutes", c.minutes);
+    save_settings("screensaver", ini);
 }
 
-saver::Runner &runner()
-{
-    static saver::Runner r(manager());
-    return r;
-}
-
-void apply()
-{
-    if (g_choice == 0) {
-        manager().set_screen_saver(nullptr, 0);
-    } else {
-        runner().select(g_choice - 1);
-        manager().set_screen_saver(&runner(), static_cast<uint32_t>(g_minutes) * 60);
-    }
-}
+void apply(const Choice &c) { os::set_screen_saver(c.saver - 1, static_cast<uint32_t>(c.minutes) * 60); }
 
 const char *const *names()
 {
@@ -110,11 +99,12 @@ public:
         ok_.set_default(true);
         set_default(&ok_);
         // What is in force now, to start from.
+        now_ = read_settings(settings_);
         char text[8];
-        snprintf(text, sizeof(text), "%d", g_minutes);
+        snprintf(text, sizeof(text), "%d", now_.minutes);
         wait_.set(text);
-        list_.select(g_choice);
-        set_frame(centred(shell::manager(), frame().w, frame().h));
+        list_.select(now_.saver);
+        set_frame(os::centred(frame().w, frame().h));
         set_focus(&list_);
     }
 
@@ -122,13 +112,13 @@ public:
     {
         // How the last run went (a preview or the real thing): real figures,
         // as on the start-up screen.
-        const saver::Runner &r = runner();
-        if (r.frames() > 0 && r.shown_us() > 0) {
-            const unsigned tenths = static_cast<unsigned>(r.frames() * 10000000ull / r.shown_us());
+        const os::SaverRun r = os::last_saver_run();
+        if (r.frames > 0 && r.shown_us > 0) {
+            const unsigned tenths = static_cast<unsigned>(r.frames * 10000000ull / r.shown_us);
             snprintf(last_run_text_, sizeof(last_run_text_), "Last run: %u.%u frames a second", tenths / 10,
                      tenths % 10);
             snprintf(slowest_text_, sizeof(slowest_text_), "Slowest frame: %u.%u ms",
-                     static_cast<unsigned>(r.slowest_us() / 1000), static_cast<unsigned>(r.slowest_us() / 100 % 10));
+                     static_cast<unsigned>(r.slowest_us / 1000), static_cast<unsigned>(r.slowest_us / 100 % 10));
         }
         Window::paint(c);
     }
@@ -147,19 +137,16 @@ public:
     }
 
     // Closed without OK: a preview may have put another saver in place.
-    void closed() override { apply(); }
+    void closed() override { apply(now_); }
 
 private:
     static void preview(wm::Button &, void *context)
     {
         auto *d = static_cast<SaverDialog *>(context);
         const int choice = d->list_.selected();
-        if (choice < 1) {
-            return;
+        if (choice >= 1) {
+            os::preview_screen_saver(choice - 1);
         }
-        runner().select(choice - 1);
-        shell::manager().set_screen_saver(&runner(), g_choice != 0 ? static_cast<uint32_t>(g_minutes) * 60 : 0);
-        shell::manager().start_screen_saver();
     }
     static void ok(wm::Button &, void *context)
     {
@@ -168,16 +155,18 @@ private:
         d->wait_.get(text, sizeof(text));
         const int minutes = atoi(text);
         if (minutes >= 1) {
-            g_minutes = minutes > kScreenSaverMaxMinutes ? kScreenSaverMaxMinutes : minutes;
+            d->now_.minutes = in_range(minutes);
         }
         if (d->list_.selected() >= 0) {
-            g_choice = d->list_.selected();
+            d->now_.saver = d->list_.selected();
         }
-        write_settings();
+        write_settings(d->settings_, d->now_);
         d->close(); // applies
     }
     static void cancel(wm::Button &, void *context) { static_cast<SaverDialog *>(context)->close(); }
 
+    Choice now_; // what the settings file holds
+    fs::Ini settings_;
     char last_run_text_[48] = "";
     char slowest_text_[48] = "";
     wm::GroupFrame group_;
@@ -200,8 +189,8 @@ void screen_saver_dialog()
 
 void install_screen_saver()
 {
-    read_settings();
-    apply();
+    fs::Ini ini;
+    apply(read_settings(ini));
 }
 
 } // namespace shell

@@ -38,6 +38,8 @@ set(CORE_SRCS
     src/net/wifi.cpp
     src/init/init.cpp
     src/os/os.cpp
+    src/desk/icons.cpp
+    src/desk/taskbar.cpp
     src/job/job.cpp
     src/msg/input.cpp
     src/msg/queue.cpp
@@ -66,9 +68,11 @@ set(CORE_SRCS
     src/shell/listing.cpp
     src/shell/screensaver.cpp
     src/shell/network.cpp
+    src/shell/network_service.cpp
     src/shell/power.cpp
     src/shell/run.cpp
     src/shell/settings.cpp
+    src/shell/shutdown.cpp
     src/shell/task_manager.cpp
     src/shell/terminal.cpp
     src/shell/viewer.cpp

@@ -5,6 +5,7 @@
 
 #include "core/fs/ini.hpp"
 #include "core/gfx/art.hpp"
+#include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/widgets.hpp"
 #include "internal.hpp"
@@ -63,7 +64,11 @@ constexpr NamedPattern kPatterns[] = {
 };
 constexpr int kPatternCount = sizeof(kPatterns) / sizeof(kPatterns[0]);
 
-int g_colour = 0, g_pattern = 0;
+// What the desktop shows: places in the two tables above. Nothing is kept
+// in memory while the dialog is closed; the settings file has it.
+struct Choice {
+    int colour = 0, pattern = 0;
+};
 
 // The pattern's ink: the colour a good deal darker, or lighter when the
 // colour is too dark for that to show.
@@ -82,38 +87,39 @@ wm::Wm::Backdrop backdrop_for(int colour, int pattern)
     return b;
 }
 
-void apply() { manager().set_backdrop(backdrop_for(g_colour, g_pattern)); }
+void apply(const Choice &c) { os::set_backdrop(backdrop_for(c.colour, c.pattern)); }
 
-void read_settings()
+// `ini` is the caller's (2 KB, too much for the stack this deep).
+Choice read_settings(fs::Ini &ini)
 {
-    fs::Ini ini;
+    Choice c;
     if (!load_settings("desktop", ini)) {
-        return;
+        return c;
     }
     char value[32];
     if (ini.get("background", "colour", value, sizeof(value))) {
         for (int i = 0; i < kColourCount; i++) {
             if (strcmp(value, kColours[i].key) == 0) {
-                g_colour = i;
+                c.colour = i;
             }
         }
     }
     if (ini.get("background", "pattern", value, sizeof(value))) {
         for (int i = 0; i < kPatternCount; i++) {
             if (strcmp(value, kPatterns[i].key) == 0) {
-                g_pattern = i;
+                c.pattern = i;
             }
         }
     }
+    return c;
 }
 
-// `ini` is the dialog's own (2 KB, too much for the stack this deep).
-void write_settings(fs::Ini &ini)
+void write_settings(fs::Ini &ini, const Choice &c)
 {
     // Read again first: the desktop keeps other things in the same file.
     load_settings("desktop", ini);
-    ini.set("background", "colour", kColours[g_colour].key);
-    ini.set("background", "pattern", kPatterns[g_pattern].key);
+    ini.set("background", "colour", kColours[c.colour].key);
+    ini.set("background", "pattern", kPatterns[c.pattern].key);
     save_settings("desktop", ini);
 }
 
@@ -281,12 +287,11 @@ public:
         ok_.set_default(true);
         set_default(&ok_);
         // What the desktop shows now, to start from and to go back to.
-        before_colour_ = g_colour;
-        before_pattern_ = g_pattern;
-        colours_.select(g_colour);
-        patterns_.select(g_pattern);
+        before_ = read_settings(settings_);
+        colours_.select(before_.colour);
+        patterns_.select(before_.pattern);
         sync();
-        set_frame(centred(shell::manager(), frame().w, frame().h));
+        set_frame(os::centred(frame().w, frame().h));
         set_focus(&colours_);
     }
 
@@ -315,15 +320,7 @@ public:
     }
 
     // Closed without OK: what Apply showed is taken back.
-    void closed() override
-    {
-        if (!kept_) {
-            g_colour = before_colour_;
-            g_pattern = before_pattern_;
-        }
-        kept_ = false;
-        apply();
-    }
+    void closed() override { apply(before_); }
 
 private:
     static void paint_colour(gfx::Canvas &c, const Rect &cell, int index, void *)
@@ -350,31 +347,24 @@ private:
         patterns_.invalidate(); // the patterns are shown in the colour picked
         preview_.set(colours_.selected(), patterns_.selected());
     }
-    void take()
-    {
-        g_colour = colours_.selected();
-        g_pattern = patterns_.selected();
-    }
+    Choice picked() const { return {colours_.selected(), patterns_.selected()}; }
     static void ok(wm::Button &, void *context)
     {
         auto *d = static_cast<DisplayDialog *>(context);
-        d->take();
-        write_settings(d->settings_);
-        d->kept_ = true;
+        d->before_ = d->picked();
+        write_settings(d->settings_, d->before_);
         d->close(); // applies
     }
     static void cancel(wm::Button &, void *context) { static_cast<DisplayDialog *>(context)->close(); }
     // Apply shows the choice on the real desktop; only OK keeps it.
     static void apply_now(wm::Button &, void *context)
     {
-        static_cast<DisplayDialog *>(context)->take();
-        apply();
+        apply(static_cast<DisplayDialog *>(context)->picked());
     }
 
     char colour_text_[24] = "";
     char pattern_text_[24] = "";
-    int before_colour_ = 0, before_pattern_ = 0;
-    bool kept_ = false;
+    Choice before_; // what the settings file holds
     fs::Ini settings_;
     Preview preview_;
     wm::GroupFrame group_;
@@ -395,8 +385,8 @@ void display_dialog()
 
 void install_display()
 {
-    read_settings();
-    apply();
+    fs::Ini ini;
+    apply(read_settings(ini));
 }
 
 } // namespace shell

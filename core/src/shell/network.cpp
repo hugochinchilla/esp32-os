@@ -1,11 +1,13 @@
-// The Network panel: the Wi-Fi networks in range, connecting with a
-// password, and the signal icon in the tray. The work is done by
-// net::Manager; this file shows it.
+// The Network panel: the Wi-Fi networks in range and connecting with a
+// password. The work is done by net::Manager, which the system keeps
+// running (network_service.cpp, with the signal icon in the tray); this
+// file shows it while the panel is open.
 #include <cstdio>
 #include <cstring>
 
 #include "core/gfx/art.hpp"
 #include "core/net/wifi.hpp"
+#include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/widgets.hpp"
 #include "internal.hpp"
@@ -14,8 +16,8 @@ namespace shell {
 
 namespace {
 
-net::Manager *g_net = nullptr;
-uint32_t g_shown_changes = 0;
+// The Wi-Fi service. The panel only opens when there is one.
+net::Manager &wifi() { return *os::network(); }
 
 // A line of text exactly as given (a Label would read '&' in a network's
 // name as an access letter).
@@ -105,9 +107,9 @@ public:
         show_.set_checked(false);
         remember_.set_checked(true);
         set_focus(ask_name_ ? &name_ : &password_);
-        set_frame(centred(shell::manager(), frame().w, frame().h));
+        set_frame(os::centred(frame().w, frame().h));
         set_modal(owner);
-        shell::manager().add(*this);
+        os::show(*this);
     }
 
     bool key(const wm::KeyMsg &k) override
@@ -157,7 +159,7 @@ private:
         }
         const bool remember = d->remember_.checked();
         d->close();
-        g_net->connect(ssid, password, remember);
+        wifi().connect(ssid, password, remember);
         memset(password, 0, sizeof(password));
     }
 
@@ -220,7 +222,10 @@ public:
         add(close_);
         connect_.set_default(true);
         set_default(&connect_);
+        // Four times a second, while the panel exists: has the radio news?
+        timer_ = os::start_timer(250000, 250000, &NetworkWindow::tick, this);
     }
+    ~NetworkWindow() { os::stop_timer(timer_); }
 
     bool layered() const override { return true; } // the picture over the face
     void paint(gfx::Canvas &c) override
@@ -241,7 +246,8 @@ public:
     // Shows the manager's state again; the selection follows its network.
     void refresh()
     {
-        net::Manager &m = *g_net;
+        net::Manager &m = wifi();
+        shown_changes_ = m.changes();
         const net::LinkStatus &link = m.link();
         char text[128];
 
@@ -340,7 +346,7 @@ private:
     const net::Manager::Seen *chosen() const
     {
         const int i = list_.selected();
-        return i >= 0 && i < g_net->seen_count() ? &g_net->seen(i) : nullptr;
+        return i >= 0 && i < wifi().seen_count() ? &wifi().seen(i) : nullptr;
     }
 
     void sync_button()
@@ -360,11 +366,11 @@ private:
             return;
         }
         if (s->connected) {
-            g_net->disconnect();
+            wifi().disconnect();
         } else if (s->network.security == net::Security::Enterprise) {
             message_box("Network", "This network asks for a user name as\nwell as a password. Chinchilla cannot\njoin such networks.");
         } else if (s->saved || s->network.security == net::Security::Open) {
-            g_net->connect(s->network.ssid, nullptr, true);
+            wifi().connect(s->network.ssid, nullptr, true);
         } else {
             if (PasswordDialog *d = one<PasswordDialog>("Connect to network")) {
                 d->ask(this, s->network.ssid);
@@ -380,10 +386,10 @@ private:
         if (const net::Manager::Seen *s = self(context).chosen()) {
             char ssid[net::kSsidMax + 1];
             snprintf(ssid, sizeof(ssid), "%s", s->network.ssid);
-            g_net->forget(ssid);
+            wifi().forget(ssid);
         }
     }
-    static void rescan(wm::Button &, void *) { g_net->scan(); }
+    static void rescan(wm::Button &, void *) { wifi().scan(); }
     static void other(wm::Button &, void *context)
     {
         if (OtherDialog *d = one<OtherDialog>("Other network")) {
@@ -391,6 +397,13 @@ private:
         }
     }
     static void close_clicked(wm::Button &, void *context) { self(context).close(); }
+    static void tick(void *context)
+    {
+        NetworkWindow &w = self(context);
+        if (w.open() && wifi().changes() != w.shown_changes_) {
+            w.refresh();
+        }
+    }
     static const gfx::Bitmap *row_icon(int index, void *context)
     {
         const uint8_t v = self(context).icons_[index];
@@ -410,59 +423,18 @@ private:
     const char *row_ptrs_[net::Manager::kMaxSeen] = {};
     uint8_t icons_[net::Manager::kMaxSeen] = {};
     int count_ = 0;
+    int timer_ = 0;
+    uint32_t shown_changes_ = 0;
     int shown_bars_ = -1;
     bool shows_disconnect_ = false;
     bool was_connecting_ = false;
 };
 
-void tray_clicked(void *) { open_network(); }
-
-void show_tray()
-{
-    const net::LinkStatus &link = g_net->link();
-    const int icon = link.link == net::Link::Connected ? net::bars(link.rssi)
-                                                       : (link.link == net::Link::Connecting ? 0 : -1);
-    manager().set_tray_icon(&gfx::signal_icon_16(icon), &tray_clicked, nullptr);
-}
-
-void clock_from_network(const net::LocalTime &t, void *) { manager().set_time(t.hour, t.minute, t.second); }
-
-// Four times a second: follow the radio, and show what changed.
-void network_tick(void *)
-{
-    g_net->tick(manager().now_us());
-    if (g_net->changes() != g_shown_changes) {
-        g_shown_changes = g_net->changes();
-        show_tray();
-        if (NetworkWindow *panel = the<NetworkWindow>()) {
-            panel->refresh();
-        }
-    }
-}
-
 } // namespace
-
-void set_network(net::Manager *wifi) { g_net = wifi; }
-net::Manager *network() { return g_net; }
-
-void start_network()
-{
-    if (g_net == nullptr) {
-        return;
-    }
-    // The Wi-Fi manager has no row in the process table: it is driven by the
-    // timer below, on the UI task, so that timer is the desktop's. It gets a
-    // row when it is a task of its own (the owner's rule, 2026-11-16).
-    g_net->set_on_time(&clock_from_network, nullptr);
-    g_net->start(manager().now_us());
-    g_shown_changes = g_net->changes();
-    show_tray();
-    manager().start_timer(250000, 250000, &network_tick, nullptr);
-}
 
 void open_network()
 {
-    if (g_net == nullptr) {
+    if (os::network() == nullptr) {
         message_box("Network", "The network is not available on this board.");
         return;
     }
@@ -472,10 +444,10 @@ void open_network()
         return;
     }
     if (!w->open()) {
-        w->set_frame(centred(manager(), w->frame().w, w->frame().h));
+        w->set_frame(os::centred(w->frame().w, w->frame().h));
         w->refresh();
-        if (!g_net->scanning()) {
-            g_net->scan(); // a fresh list each time it opens
+        if (!wifi().scanning()) {
+            wifi().scan(); // a fresh list each time it opens
             w->refresh();
         }
     }

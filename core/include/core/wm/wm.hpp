@@ -1,8 +1,14 @@
-// The window manager: overlapping windows in a stacking order, the desktop
-// with its icons behind them, the taskbar in front, and pop-up menus (menu
-// bars, the Start menu) on top of everything. It works out what is visible
-// and asks each window to paint only that, routes the mouse and the
-// keyboard, and draws frames, menus and the taskbar in the 98 look.
+// The window server: overlapping windows in a stacking order, the background
+// behind them, and pop-up menus (menu bars, the Start menu) on top of
+// everything. It works out what is visible and asks each window to paint
+// only that, routes the mouse and the keyboard, and draws frames and menus
+// in the 98 look.
+//
+// What is on the desktop besides windows is not its business: the icons and
+// the taskbar are panels (below), surfaces that the desktop shell supplies
+// and draws (core/desk, backlog item 21). The server keeps a strip at the
+// bottom of the screen free of windows for a bar, and knows nothing of what
+// goes in it.
 #pragma once
 
 #include <cstddef>
@@ -21,18 +27,6 @@ enum class Part : uint8_t { None, Border, Title, MenuBar, Client, Minimize, Maxi
 
 // Edges grabbed when resizing, as bits.
 enum Edge : uint8_t { kLeft = 1, kRight = 2, kTop = 4, kBottom = 8 };
-
-// An icon on the desktop: a 32x32 picture with a label under it.
-struct DesktopIcon {
-    const char *label;
-    const gfx::Bitmap *picture;
-    void (*open)(void *context);
-    void *context;
-    // The file the icon stands for: such icons can be dragged.
-    const char *path = nullptr;
-    // Takes a dragged file let go on the icon; nullptr: not a drop target.
-    void (*drop)(const char *path, void *context) = nullptr;
-};
 
 // A screensaver: takes the whole screen over after a while with no input.
 // While it shows, the window manager paints nothing and hides the pointer;
@@ -53,11 +47,50 @@ protected:
     ~ScreenSaver() = default;
 };
 
+// A panel: a part of the screen that is not a window and belongs to the
+// desktop shell. There are two places for one. The desktop panel has the
+// work area behind every window (the icons); the bar panel has the strip
+// under the work area, in front of the windows (the taskbar). The server
+// asks a panel to paint, hands it the mouse and files dragged over it, and
+// tells it news it may want to show. All coordinates are the screen's.
+// Every call is made as the process that set the panel.
+enum class PanelPlace : uint8_t { Desktop, Bar };
+enum class PanelNews : uint8_t {
+    Windows, // a window opened, closed, was minimized or restored, or another one is in use
+    Menu,    // the Start menu opened or closed
+    Clock,   // the time of day shows another minute, or was set
+};
+
+class Wm;
+
+class Panel {
+public:
+    // Paints the parts of its place in `clip` (Wm::canvas() gives the
+    // canvas). The desktop panel paints the background too, where it does
+    // not paint something else (Wm::fill_backdrop), so each pixel is
+    // painted once.
+    virtual void paint(const gfx::RectList &clip) = 0;
+    // The left button: Down in its place, then Move and Up wherever the
+    // pointer goes until the button comes up.
+    virtual void mouse(const MouseMsg & /*m*/) {}
+    virtual void right_click(int /*x*/, int /*y*/) {}
+    // A file is being dragged over it (the desktop panel only): true if
+    // letting go here would do something. nullptr: the drag has left.
+    virtual bool drag_over(const char * /*path*/, int /*x*/, int /*y*/) { return false; }
+    virtual void dropped(const char * /*path*/, int /*x*/, int /*y*/) {}
+    virtual void news(PanelNews /*what*/) {}
+    // What is selected in it, for the debug protocol's window list (-1:
+    // nothing).
+    virtual int selected() const { return -1; }
+
+protected:
+    ~Panel() = default;
+};
+
 class Wm : public ports::InputSink, public ports::Desktop {
 public:
     static constexpr int kMaxWindows = 16;
     static constexpr int kMaxPopups = 4;  // a menu and its open submenus
-    static constexpr int kMaxIcons = 24; // in columns, top to bottom, then left to right
     static constexpr int kTaskbarHeight = 28;
     static constexpr int kOutline = 3;        // width of the outline while dragging
     static constexpr uint32_t kDoubleClickUs = 500000;
@@ -73,8 +106,8 @@ public:
     // Sets the pointer up and paints the whole screen.
     void start();
 
-    // The process table, and the process that owns the desktop itself (the
-    // Start menu, the icons, the taskbar and the manager's own timers). With
+    // The process table, and the process that owns the server itself (its
+    // own timers, and the panels' calls when a panel names no owner). With
     // one set, every window and timer records the process that asked for it
     // (the current one), the manager makes a window's owner the current
     // process whenever it calls into it, and a window program is removed
@@ -97,18 +130,18 @@ public:
         desktop_pid_ = desktop;
     }
     proc::Table *processes() const { return procs_; }
-    // The desktop shell (backlog item 21): the process that owns the taskbar,
-    // the Start menu, the quick-launch icons, the tray and the desktop
-    // icons. What it gave (set_start_menu, set_desktop_icons...) is called
-    // as that process. shell_ended(): it has gone and taken those back; the
-    // taskbar is not drawn and takes no clicks until a shell is set again.
-    // Windows stay as they are, and so does the work area: a window does not
-    // move because the bar under it left for a moment. Without either call
-    // the taskbar is the desktop process's, as before.
-    void set_shell(proc::Pid pid);
-    void shell_ended();
-    proc::Pid shell() const { return shell_pid_; }
-    bool taskbar_shown() const { return !shell_gone_; }
+    // The panels of the desktop shell. `owner` is the process the panel is
+    // called as. nullptr takes the panel away: its place shows the
+    // background and takes no clicks. Windows stay as they are, and so does
+    // the work area: a window does not move because the bar under it left
+    // for a moment.
+    void set_panel(PanelPlace place, Panel *panel, proc::Pid owner = proc::kNone);
+    Panel *panel(PanelPlace place) const { return panels_[place == PanelPlace::Bar ? 1 : 0].panel; }
+    proc::Pid panel_owner(PanelPlace place) const { return panels_[place == PanelPlace::Bar ? 1 : 0].owner; }
+    // For a panel's paint(): a canvas on the screen, in screen coordinates,
+    // clipped to `clip` and to `bounds`; and the background.
+    gfx::Canvas canvas(const gfx::RectList &clip, const Rect &bounds);
+    void fill_backdrop(gfx::Canvas &c, const Rect &r) const;
     // Ends a process as KILL does: its windows, menus and timers go and its
     // row is removed. For a stop function (proc::Table::set_stop) of a
     // process that may have windows.
@@ -170,8 +203,8 @@ public:
     // takes the shape that fits where it is now.
     void lock_changed(Window &w);
 
-    // The desktop and the Start menu, supplied by the shell.
-    void set_desktop_icons(const DesktopIcon *icons, int count);
+    // The Start menu, supplied by the shell: what the Start key opens, at
+    // the bottom left, with `banner` down its side. nullptr: none.
     void set_start_menu(Menu *menu, const char *banner);
 
     // The desktop behind everything: a colour and, over it, an 8x8 pattern
@@ -184,34 +217,6 @@ public:
     };
     void set_backdrop(const Backdrop &backdrop);
     const Backdrop &backdrop() const { return backdrop_; }
-    // A right click on the desktop away from the icons calls `menu` with
-    // the pointer's place (the shell opens a menu there).
-    void set_desktop_menu(void (*menu)(int x, int y, void *context), void *context)
-    {
-        desktop_menu_ = menu;
-        desktop_menu_context_ = context;
-    }
-
-    // A 16x16 icon in the tray, left of the clock (nullptr: none). A click
-    // on it calls `click`.
-    void set_tray_icon(const gfx::Bitmap *icon, void (*click)(void *context) = nullptr,
-                       void *context = nullptr);
-    Rect tray_icon_rect() const; // empty without an icon
-
-    // Quick launch: small icons between the Start button and the window
-    // buttons, each of which does one thing when clicked (the desktop sets
-    // them to open a program). The array is copied; at most kMaxQuick, none
-    // by default. `click` runs as the desktop's process.
-    struct QuickLaunch {
-        const gfx::Bitmap *icon; // 16x16
-        void (*click)(void *context);
-        void *context;
-    };
-    static constexpr int kMaxQuick = 4;
-    void set_quick_launch(const QuickLaunch *items, int count);
-    int quick_launch_count() const { return quick_count_; }
-    Rect quick_launch_rect(int index) const;
-
     // Pop-up menus. open_menu() opens a free-standing one at (x, y).
     void open_menu(Menu &menu, int x, int y);
     void open_start_menu();
@@ -286,7 +291,6 @@ public:
     void set_time(int hours, int minutes, int seconds) override;
     void get_time(int &hours, int &minutes, int &seconds) override;
     void set_animations(bool on) override;
-    Rect clock_rect() const;
 
     int window_count() const { return count_; }
     Window *window_at(int z) const { return z < count_ ? stack_[z] : nullptr; } // 0 = bottom
@@ -298,35 +302,24 @@ public:
     Rect menu_bar_entry(const Window &w, int entry) const;
     Rect work_area() const { return {0, 0, width_, height_ - kTaskbarHeight}; }
     Rect taskbar() const { return {0, height_ - kTaskbarHeight, width_, kTaskbarHeight}; }
-    // Taskbar buttons: -1 the Start button, 0.. the window buttons.
-    Rect taskbar_button(int index) const;
-    Rect desktop_icon_rect(int index) const;
-    int selected_icon() const { return selected_icon_; }
     int pointer_x() const { return pointer_x_; }
     int pointer_y() const { return pointer_y_; }
     uint8_t modifiers() const { return mods_; }
     bool dragging() const { return capture_ == Capture::Drag || capture_ == Capture::Resize; }
 
     // Drag and drop of a file: called by a window while the left button is
-    // held (from its mouse handler); an outline follows the pointer until
-    // the button is let go over a desktop icon with a drop function or a
-    // window whose drag_over() takes it, or anywhere else (nothing happens).
+    // held (from its mouse handler), or by a panel; an outline follows the
+    // pointer until the button is let go over a window or the desktop panel
+    // whose drag_over() takes it, or anywhere else (nothing happens).
     static constexpr int kDragPath = 160;
     void begin_drag(const char *path);
     bool item_dragging() const { return capture_ == Capture::Item; }
-    // Files let go on the desktop away from the icons go to `drop`.
-    void set_desktop_drop(void (*drop)(const char *path, void *context), void *context)
-    {
-        desktop_drop_ = drop;
-        desktop_drop_context_ = context;
-    }
-    int drop_icon() const { return drop_icon_; }
     uint32_t last_update_us() const { return last_update_us_; }
     // Time to handle the last input event, painting included.
     uint32_t last_event_us() const { return last_event_us_; }
 
 private:
-    enum class Capture : uint8_t { None, Drag, Resize, TitleButton, Client, Taskbar, Menu, Swallow, Icon, Item };
+    enum class Capture : uint8_t { None, Drag, Resize, TitleButton, Client, Panel, Menu, Swallow, Item };
 
     struct Popup {
         Menu *menu;
@@ -362,8 +355,6 @@ private:
     void on_move();
     void update_pointer_shape();
     bool double_click(int target);
-    void taskbar_click(int index);
-    int taskbar_index_at(int x, int y) const;
     void set_outline(const Rect &r, bool shown);
     void xor_outline();
     void set_active(Window *w);
@@ -386,7 +377,6 @@ private:
     void paint_window(Window &w, const gfx::RectList &clip);
     void paint_frame(gfx::Canvas &c, Window &w);
     void paint_menu_bar(gfx::Canvas &c, Window &w);
-    void paint_taskbar(const gfx::RectList &clip);
     void paint_popup(int level, const gfx::RectList &clip);
     bool visible(const Window &w) const { return w.state_ != WindowState::Minimized; }
 
@@ -401,16 +391,14 @@ private:
     int next_id_ = 1;
     Window *active_ = nullptr;
 
-    const DesktopIcon *icons_ = nullptr;
-    int icon_count_ = 0;
-    int selected_icon_ = -1;
-
-    QuickLaunch quick_[kMaxQuick] = {};
-    int quick_count_ = 0;
-    int buttons_x() const; // where the window buttons start
-    const gfx::Bitmap *tray_icon_ = nullptr;
-    void (*tray_click_)(void *context) = nullptr;
-    void *tray_context_ = nullptr;
+    struct PanelSlot {
+        Panel *panel = nullptr;
+        proc::Pid owner = proc::kNone;
+    };
+    PanelSlot panels_[2];
+    Panel *captured_panel_ = nullptr; // Capture::Panel
+    proc::Pid captured_panel_owner_ = proc::kNone;
+    void tell_panels(PanelNews what);
 
     Menu *start_menu_ = nullptr;
     const char *start_banner_ = "";
@@ -434,7 +422,6 @@ private:
     Capture capture_ = Capture::None;
     Window *captured_ = nullptr;
     Part captured_part_ = Part::None;
-    int captured_index_ = 0;   // taskbar button
     bool captured_inside_ = false;
     int grab_dx_ = 0, grab_dy_ = 0;
     uint8_t resize_edges_ = 0;
@@ -442,21 +429,15 @@ private:
     Rect outline_;
     bool outline_shown_ = false;
 
-    // Drag and drop: the icon pressed (Capture::Icon), the file carried and
-    // the target under the pointer (Capture::Item).
+    // Drag and drop: the file carried and the target under the pointer
+    // (Capture::Item), a window or the desktop panel.
     void update_drop_target();
-    void set_drop_icon(int icon);
-    int pressed_icon_ = -1;
+    void leave_desktop_target();
     char drag_path_[kDragPath] = "";
-    int drop_icon_ = -1;
     Window *drop_window_ = nullptr;
-    bool desktop_target_ = false;
-    void (*desktop_drop_)(const char *path, void *context) = nullptr;
+    bool desktop_over_ = false;   // the desktop panel has been shown the drag
+    bool desktop_target_ = false; // and it would take the file
     Backdrop backdrop_ = {{58, 110, 165}, {0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0}};
-    void fill_backdrop(gfx::Canvas &c, const Rect &r) const;
-    void (*desktop_menu_)(int x, int y, void *context) = nullptr;
-    void *desktop_menu_context_ = nullptr;
-    void *desktop_drop_context_ = nullptr;
 
     // Double clicks: the target of the last press and when it happened.
     int last_target_ = -1;
@@ -475,9 +456,11 @@ private:
     // Processes.
     proc::Table *procs_ = nullptr;
     proc::Pid desktop_pid_ = 0;
-    proc::Pid shell_pid_ = 0;
-    bool shell_gone_ = false;
-    proc::Pid shell_or_desktop() const { return shell_pid_ != 0 ? shell_pid_ : desktop_pid_; }
+    proc::Pid owner_of(PanelPlace place) const
+    {
+        const PanelSlot &slot = panels_[place == PanelPlace::Bar ? 1 : 0];
+        return slot.owner != proc::kNone ? slot.owner : desktop_pid_;
+    }
     proc::Pid current_pid() const { return procs_ != nullptr ? procs_->current() : 0; }
     int start_timer_for(proc::Pid owner, uint32_t delay_us, uint32_t period_us, TimerFn fn, void *context);
     void reap();

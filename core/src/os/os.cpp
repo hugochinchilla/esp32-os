@@ -5,6 +5,8 @@
 
 #include <cstdio>
 
+#include "core/saver/saver.hpp"
+
 namespace os {
 
 namespace {
@@ -12,6 +14,16 @@ namespace {
 Kit g_kit;
 uint32_t g_blocks = 0;
 uint32_t g_bytes = 0;
+net::Manager *g_network = nullptr;
+uint32_t g_saver_wait = 0; // seconds; 0: no screensaver is set
+
+// The screensaver: one object for good, a few words when it is not running
+// (its frame is the window manager's).
+saver::Runner &saver_runner()
+{
+    static saver::Runner runner(*g_kit.wm);
+    return runner;
+}
 
 // In front of every block: whose it is and how large, for when it is given
 // back (which may be a moment after the process's row has gone: add_memory()
@@ -30,6 +42,7 @@ void settings_path(const char *program, char *out, size_t n)
 } // namespace
 
 void install(const Kit &kit) { g_kit = kit; }
+void install_network(net::Manager *wifi) { g_network = wifi; }
 
 /* ---- The process ------------------------------------------------------------ */
 
@@ -138,6 +151,44 @@ void begin_drag(const char *path) { g_kit.wm->begin_drag(path); }
 
 Busy::Busy() { g_kit.wm->begin_wait(); }
 Busy::~Busy() { g_kit.wm->end_wait(); }
+
+/* ---- The desktop --------------------------------------------------------------- */
+
+void set_backdrop(const wm::Wm::Backdrop &backdrop) { g_kit.wm->set_backdrop(backdrop); }
+
+void set_screen_saver(int animation, uint32_t wait_seconds)
+{
+    if (animation < 0 || animation >= saver::kCount || wait_seconds == 0) {
+        g_saver_wait = 0;
+        g_kit.wm->set_screen_saver(nullptr, 0);
+        return;
+    }
+    g_saver_wait = wait_seconds;
+    saver_runner().select(animation);
+    g_kit.wm->set_screen_saver(&saver_runner(), wait_seconds);
+}
+
+void preview_screen_saver(int animation)
+{
+    if (animation < 0 || animation >= saver::kCount) {
+        return;
+    }
+    saver_runner().select(animation);
+    g_kit.wm->set_screen_saver(&saver_runner(), g_saver_wait); // a wait of 0: only when asked, as here
+    g_kit.wm->start_screen_saver();
+}
+
+SaverRun last_saver_run()
+{
+    const saver::Runner &r = saver_runner();
+    return {r.frames(), r.shown_us(), r.slowest_us()};
+}
+
+bool shut_down() { return g_kit.shut_down != nullptr && g_kit.shut_down(); }
+
+/* ---- The network ---------------------------------------------------------------- */
+
+net::Manager *network() { return g_network; }
 
 /* ---- Files --------------------------------------------------------------------- */
 
