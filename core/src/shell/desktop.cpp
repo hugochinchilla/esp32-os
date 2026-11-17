@@ -6,6 +6,7 @@
 #include <strings.h>
 #include "core/fs/ini.hpp"
 #include "core/gfx/art.hpp"
+#include "core/desk/desk.hpp"
 #include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/text_edit.hpp"
@@ -293,15 +294,24 @@ void drop_on_trash(const char *path, void *) { drop_in_trash(path); }
 // The system icons, then the files in C:\Documents\Desktop.
 constexpr int kSystemIcons = 4;
 constexpr const char *kDesktopFolder = "C:\\Documents\\Desktop";
-wm::DesktopIcon g_icons[wm::Wm::kMaxIcons];
+desk::Icon g_icons[desk::Icons::kMax];
 struct DesktopFile {
     char path[fs::kMaxPath];
     char label[16];
 };
-DesktopFile g_files[wm::Wm::kMaxIcons - kSystemIcons];
+DesktopFile g_files[desk::Icons::kMax - kSystemIcons];
 uint32_t g_files_signature = 0;
 proc::Pid g_taskbar = proc::kNone; // the taskbar's process while it runs
 bool g_taskbar_up = false;
+// Its two surfaces (core/desk), made when it starts and destroyed when it
+// ends; the memory is counted as the taskbar's.
+desk::Taskbar *g_bar = nullptr;
+desk::Icons *g_desk = nullptr;
+// The tray icon is the network's to set (network.cpp), whether or not there
+// is a taskbar to show it at the moment.
+const gfx::Bitmap *g_tray_icon = nullptr;
+void (*g_tray_click)(void *context) = nullptr;
+void *g_tray_context = nullptr;
 
 void open_desktop_file(void *context)
 {
@@ -382,8 +392,8 @@ void refresh_desktop_files(bool force)
         char name[64];
         bool folder;
     };
-    static Found found[wm::Wm::kMaxIcons - kSystemIcons];
-    for (int i = 0; n < wm::Wm::kMaxIcons - kSystemIcons; i++) {
+    static Found found[desk::Icons::kMax - kSystemIcons];
+    for (int i = 0; n < desk::Icons::kMax - kSystemIcons; i++) {
         ports::DirEntry e;
         if (storage().entry(kDesktopFolder, i, e) != ports::FsError::Ok) {
             break;
@@ -429,7 +439,7 @@ void refresh_desktop_files(bool force)
         g_icons[kSystemIcons + i] = {f.label, file_picture(found[i].name, found[i].folder), &open_desktop_file, &f,
                                      f.path, found[i].folder ? &drop_on_folder : nullptr};
     }
-    manager().set_desktop_icons(g_icons, kSystemIcons + n);
+    g_desk->set_icons(g_icons, kSystemIcons + n);
 }
 
 void desktop_files_tick(void *) { refresh_desktop_files(false); }
@@ -592,20 +602,27 @@ void shut_down_dialog()
 
 namespace {
 
+template <class T> void destroy(T *&object)
+{
+    if (object != nullptr) {
+        object->~T(); // gives its place on the screen up
+        os::release(object);
+        object = nullptr;
+    }
+}
+
 // The taskbar's end, for TERM and for KILL alike (it has nothing to ask):
-// what it gave the window manager is taken back, its windows and timers go
-// with its row, and the table starts it again.
+// its two surfaces leave the screen and are destroyed, the Start menu is
+// taken back, its windows and timers go with its row, and the table starts
+// it again.
 void stop_taskbar(proc::Pid pid, proc::Signal, void *)
 {
     wm::Wm &wm = manager();
     g_taskbar_up = false;
     g_taskbar = proc::kNone;
     wm.set_start_menu(nullptr, nullptr);
-    wm.set_quick_launch(nullptr, 0);
-    wm.set_desktop_icons(nullptr, 0);
-    wm.set_desktop_drop(nullptr, nullptr);
-    wm.set_desktop_menu(nullptr, nullptr);
-    wm.shell_ended();
+    destroy(g_bar);
+    destroy(g_desk);
     wm.end(pid);
 }
 
@@ -625,7 +642,19 @@ void start_taskbar(void *)
     }
     // With no room in the table the taskbar is the desktop's, as it was
     // before it had a process.
-    const proc::Scope as(&processes, pid != proc::kNone ? pid : desktop);
+    const proc::Pid owner = pid != proc::kNone ? pid : desktop;
+    const proc::Scope as(&processes, owner);
+    void *bar_place = os::allocate(sizeof(desk::Taskbar));
+    void *desk_place = os::allocate(sizeof(desk::Icons));
+    if (bar_place == nullptr || desk_place == nullptr) {
+        // No memory for them: no taskbar this time. The row stays, so it
+        // can be ended and tried again.
+        os::release(bar_place);
+        os::release(desk_place);
+        return;
+    }
+    g_bar = new (bar_place) desk::Taskbar(wm);
+    g_desk = new (desk_place) desk::Icons(wm);
 
     const int n = app_count() < kMaxApps ? app_count() : kMaxApps;
     for (int i = 0; i < n; i++) {
@@ -644,7 +673,7 @@ void start_taskbar(void *)
     // (backlog item 30; which three is in docs/DECISIONS.md).
     {
         static const char *const kQuick[] = {"File manager", "Editor", "Terminal"};
-        wm::Wm::QuickLaunch quick[wm::Wm::kMaxQuick];
+        desk::Taskbar::QuickLaunch quick[desk::Taskbar::kMaxQuick];
         int count = 0;
         for (const char *name : kQuick) {
             if (const App *program = find_app(name)) {
@@ -653,7 +682,7 @@ void start_taskbar(void *)
                                   const_cast<App *>(program)};
             }
         }
-        wm.set_quick_launch(quick, count);
+        g_bar->set_quick_launch(quick, count);
     }
 
     g_icons[0] = {"My Board", &gfx::board_icon_32(), &open_my_board, nullptr};
@@ -665,16 +694,31 @@ void start_taskbar(void *)
         g_settings_items[2].icon = &gfx::network_icon_16();
         g_settings_items[2].flags = 0;
     }
-    wm.set_desktop_icons(g_icons, kSystemIcons);
-    wm.set_desktop_drop(&drop_on_desktop, nullptr);
+    g_bar->set_tray_icon(g_tray_icon, g_tray_click, g_tray_context);
+    g_desk->set_icons(g_icons, kSystemIcons);
+    g_desk->set_drop(&drop_on_desktop, nullptr);
+    g_desk->set_menu(&desktop_menu, nullptr);
     g_taskbar_up = true;
     refresh_desktop_files(true);
     wm.start_timer(2000000, 2000000, &desktop_files_tick, nullptr);
-    wm.set_desktop_menu(&desktop_menu, nullptr);
-    wm.set_shell(pid != proc::kNone ? pid : desktop);
+    g_desk->attach(owner);
+    g_bar->attach(owner);
 }
 
 } // namespace
+
+void set_tray_icon(const gfx::Bitmap *icon, void (*click)(void *context), void *context)
+{
+    g_tray_icon = icon;
+    g_tray_click = click;
+    g_tray_context = context;
+    if (g_bar != nullptr) {
+        g_bar->set_tray_icon(icon, click, context);
+    }
+}
+
+desk::Taskbar *taskbar() { return g_bar; }
+desk::Icons *desktop_icons() { return g_desk; }
 
 bool start_taskbar_again()
 {

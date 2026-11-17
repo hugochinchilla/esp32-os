@@ -1911,6 +1911,26 @@ the first option recommended); built on it meanwhile.
 - The drawing code is still in the window manager. Cutting that file in
   two is the second part.
 
+### The window server and the desktop shell (the owner's decision, 2026-11-17)
+
+Backlog item 21, second part. The owner was shown three depths (the
+process only; the code cut in two on one task; two tasks that talk by
+messages) and chose the second.
+[Journal](journal/2026-11-17-window-server-and-shell.md).
+
+- The window server (`core/wm`) knows windows, menus, the pointer and the
+  background. The taskbar and the desktop icons are the shell's
+  (`core/desk`), drawn by its code and owned by the `taskbar` process.
+- The order agreed with the owner: this cut, then the OS calls taken to
+  handles (item 37), then separate tasks together with item 26.
+- The agent's, to confirm: the shell's surfaces are panels (two places:
+  behind the windows, and the strip in front of them), not windows of a
+  special kind; menus, the time of day and the height of the strip stay
+  with the server; the desktop panel paints the background where it has no
+  icon.
+- Painting is not an OS call: the server calls a window or a panel to
+  paint and hands it a canvas. It becomes one with item 37.
+
 ### Chosen for background jobs (2026-11-17, to confirm)
 
 Backlog item 10. Journal: `docs/journal/2026-11-17-jobs.md`. Chosen by the

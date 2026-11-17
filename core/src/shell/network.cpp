@@ -422,7 +422,7 @@ void show_tray()
     const net::LinkStatus &link = g_net->link();
     const int icon = link.link == net::Link::Connected ? net::bars(link.rssi)
                                                        : (link.link == net::Link::Connecting ? 0 : -1);
-    manager().set_tray_icon(&gfx::signal_icon_16(icon), &tray_clicked, nullptr);
+    set_tray_icon(&gfx::signal_icon_16(icon), &tray_clicked, nullptr);
 }
 
 void clock_from_network(const net::LocalTime &t, void *) { manager().set_time(t.hour, t.minute, t.second); }

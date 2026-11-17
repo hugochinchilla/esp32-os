@@ -38,6 +38,8 @@ set(CORE_SRCS
     src/net/wifi.cpp
     src/init/init.cpp
     src/os/os.cpp
+    src/desk/icons.cpp
+    src/desk/taskbar.cpp
     src/job/job.cpp
     src/msg/input.cpp
     src/msg/queue.cpp

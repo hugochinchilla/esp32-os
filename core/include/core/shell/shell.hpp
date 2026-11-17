@@ -26,6 +26,11 @@ namespace net {
 class Manager;
 }
 
+namespace desk {
+class Taskbar;
+class Icons;
+} // namespace desk
+
 namespace shell {
 
 struct App {
@@ -159,6 +164,12 @@ void open_network();
 games::CactusField &cactus_patch_field();
 void cactus_patch_refresh();
 int cactus_patch_seconds();
+
+// The taskbar and the icons on the desktop (core/desk/desk.hpp), while the
+// `taskbar` process runs; nullptr while it does not. For the tests and the
+// reference pictures.
+desk::Taskbar *taskbar();
+desk::Icons *desktop_icons();
 
 // After init has done the start-up file (core/init): says on the screen
 // that `lines` of it could not be done, and where to read which. Nothing

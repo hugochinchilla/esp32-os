@@ -11,6 +11,7 @@
 
 #include "core/fs/memory_volume.hpp"
 #include "core/gfx/canvas.hpp"
+#include "core/desk/desk.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/wm.hpp"
 #include "../host_adapters.hpp"
@@ -153,7 +154,7 @@ int main(int argc, char **)
     expect_once("closing a menu");
 
     // The Start menu and its Programs submenu.
-    centre(desktop.taskbar_button(-1), x, y);
+    centre(shell::taskbar()->button(-1), x, y);
     mouse(x, y, 1);
     mouse(x, y, 0);
     expect_once("opening the Start menu");
@@ -170,7 +171,7 @@ int main(int argc, char **)
     wm::Window *top = desktop.active();
     desktop.minimize(*top);
     expect_once("minimising a window");
-    centre(desktop.taskbar_button(0), x, y);
+    centre(shell::taskbar()->button(0), x, y);
     mouse(x, y, 1);
     expect_once("pressing a taskbar button");
     mouse(x, y, 0);
@@ -188,7 +189,7 @@ int main(int argc, char **)
     shell::open_in_editor("C:\\Documents\\notes.txt");
     desktop.update();
     writes->reset();
-    centre(desktop.desktop_icon_rect(4), x, y); // welcome.txt
+    centre(shell::desktop_icons()->icon_rect(4), x, y); // welcome.txt
     mouse(x, y, 0);
     mouse(x, y, 1);
     expect_once("selecting a desktop icon");
