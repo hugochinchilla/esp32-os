@@ -512,6 +512,15 @@ int main(int argc, char **argv)
     desktop.text("help");
     key(wm::key::Enter);
     save("46-terminal-help");
+    // Maximised: as many columns and rows as fit, and the scroll bar a
+    // few lines back.
+    desktop.toggle_maximize(*desktop.active());
+    desktop.text("dir");
+    key(wm::key::Enter);
+    key(wm::key::PageUp);
+    save("46b-terminal-maximized");
+    key(wm::key::PageDown);
+    desktop.toggle_maximize(*desktop.active());
     key(wm::key::F4, true);
 
     // Start > Run...: a program of its own, with a name typed.

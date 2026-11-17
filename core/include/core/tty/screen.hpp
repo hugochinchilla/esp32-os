@@ -19,7 +19,7 @@
 // screen is wide.
 //
 // Lines pushed off the top are kept, kHistory of them, and can be looked at
-// again (scroll_view). No heap: the whole grid is in the object, 16 KB.
+// again (scroll_view). No heap: the whole grid is in the object, 22 KB.
 #pragma once
 
 #include <cstdint>
@@ -30,22 +30,34 @@ namespace tty {
 
 class Screen : public ports::ByteSink {
 public:
-    static constexpr int kColumns = 80, kRows = 25;
+    static constexpr int kColumns = 80, kRows = 25; // the size it starts with
+    // The size can change (a window made larger): up to what a maximised
+    // window holds at 640x480.
+    static constexpr int kMinColumns = 20, kMinRows = 4;
+    static constexpr int kMaxColumns = 104, kMaxRows = 36;
     static constexpr int kHistory = 175; // lines kept above the screen
-    static constexpr int kLines = kRows + kHistory;
+    static constexpr int kLines = kMaxRows + kHistory;
 
     Screen();
 
     void write(const uint8_t *data, size_t size) override;
     void write(const char *text); // up to the 0 (tests)
 
-    // A row of what is in view, top to bottom: kColumns Latin-1 characters,
-    // no 0 at the end.
+    int columns() const { return columns_; }
+    int rows() const { return rows_; }
+    // A new size, kept within the limits above. Taller brings lines back
+    // from the history; shorter pushes lines into it so that the cursor
+    // stays on the screen. The text is not wrapped again: a line keeps what
+    // it had, and what is past a narrower edge shows again when it widens.
+    void set_size(int columns, int rows);
+
+    // A row of what is in view, top to bottom: columns() Latin-1
+    // characters (kMaxColumns are there), no 0 at the end.
     const uint8_t *row(int index) const;
     // Where the cursor is in the view; the row is -1 when the view has been
     // scrolled so far back that the cursor is not in it.
     int cursor_column() const { return column_; }
-    int cursor_row() const { return row_ + scrolled_ < kRows ? row_ + scrolled_ : -1; }
+    int cursor_row() const { return row_ + scrolled_ < rows_ ? row_ + scrolled_ : -1; }
 
     // Looking back: how many lines above the screen exist, how many of them
     // the view has been moved up by, and moving it (positive: further back).
@@ -72,7 +84,8 @@ private:
     void erase(int row, int from, int to);
     int number(int index, int otherwise) const;
 
-    uint8_t cells_[kLines][kColumns];
+    uint8_t cells_[kLines][kMaxColumns];
+    int columns_ = kColumns, rows_ = kRows;
     int top_ = 0;      // which line of cells_ is the screen's first row
     int history_ = 0;
     int scrolled_ = 0;

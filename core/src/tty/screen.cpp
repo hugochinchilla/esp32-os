@@ -14,12 +14,49 @@ void Screen::clear()
     wrap_pending_ = false;
     state_ = State::Text;
     utf8_more_ = 0;
-    changed(0, kRows - 1);
+    changed(0, rows_ - 1);
 }
 
 const uint8_t *Screen::row(int index) const
 {
     return cells_[(top_ - scrolled_ + index + kLines) % kLines];
+}
+
+void Screen::set_size(int columns, int rows)
+{
+    columns = columns < kMinColumns ? kMinColumns : columns > kMaxColumns ? kMaxColumns : columns;
+    rows = rows < kMinRows ? kMinRows : rows > kMaxRows ? kMaxRows : rows;
+    if (columns == columns_ && rows == rows_) {
+        return;
+    }
+    scrolled_ = 0;
+    if (rows > rows_) {
+        // Taller: lines come back from the history at the top, as many as
+        // there are; the rest of the new rows are empty ones at the bottom.
+        const int extra = rows - rows_;
+        const int back = extra < history_ ? extra : history_;
+        top_ = (top_ - back + kLines) % kLines;
+        history_ -= back;
+        row_ += back;
+        for (int r = rows_ + back; r < rows; r++) {
+            memset(cells_[(top_ + r) % kLines], ' ', kMaxColumns);
+        }
+    } else if (row_ > rows - 1) {
+        // Shorter, and the cursor would be below the last row: the top
+        // lines go into the history until it is on it.
+        const int up = row_ - (rows - 1);
+        top_ = (top_ + up) % kLines;
+        history_ = history_ + up < kHistory ? history_ + up : kHistory;
+        row_ -= up;
+    }
+    rows_ = rows;
+    columns_ = columns;
+    if (column_ > columns_ - 1) {
+        column_ = columns_ - 1;
+    }
+    wrap_pending_ = false;
+    first_changed_ = 0;
+    last_changed_ = rows_ - 1;
 }
 
 void Screen::changed(int first, int last)
@@ -35,7 +72,7 @@ bool Screen::take_changes(int &first, int &last)
     }
     first = first_changed_;
     last = last_changed_;
-    first_changed_ = kRows;
+    first_changed_ = rows_;
     last_changed_ = -1;
     return true;
 }
@@ -53,7 +90,7 @@ void Screen::scroll_view(int lines)
     to = to < 0 ? 0 : to > history_ ? history_ : to;
     if (to != scrolled_) {
         scrolled_ = to;
-        changed(0, kRows - 1);
+        changed(0, rows_ - 1);
     }
 }
 
@@ -67,7 +104,7 @@ void Screen::erase(int row, int from, int to)
 
 void Screen::line_down()
 {
-    if (row_ < kRows - 1) {
+    if (row_ < rows_ - 1) {
         changed(row_, row_ + 1); // the cursor leaves one row for the other
         row_++;
         return;
@@ -76,8 +113,8 @@ void Screen::line_down()
     // the bottom: only top_ moves, no line is copied.
     top_ = (top_ + 1) % kLines;
     history_ = history_ < kHistory ? history_ + 1 : kHistory;
-    memset(live(kRows - 1), ' ', kColumns);
-    changed(0, kRows - 1);
+    memset(live(rows_ - 1), ' ', kMaxColumns);
+    changed(0, rows_ - 1);
 }
 
 void Screen::character(uint8_t c)
@@ -89,7 +126,7 @@ void Screen::character(uint8_t c)
     }
     live(row_)[column_] = c;
     changed(row_, row_);
-    if (column_ == kColumns - 1) {
+    if (column_ == columns_ - 1) {
         wrap_pending_ = true;
     } else {
         column_++;
@@ -116,13 +153,13 @@ void Screen::control(uint8_t c)
         } else if (row_ > 0) {
             changed(row_ - 1, row_);
             row_--;
-            column_ = kColumns - 1;
+            column_ = columns_ - 1;
         }
         changed(row_, row_);
         break;
     case '\t': {
         const int stop = (column_ / 8 + 1) * 8;
-        column_ = stop < kColumns ? stop : kColumns - 1;
+        column_ = stop < columns_ ? stop : columns_ - 1;
         changed(row_, row_);
         break;
     }
@@ -143,33 +180,33 @@ void Screen::sequence(uint8_t last)
     const int before = row_;
     switch (last) {
     case 'A': row_ = row_ - n < 0 ? 0 : row_ - n; break;
-    case 'B': row_ = row_ + n > kRows - 1 ? kRows - 1 : row_ + n; break;
-    case 'C': column_ = column_ + n > kColumns - 1 ? kColumns - 1 : column_ + n; break;
+    case 'B': row_ = row_ + n > rows_ - 1 ? rows_ - 1 : row_ + n; break;
+    case 'C': column_ = column_ + n > columns_ - 1 ? columns_ - 1 : column_ + n; break;
     case 'D': column_ = column_ - n < 0 ? 0 : column_ - n; break;
     case 'H':
     case 'f': {
         const int row = number(0, 1), column = number(1, 1);
-        row_ = row > kRows ? kRows - 1 : row - 1;
-        column_ = column > kColumns ? kColumns - 1 : column - 1;
+        row_ = row > rows_ ? rows_ - 1 : row - 1;
+        column_ = column > columns_ ? columns_ - 1 : column - 1;
         break;
     }
     case 'J':
         if (number(0, 0) == 2) {
-            for (int r = 0; r < kRows; r++) {
-                erase(r, 0, kColumns);
+            for (int r = 0; r < rows_; r++) {
+                erase(r, 0, kMaxColumns);
             }
         } else if (number(0, 0) == 0) {
-            erase(row_, column_, kColumns);
-            for (int r = row_ + 1; r < kRows; r++) {
-                erase(r, 0, kColumns);
+            erase(row_, column_, kMaxColumns);
+            for (int r = row_ + 1; r < rows_; r++) {
+                erase(r, 0, kMaxColumns);
             }
         }
         return; // the cursor stays
     case 'K':
         if (number(0, 0) == 2) {
-            erase(row_, 0, kColumns);
+            erase(row_, 0, kMaxColumns);
         } else if (number(0, 0) == 0) {
-            erase(row_, column_, kColumns);
+            erase(row_, column_, kMaxColumns);
         }
         return;
     default: return; // colours and the rest: not understood, not shown
@@ -182,7 +219,7 @@ void Screen::write(const uint8_t *data, size_t size)
 {
     if (size > 0 && scrolled_ != 0) {
         scrolled_ = 0;
-        changed(0, kRows - 1);
+        changed(0, rows_ - 1);
     }
     for (size_t i = 0; i < size; i++) {
         const uint8_t byte = data[i];
