@@ -45,6 +45,13 @@ proc::Pid find(const char *name) { return proc::table().find_by_name(name); }
 
 As::As(proc::Pid pid) : scope_(&proc::table(), pid) {}
 
+int process_count() { return proc::table().count(); }
+const proc::Process &process_at(int index) { return proc::table().at(index); }
+const proc::Process *process(proc::Pid pid) { return proc::table().find(pid); }
+bool alive(proc::Pid pid) { return proc::table().alive(pid); }
+void refresh_figures() { proc::table().bring_up_to_date(); }
+proc::Sent signal(proc::Pid pid, proc::Signal signal) { return proc::table().signal(pid, signal); }
+
 /* ---- Time --------------------------------------------------------------------- */
 
 uint64_t now_us() { return g_kit.wm->now_us(); }
@@ -123,6 +130,12 @@ gfx::Rect centred(int w, int h)
 
 bool menu_open() { return g_kit.wm->menu_open(); }
 
+void open_menu(wm::Menu &menu, int x, int y) { g_kit.wm->open_menu(menu, x, y); }
+wm::Window *blocker(const wm::Window &window) { return g_kit.wm->blocker(window); }
+bool in_front(const wm::Window &window) { return g_kit.wm->active() == &window; }
+wm::Window *main_window(proc::Pid pid) { return g_kit.wm->main_window_of(pid); }
+void begin_drag(const char *path) { g_kit.wm->begin_drag(path); }
+
 Busy::Busy() { g_kit.wm->begin_wait(); }
 Busy::~Busy() { g_kit.wm->end_wait(); }
 
@@ -157,6 +170,8 @@ Error write_file(const char *path, const void *data, size_t size)
     return g_kit.storage->write_file(path, data, size);
 }
 
+const fs::Storage &storage() { return *g_kit.storage; }
+
 } // namespace file
 
 /* ---- Settings ------------------------------------------------------------------ */
@@ -179,5 +194,11 @@ bool save_settings(const char *program, const fs::Ini &ini)
 /* ---- The machine ---------------------------------------------------------------- */
 
 void restart() { g_kit.system->reboot(); }
+void stats(ports::SystemStats &out) { g_kit.system->stats(out); }
+bool fact(ports::Fact which, uint32_t &value, char *text, size_t capacity)
+{
+    return g_kit.system->fact(which, value, text, capacity);
+}
+uint32_t busy_us() { return g_kit.wm->busy_us(); }
 
 } // namespace os

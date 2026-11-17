@@ -44,6 +44,18 @@ private:
     proc::Scope scope_;
 };
 
+// The process list, for the tools that show it or act on it (the Task
+// Manager). Rows in order of creation; a row is valid until the next event.
+int process_count();
+const proc::Process &process_at(int index);
+const proc::Process *process(proc::Pid pid); // nullptr: there is none
+bool alive(proc::Pid pid);
+// Processor time and memory of jobs still running, brought up to now.
+void refresh_figures();
+// Asks a process to close (Term) or ends it (Kill). The answer says if it
+// may be signalled at all.
+proc::Sent signal(proc::Pid pid, proc::Signal signal);
+
 /* ---- Time --------------------------------------------------------------------- */
 
 uint64_t now_us(); // since start-up; does not wrap
@@ -74,6 +86,14 @@ void move(wm::Window &window, const gfx::Rect &frame);
 gfx::Rect work_area();          // the screen without the taskbar
 gfx::Rect centred(int w, int h); // a frame of that size in the middle of it
 bool menu_open();
+void open_menu(wm::Menu &menu, int x, int y); // a free-standing menu at (x, y)
+// The dialog that keeps `window` from being used now; nullptr: none.
+wm::Window *blocker(const wm::Window &window);
+bool in_front(const wm::Window &window); // it is the window in use
+// The main window of a process; nullptr: it has none.
+wm::Window *main_window(proc::Pid pid);
+// A file or folder starts being dragged (the File manager).
+void begin_drag(const char *path);
 // The hourglass while slow work runs on the UI task:
 //     const os::Busy busy;
 class Busy {
@@ -110,6 +130,10 @@ Error finish_save(fs::Save &save, bool keep = true);
 Error read_file(const char *path, void *data, size_t capacity, size_t &size);
 Error write_file(const char *path, const void *data, size_t size);
 
+// The drives themselves, for library code that reads a file on its own
+// (the picture decoder). A program passes it on and does not keep it.
+const fs::Storage &storage();
+
 } // namespace file
 
 /* ---- Settings ------------------------------------------------------------------ */
@@ -122,6 +146,12 @@ bool save_settings(const char *program, const fs::Ini &ini);
 /* ---- The machine ---------------------------------------------------------------- */
 
 void restart();
+// Figures for the tools that show them: memory free, tasks; and facts that
+// do not change (the processor, the RAM fitted).
+void stats(ports::SystemStats &out);
+bool fact(ports::Fact which, uint32_t &value, char *text, size_t capacity);
+// How long the UI task has worked since start-up, in µs (wraps).
+uint32_t busy_us();
 
 /* ---- For the system, not for programs ------------------------------------------ */
 

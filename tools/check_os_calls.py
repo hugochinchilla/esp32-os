@@ -17,10 +17,14 @@ MOVED = [
     "cactus_patch.cpp",
     "culebra.cpp",
     "defrag.cpp",
+    "dialogs.cpp",
     "editor.cpp",
+    "file_manager.cpp",
     "run.cpp",
     "settings.cpp",
+    "task_manager.cpp",
     "trash.cpp",
+    "viewer.cpp",
 ]
 
 # Not programs: the desktop itself, and what the programs share.
@@ -34,7 +38,7 @@ SYSTEM = [
 # What a moved program may not write, and what to write instead.
 FORBIDDEN = [
     (r"\bmanager\(\)", "os::show, os::start_timer, os::centred..."),
-    (r"\bstorage\(\)", "os::file::..."),
+    (r"(?<!file::)\bstorage\(\)", "os::file::..."),
     (r"\bsystem_port\(\)", "os::restart"),
     (r"\bproc::table\(\)", "os::self, os::spawn, os::As"),
     (r"\bwm::Wait\b", "os::Busy"),

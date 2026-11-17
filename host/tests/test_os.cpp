@@ -152,6 +152,47 @@ void test_windows_and_time()
     proc::table().exit(p);
 }
 
+// What the Task Manager asks: the list, a window's process, a signal.
+void test_process_list()
+{
+    const int before = os::process_count();
+    const proc::Pid p = os::spawn("listed");
+    CHECK(os::process_count() == before + 1 && os::process_at(before).pid == p);
+    CHECK(os::alive(p) && os::process(p) != nullptr && strcmp(os::process(p)->name, "listed") == 0);
+    CHECK(os::main_window(p) == nullptr);
+    os::refresh_figures();
+    // The desktop is protected; one that is not there is not there; a
+    // window program without windows is ended at the next safe point.
+    CHECK(os::signal(os::find("desktop"), proc::Signal::Kill) == proc::Sent::NotPermitted);
+    CHECK(os::signal(30000, proc::Signal::Term) == proc::Sent::NoSuchProcess);
+    CHECK(os::signal(p, proc::Signal::Kill) == proc::Sent::Ok);
+    wait(10000);
+    wait(10000);
+    CHECK(!os::alive(p) && os::process(p) == nullptr && os::process_count() == before);
+
+    // A program with a window: the window is its main one, it is in front,
+    // nothing blocks it, and Term closes it.
+    shell::open_culebra();
+    wait(10000);
+    wm::Window *w = desktop.active();
+    CHECK(w != nullptr);
+    if (w != nullptr) {
+        const proc::Pid owner = w->owner();
+        CHECK(os::main_window(owner) == w && os::in_front(*w) && os::blocker(*w) == nullptr);
+        CHECK(os::signal(owner, proc::Signal::Term) == proc::Sent::Ok);
+        wait(10000);
+        wait(10000);
+        CHECK(!os::alive(owner));
+    }
+
+    ports::SystemStats stats = {};
+    os::stats(stats);
+    uint32_t value = 0;
+    char text[64] = "";
+    os::fact(ports::Fact::Processor, value, text, sizeof(text));
+    CHECK(&os::file::storage() == &storage);
+}
+
 // Every program opened and closed: the memory out comes back to where it
 // was, so nothing a program asked the OS for outlives it.
 void test_programs_give_back()
@@ -203,6 +244,7 @@ int main()
     test_memory();
     test_files();
     test_windows_and_time();
+    test_process_list();
     test_programs_give_back();
 
     if (failures == 0) {

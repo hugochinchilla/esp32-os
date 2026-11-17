@@ -5,6 +5,7 @@
 #include <cstring>
 
 #include "core/gfx/art.hpp"
+#include "core/os/os.hpp"
 #include "internal.hpp"
 
 namespace shell {
@@ -43,7 +44,7 @@ bool Listing::ready()
     return items_ != nullptr;
 }
 
-ports::FsError Listing::read(const fs::Storage &storage, const char *folder)
+ports::FsError Listing::read(const char *folder)
 {
     count_ = 0;
     truncated_ = false;
@@ -53,7 +54,7 @@ ports::FsError Listing::read(const fs::Storage &storage, const char *folder)
     ports::FsError e = ports::FsError::Ok;
     for (int i = 0;; i++) {
         ports::DirEntry d;
-        e = storage.entry(folder, i, d);
+        e = os::file::entry(folder, i, d);
         if (e != ports::FsError::Ok) {
             break;
         }
@@ -80,7 +81,7 @@ ports::FsError Listing::read(const fs::Storage &storage, const char *folder)
     return e == ports::FsError::NotFound ? ports::FsError::Ok : e;
 }
 
-void Listing::read_drives(const fs::Storage &storage)
+void Listing::read_drives()
 {
     count_ = 0;
     truncated_ = false;
@@ -88,10 +89,10 @@ void Listing::read_drives(const fs::Storage &storage)
         return;
     }
     char letters[fs::Storage::kMaxDrives];
-    const int n = storage.drives(letters, fs::Storage::kMaxDrives);
+    const int n = os::file::drives(letters, fs::Storage::kMaxDrives);
     for (int i = 0; i < n; i++) {
         ports::VolumeInfo info = {};
-        storage.info(letters[i], info);
+        os::file::drive_info(letters[i], info);
         Item &it = items_[count_];
         snprintf(it.name, sizeof(it.name), "%s (%c:)", info.label, letters[i]);
         it.folder = true;
