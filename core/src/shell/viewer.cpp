@@ -147,7 +147,7 @@ public:
             }
         }
         if (path == nullptr) {
-            open_file_dialog(number(), "C:\\pictures", &ViewerWindow::chosen, this);
+            open_file_dialog(number(), "C:\\pictures", &ViewerWindow::file_chosen, this);
             return;
         }
         snprintf(path_, sizeof(path_), "%s", path);
@@ -391,7 +391,7 @@ private:
         }
     }
 
-    static void chosen(const char *path, void *context) { static_cast<ViewerWindow *>(context)->open_path(path); }
+    static void file_chosen(const char *path, void *context) { static_cast<ViewerWindow *>(context)->open_path(path); }
     static void menu_open(void *c) { static_cast<ViewerWindow *>(c)->open_path(nullptr); }
     void again()
     {
