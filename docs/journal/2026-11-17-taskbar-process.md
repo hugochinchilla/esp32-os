@@ -142,3 +142,47 @@ leave it out, which is a machine nobody wants by accident.
 - The second part of item 21: the cut of the window manager's code in two,
   with the taskbar drawn by the shell. With it Display, Screen Saver,
   Network and Shut Down can be split the same way (item 20's last files).
+
+
+## On the board (added by the board thread, 2026-11-17)
+
+Branch commit 138ee0a with main de4749c merged in. The backlog table
+conflicted; the resolution keeps the board results already on main and the
+branch's new lines. PC tests passed (40 of 40), the Linux `chinchilla`
+target built, and the firmware build was clean.
+
+1. `ps`: init 1, desktop 2, taskbar 3 (S-R-, parent 2), inetd 4, and a
+   Terminal opened from the quick-launch icon has parent 3.
+2. `kill 3` typed in a Terminal, with an Editor holding unsaved text
+   minimized: in the first screenshot after the command (0.32 s later) the
+   bar, the icons and both window buttons were back, the taskbar's new PID
+   was 7, and the Terminal and Editor now have parent 1 (init). The
+   minimized Editor's button returned, the desktop icons and the Trash
+   returned, and the clock and the Wi-Fi tray icon were there and went on
+   working. The Terminal kept taking commands.
+3. The webcam filmed the kill at 60 frames a second for 8 s. In every frame
+   the bar is there; no frame without it was caught. To the eye there is no
+   gap: the bar does not blink.
+4. End Task on taskbar in the Task Manager (all processes shown) ended it,
+   and it came back with a new PID.
+5. The brake: from a telnet session (switched on for this and off again
+   afterwards), `kill` on whatever PID the taskbar had, six times in a row,
+   0.6 s apart. After the sixth it did not come back: no bar, no icons, just
+   the background and the pointer.
+6. With no taskbar the machine stays usable: Ctrl+Alt+Del opened the Task
+   Manager, programs started with `run editor` and `run terminal` from
+   telnet opened, and Alt+Tab moved the focus between them.
+7. `run taskbar` from telnet brought it back (PID 16), with icons, quick
+   launch, clock and tray.
+8. Rules: `kill 1` and `kill 2` say "it is protected"; in the Task Manager
+   End Task is grey on init and desktop. The watchdog: `dbg.py fault hang`
+   charged to a Terminal restarted the board after 15 s, and C:\crash.txt
+   names the Terminal.
+9. Time to the desktop: a fast start 270 and 271 ms (main 359 and 367 ms
+   earlier tonight), a normal start 11,541 ms (main 11,608 ms).
+10. Free internal RAM on an idle desktop: 209,139 bytes against 209,159 on
+    main de4749c, external 6,470,588 against 6,470,532. No late or missed
+    refill in 60 s idle.
+
+At the end `C:\.config\network.ini` (added for telnet in this turn) was
+deleted and the board restarted: port 23 refuses, telnet is OFF.
