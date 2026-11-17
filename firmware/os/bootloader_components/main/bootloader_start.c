@@ -13,6 +13,8 @@
 #include <string.h>
 #include "esp_log.h"
 #include "esp_rom_sys.h"
+#include "esp_rom_caps.h"
+#include "rom/rtc.h"
 #include "esp_image_format.h"
 #include "bootloader_init.h"
 #include "bootloader_utility.h"
@@ -80,7 +82,18 @@ static int selected_boot_partition(const bootloader_state_t *bs)
 {
     // Loading the OS resets the whole reserved block if its checksum is
     // wrong (after a power-on), and our word with it. Make it right first.
-    if (bootloader_common_get_rtc_retain_mem_partition() == NULL) {
+    // To find why the word was lost on the board (the journal, "Second try"):
+    // the block as it was found, before anything here changes it, and a
+    // second copy the BIOS leaves in RTC slow memory, read but not used.
+    const bool valid = bootloader_common_get_rtc_retain_mem_partition() != NULL;
+    {
+        const uint32_t *raw = (const uint32_t *)bootloader_common_get_rtc_retain_mem();
+        esp_rom_printf("chinchilla: reset reason %d, block at %p %s: %08x %08x %08x %08x %08x %08x, slow copy %08x\n",
+                       (int)esp_rom_get_reset_reason(0), raw, valid ? "valid" : "NOT valid",
+                       raw[0], raw[1], raw[2], raw[3], raw[4], raw[5],
+                       *(const volatile uint32_t *)CHINCHILLA_SLOW_COPY_ADDRESS);
+    }
+    if (!valid) {
         bootloader_common_reset_rtc_retain_mem();
         bootloader_common_update_rtc_retain_mem(NULL, false);
     }

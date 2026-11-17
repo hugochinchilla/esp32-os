@@ -211,3 +211,36 @@ What the first try did show (the board thread's report, on 1bf5acd):
 - The laptop's ESP-IDF builds slightly smaller files than the cloud's
   (bootloader 21,168, BIOS 287,296, OS 1,480,832 bytes): another patch
   release of 5.5.
+
+## Second try on the board: the BIOS runs, the handover does not
+
+With the 16 KB task (commit de26d90) the BIOS ran every line on the monitor
+and on serial: 5760K external, 284K internal, the video, "drive C: 11 MB",
+"keyboard: serial console", "Boot device ... ota_0, 1.4 MB, image OK",
+"Starting Chinchilla..." and the countdown from 5 to 1, about 6.7 s from
+reset. A byte on serial skipped the countdown within about 50 ms.
+
+Then the board restarted and the bootloader said "starting the BIOS" again,
+never "BIOS done: starting the OS": a loop every 11.7 s. The word the BIOS
+left was not there when the bootloader looked, the one thing named as the
+main risk before the turn. The board went back to `main` the tested way.
+
+Reading ESP-IDF's source again did not find the cause. Checked and ruled
+out on paper: the block is at the same address in the bootloader and in
+the BIOS (0x600fffe8, the word at 0x600ffff4, from the BIOS's link map);
+both builds reserve the same 8 bytes and leave them out of the checksum;
+the heap does not include the block, so the memory test cannot write over
+it; `esp_restart()` on this chip resets the processors only; nothing in
+the bootloader's start clears RTC memory. So the next flash measures
+instead of guessing (the board thread's suggestion):
+
+- the bootloader prints the reset reason, whether the block's checksum was
+  right, and the block's six words as found, before it changes anything;
+- the BIOS prints the block before and after it writes the word, and the
+  address;
+- the BIOS also leaves a copy of the word in the last word of RTC slow
+  memory (0x50001ffc), which the bootloader prints but does not use. If
+  the fast memory loses the word and the slow one keeps it, that is the
+  way out.
+
+The handover itself is unchanged. Compiled; not run.
