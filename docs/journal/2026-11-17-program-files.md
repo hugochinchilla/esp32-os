@@ -75,7 +75,7 @@ compiler's own tools is needed.
   (`wm::Wm::set_start_menu_opening`) the taskbar lists `C:\Programs` and
   adds an entry for each program file, eight at most, with the header's
   name and small picture. The folder is listed every time; a header is
-  read only for a file that is new or changed (name, size, date). The 6 KB
+  read only for a file that is new or changed (name, size, date). The 4 KB
   it needs are asked for the first time the menu opens and given back when
   the taskbar ends.
 - **Pictures.** `gfx::program_icon_16/32`, original: a window with a title
@@ -159,3 +159,48 @@ at 0xa34. Not run on the board yet; a new turn is asked for.
 
 The loader's own serial lines were not captured and `C:\crash.txt` was
 lost in that turn; the next one asks for both.
+
+## How the programs reach the board (the same day)
+
+Asked on a card, "Elige cómo llegan a la placa los programas sacados del
+firmware", the owner chose **"Dentro del firmware, se instalan"**.
+
+| Option | Chosen | Why, or why not |
+|---|---|---|
+| **In the firmware, installed at start-up**: the firmware carries the `.app` files as data and copies them to `C:\Programs` when they are missing or from another build | Yes (the owner) | Nothing of the partitions or the saved Wi-Fi networks is touched; a wiped C: and an update over the network both end with the programs in place. It saves no flash: the files are in the firmware and again on C: |
+| A system partition of its own, read-only, written beside the firmware | No | The firmware would shrink, but the partition table changes and the update over the network does not write it |
+| Copied with `dbg.py` after flashing | No | The simplest, but a wiped C: leaves the board without those programs |
+
+Built:
+
+- `tools/gen_bundle.py` writes the program files as a C source file with a
+  stamp, the first 16 hex digits of the SHA-256 of their names and bytes.
+- The firmware build (`firmware/os/main/CMakeLists.txt`) now builds
+  `programs/*` itself with its own compiler, checks them against its table
+  of exports and carries the result: `hello.app` today. The firmware is
+  0x17da90 bytes of 0x1f0000 (7 KB more: the file, the installer).
+- `shell::install_programs()` (`core/src/shell/loaded.cpp`), called by
+  `shell::start`: if `C:\Programs\installed.txt` holds this build's stamp
+  and every file is there with its size, nothing is written (the cost is
+  one small read and a `stat` a file). Otherwise the files that are
+  missing, of another size or of another set are written, then the stamp.
+  A file that cannot be written leaves no stamp, so the next start tries
+  again. A bundled program the user deletes comes back at the next start.
+
+Tested on the PC (`test_loaded`): installed at start; nothing written the
+second time; a missing file and one of the wrong size put back; another
+stamp writes the set again, once. The firmware compiles and links with it.
+**Not run on the board.**
+
+No built-in program has moved yet. The two games are first, once the board
+has run `hello.app` through a press of its button.
+
+A correction to the PR's first description: the one-glyph difference in
+Terminal pictures was not an old instability, it was this change. `ps` in
+those scenes shows the taskbar's memory, and the taskbar now holds the list
+of program files once the Start menu has opened: 1K became 6K. The header
+being read was moved out of that block (asked for and given back around
+each read), so the figure is 4K, and the four reference pictures that show it
+(`host/tests/pictures/45-terminal-commands.png`,
+`46b-terminal-maximized.png`, `34b-task-manager-all.png`,
+`34c-task-manager-protected.png`) were drawn again: one digit each.

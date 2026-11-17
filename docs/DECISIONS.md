@@ -2328,6 +2328,17 @@ The rest is the agent's, to confirm:
   the menu left alone. In the File manager a `.app` has one picture for
   the kind, not each program's own (the listing keeps no pixels).
 
+- **Programs that come with the system are carried in the firmware and
+  installed** (the owner's choice on a card, 2026-11-17: "Dentro del
+  firmware, se instalan"): the firmware build makes `programs/*` into
+  `.app` files and carries them as data; at start-up the system writes to
+  `C:\Programs` those that are missing or from another build
+  (`C:\Programs\installed.txt` holds the build's stamp). Rejected: a
+  read-only system partition (the partition table changes, the network
+  update does not write it) and copying with `dbg.py` (a wiped C: loses
+  them). A bundled program deleted by the user comes back at the next
+  start.
+
 ### Missed video refills are logged (2026-11-17, the owner's request)
 
 - `dbg.py tasks` stays as it is (the owner, 2026-11-17: "we can leave the

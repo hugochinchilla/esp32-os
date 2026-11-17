@@ -22,6 +22,16 @@ struct chinchilla_export {
 };
 extern const struct chinchilla_export chinchilla_exports[];
 extern const unsigned chinchilla_export_count;
+// The program files the firmware carries (tools/gen_bundle.py): the same
+// three fields as shell::BundledProgram.
+struct chinchilla_bundled {
+    const char *file;
+    const uint8_t *data;
+    uint32_t size;
+};
+extern const struct chinchilla_bundled chinchilla_bundle[];
+extern const unsigned chinchilla_bundle_count;
+extern const char chinchilla_bundle_stamp[];
 }
 
 class ElfLoader : public ports::Loader {

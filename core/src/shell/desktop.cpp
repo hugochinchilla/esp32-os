@@ -196,7 +196,6 @@ constexpr int kMaxApps = 16;
 // Programs kept in files (backlog item 27): every program file in this
 // folder has an entry in Start > Programs, after the built-in ones, with
 // the name and the picture its header gives.
-constexpr char kProgramsFolder[] = "C:\\Programs";
 constexpr int kMaxFilePrograms = 8;
 wm::MenuItem g_program_items[kMaxApps + kMaxFilePrograms];
 wm::Menu g_programs = {g_program_items, 0};
@@ -215,7 +214,6 @@ struct FileProgram {
 struct FilePrograms {
     FileProgram rows[kMaxFilePrograms];
     int count;
-    app::FileInfo header; // the one being read
 };
 // The taskbar's, asked for the first time the Start menu opens.
 FilePrograms *g_menu_files = nullptr;
@@ -261,22 +259,26 @@ void find_programs(void *)
                 // further on if there is room, or read again another time.
                 f.rows[f.count < kMaxFilePrograms ? f.count++ : kMaxFilePrograms - 1] = row;
             }
-            if (!program_info(path, f.header)) {
+            // Its header, in memory asked for only while it is read.
+            auto *header = static_cast<app::FileInfo *>(os::allocate(sizeof(app::FileInfo)));
+            if (header == nullptr || !program_info(path, *header)) {
+                os::release(header);
                 continue; // not a program of this system: no entry
             }
             snprintf(row.path, sizeof(row.path), "%s", path);
-            snprintf(row.title, sizeof(row.title), "%s", f.header.title);
+            snprintf(row.title, sizeof(row.title), "%s", header->title);
             if (row.title[0] == 0) {
                 snprintf(row.title, sizeof(row.title), "%.*s", static_cast<int>(sizeof(row.title)) - 1, entry.name);
                 if (char *dot = strrchr(row.title, '.')) {
                     *dot = 0;
                 }
             }
-            memcpy(row.pixels, f.header.icon16, sizeof(row.pixels));
-            row.icon = {16, 16, nullptr, f.header.clear};
-            row.own_icon = f.header.has16 != 0;
+            memcpy(row.pixels, header->icon16, sizeof(row.pixels));
+            row.icon = {16, 16, nullptr, header->clear};
+            row.own_icon = header->has16 != 0;
             row.size = entry.size;
             row.modified = entry.modified;
+            os::release(header);
         }
         row.icon.pixels = row.pixels; // the row may have moved
         g_program_items[g_built_in + n] = {row.title, &launch_file, &row, nullptr,
@@ -947,6 +949,7 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
     welcome_file();
     install_screen_saver();
     install_display();
+    install_programs(); // those that come with the system, into C:\Programs
     start_network();
     // The taskbar, the Start menu and the icons are a process of their own
     // (backlog item 21), started by init at its line of startup.txt and

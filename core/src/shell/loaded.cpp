@@ -245,4 +245,59 @@ bool run_file(const char *path, char *why, size_t capacity)
     return true;
 }
 
+/* ---- Programs that come with the system ---------------------------------------- */
+
+namespace {
+const BundledProgram *g_bundled = nullptr;
+int g_bundled_count = 0;
+const char *g_bundle_stamp = "";
+// Which set of files was put in the folder last.
+constexpr char kStampFile[] = "C:\\Programs\\installed.txt";
+} // namespace
+
+void set_bundled_programs(const BundledProgram *list, int count, const char *stamp)
+{
+    g_bundled = list;
+    g_bundled_count = count;
+    g_bundle_stamp = stamp != nullptr ? stamp : "";
+}
+
+int install_programs()
+{
+    const prog::InCall in_call;
+    if (g_bundled_count == 0) {
+        return 0;
+    }
+    // The same set as last time and every file there with its size: nothing
+    // is read or written but the stamp and the folder's entries.
+    char stamp[48] = "";
+    size_t got = 0;
+    const bool same_set = os::file::read_file(kStampFile, stamp, sizeof(stamp) - 1, got) == ports::FsError::Ok &&
+                          got == strlen(g_bundle_stamp) && memcmp(stamp, g_bundle_stamp, got) == 0;
+    int written = 0;
+    bool failed = false;
+    os::file::make_folder(kProgramsFolder); // there already, most times
+    for (int i = 0; i < g_bundled_count; i++) {
+        const BundledProgram &b = g_bundled[i];
+        char path[fs::kMaxPath];
+        snprintf(path, sizeof(path), "%s\\%s", kProgramsFolder, b.file);
+        fs::DirEntry entry;
+        if (same_set && os::file::stat(path, entry) == ports::FsError::Ok && !entry.folder && entry.size == b.size) {
+            continue;
+        }
+        if (os::file::write_file(path, b.data, b.size) == ports::FsError::Ok) {
+            written++;
+        } else {
+            failed = true;
+        }
+    }
+    if (failed) {
+        return -1; // no stamp: tried again at the next start
+    }
+    if (!same_set && os::file::write_file(kStampFile, g_bundle_stamp, strlen(g_bundle_stamp)) != ports::FsError::Ok) {
+        return -1;
+    }
+    return written;
+}
+
 } // namespace shell

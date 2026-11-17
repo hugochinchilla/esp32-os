@@ -66,6 +66,11 @@ int main(int argc, char **argv)
 
     static fs::MemoryVolume disk(memory.allocate(1 << 20), 1 << 20, "RAM disk");
     storage.mount('C', disk);
+    // The programs that come with the system: handed in before it starts,
+    // in C:\Programs once it has.
+    static const shell::BundledProgram bundle[] = {
+        {"hello.app", reinterpret_cast<const uint8_t *>(program.data()), static_cast<uint32_t>(program.size())}};
+    shell::set_bundled_programs(bundle, 1, "first");
     shell::start(desktop, system_, storage, memory);
     desktop.start();
     desktop.set_animations(false);
@@ -75,6 +80,24 @@ int main(int argc, char **argv)
     while (desktop.active() != nullptr) {
         desktop.close(*desktop.active());
         wait(10000);
+    }
+    {
+        fs::DirEntry there;
+        CHECK(storage.stat("C:\\Programs\\hello.app", there) == ports::FsError::Ok && there.size == program.size());
+        CHECK(shell::install_programs() == 0); // the same set, all there: nothing written
+        CHECK(storage.remove("C:\\Programs\\hello.app") == ports::FsError::Ok);
+        CHECK(shell::install_programs() == 1); // one missing: put back
+        CHECK(storage.write_file("C:\\Programs\\hello.app", "old", 3) == ports::FsError::Ok);
+        CHECK(shell::install_programs() == 1); // not the size it should be
+        shell::set_bundled_programs(bundle, 1, "second");
+        CHECK(shell::install_programs() == 1 && shell::install_programs() == 0); // another set: written again, once
+        char stamp[16] = "";
+        size_t got = 0;
+        CHECK(storage.read_file("C:\\Programs\\installed.txt", stamp, sizeof(stamp), got) == ports::FsError::Ok &&
+              got == 6 && memcmp(stamp, "second", 6) == 0);
+        // The rest of the test puts its own files there.
+        shell::set_bundled_programs(nullptr, 0, "");
+        CHECK(storage.remove("C:\\Programs\\hello.app") == ports::FsError::Ok);
     }
     const int processes = t.count();
     const uint32_t blocks = os::blocks_out();
@@ -153,7 +176,6 @@ int main(int argc, char **argv)
     const wm::Menu *programs = desktop.popup_menu(0)->items[0].submenu;
     const int built_in = programs->count;
     desktop.close_menus();
-    CHECK(storage.make_folder("C:\\Programs") == ports::FsError::Ok);
     CHECK(storage.write_file("C:\\Programs\\hello.app", program.data(), program.size()) == ports::FsError::Ok);
     CHECK(storage.write_file("C:\\Programs\\notes.txt", "x", 1) == ports::FsError::Ok);
     CHECK(storage.write_file("C:\\Programs\\broken.app", "not a program", 13) == ports::FsError::Ok);

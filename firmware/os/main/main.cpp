@@ -1176,6 +1176,10 @@ extern "C" void app_main(void)
     static ElfLoader programs;
     if (programs.begin()) {
         shell::set_loader(&programs);
+        // Those that come with the system go to C:\Programs when it starts.
+        static_assert(sizeof(chinchilla_bundled) == sizeof(shell::BundledProgram), "one layout, two names");
+        shell::set_bundled_programs(reinterpret_cast<const shell::BundledProgram *>(chinchilla_bundle),
+                                    static_cast<int>(chinchilla_bundle_count), chinchilla_bundle_stamp);
     }
 
     ESP_LOGI(TAG, "starting video on core 1");

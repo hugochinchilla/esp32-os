@@ -20,7 +20,7 @@ CXX="${CXX:-xtensa-esp32s3-elf-g++}"
 NM="${NM:-xtensa-esp32s3-elf-nm}"
 STRIP="${STRIP:-xtensa-esp32s3-elf-strip}"
 OBJCOPY="${OBJCOPY:-xtensa-esp32s3-elf-objcopy}"
-OUT="$HERE/build/programs"
+OUT="${PROGRAMS_OUT:-$HERE/build/programs}"
 mkdir -p "$OUT"
 built=""
 for dir in "$HERE"/programs/*/; do
