@@ -11,6 +11,7 @@
 #include "core/image/image.hpp"
 #include "../folder_volume.hpp"
 #include "../host_adapters.hpp"
+#include "../../firmware/common/boot_flag.h"
 
 namespace {
 
@@ -170,8 +171,9 @@ void test_matches_reference(const char *look_folder)
     gfx::Canvas c = screen.canvas();
     static bios::TextScreen s;
     bios::draw_post(c, s,
-                    {"v0.3", "ESP32-S3 dual core, 240 MHz", 8192, 376, "VGA 640x480, 256 colours", "12 MB flash disk",
-                     "serial debug link", "none", 5, "17/11/2026-ESP32S3-N16R8-CHINCHILLA"});
+                    {"v0.3", "ESP32-S3 dual core, 240 MHz", 8192, 376, "VGA 640x480, 256 colours", "11 MB flash disk",
+                     "serial debug link", "none", "ota_0, 1.4 MB, image OK", 5,
+                     "17/11/2026-ESP32S3-N16R8-CHINCHILLA"});
     int differ = 0, x0 = 640, y0 = 480, x1 = -1, y1 = -1;
     for (int i = 0; i < 640 * 480; i++) {
         if (screen.display.pixels()[i] != reference[i]) {
@@ -314,13 +316,83 @@ void test_waiting_and_skipping()
     CHECK(row(s, bios::kKeyRow).empty());                                                 // no countdown after a key
 }
 
+// What only the BIOS knows: the drive from the partition table, and the
+// system it is about to start. With no system it stops and says so.
+void test_boot_device()
+{
+    Screen screen;
+    host::HostSystem system;
+    host::HostMemory memory;
+    SteppingClock clock;
+    shell::BootIo io{screen.display, system, memory, clock, nullptr, nullptr, nullptr, nullptr};
+    io.monitor_wait_ms = 0;
+    io.hold_s = 2;
+    static bios::TextScreen s;
+    std::string sent;
+    s.set_out(collect, &sent);
+    bios::Post post{io, s};
+    post.drive = "11 MB flash disk";
+    static const char *found = "ota_0, 1.4 MB, image OK";
+    post.boot_context = &found;
+    post.boot_device = [](char *text, size_t capacity, void *context) {
+        snprintf(text, capacity, "%s", *static_cast<const char **>(context));
+        return true;
+    };
+    CHECK(bios::run_post(post, true) == 0 && post.bootable);
+    CHECK(row(s, bios::kDriveRow) == "  Detecting drive C: .... 11 MB flash disk");
+    CHECK(row(s, bios::kBootRow) == "  Boot device ........... ota_0, 1.4 MB, image OK");
+    CHECK(row(s, bios::kSummaryRow) == "  Starting Chinchilla..." && row(s, bios::kCountdownRow) == "  Booting in 1");
+    const std::vector<std::string> lines = terminal(sent);
+    CHECK(lines.size() > static_cast<size_t>(bios::kCountdownRow) && lines[bios::kBootRow] == row(s, bios::kBootRow));
+
+    host::HostMemory fresh;
+    SteppingClock clock2;
+    shell::BootIo io2{screen.display, system, fresh, clock2, nullptr, nullptr, nullptr, nullptr};
+    io2.monitor_wait_ms = 0;
+    io2.hold_s = 5;
+    bios::Post none{io2, s};
+    none.drive = "11 MB flash disk";
+    none.boot_device = [](char *text, size_t capacity, void *) {
+        snprintf(text, capacity, "ota_0, not a system");
+        return false;
+    };
+    const uint32_t before = clock2.now;
+    CHECK(bios::run_post(none, true) == 1 && !none.bootable);
+    CHECK(s.colour_at(2, bios::kBootRow) == bios::kRed);
+    CHECK(row(s, bios::kSummaryRow) == "  No operating system found." && s.colour_at(2, bios::kSummaryRow) == bios::kRed);
+    CHECK(row(s, bios::kKeyRow) == "  Flash one with the cable, then restart." && row(s, bios::kCountdownRow).empty());
+    CHECK(clock2.now - before < 5000000); // no countdown
+}
+
+// The bootloader's choice between the BIOS and the OS, over the restarts
+// of a normal start, a fast restart and a flash with no BIOS in it.
+void test_boot_word()
+{
+    // Power-on: the memory holds anything. The BIOS starts.
+    uint32_t word = 0xDEADBEEF;
+    CHECK(chinchilla_start_bios(&word, true) && word == 0);
+    // The BIOS is done and restarts: the OS starts and is told so, once.
+    word = CHINCHILLA_START_OS;
+    CHECK(!chinchilla_start_bios(&word, true) && word == CHINCHILLA_FROM_BIOS);
+    // The OS did not clear the word (it crashed at once): the next restart
+    // still goes through the BIOS.
+    CHECK(chinchilla_start_bios(&word, true) && word == 0);
+    // No BIOS in the flash: the OS starts, and is not told a BIOS ran.
+    word = 0;
+    CHECK(!chinchilla_start_bios(&word, false) && word == 0);
+    word = CHINCHILLA_FROM_BIOS;
+    CHECK(!chinchilla_start_bios(&word, false) && word == 0);
+}
+
 } // namespace
 
 int main(int argc, char **argv)
 {
+    test_boot_word();
     test_text_screen();
     test_run();
     test_waiting_and_skipping();
+    test_boot_device();
     if (argc > 1) {
         test_matches_reference(argv[1]);
     } else {

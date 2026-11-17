@@ -11,7 +11,8 @@ namespace bios {
 
 // Where things are on the 80 by 30 screen.
 constexpr int kTitleRow = 1, kProcessorRow = 4, kMemoryRow = 5, kVideoRow = 8, kDriveRow = 9, kInputRow = 10,
-              kSoundRow = 11, kSummaryRow = 13, kKeyRow = 15, kCountdownRow = 16, kSetupRow = 28, kIdRow = 29;
+              kSoundRow = 11, kBootRow = 13, kSummaryRow = 15, kKeyRow = 17, kCountdownRow = 18, kSetupRow = 28,
+              kIdRow = 29;
 constexpr int kLeftColumn = 2;
 // The mascot: 16 squares of 5 pixels, over ten columns and five rows that
 // the text leaves empty.
@@ -28,6 +29,18 @@ struct Post {
     TextScreen &screen;
     // The bottom line, e.g. the build's date and the board (may be nullptr).
     const char *id = nullptr;
+    // Drive C: when io.storage is not given: the BIOS does not mount the
+    // drive, it reads its size from the partition table (may be nullptr:
+    // "none", a failed check).
+    const char *drive = nullptr;
+    // The system the BIOS is about to start: fills `text` (e.g. "ota_0,
+    // 1.4 MB, image OK") and returns whether it can be started. nullptr: no
+    // "Boot device" line (a BIOS that starts nothing, as on the PC).
+    bool (*boot_device)(char *text, size_t capacity, void *context) = nullptr;
+    void *boot_context = nullptr;
+    // Set by run_post: there is a system to start. When false the screen
+    // says so and does not count down; the caller must not hand over.
+    bool bootable = true;
 };
 
 // Black, the mascot, and every cell of the screen.
@@ -44,6 +57,7 @@ struct PostValues {
     const char *version, *processor;
     uint32_t external_kb, internal_kb;
     const char *video, *drive, *input, *sound;
+    const char *boot; // nullptr: no "Boot device" line
     uint32_t countdown; // 0: no "Press any key" lines
     const char *id;
 };

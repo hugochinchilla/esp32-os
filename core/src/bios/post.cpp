@@ -114,6 +114,9 @@ void draw_post(gfx::Canvas &c, TextScreen &s, const PostValues &v)
     line(s, kDriveRow, "Detecting drive C: .... ", v.drive, kText);
     line(s, kInputRow, "Detecting keyboard .... ", v.input, kText);
     line(s, kSoundRow, "Detecting sound ....... ", v.sound, kText);
+    if (v.boot != nullptr) {
+        line(s, kBootRow, "Boot device ........... ", v.boot, kText);
+    }
     line(s, kSummaryRow, "Starting Chinchilla...", "", kYellow);
     if (v.countdown > 0) {
         char t[32];
@@ -227,6 +230,9 @@ int run_post(Post &post, bool hold)
         }
         snprintf(v, sizeof(v), "%s %s", size, label);
         ok = true;
+    } else if (io.storage == nullptr && post.drive != nullptr) {
+        snprintf(v, sizeof(v), "%s", post.drive);
+        ok = true;
     }
     line(s, kDriveRow, "Detecting drive C: .... ", v, ok ? kText : kRed);
     log("Drive C:", v, ok);
@@ -249,6 +255,24 @@ int run_post(Post &post, bool hold)
         shown();
     }
 
+    // The system to start. Without one the BIOS stops here.
+    post.bootable = true;
+    if (post.boot_device != nullptr) {
+        v[0] = 0;
+        post.bootable = post.boot_device(v, sizeof(v), post.boot_context);
+        line(s, kBootRow, "Boot device ........... ", v, post.bootable ? kText : kRed);
+        log("Boot device", v, post.bootable);
+        failures += post.bootable ? 0 : 1;
+        shown();
+    }
+
+    if (!post.bootable) {
+        line(s, kSummaryRow, "No operating system found.", "", kRed);
+        line(s, kKeyRow, "Flash one with the cable, then restart.", "", kText);
+        s.paint(c);
+        s.move_to(s.cursor_row() + 1);
+        return failures;
+    }
     if (failures == 0) {
         line(s, kSummaryRow, "Starting Chinchilla...", "", kYellow);
     } else {

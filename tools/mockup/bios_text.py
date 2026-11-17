@@ -104,8 +104,9 @@ def screen(g, grid=False):
     img.paste(MASCOT, (640 - 88 - 16, 16))      # logo: cols 67..77, rows 1..5
     return img
 
-for key, name, note, g in FONTS:
-    screen(g).save(f"{OUT}/bios-text-{key}.png")
+if len(FONTS) > 1:  # the font mock-ups, only when all five can be drawn
+    for key, name, note, g in FONTS:
+        screen(g).save(f"{OUT}/bios-text-{key}.png")
 
 # ---- The reference for the PC test (host/tests/test_bios.cpp): the screen
 # as core/src/bios/post.cpp lays it out, drawn here from Spleen's BDF file
@@ -135,12 +136,13 @@ def post_reference(g):
         (5, [(TXT, "Memory Test    : "), (HI, "  8192K OK"), (TXT, "   (external)")]),
         (6, [(TXT, "               : "), (HI, "   376K OK"), (TXT, "   (internal)")]),
         (8, [(TXT, "Detecting video ....... VGA 640x480, 256 colours")]),
-        (9, [(TXT, "Detecting drive C: .... 12 MB flash disk")]),
+        (9, [(TXT, "Detecting drive C: .... 11 MB flash disk")]),
         (10, [(TXT, "Detecting keyboard .... serial debug link")]),
         (11, [(TXT, "Detecting sound ....... none")]),
-        (13, [(YEL, "Starting Chinchilla...")]),
-        (15, [(TXT, "Press any key to continue")]),
-        (16, [(HI, "Booting in 5")]),
+        (13, [(TXT, "Boot device ........... ota_0, 1.4 MB, image OK")]),
+        (15, [(YEL, "Starting Chinchilla...")]),
+        (17, [(TXT, "Press any key to continue")]),
+        (18, [(HI, "Booting in 5")]),
         (28, [(DARK, "Press DEL to enter SETUP (there is no setup)")]),
         (29, [(DARK, "17/11/2026-ESP32S3-N16R8-CHINCHILLA")]),
     ]
