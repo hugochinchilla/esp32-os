@@ -95,6 +95,12 @@ file is deleted; with a real thread as its task the program starts, answers
 a key, closes, and is unloaded only after the task has ended. The PC gate
 passes.
 
+The firmware compiles and links with the change in the cloud container
+(0x17beb0 bytes of 0x1f0000, 3 KB more than the first step), and
+`hello.app` builds for the board: 6,480 bytes (3,712 before; the header is
+1,332 and the program holds a second copy of it, with its picture), every
+name it asks for among the 296 exported.
+
 **Not run on the board.** Whether loaded code runs there at all is still
 the open question of the first step; the board turn for it was asked for
 before this step began, on the first step's commit.
@@ -107,6 +113,11 @@ before this step began, on the first step's commit.
 - The first step's test passed with the process named after the file; the
   name is now the program's own, which is what `find_by_name("Editor")`
   and the like will need when built-in programs move to files.
+
+- The board's compiler caught what the PC's did not: a process's name is
+  shorter (24) than a program's (32), and `-Werror=format-truncation`
+  refused the `snprintf` that cut one to the other. The cut is meant; it
+  is now written so.
 
 ## What is left
 

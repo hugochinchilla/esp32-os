@@ -105,7 +105,10 @@ void ended(proc::Pid pid, void *)
 void process_name(const char *path, const app::FileInfo &info, char *out, size_t capacity)
 {
     if (info.title[0] != 0) {
-        snprintf(out, capacity, "%.*s", app::FileInfo::kTitleSize - 1, info.title);
+        // As much of it as a process's name holds.
+        const int room = static_cast<int>(capacity) - 1;
+        snprintf(out, capacity, "%.*s", room < app::FileInfo::kTitleSize - 1 ? room : app::FileInfo::kTitleSize - 1,
+                 info.title);
         return;
     }
     snprintf(out, capacity, "%s", fs::path::name(path));
