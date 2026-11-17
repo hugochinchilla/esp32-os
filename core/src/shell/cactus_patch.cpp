@@ -5,6 +5,7 @@
 // pictures are original, drawn here as text rows.
 #include "core/app/app.hpp"
 #include "core/gfx/art.hpp"
+#include "core/gfx/game_art.hpp"
 #include <cstdio>
 #include <cstring>
 
@@ -566,12 +567,7 @@ private:
     static void pick_large(void *context) { static_cast<CactusWindow *>(context)->set_level(2); }
     static void close_action(void *context) { static_cast<CactusWindow *>(context)->close(); }
     static void how_to_play(void *) { message_box("How to play", kHowToPlay); }
-    static void about(void *)
-    {
-        if (const App *a = find_app("About Chinchilla")) {
-            launch(*a);
-        }
-    }
+    static void about(void *) { os::launch("About Chinchilla"); }
 
     static constexpr int kSeparate = 16; // more changed tiles than this are painted as one area
 
@@ -604,24 +600,51 @@ private:
     const wm::MenuBar bar_ = {entries_, 2};
 };
 
+app::Number open_window(const gfx::Bitmap *icon)
+{
+    app::Look look;
+    look.title = "Cactus Patch";
+    look.icon = icon;
+    look.flags = app::kClientSize | app::kFixedSize | app::kMenuBar; // the size is set by the game
+    return app::open<CactusWindow>(look);
+}
+
+#ifndef APP_FILE
 app::Number g_window = app::kNone; // the one there may be: a number, dead once it has closed
 
 // For the tests and the reference pictures, while Cactus Patch is open.
 CactusWindow &cactus_window() { return *app::program<CactusWindow>(g_window); }
+#endif
 
 } // namespace
 
+#ifdef APP_FILE
+} // namespace shell
+
+// Cactus Patch kept in a file (backlog item 27; programs/cactus_patch): on
+// the board it is not part of the firmware.
+APP_INFO(app::file_info("Cactus Patch", 0, gfx::game_art::kCactus16, gfx::game_art::kCactus16Inks,
+                        gfx::game_art::kCactus32, gfx::game_art::kCactus32Inks));
+
+namespace {
+// The window's icon: the header's own pixels are not in memory with the
+// program, so they are made again here from the same rows.
+constexpr app::Icon16 kWindowIcon = app::icon16(gfx::game_art::kCactus16, gfx::game_art::kCactus16Inks);
+} // namespace
+
+APP_MAIN(int, char **)
+{
+    static const gfx::Bitmap icon = {16, 16, kWindowIcon.pixels, app::kClearInk};
+    return shell::open_window(&icon) != app::kNone ? 0 : 1;
+}
+#else
 void open_cactus_patch()
 {
     const AsProgram as("Cactus Patch");
     if (app::bring_forward(g_window)) {
         return;
     }
-    app::Look look;
-    look.title = "Cactus Patch";
-    look.icon = &gfx::cactus_icon_16();
-    look.flags = app::kClientSize | app::kFixedSize | app::kMenuBar; // the size is set by the game
-    g_window = app::open<CactusWindow>(look);
+    g_window = open_window(&gfx::cactus_icon_16());
     if (g_window == app::kNone) {
         no_memory_for("Cactus Patch");
     }
@@ -634,3 +657,4 @@ void cactus_patch_refresh() { cactus_window().refresh(); }
 int cactus_patch_seconds() { return cactus_window().seconds(); }
 
 } // namespace shell
+#endif

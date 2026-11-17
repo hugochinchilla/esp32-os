@@ -14,6 +14,7 @@ import sys
 
 # Programs (files of core/src/shell) that use only the OS calls.
 MOVED = [
+    "about.cpp",
     "cactus_patch.cpp",
     "colour_dialog.cpp",
     "culebra.cpp",
@@ -22,6 +23,7 @@ MOVED = [
     "display.cpp",
     "editor.cpp",
     "file_manager.cpp",
+    "gallery.cpp",
     "network.cpp",
     "run.cpp",
     "screensaver.cpp",
@@ -31,6 +33,7 @@ MOVED = [
     "terminal.cpp",
     "trash.cpp",
     "viewer.cpp",
+    "welcome.cpp",
 ]
 
 # Not programs: the desktop itself, what it keeps running (the network, the
@@ -40,6 +43,7 @@ SYSTEM = [
     "boot.cpp",
     "desktop.cpp",
     "listing.cpp",
+    "loaded.cpp",
     "network_service.cpp",
     "power.cpp",
     "sessions.cpp",

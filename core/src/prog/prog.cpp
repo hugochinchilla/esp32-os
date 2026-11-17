@@ -11,6 +11,7 @@ Runner::Runner(proc::Table &procs) : procs_(procs)
 {
     procs_.set_caller(&Runner::call_for_table, this);
     procs_.set_between([](void *self) { static_cast<Runner *>(self)->serve(); }, this);
+    procs_.set_busy([](proc::Pid pid, void *self) { return static_cast<Runner *>(self)->late(pid); }, this);
     procs_.on_exit(&Runner::exited, this);
 }
 
@@ -23,6 +24,7 @@ Runner::~Runner()
     }
     procs_.set_caller(nullptr, nullptr);
     procs_.set_between(nullptr, nullptr);
+    procs_.set_busy(nullptr, nullptr);
 }
 
 void Runner::set_tasks(ports::Tasks *tasks, Kit *kits, int count)
@@ -44,6 +46,16 @@ Runner::Slot *Runner::slot_of(proc::Pid pid)
 
 const Runner::Slot *Runner::slot_of(proc::Pid pid) const { return const_cast<Runner *>(this)->slot_of(pid); }
 
+bool Runner::task_left(proc::Pid pid) const
+{
+    for (const Slot &s : slots_) {
+        if (s.used && s.pid == pid) {
+            return true;
+        }
+    }
+    return false;
+}
+
 int Runner::tasks() const
 {
     int n = 0;
@@ -63,8 +75,9 @@ bool Runner::late(proc::Pid pid) const
     return state == Late || state == LateDone;
 }
 
-bool Runner::start(proc::Pid pid)
+bool Runner::start(proc::Pid pid, uint32_t stack_bytes)
 {
+    stack_bytes = stack_bytes < kStackBytes ? kStackBytes : stack_bytes;
     if (!threaded() || !procs_.alive(pid)) {
         return false;
     }
@@ -91,12 +104,12 @@ bool Runner::start(proc::Pid pid)
         s.kit.go->wait(0);
         s.kit.done->wait(0);
         const proc::Process *row = procs_.find(pid);
-        s.task = tasks_->start(row->name, &Runner::task, &s, kStackBytes, ports::Priority::High);
+        s.task = tasks_->start(row->name, &Runner::task, &s, stack_bytes, ports::Priority::High);
         if (s.task == nullptr) {
             s.used = false;
             return false;
         }
-        procs_.add_memory(pid, static_cast<int32_t>(kStackBytes));
+        procs_.add_memory(pid, static_cast<int32_t>(stack_bytes));
         return true;
     }
     return false;

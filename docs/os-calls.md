@@ -49,10 +49,11 @@ The journal entry with the reasons is
 | Desktop | `os::set_theme(index)` | The look of windows, buttons and the taskbar, a row of the table in `core/gfx/theme.hpp` (Display); the whole screen is painted again |
 | | `os::set_screen_saver(animation, seconds)` | Which animation and after how long; -1 for none (Screen Saver) |
 | | `os::preview_screen_saver(animation)`, `os::last_saver_run()` | Shows one now; how the last run went |
+| | `os::launch(program)` | Starts one of the system's own programs by name, or brings it forward |
 | | `os::shut_down()` | Asks every program to close and shows the power-off screen; false if one called it off |
 | Network | `os::network()` | The Wi-Fi service, or nothing on a board with no radio; asked for each time, not kept |
 | Sessions | `os::open_session(device, why)` | A command shell on a TTY of its own, as a process `sh`, child of the one asking, which is its device (the Terminal). `nullptr` and the reason if it cannot start |
-| Files | `os::file::stat`, `entry`, `make_folder`, `remove`, `rename` | Folders and names |
+| Files | `os::file::stat`, `entry`, `entries` (a run of a folder in one pass), `make_folder`, `remove`, `rename` | Folders and names |
 | | `os::file::open`, `read`, `write`, `seek`, `close` | A file a piece at a time, by its handle: a number. The system knows which process holds it and closes it if the process ends. Two per process, six in all |
 | | `os::file::begin_save`, `finish_save` | Saving without putting the old file at risk, by a handle too; thrown away if the process ends first |
 | | `os::file::open_files(pid)` | How many a process holds |
@@ -76,10 +77,11 @@ background job: the drives have their own lock.
 the drives, the System port or the process table again, and prints how far
 the move has got.
 
-Moved (17 of 17): Cactus Patch, the colour chooser, Culebra, Defrag, the
-file dialogs and the message box, Display, the Editor, the File manager,
-Network, the Picture viewer, Run, Screen Saver, the settings files, Shut
-Down, the Task Manager, the Terminal, the Trash.
+Moved (20 of 20): About, Cactus Patch, the colour chooser, Culebra, Defrag,
+the file dialogs and the message box, Display, the Editor, the File
+manager, Network, the Picture viewer, Run, Screen Saver, the settings
+files, Shut Down, the Task Manager, the Terminal, the Trash, Welcome, the
+Widget gallery.
 
 Display, Screen Saver, Network and Shut Down were each half a window and
 half something the system keeps going. The window is the program; the

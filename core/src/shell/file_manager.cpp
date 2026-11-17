@@ -800,76 +800,83 @@ void refresh_folder_windows()
 
 void open_trash()
 {
-    const AsProgram as("File manager");
-    if (TrashWindow *w = app::program<TrashWindow>(g_trash)) {
-        w->refresh();
-        app::bring_forward(g_trash);
-        return;
-    }
-    app::Look look;
-    look.title = "Trash";
-    look.x = 120;
-    look.y = 60;
-    look.width = 400;
-    look.height = 280;
-    look.icon = &gfx::bin_icon_16();
-    look.flags = app::kMenuBar;
-    g_trash = app::make<TrashWindow>(look);
-    if (g_trash == app::kNone) {
-        no_memory_for("Trash");
-        return;
-    }
-    app::program<TrashWindow>(g_trash)->refresh();
-    app::show(g_trash);
+    in_program("File manager", [] {
+        if (TrashWindow *w = app::program<TrashWindow>(g_trash)) {
+            w->refresh();
+            app::bring_forward(g_trash);
+            return;
+        }
+        app::Look look;
+        look.title = "Trash";
+        look.x = 120;
+        look.y = 60;
+        look.width = 400;
+        look.height = 280;
+        look.icon = &gfx::bin_icon_16();
+        look.flags = app::kMenuBar;
+        g_trash = app::make<TrashWindow>(look);
+        if (g_trash == app::kNone) {
+            no_memory_for("Trash");
+            return;
+        }
+        app::program<TrashWindow>(g_trash)->refresh();
+        app::show(g_trash);
+    });
 }
 
 void open_folder(const char *path)
 {
-    const AsProgram as("File manager");
-    const char *want = path != nullptr ? path : "";
-    // Already shown: bring that window forward.
-    for (const app::Number number : g_windows) {
-        FolderWindow *w = app::program<FolderWindow>(number);
-        if (w != nullptr && w->on_screen() && strcmp(w->folder(), want) == 0) {
-            w->refresh();
-            app::bring_forward(number);
-            return;
+    const PathArg p(path);
+    in_program("File manager", [p] {
+        const char *want = p.text;
+        // Already shown: bring that window forward.
+        for (const app::Number number : g_windows) {
+            FolderWindow *w = app::program<FolderWindow>(number);
+            if (w != nullptr && w->on_screen() && strcmp(w->folder(), want) == 0) {
+                w->refresh();
+                app::bring_forward(number);
+                return;
+            }
         }
-    }
-    // A place with no open window, else the first window is reused.
-    int n = 0;
-    for (int i = 0; i < kWindows; i++) {
-        if (!os::ui::alive(g_windows[i])) {
-            n = i;
-            break;
+        // A place with no open window, else the first window is reused.
+        int n = 0;
+        for (int i = 0; i < kWindows; i++) {
+            if (!os::ui::alive(g_windows[i])) {
+                n = i;
+                break;
+            }
         }
-    }
-    if (!os::ui::alive(g_windows[n])) {
-        app::Look look;
-        look.title = "My Board";
-        look.x = 96 + n * 24;
-        look.y = 28 + n * 24;
-        look.width = 400;
-        look.height = 300;
-        look.icon = &gfx::folder_icon_16();
-        look.flags = app::kMenuBar;
-        g_windows[n] = app::make<FolderWindow>(look);
-        if (g_windows[n] == app::kNone) {
-            no_memory_for("File manager");
-            return;
+        if (!os::ui::alive(g_windows[n])) {
+            app::Look look;
+            look.title = "My Board";
+            look.x = 96 + n * 24;
+            look.y = 28 + n * 24;
+            look.width = 400;
+            look.height = 300;
+            look.icon = &gfx::folder_icon_16();
+            look.flags = app::kMenuBar;
+            g_windows[n] = app::make<FolderWindow>(look);
+            if (g_windows[n] == app::kNone) {
+                no_memory_for("File manager");
+                return;
+            }
         }
-    }
-    FolderWindow *use = app::program<FolderWindow>(g_windows[n]);
-    use->forget_history();
-    use->go_to(want, false);
-    app::show(g_windows[n]);
+        FolderWindow *use = app::program<FolderWindow>(g_windows[n]);
+        use->forget_history();
+        use->go_to(want, false);
+        app::show(g_windows[n]);
+    });
 }
 
-// What opens what, by extension: 1 the Editor, 2 the Picture viewer, 0 nothing.
+// What opens what, by extension: 1 the Editor, 2 the Picture viewer, 3 a
+// program that is loaded and run, 0 nothing.
 static int program_kind(const char *path)
 {
     static const char *const kText[] = {"txt", "log", "ini", "md"};
     static const char *const kPictures[] = {"bmp", "png", "jpg", "jpeg"};
+    if (is_program_file(path)) {
+        return 3;
+    }
     char ext[8];
     fs::path::extension(path, ext, sizeof(ext));
     for (const char *e : kText) {
@@ -896,6 +903,16 @@ bool open_file(const char *path)
     case 2:
         open_picture(path);
         return true;
+    case 3: {
+        // A program in a file: loaded and run.
+        static char text[200];
+        char why[120];
+        if (!run_file(path, why, sizeof(why))) {
+            snprintf(text, sizeof(text), "'%s' could not be run:\n%s.", fs::path::name(path), why);
+            message_box("Run", text);
+        }
+        return true;
+    }
     default:
         break;
     }

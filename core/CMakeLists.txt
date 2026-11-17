@@ -60,7 +60,10 @@ set(CORE_SRCS
     src/sys/crash.cpp
     src/sys/log.cpp
     src/sys/missed_refills.cpp
+    src/shell/about.cpp
     src/shell/apps.cpp
+    src/shell/gallery.cpp
+    src/shell/welcome.cpp
     src/shell/boot.cpp
     src/shell/cactus_patch.cpp
     src/shell/culebra.cpp
@@ -73,6 +76,7 @@ set(CORE_SRCS
     src/shell/file_manager.cpp
     src/shell/trash.cpp
     src/shell/listing.cpp
+    src/shell/loaded.cpp
     src/shell/screensaver.cpp
     src/shell/network.cpp
     src/shell/network_service.cpp
@@ -95,7 +99,14 @@ set(CORE_SRCS
 )
 
 if(ESP_PLATFORM)
+    # On the board the two games are programs kept in files (programs/,
+    # backlog item 27; the owner's choice, 2026-11-17): built by themselves,
+    # carried by the firmware as data and installed in C:\Programs. They
+    # are not part of this library there; on the PC they are.
+    list(REMOVE_ITEM CORE_SRCS src/games/cactus.cpp src/games/snake.cpp src/shell/cactus_patch.cpp
+         src/shell/culebra.cpp)
     idf_component_register(SRCS ${CORE_SRCS} INCLUDE_DIRS "include" LDFRAGMENTS "linker.lf")
+    target_compile_definitions(${COMPONENT_LIB} PUBLIC CHINCHILLA_GAMES_IN_FILES=1)
     return()
 endif()
 

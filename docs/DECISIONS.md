@@ -401,7 +401,7 @@ and reasons are in `docs/journal/2026-11-17-program-lifecycle.md`.
 | --- | --- | --- |
 | Window manager details chosen while building step 4, closest to the 98 look; to confirm or overrule | See the list under "Chosen in step 4" below | As built |
 | Remote keyboard, mouse and screen for a person | VNC server, web page, debug tool only | VNC server |
-| How apps are delivered | Built into the firmware, or loadable from disk | Built in first, behind an app interface. Still the owner's question; the shell works on that assumption: programs are entries in a table (`core/include/core/shell/shell.hpp`: name, icon, open function) that the Start menu and desktop icons launch the same way |
+| How apps are delivered | Built into the firmware, or loadable from disk | Decided 2026-11-17: both. The built-in programs stay rows in the program table, and a program can also be a file loaded from a drive ("Programs loaded from files" below, backlog item 27) |
 | Shell details chosen while building menus, the Start menu and widgets; to confirm or overrule | See "Chosen in the shell milestone" below | As built |
 | A RAM disk as well as C: | Drop it, or keep a small one as a separate temporary drive | Dropped with LittleFS, since nothing needs it; the RAM disk code stays for the PC tests and the simulator |
 | Details chosen in the files milestone; to confirm or overrule | See "Chosen in the files milestone" below | As built |
@@ -2174,9 +2174,9 @@ option of a card the owner has not answered yet.
   panels are pictures it paints itself. The one thing a program holds
   that is not a number is the Editor's reader for its text while a save
   job runs (good only while the window is locked).
-- All 17 programs are written with the thin classes. What is left on
-  `core/wm`'s classes is the desktop itself and its own windows (About,
-  Welcome, the widget gallery, the message box).
+- All 17 programs are written with the thin classes, and since item 26
+  About, Welcome and the widget gallery too (20 files). What is left on
+  `core/wm`'s classes is the desktop itself and the message box.
 - Events through a queue: with item 26.
 
 ### Chosen for background jobs (2026-11-17, to confirm)
@@ -2256,6 +2256,22 @@ The rest is the agent's, to confirm:
   Rejected: a mutex held by the UI task whenever it runs.
 - What goes to a program goes by copy, never as a pointer into the
   caller's stack.
+- A program's code is entered from outside only through `in_program`
+  (or `launch`): one program opening another, the desktop opening a
+  folder, files changing under a File manager window, the answer to a
+  question. Rejected for now: posting a message and returning (it comes
+  with the queue of events).
+- **The programs have tasks, the dialogs and settings tools do not** (the
+  owner's choice on a card, 2026-11-17: "Los programas, no los
+  diálogos"; every one with dialogs included, only those that can take
+  long, and leaving it at Culebra were the others).
+- Stack per program in the program table (the figures are the agent's,
+  to confirm with the board): Cactus
+  Patch at 4 KB; Editor, File manager, Picture viewer, Task Manager and
+  Defragmenter at 8 KB; About, Welcome and Widget gallery at 4 KB, now
+  written on the OS calls like the rest. The Terminal's window stays on
+  the UI task (its shell already has a task: the session). The settings
+  tools and dialogs stay on the UI task.
 - A late program's task runs at the idle priority until it answers: it
   may spin for ever, and the kernel's idle tasks must still get their
   turn (ESP-IDF's task watchdog watches them, 5 s).
@@ -2263,6 +2279,73 @@ The rest is the agent's, to confirm:
   every OS call by then, so it holds no lock.
 - Not yet: the queue of events (what a late program missed is lost),
   the other programs, programs that call each other's code directly.
+
+### Programs loaded from files (2026-11-17)
+
+Backlog item 27. [Journal](journal/2026-11-17-loaded-programs.md).
+
+- **Native code loaded from C:** (the owner's choice on a card,
+  2026-11-17: "Código nativo cargado de C:"). Rejected: WebAssembly (safe
+  but 10 to 30 times slower), an interpreted language of our own, nothing.
+  A loaded program has no protection, as a built-in one has none.
+
+The rest is the agent's, to confirm:
+
+- A program file is `name.app`: **a header of ours, then the code** (an
+  ELF shared object for the ESP32-S3). The header
+  (`core/include/core/app/file.hpp`, 1,332 bytes) carries the program's
+  name, the stack its task asks for and a 16x16 and a 32x32 picture; the
+  program writes it with `APP_INFO` and the build copies it to the front
+  of the file (`tools/pack_app.sh`). The system reads it without loading
+  the program. A file without it is refused. Put to the owner on a card
+  (2026-11-17), built on the recommended option, answer pending; the
+  others: the code alone with one picture for every program, or the
+  picture in a file beside it.
+- Programs are built from the same thin classes as the built-in ones
+  (`programs/`, `tools/build_programs.sh`), with `APP_MAIN` as the way in.
+- It reaches the system **by name** (the owner's choice on a card,
+  2026-11-17: "Por nombre (como está hecho)"; a table of calls by number
+  was the other): the loader fills in the calls from a table written out
+  of the firmware's core library at build time (`tools/gen_exports.py`).
+  Only the OS calls, the pictures, the shell's dialogs and a short list
+  of libc are in it.
+- The loader on the board is Espressif's `elf_loader` (2.1.0, Apache 2.0)
+  behind `ports::Loader`; its own symbol tables are off.
+- A loaded program is a process with the name its header gives (its
+  file's if it gives none), windowed like the others. **Every loaded
+  program has a task of its own** where the machine has tasks, with the
+  stack its header asks for (4 KB if it says nothing): the owner's rule
+  for item 26, "los programas, no los diálogos", applied to files. Put to
+  him on a card (2026-11-17), answer pending; the others: only programs
+  that mark it, or none for now.
+- What a loaded program takes in memory is counted as its process's.
+- It is unloaded after its process has ended, its last window is
+  destroyed and its task has gone. 1 MB a file, eight at a time.
+- **Start > Programs lists the program files of `C:\Programs`**, after
+  the built-in programs, flat, by the name and picture of each header;
+  the folder is read as the menu opens. Put to the owner on a card
+  (2026-11-17), answer pending; the others: subfolders as submenus, or
+  the menu left alone. In the File manager a `.app` has one picture for
+  the kind, not each program's own (the listing keeps no pixels).
+
+- **Programs that come with the system are carried in the firmware and
+  installed** (the owner's choice on a card, 2026-11-17: "Dentro del
+  firmware, se instalan"): the firmware build makes `programs/*` into
+  `.app` files and carries them as data; at start-up the system writes to
+  `C:\Programs` those that are missing or from another build
+  (`C:\Programs\installed.txt` holds the build's stamp). Rejected: a
+  read-only system partition (the partition table changes, the network
+  update does not write it) and copying with `dbg.py` (a wiped C: loses
+  them). A bundled program deleted by the user comes back at the next
+  start.
+
+- **Culebra and Cactus Patch are files on the board and built in on the
+  PC** (the owner's choice on a card, 2026-11-17: "Archivo en placa,
+  integrado en PC"): one source with two forms (`APP_FILE`). Rejected: a
+  file everywhere (the browser build cannot load files and would lose
+  them) and leaving them built in. A program file runs one copy at a time
+  unless its header says `many`. The firmware does not shrink by this:
+  the files are carried in it.
 
 ### Missed video refills are logged (2026-11-17, the owner's request)
 

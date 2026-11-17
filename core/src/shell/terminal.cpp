@@ -453,29 +453,30 @@ void open_terminal()
         message_box("Terminal", "The Terminal could not start:\ntoo many programs are running.");
         return;
     }
-    const os::As as(pid);
-    app::Look look;
-    look.title = "Terminal";
-    look.x = 40 + place * 22;
-    look.y = 30 + place * 22;
-    look.width = TerminalWindow::kWidth + TerminalWindow::kBar;
-    look.height = TerminalWindow::kHeight;
-    look.icon = &gfx::terminal_icon_16();
-    look.flags = app::kClientSize;
-    // Not shown until it has its session.
-    const app::Number number = app::make<TerminalWindow>(look);
-    if (number == app::kNone) {
-        no_memory_for("Terminal");
-        return;
-    }
-    if (const char *why = app::program<TerminalWindow>(number)->begin()) {
-        os::ui::close(number);
-        message_box("Terminal", why);
-        return;
-    }
-    if (app::show(number)) {
-        g_terminals[place] = number;
-    }
+    in_process(pid, "Terminal", [place] {
+        app::Look look;
+        look.title = "Terminal";
+        look.x = 40 + place * 22;
+        look.y = 30 + place * 22;
+        look.width = TerminalWindow::kWidth + TerminalWindow::kBar;
+        look.height = TerminalWindow::kHeight;
+        look.icon = &gfx::terminal_icon_16();
+        look.flags = app::kClientSize;
+        // Not shown until it has its session.
+        const app::Number number = app::make<TerminalWindow>(look);
+        if (number == app::kNone) {
+            no_memory_for("Terminal");
+            return;
+        }
+        if (const char *why = app::program<TerminalWindow>(number)->begin()) {
+            os::ui::close(number);
+            message_box("Terminal", why);
+            return;
+        }
+        if (app::show(number)) {
+            g_terminals[place] = number;
+        }
+    });
 }
 
 const tty::Screen *terminal_screen()
