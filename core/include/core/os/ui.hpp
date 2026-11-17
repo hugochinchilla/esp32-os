@@ -113,6 +113,7 @@ Control text_area(Window window, const gfx::Rect &place, const char *text); // s
 Control picture(Window window, const gfx::Rect &place);
 // Asks for a control to be painted again.
 void redraw_control(Window window, Control control);
+void redraw_control_part(Window window, Control control, const gfx::Rect &part); // in the control's coordinates
 // A grid of cells to pick one from, each painted by the program
 // (What::Cell): colours, patterns. The one picked has a frame, the arrows
 // move it, and Changed tells of it. `margin`: from the edge of a cell to

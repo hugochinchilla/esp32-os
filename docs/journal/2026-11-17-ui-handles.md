@@ -298,3 +298,14 @@ checks it.
 
 PC tests pass (41 of 41), the pictures match. Firmware not compiled
 since, and not run.
+
+## The same day: the Defragmenter
+
+Program ten. Its map of blocks and its legend are two `picture`s; a
+picture can now be asked to paint only a part of itself again
+(`Picture::redraw(part)`), which is how one block changes without the
+whole map being painted. The meter is the system's; `meter.hpp` is gone
+from the shell.
+
+PC tests pass (41 of 41), the pictures match. Firmware not compiled
+since, and not run.

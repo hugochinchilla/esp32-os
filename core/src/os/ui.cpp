@@ -656,6 +656,14 @@ void redraw_control(Window window, Control control)
     }
 }
 
+void redraw_control_part(Window window, Control control, const gfx::Rect &part)
+{
+    Behind *w = behind(window);
+    if (wm::Widget *c = w != nullptr ? w->any(control) : nullptr) {
+        c->invalidate_part(part);
+    }
+}
+
 Control grid(Window window, const gfx::Rect &place, int columns, int count, int cell_w, int cell_h, int margin)
 {
     Behind *w = behind(window);

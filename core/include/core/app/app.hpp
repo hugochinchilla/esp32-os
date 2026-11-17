@@ -204,6 +204,9 @@ public:
 class Picture : public Control {
 public:
     using Control::Control;
+    using Control::redraw;
+    // A part of it painted again, in its own coordinates.
+    void redraw(const gfx::Rect &part) const { os::ui::redraw_control_part(window_, number_, part); }
 };
 
 // A grid of cells to pick one from, each painted by the program

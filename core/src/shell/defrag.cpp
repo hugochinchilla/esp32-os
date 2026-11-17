@@ -2,13 +2,12 @@
 // core/shell/defrag.hpp); no drive is read or written.
 #include <cstdio>
 
+#include "core/app/app.hpp"
 #include "core/gfx/art.hpp"
 #include "core/shell/defrag.hpp"
 #include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
-#include "core/wm/widgets.hpp"
 #include "internal.hpp"
-#include "meter.hpp"
 
 namespace shell {
 
@@ -221,7 +220,7 @@ gfx::Colour file_colour(int file)
 }
 
 // One block at (x, y): 8x8 pixels with its gap, each pixel written once.
-void paint_block(gfx::Canvas &c, int x, int y, gfx::Colour colour, bool framed)
+void paint_block(app::Canvas &c, int x, int y, gfx::Colour colour, bool framed)
 {
     if (framed) {
         c.fill({x, y, 7, 1}, gfx::kBlack);
@@ -236,100 +235,28 @@ void paint_block(gfx::Canvas &c, int x, int y, gfx::Colour colour, bool framed)
     c.fill({x, y + 7, 7, 1}, gfx::kGrey);
 }
 
-class MapView : public wm::Widget {
-public:
-    MapView(int x, int y, const DefragModel &disk)
-        : Widget({x, y, DefragModel::kColumns * kPitch + 4, DefragModel::kRows * kPitch + 4}),
-          disk_(disk)
-    {
-    }
-
-    void paint(gfx::Canvas &c) override
-    {
-        c.sunken({0, 0, rect.w, rect.h});
-        for (int cell = 0; cell < DefragModel::kCells; cell++) {
-            const DefragModel::Mark m = disk_.mark(cell);
-            const gfx::Colour colour = m == DefragModel::Mark::Reading   ? kReading
-                                       : m == DefragModel::Mark::Writing ? kWriting
-                                                                         : file_colour(disk_.file(cell));
-            paint_block(c, 2 + cell % DefragModel::kColumns * kPitch,
-                        2 + cell / DefragModel::kColumns * kPitch, colour, m != DefragModel::Mark::None);
-        }
-    }
-
-    void block_changed(int cell)
-    {
-        invalidate_part({2 + cell % DefragModel::kColumns * kPitch,
-                         2 + cell / DefragModel::kColumns * kPitch, kPitch, kPitch});
-    }
-
-private:
-    const DefragModel &disk_;
-};
-
-// What the colours mean.
-class Legend : public wm::Widget {
-public:
-    explicit Legend(const gfx::Rect &r) : Widget(r) {}
-
-    void paint(gfx::Canvas &c) override
-    {
-        c.fill({0, 0, rect.w, rect.h}, gfx::kGrey);
-        int x = 0;
-        const int y = (rect.h - 9) / 2;
-        const auto entry = [&](const char *label, gfx::Colour a, gfx::Colour b, bool framed) {
-            c.fill({x, y, 9, 9}, gfx::kDarkGrey);
-            if (framed) {
-                c.fill({x + 1, y + 1, 7, 7}, gfx::kBlack);
-                c.fill({x + 2, y + 2, 5, 5}, a);
-            } else {
-                c.fill({x + 1, y + 1, 4, 7}, a);
-                c.fill({x + 5, y + 1, 3, 7}, b);
-            }
-            x = c.text(x + 13, (rect.h - 12) / 2, label, gfx::kBlack) + 14;
-        };
-        entry("Free", kFree, kFree, false);
-        entry("Files", kFileColours[0], kFileColours[1], false);
-        entry("Reading", kReading, kReading, true);
-        entry("Writing", kWriting, kWriting, true);
-    }
-};
-
-class DefragWindow : public wm::Window {
+class DefragWindow : public app::Window {
 public:
     static constexpr int kMapW = DefragModel::kColumns * kPitch + 4;
     static constexpr int kMapH = DefragModel::kRows * kPitch + 4;
     static constexpr int kClientW = kMapW + 16;
     static constexpr int kButtonsY = kMapH + 104;
     static constexpr int kClientH = kButtonsY + 23 + 8;
+    static constexpr gfx::Rect kLegend = {8, kMapH + 72, kMapW, 16};
 
     DefragWindow()
-        : Window("Defragmenter", {0, 0, kClientW + 2 * kBorder, kClientH + kClientTop + kBorder},
-                 &gfx::defrag_icon_16()),
-          about_({8, 6, kMapW, 14}, "A pretend disk, tidied for old times' sake. No drive is touched."),
-          map_(8, 24, disk_),
-          status_({8, kMapH + 30, kMapW, 14}, status_text_),
-          meter_({8, kMapH + 48, kMapW - 40, 16}),
-          percent_({kMapW - 26, kMapH + 49, 34, 14}, percent_text_),
-          legend_({8, kMapH + 72, kMapW, 16}),
-          start_({8, kButtonsY, 75, 23}, "&Start", &DefragWindow::start_pressed, this),
-          scramble_({89, kButtonsY, 75, 23}, "S&cramble", &DefragWindow::scramble_pressed, this),
-          close_({kClientW - 75 - 8, kButtonsY, 75, 23}, "Close", &DefragWindow::close_pressed, this)
+        : start_(button({8, kButtonsY, 75, 23}, "&Start")),
+          scramble_(button({89, kButtonsY, 75, 23}, "S&cramble")),
+          close_(button({kClientW - 75 - 8, kButtonsY, 75, 23}, "Close")),
+          about_(label({8, 6, kMapW, 14}, "A pretend disk, tidied for old times' sake. No drive is touched.")),
+          map_(picture({8, 24, kMapW, kMapH})),
+          status_(plain({8, kMapH + 30, kMapW, 14})),
+          meter_(meter({8, kMapH + 48, kMapW - 40, 16})),
+          percent_(plain({kMapW - 26, kMapH + 49, 34, 14})),
+          legend_(picture(kLegend))
     {
-        set_dialog(true); // fixed size, only the close button
-        add(start_);
-        add(scramble_);
-        add(close_);
-        add(about_);
-        add(map_);
-        add(status_);
-        add(meter_);
-        add(percent_);
-        add(legend_);
-        start_.set_default(true);
-        set_default(&start_);
+        set_default(start_);
         show_state();
-        set_frame(os::centred(frame().w, frame().h));
     }
 
     const DefragModel &disk() const { return disk_; }
@@ -340,51 +267,82 @@ public:
             close();
             return true;
         }
-        return Window::key(k);
+        return false;
     }
 
     // Closing ends the program: the timer stops, and the next opening
     // starts from the scrambled disk again.
     void closed() override { pause(); }
 
-private:
-    static void start_pressed(wm::Button &, void *context)
+    void command(app::Control which) override
     {
-        auto *w = static_cast<DefragWindow *>(context);
-        if (w->timer_ != 0) {
-            w->pause();
-        } else {
-            if (w->disk_.done()) {
-                w->disk_.scramble(++w->seed_);
-                w->map_.invalidate();
+        if (which == start_) {
+            if (timer_ != 0) {
+                pause();
+            } else {
+                if (disk_.done()) {
+                    disk_.scramble(++seed_);
+                    map_.redraw();
+                }
+                timer_ = os::start_timer(kDefragStepUs, kDefragStepUs, &DefragWindow::tick, this);
+                started_ = true;
             }
-            w->timer_ = os::start_timer(kDefragStepUs, kDefragStepUs, &DefragWindow::tick, w);
-            w->started_ = true;
+            show_state();
+        } else if (which == scramble_) {
+            pause();
+            disk_.scramble(++seed_);
+            started_ = false;
+            map_.redraw();
+            show_state();
+        } else if (which == close_) {
+            close();
         }
-        w->show_state();
     }
 
-    static void scramble_pressed(wm::Button &, void *context)
+    void paint_in(app::Control which, app::Canvas &c) override
     {
-        auto *w = static_cast<DefragWindow *>(context);
-        w->pause();
-        w->disk_.scramble(++w->seed_);
-        w->started_ = false;
-        w->map_.invalidate();
-        w->show_state();
+        if (which == map_) {
+            c.sunken({0, 0, kMapW, kMapH});
+            for (int cell = 0; cell < DefragModel::kCells; cell++) {
+                const DefragModel::Mark m = disk_.mark(cell);
+                const gfx::Colour colour = m == DefragModel::Mark::Reading   ? kReading
+                                           : m == DefragModel::Mark::Writing ? kWriting
+                                                                             : file_colour(disk_.file(cell));
+                paint_block(c, 2 + cell % DefragModel::kColumns * kPitch, 2 + cell / DefragModel::kColumns * kPitch,
+                            colour, m != DefragModel::Mark::None);
+            }
+            return;
+        }
+        // What the colours mean.
+        c.fill({0, 0, kLegend.w, kLegend.h}, gfx::kGrey);
+        int x = 0;
+        const int y = (kLegend.h - 9) / 2;
+        const auto entry = [&](const char *label, gfx::Colour a, gfx::Colour b, bool framed) {
+            c.fill({x, y, 9, 9}, gfx::kDarkGrey);
+            if (framed) {
+                c.fill({x + 1, y + 1, 7, 7}, gfx::kBlack);
+                c.fill({x + 2, y + 2, 5, 5}, a);
+            } else {
+                c.fill({x + 1, y + 1, 4, 7}, a);
+                c.fill({x + 5, y + 1, 3, 7}, b);
+            }
+            x = c.text(x + 13, (kLegend.h - 12) / 2, label, gfx::kBlack) + 14;
+        };
+        entry("Free", kFree, kFree, false);
+        entry("Files", kFileColours[0], kFileColours[1], false);
+        entry("Reading", kReading, kReading, true);
+        entry("Writing", kWriting, kWriting, true);
     }
 
-    static void close_pressed(wm::Button &, void *context)
-    {
-        static_cast<DefragWindow *>(context)->close();
-    }
-
+private:
     static void tick(void *context)
     {
         auto *w = static_cast<DefragWindow *>(context);
         const bool more = w->disk_.step();
         for (int i = 0; i < w->disk_.changed_count(); i++) {
-            w->map_.block_changed(w->disk_.changed(i));
+            const int cell = w->disk_.changed(i);
+            w->map_.redraw({2 + cell % DefragModel::kColumns * kPitch, 2 + cell / DefragModel::kColumns * kPitch,
+                            kPitch, kPitch});
         }
         if (!more) {
             w->pause();
@@ -403,7 +361,7 @@ private:
     // The status line, the meter and the Start button, when they change.
     void show_state()
     {
-        char text[sizeof(status_text_)];
+        char text[72];
         const char *button = "&Start";
         if (disk_.done()) {
             snprintf(text, sizeof(text), "Done: %d files in order after %u moves. Nothing was written.",
@@ -423,25 +381,16 @@ private:
             snprintf(text, sizeof(text), "%d files in pieces. Press Start to tidy them.",
                      disk_.file_count());
         }
-        bool same = true;
-        for (size_t i = 0; i < sizeof(text) && same; i++) {
-            same = text[i] == status_text_[i];
-            if (text[i] == 0) {
-                break;
-            }
-        }
-        if (!same) {
-            snprintf(status_text_, sizeof(status_text_), "%s", text);
-            status_.invalidate();
-        }
+        status_.set(text);
         if (button != button_) {
             button_ = button;
             start_.set_label(button);
         }
         if (disk_.percent() != shown_percent_) {
             shown_percent_ = disk_.percent();
-            snprintf(percent_text_, sizeof(percent_text_), "%3d%%", shown_percent_);
-            percent_.invalidate();
+            char percent[8];
+            snprintf(percent, sizeof(percent), "%3d%%", shown_percent_);
+            percent_.set(percent);
             meter_.set(static_cast<uint32_t>(disk_.placed()), static_cast<uint32_t>(disk_.used()));
         }
     }
@@ -452,26 +401,39 @@ private:
     bool started_ = false;
     int shown_percent_ = -1;
     const char *button_ = nullptr;
-    char status_text_[72] = "";
-    char percent_text_[8] = "";
 
-    wm::Label about_;
-    MapView map_;
-    wm::Label status_;
-    Meter meter_;
-    wm::Label percent_;
-    Legend legend_;
-    wm::Button start_, scramble_, close_;
+    app::Button start_, scramble_, close_;
+    app::Label about_;
+    app::Picture map_;
+    app::Plain status_;
+    app::Meter meter_;
+    app::Plain percent_;
+    app::Picture legend_;
 };
+
+app::Number g_window = app::kNone; // the one there may be: a number, dead once it has closed
 
 } // namespace
 
 void open_defragmenter()
 {
     const AsProgram as("Defragmenter");
-    open_one<DefragWindow>("Defragmenter");
+    if (app::bring_forward(g_window)) {
+        return;
+    }
+    app::Look look;
+    look.title = "Defragmenter";
+    look.width = DefragWindow::kClientW;
+    look.height = DefragWindow::kClientH;
+    look.icon = &gfx::defrag_icon_16();
+    look.flags = app::kDialog | app::kClientSize; // fixed size, only the close button
+    g_window = app::open<DefragWindow>(look);
+    if (g_window == app::kNone) {
+        no_memory_for("Defragmenter");
+    }
 }
 
-const DefragModel &defragmenter_disk() { return one<DefragWindow>("Defragmenter")->disk(); }
+// For the tests, while the Defragmenter is open.
+const DefragModel &defragmenter_disk() { return app::program<DefragWindow>(g_window)->disk(); }
 
 } // namespace shell
