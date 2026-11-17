@@ -538,11 +538,11 @@ void Machine::start()
     // the PC's.
     // init is PID 1 and starts the desktop from C:\.config\startup.txt, as
     // on the board. There are no network services here.
-    static init::Init first(proc::table());
-    first.set_run(
+    static init::Init init_process(proc::table());
+    init_process.set_run(
         [](const char *what, char *why, size_t capacity, void *) { return shell::run_text(what, "C:\\", why, capacity); },
         nullptr);
-    first.add(
+    init_process.add(
         "desktop",
         [](void *self) {
             auto *m = static_cast<Machine *>(self);
@@ -550,7 +550,7 @@ void Machine::start()
             return true;
         },
         this, true);
-    first.boot(storage_);
+    init_process.boot(storage_);
     screen_.set_damage_listener([](const gfx::Rect &, void *self) { static_cast<Machine *>(self)->dirty_ = true; },
                                 this);
     const time_t now = time(nullptr);
