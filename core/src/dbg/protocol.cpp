@@ -297,6 +297,28 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
         reply(type, seq, kOk, nullptr, 0);
         break;
 
+    case kLogRead: {
+        // From (8, bytes since start; 0 the oldest kept). Reply: where the
+        // next piece starts (8), then up to 1000 bytes of log text. Text
+        // pushed out of the ring meanwhile is skipped.
+        if (args_size != 8) {
+            reply(type, seq, kBadArguments, nullptr, 0);
+            break;
+        }
+        uint64_t from = 0;
+        for (int i = 7; i >= 0; i--) {
+            from = (from << 8) | args[i];
+        }
+        sys::Log &log = sys::log();
+        if (from < log.oldest()) {
+            from = log.oldest();
+        }
+        const size_t n = log.read(from, reinterpret_cast<char *>(chunk_ + 8), 1000);
+        put64(chunk_, from);
+        reply(type, seq, kOk, chunk_, static_cast<uint16_t>(8 + n));
+        break;
+    }
+
     case kFault: {
         // kind, then optionally the PID to charge it to (16 bits): the fault
         // happens as if that program had made it, so the crash record and

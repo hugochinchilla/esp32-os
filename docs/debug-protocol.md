@@ -88,6 +88,7 @@ and the same sequence number. Every reply payload starts with a status byte:
 | 0x13 | Memory report | None | Text: heaps and video timing (task stacks are in Tasks, which holds the kernel lock about 0.8 ms per call) |
 | 0x14 | Tasks | None | The kernel's tasks, see below. Unknown command when the firmware keeps no run-time statistics |
 | 0x15 | Fault | Kind (1): 0 hang (the UI task spins for ever), 1 a write through a null pointer, 2 abort. Then optionally a PID (2) to charge it to | None. The board replies, then fails on purpose: the watchdog or the panic handler writes the crash record and restarts it, and the next start shows the error screen. Bad arguments for a PID that is not running |
+| 0x16 | Log read | From (8): bytes since start, 0 for the oldest text kept | Where the next piece starts (8), then up to 1000 bytes of the system log (what `dmesg` prints). Text pushed out of the 16 KB ring meanwhile is skipped. `tools/dbg.py dmesg` prints it all |
 
 - The board replies to Key, Mouse and Text before acting on them, so an event
   that restarts the board (Restart in the Shut Down dialog) still gets its
@@ -243,3 +244,25 @@ connections. `--reset` restarts the board on purpose.
 A list of windows and widgets as structured data, waiting until the screen is
 idle, file transfer, and carrying network traffic for dial-up (see
 `docs/DECISIONS.md`).
+
+## Missed video refills
+
+The video interrupt counts refills that were not done in time (`refills /
+late / missed` in the memory report). It never logs; once a second the
+scanlog task writes a line to the system log when the count has gone up, at
+once for the first miss of a burst and then at most once every 10 s with what
+came meanwhile:
+
+    W (2000) os: video: 3 refills missed, worst 640 us late, last at line 240
+    W (3000) os: video: 2 refills missed (all during a debug task list), worst 812 us late, last at line 96
+    W (4000) os: video: 5 refills missed (2 during a debug task list), worst 640 us late, last at line 30
+
+Misses that happened while the Tasks request (0x14) walked the task list are
+counted apart and named: that request holds the kernel's lock for about
+0.8 ms and is known to cause them (docs/journal/2026-11-17-refills.md). Late
+refills that still finished in time are not logged; they stay in the counters.
+
+`tools/dbg.py misses` prints the lines with misses not caused by the debug
+link and exits with status 1 if there are any (0 otherwise); `--all` also
+prints the debug link's own.
+
