@@ -1864,10 +1864,12 @@ Chosen by the agent under the owner's "dejo a tu criterio" of 2026-11-16.
   hears the stop; an idle board's services task wakes once a second where
   it did not wake at all (item 8b). Rejected: a socket to itself.
 
-### Chosen for the OS calls (2026-11-17, to confirm)
+### The OS calls (the owner's decision, 2026-11-17)
 
-Backlog item 20. The owner was asked (a card in the thread, the first
-option recommended); built on it meanwhile.
+Backlog item 20. The owner was asked with the first option recommended and
+decided: the thin layer in C++ for now, and a backlog item (37) to look at
+it again at the end and take it to numbered calls with handles. The
+smaller points below are the agent's and still to confirm.
 [Journal](journal/2026-11-17-os-calls.md), [the list](os-calls.md).
 
 - Programs ask the system through `core/os/os.hpp` (namespace `os`): a thin

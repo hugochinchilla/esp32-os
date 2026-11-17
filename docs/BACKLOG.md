@@ -54,6 +54,7 @@ board or the merge), `done`.
 | 25 | Updates over Wi-Fi | M | | Yes | done (checked on the board 2026-11-17). [Journal](journal/2026-11-17-updates.md) |
 | 26 | Apps on their own tasks, one at a time | XL | 8, 20 | Yes | todo |
 | 27 | Loadable or sandboxed apps | XL | 19, 20 | Yes | todo |
+| 37 | The OS calls taken to numbered calls with handles (windows, files and timers as numbers, events through a queue, the system's tables of what is whose), as Win16 and Unix had them. To be looked at again at the end of the backlog (the owner's decision, 2026-11-17); it is what item 27 needs | L to XL | 20 | Yes | todo. [The comparison](journal/2026-11-17-os-calls.md) |
 
 Item 14 is the only one that puts the agents' access to the board at risk
 while it is being built. It is tried on a branch with the old firmware ready
