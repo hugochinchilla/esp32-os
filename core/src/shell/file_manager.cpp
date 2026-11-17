@@ -1,7 +1,11 @@
 // The File manager: a window on a folder, in the look of the target picture
 // (toolbar, address bar, icon view, status bar), and My Board (the drives).
+// The Trash is the same window on C:\.trash: there it has Restore and Empty
+// Trash as well, and Delete is for good (the owner, 2026-11-17: one program,
+// so that whatever the folder view gains the Trash gains too).
 #include <cstdio>
 #include <cstring>
+#include <strings.h>
 
 #include "core/app/app.hpp"
 #include "core/gfx/art.hpp"
@@ -144,6 +148,7 @@ public:
         : view_(icon_view({0, kViewTop, 100, 100})),
           back_{picture({4, 0, 44, 34}, app::kMouse), {4, 0, 44, 34}, "Back", &gfx::back_icon_16()},
           up_{picture({50, 0, 44, 34}, app::kMouse), {50, 0, 44, 34}, "Up", &gfx::up_icon_16()},
+          empty_{picture({0, 0, 0, 0}, app::kMouse), kEmptyPlace, "Empty Trash", &gfx::bin_icon_16()},
           groove_(picture({0, 36, 100, 2})),
           address_label_(label({4, 44, 46, 14}, "Address")),
           address_{picture({50, 40, 100, 20}), {50, 40, 100, 20}, true, &gfx::folder_icon_16()},
@@ -159,6 +164,17 @@ public:
         file_items_[6] = {"Re&fresh", &FolderWindow::refresh_action, this, nullptr, nullptr, 0};
         file_items_[7] = {nullptr, nullptr, nullptr, nullptr, nullptr, wm::kMenuSeparator};
         file_items_[8] = {"&Close", &FolderWindow::close_action, this, nullptr, nullptr, 0};
+        // In the Trash: Restore and Empty Trash where New Folder and Rename are.
+        trash_items_[0] = file_items_[0];
+        trash_items_[1] = file_items_[1];
+        trash_items_[2] = {"&Restore", &FolderWindow::restore, this, nullptr, nullptr, 0};
+        trash_items_[3] = file_items_[4];
+        trash_items_[4] = file_items_[1];
+        trash_items_[5] = {"&Empty Trash", &FolderWindow::empty, this, nullptr, nullptr, 0};
+        trash_items_[6] = file_items_[1];
+        trash_items_[7] = file_items_[6];
+        trash_items_[8] = file_items_[1];
+        trash_items_[9] = file_items_[8];
         view_items_[0] = {"Show &hidden files", &FolderWindow::toggle_hidden, this, nullptr, nullptr, 0};
         set_menu_bar(&bar_);
         set_title(title_text_);
@@ -206,6 +222,8 @@ public:
             back_.paint(c);
         } else if (which == up_.picture) {
             up_.paint(c);
+        } else if (which == empty_.picture) {
+            empty_.paint(c);
         } else if (which == groove_) {
             paint_groove(c, width_);
         } else if (which == address_.picture) {
@@ -222,6 +240,8 @@ public:
             go_back();
         } else if (which == up_.picture && up_.mouse(m)) {
             go_up();
+        } else if (which == empty_.picture && empty_.mouse(m)) {
+            empty(this);
         }
     }
     // The icon view: an entry picked, opened, dragged.
@@ -291,32 +311,52 @@ public:
 
     void menu_opening(int) override
     {
-        view_items_[0].flags = Listing::show_hidden ? wm::kMenuChecked : 0;
+        // In the Trash everything is shown, hidden names too: they count as much.
+        const bool trash = in_trash(folder_);
+        view_items_[0].flags = trash ? wm::kMenuChecked | wm::kMenuDisabled
+                                     : (Listing::show_hidden ? wm::kMenuChecked : 0);
         const bool at_board = folder_[0] == 0;
-        const bool chosen = view_.selected() >= 0 && !at_board;
-        file_items_[0].flags = view_.selected() >= 0 ? 0 : wm::kMenuDisabled;
-        file_items_[2].flags = at_board ? wm::kMenuDisabled : 0;
-        file_items_[3].flags = chosen ? 0 : wm::kMenuDisabled;
-        file_items_[4].flags = chosen ? 0 : wm::kMenuDisabled;
+        const uint8_t open = view_.selected() >= 0 ? 0 : wm::kMenuDisabled;
+        const uint8_t chosen = view_.selected() >= 0 && !at_board ? 0 : wm::kMenuDisabled;
+        if (at_trash()) {
+            trash_items_[0].flags = open;
+            trash_items_[2].flags = chosen;
+            trash_items_[3].flags = chosen;
+            trash_items_[5].flags = listing_.count() > 0 ? 0 : wm::kMenuDisabled;
+            return;
+        }
+        // Nothing is made or renamed inside something thrown away.
+        file_items_[0].flags = open;
+        file_items_[2].flags = at_board || trash ? wm::kMenuDisabled : 0;
+        file_items_[3].flags = trash ? static_cast<uint8_t>(wm::kMenuDisabled) : chosen;
+        file_items_[4].flags = chosen;
     }
 
     void refresh()
     {
+        const bool trash = at_trash();
         if (folder_[0] == 0) {
             listing_.read_drives();
             set_title_text("My Board");
             address_.set_text("My Board");
             free_.set_text("");
         } else {
+            // The Trash is there also when its folder is not: it is made
+            // with the first thing thrown away, and goes when emptied.
             ports::DirEntry e;
-            if (fs::path::relative(folder_)[0] != 0 && os::file::stat(folder_, e) != ports::FsError::Ok) {
+            if (!trash && fs::path::relative(folder_)[0] != 0 && os::file::stat(folder_, e) != ports::FsError::Ok) {
                 folder_[0] = 0; // the folder went away: show My Board
                 refresh();
                 return;
             }
+            const bool hidden = Listing::show_hidden;
+            Listing::show_hidden = hidden || in_trash(folder_);
             listing_.read(folder_);
+            Listing::show_hidden = hidden;
             const char *name = fs::path::name(folder_);
-            if (name[0] == 0) {
+            if (trash) {
+                set_title_text("Trash");
+            } else if (name[0] == 0) {
                 ports::VolumeInfo info = {};
                 os::file::drive_info(fs::path::drive(folder_), info);
                 char t[48];
@@ -325,7 +365,7 @@ public:
             } else {
                 set_title_text(name);
             }
-            address_.set_text(folder_);
+            address_.set_text(trash ? "Trash" : folder_);
             ports::VolumeInfo info = {};
             os::file::drive_info(fs::path::drive(folder_), info);
             char t[40];
@@ -336,6 +376,13 @@ public:
             }
             free_.set_text(t);
         }
+        // What only the Trash has: its icon, its File menu, Empty Trash.
+        set_icon(trash ? &gfx::bin_icon_16() : &gfx::folder_icon_16());
+        address_.icon = trash ? &gfx::bin_icon_16() : &gfx::folder_icon_16();
+        file_.items = trash ? trash_items_ : file_items_;
+        file_.count = trash ? 10 : 9;
+        empty_.picture.place(trash ? kEmptyPlace : gfx::Rect{0, 0, 0, 0});
+        empty_.set_enabled(listing_.count() > 0);
         back_.set_enabled(history_count_ > 0);
         up_.set_enabled(folder_[0] != 0);
         large_icons(listing_, icons_);
@@ -344,6 +391,11 @@ public:
     }
 
 private:
+    static constexpr gfx::Rect kEmptyPlace = {96, 0, 72, 34}; // Empty Trash, after Up
+
+    // Showing the Trash itself (not a folder inside it).
+    bool at_trash() const { return strcasecmp(folder_, kTrashFolder) == 0; }
+
     void set_title_text(const char *t)
     {
         snprintf(title_text_, sizeof(title_text_), "%s", t);
@@ -395,7 +447,8 @@ private:
             return false;
         }
         const int i = view_.item_at(x, y - kViewTop);
-        const bool onto = i >= 0 && listing_.item(i).folder &&
+        // In the Trash a file goes to the Trash, not into a folder of it.
+        const bool onto = i >= 0 && listing_.item(i).folder && !in_trash(folder_) &&
                           fs::path::join(folder_, listing_.item(i).name, target, fs::kMaxPath) &&
                           strcmp(target, path) != 0;
         if (!onto) {
@@ -418,14 +471,23 @@ private:
     }
 
     // The left of the status bar: "3 objects", or about the chosen one: its
-    // size and when it was last written ("1,234 bytes, 2026-11-17 14:05").
+    // size and when it was last written ("1,234 bytes, 2026-11-17 14:05");
+    // in the Trash, where it came from.
     void status()
     {
-        char t[96];
+        char t[fs::kMaxPath + 8], from[fs::kMaxPath];
         const int i = view_.selected();
         if (i < 0 || i >= listing_.count() || folder_[0] == 0) {
             snprintf(t, sizeof(t), "%d object%s%s", listing_.count(), listing_.count() == 1 ? "" : "s",
                      listing_.truncated() ? " (more not shown)" : "");
+        } else if (at_trash()) {
+            if (trash_origin(listing_.item(i).name, from, sizeof(from))) {
+                char folder[fs::kMaxPath];
+                fs::path::parent(from, folder, sizeof(folder));
+                snprintf(t, sizeof(t), "From %s", folder);
+            } else {
+                snprintf(t, sizeof(t), "From an unknown place");
+            }
         } else {
             const Listing::Item &it = listing_.item(i);
             char when[24], size[24];
@@ -454,6 +516,9 @@ private:
     // Kept in C:\.config\files.ini.
     static void toggle_hidden(void *context)
     {
+        if (in_trash(static_cast<FolderWindow *>(context)->folder_)) {
+            return;
+        }
         Listing::show_hidden = !Listing::show_hidden;
         fs::Ini ini;
         load_settings("files", ini);
@@ -480,7 +545,7 @@ private:
     static void new_folder(void *context)
     {
         auto *w = static_cast<FolderWindow *>(context);
-        if (w->folder_[0] == 0) {
+        if (w->folder_[0] == 0 || in_trash(w->folder_)) {
             return;
         }
         // "New Folder", or "New Folder (2)" and so on if taken.
@@ -508,7 +573,7 @@ private:
     static void rename(void *context)
     {
         auto *w = static_cast<FolderWindow *>(context);
-        if (w->folder_[0] == 0 || w->view_.selected() < 0) {
+        if (w->folder_[0] == 0 || in_trash(w->folder_) || w->view_.selected() < 0) {
             return;
         }
         input_dialog(w->number(), "Rename", "New name:", w->listing_.item(w->view_.selected()).name,
@@ -527,13 +592,65 @@ private:
         w->after(e, "Rename", name);
     }
 
-    // To the Trash on C: (asked first), for good elsewhere (trash.cpp).
+    // To the Trash on C: (asked first); for good elsewhere and in the Trash
+    // (trash.cpp).
     static void remove(void *context)
     {
         auto *w = static_cast<FolderWindow *>(context);
         char p[fs::kMaxPath];
         if (w->folder_[0] != 0 && w->selected_path(p, sizeof(p))) {
             delete_asking(p);
+        }
+    }
+
+    // Back where it came from (the Trash only).
+    static void restore(void *context)
+    {
+        auto *w = static_cast<FolderWindow *>(context);
+        const int i = w->view_.selected();
+        if (!w->at_trash() || i < 0) {
+            return;
+        }
+        char name[fs::kMaxPath];
+        snprintf(name, sizeof(name), "%s", w->listing_.item(i).name);
+        const ports::FsError e = restore_from_trash(name);
+        files_changed();
+        if (e != ports::FsError::Ok) {
+            snprintf(w->message_, sizeof(w->message_), "Cannot put back '%s':\n%s.", name,
+                     e == ports::FsError::NotFound ? "where it came from is not known" : fs::error_text(e));
+            message_box("Restore", w->message_);
+        }
+    }
+
+    // Asks first, saying how many (the Trash only).
+    static void empty(void *context)
+    {
+        auto *w = static_cast<FolderWindow *>(context);
+        const int n = w->listing_.count();
+        if (!w->at_trash() || n == 0) {
+            return;
+        }
+        if (n == 1) {
+            snprintf(w->message_, sizeof(w->message_),
+                     "Are you sure you want to delete the item in the Trash\nfor good? It cannot be put back.");
+        } else {
+            snprintf(w->message_, sizeof(w->message_),
+                     "Are you sure you want to delete the %d items in the Trash\nfor good? They cannot be put back.", n);
+        }
+        static const char *const yes_no[] = {"&Yes", "&No"};
+        ask("Empty Trash", w->message_, yes_no, 2, &FolderWindow::empty_answer, nullptr);
+    }
+    static void empty_answer(int choice, void *)
+    {
+        if (choice != 0) {
+            return;
+        }
+        const ports::FsError e = empty_trash();
+        files_changed();
+        if (e != ports::FsError::Ok) {
+            static char text[120];
+            snprintf(text, sizeof(text), "Cannot empty the Trash:\n%s.", fs::error_text(e));
+            message_box("Empty Trash", text);
         }
     }
 
@@ -559,226 +676,25 @@ private:
     char history_[kHistory][fs::kMaxPath];
     int history_count_ = 0;
     char title_text_[64] = "My Board";
-    char message_[200] = "";
+    char message_[fs::kMaxPath + 80] = "";
     Listing listing_;
     const gfx::Bitmap *icons_[Listing::kMax] = {};
     int width_ = 100; // of the client area
     app::IconView view_;
     ToolButton back_, up_;
+    ToolButton empty_; // the owner: Empty Trash in the toolbar too; hidden outside the Trash
     app::Picture groove_;
     app::Label address_label_;
     Panel address_;
     Panel objects_, free_;
     wm::MenuItem file_items_[9];
+    wm::MenuItem trash_items_[10];
     wm::Menu file_ = {file_items_, 9};
     wm::MenuItem view_items_[1];
     wm::Menu view_menu_ = {view_items_, 1};
     const wm::MenuBarEntry entries_[2] = {{"&File", &file_}, {"&View", &view_menu_}};
     const wm::MenuBar bar_ = {entries_, 2};
 };
-
-// The Trash: what is in C:\.trash, with Restore, Delete (for good) and
-// Empty Trash; files dragged onto it are moved there.
-class TrashWindow : public app::Window {
-public:
-    TrashWindow()
-        : view_(icon_view({0, 0, 100, 100})),
-          status_{picture({0, 0, 100, 20}), {0, 0, 100, 20}, false, nullptr},
-          free_{picture({0, 0, 100, 20}), {0, 0, 100, 20}, false, nullptr},
-          empty_button_{picture({4, 0, 72, 34}, app::kMouse), {4, 0, 72, 34}, "Empty Trash", &gfx::bin_icon_16()},
-          groove_(picture({0, 36, 100, 2}))
-    {
-        file_items_[0] = {"&Restore", &TrashWindow::restore, this, nullptr, nullptr, 0};
-        file_items_[1] = {"&Delete", &TrashWindow::remove, this, nullptr, nullptr, 0};
-        file_items_[2] = {nullptr, nullptr, nullptr, nullptr, nullptr, wm::kMenuSeparator};
-        file_items_[3] = {"&Empty Trash", &TrashWindow::empty, this, nullptr, nullptr, 0};
-        file_items_[4] = {nullptr, nullptr, nullptr, nullptr, nullptr, wm::kMenuSeparator};
-        file_items_[5] = {"&Close", &TrashWindow::close_action, this, nullptr, nullptr, 0};
-        set_menu_bar(&bar_);
-        const gfx::Rect c = client_size();
-        resized(c.w, c.h);
-    }
-
-    void resized(int w, int h) override
-    {
-        width_ = w;
-        groove_.place({0, 36, w, 2});
-        view_.place({0, 40, w, h - 40 - 22});
-        status_.move({0, h - 20, w - 120, 20});
-        free_.move({w - 118, h - 20, 118, 20});
-    }
-
-    void paint_in(app::Control which, app::Canvas &c) override
-    {
-        if (which == empty_button_.picture) {
-            empty_button_.paint(c);
-        } else if (which == groove_) {
-            paint_groove(c, width_);
-        } else if (which == status_.picture) {
-            status_.paint(c);
-        } else if (which == free_.picture) {
-            free_.paint(c);
-        }
-    }
-    void mouse(app::Control which, const wm::MouseMsg &m) override
-    {
-        if (which == empty_button_.picture && empty_button_.mouse(m)) {
-            empty(this);
-        }
-    }
-    // The icon view: an entry picked, opened, dragged.
-    void changed(app::Control) override { status(); }
-    bool chosen(app::Control) override
-    {
-        char p[fs::kMaxPath];
-        if (selected_path(p, sizeof(p)) && !listing_.item(view_.selected()).folder) {
-            open_file(p);
-        }
-        return true;
-    }
-    void drag(app::Control) override
-    {
-        char p[fs::kMaxPath];
-        if (selected_path(p, sizeof(p))) {
-            os::begin_drag(p);
-        }
-    }
-
-    void refresh()
-    {
-        // Everything in it, hidden names too: they count as much.
-        const bool hidden = Listing::show_hidden;
-        Listing::show_hidden = true;
-        listing_.read(kTrashFolder);
-        Listing::show_hidden = hidden;
-        large_icons(listing_, icons_);
-        view_.set_items(listing_.names(), listing_.count(), icons_);
-        view_.reset();
-        empty_button_.set_enabled(listing_.count() > 0);
-        ports::VolumeInfo info = {};
-        os::file::drive_info('C', info);
-        char t[40];
-        snprintf(t, sizeof(t), "%u KB free", static_cast<unsigned>(info.free_bytes >> 10));
-        free_.set_text(t);
-        status();
-    }
-
-    bool key(const wm::KeyMsg &k) override
-    {
-        if (k.pressed && k.usage == wm::key::Delete) {
-            remove(this);
-            return true;
-        }
-        return false;
-    }
-
-    void menu_opening(int) override
-    {
-        const int chosen = view_.selected() >= 0 ? 0 : wm::kMenuDisabled;
-        file_items_[0].flags = chosen;
-        file_items_[1].flags = chosen;
-        file_items_[3].flags = listing_.count() > 0 ? 0 : wm::kMenuDisabled;
-    }
-
-    bool drag_over(const char *path, int, int) override { return path != nullptr && trashable(path); }
-    void dropped(const char *path, int, int) override { drop_in_trash(path); }
-
-private:
-    // "3 objects", or where the chosen one came from.
-    void status()
-    {
-        char t[fs::kMaxPath + 8], from[fs::kMaxPath];
-        const int i = view_.selected();
-        if (i < 0) {
-            snprintf(t, sizeof(t), "%d object%s", listing_.count(), listing_.count() == 1 ? "" : "s");
-        } else if (trash_origin(listing_.item(i).name, from, sizeof(from))) {
-            char folder[fs::kMaxPath];
-            fs::path::parent(from, folder, sizeof(folder));
-            snprintf(t, sizeof(t), "From %s", folder);
-        } else {
-            snprintf(t, sizeof(t), "From an unknown place");
-        }
-        status_.set_text(t);
-    }
-
-    bool selected_path(char *out, int capacity)
-    {
-        const int i = view_.selected();
-        return i >= 0 && fs::path::join(kTrashFolder, listing_.item(i).name, out, capacity);
-    }
-
-    static void close_action(void *context) { static_cast<TrashWindow *>(context)->close(); }
-    static void restore(void *context)
-    {
-        auto *w = static_cast<TrashWindow *>(context);
-        const int i = w->view_.selected();
-        if (i < 0) {
-            return;
-        }
-        snprintf(w->name_, sizeof(w->name_), "%s", w->listing_.item(i).name);
-        const ports::FsError e = restore_from_trash(w->name_);
-        files_changed();
-        if (e != ports::FsError::Ok) {
-            snprintf(w->message_, sizeof(w->message_), "Cannot put back '%s':\n%s.", w->name_,
-                     e == ports::FsError::NotFound ? "where it came from is not known" : fs::error_text(e));
-            message_box("Restore", w->message_);
-        }
-    }
-    static void remove(void *context)
-    {
-        auto *w = static_cast<TrashWindow *>(context);
-        char p[fs::kMaxPath];
-        if (w->selected_path(p, sizeof(p))) {
-            delete_asking(p); // in the Trash: for good, asked first
-        }
-    }
-    static void empty(void *context)
-    {
-        auto *w = static_cast<TrashWindow *>(context);
-        const int n = w->listing_.count();
-        if (n == 0) {
-            return;
-        }
-        if (n == 1) {
-            snprintf(w->message_, sizeof(w->message_),
-                     "Are you sure you want to delete the item in the Trash\nfor good? It cannot be put back.");
-        } else {
-            snprintf(w->message_, sizeof(w->message_),
-                     "Are you sure you want to delete the %d items in the Trash\nfor good? They cannot be put back.", n);
-        }
-        static const char *const yes_no[] = {"&Yes", "&No"};
-        ask("Empty Trash", w->message_, yes_no, 2, &TrashWindow::empty_answer, w);
-    }
-    static void empty_answer(int choice, void *)
-    {
-        if (choice != 0) {
-            return;
-        }
-        const ports::FsError e = empty_trash();
-        files_changed();
-        if (e != ports::FsError::Ok) {
-            static char text[120];
-            snprintf(text, sizeof(text), "Cannot empty the Trash:\n%s.", fs::error_text(e));
-            message_box("Empty Trash", text);
-        }
-    }
-
-    Listing listing_;
-    const gfx::Bitmap *icons_[Listing::kMax] = {};
-    int width_ = 100; // of the client area
-    app::IconView view_;
-    Panel status_, free_;
-    ToolButton empty_button_; // the owner: Empty Trash in the toolbar too
-    app::Picture groove_;
-    char name_[fs::kMaxPath] = "";
-    char message_[fs::kMaxPath + 80] = "";
-    wm::MenuItem file_items_[6];
-    wm::Menu file_ = {file_items_, 6};
-    const wm::MenuBarEntry entries_[1] = {{"&File", &file_}};
-    const wm::MenuBar bar_ = {entries_, 1};
-};
-
-app::Number g_trash = app::kNone; // the Trash window's number: dead once closed
 
 } // namespace
 
@@ -791,37 +707,10 @@ void refresh_folder_windows()
             }
         }
     }
-    if (TrashWindow *trash = app::program<TrashWindow>(g_trash)) {
-        if (trash->on_screen()) {
-            trash->refresh();
-        }
-    }
 }
 
-void open_trash()
-{
-    const AsProgram as("File manager");
-    if (TrashWindow *w = app::program<TrashWindow>(g_trash)) {
-        w->refresh();
-        app::bring_forward(g_trash);
-        return;
-    }
-    app::Look look;
-    look.title = "Trash";
-    look.x = 120;
-    look.y = 60;
-    look.width = 400;
-    look.height = 280;
-    look.icon = &gfx::bin_icon_16();
-    look.flags = app::kMenuBar;
-    g_trash = app::make<TrashWindow>(look);
-    if (g_trash == app::kNone) {
-        no_memory_for("Trash");
-        return;
-    }
-    app::program<TrashWindow>(g_trash)->refresh();
-    app::show(g_trash);
-}
+// The Trash is the File manager on C:\.trash.
+void open_trash() { open_folder(kTrashFolder); }
 
 void open_folder(const char *path)
 {

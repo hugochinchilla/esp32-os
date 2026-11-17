@@ -2374,3 +2374,36 @@ Step 1 of backlog item 46, built on the PC only
 - The reference picture `docs/look/bios-text/bios-post.png` is drawn by
   `tools/mockup/bios_text.py` from the font's BDF file; the PC test compares
   the screen with it pixel for pixel.
+
+### The Trash is the File manager on C:\.trash (the owner's request, 2026-11-17)
+
+Asked for by the owner: one File manager that also shows the Trash, so that
+whatever the folder view gains (a list view, say) the Trash gains too. There
+is no Trash window of its own any more.
+
+- A folder window that shows `C:\.trash` is the Trash: titled "Trash", with
+  the bin as its icon (title bar, taskbar, address bar), an Empty Trash
+  button after Back and Up, and Restore and Empty Trash in its File menu
+  where New Folder and Rename are elsewhere. Everything else is the folder
+  window's: toolbar, address bar, icon view, status bar, View menu, F5.
+- It is so however the window got there: the desktop's Trash icon, or a
+  folder window taken to `C:\.trash` with hidden files shown. Up leaves the
+  Trash for `C:\`; Back returns.
+
+Chosen by the agent, to confirm:
+
+- The free space reads as in every folder window: MB from 10 MB up, KB
+  below. (The Trash window always said KB; that was the difference the
+  owner saw.)
+- With an entry chosen, the status bar of the Trash says where it came from
+  ("From C:\Documents"), not its size and date.
+- A folder in the Trash opens like any other (it did not open before).
+  Inside the Trash nothing is made or renamed, hidden names are always
+  shown, and Delete is for good, after asking. Restore and Empty Trash are
+  only at the top of the Trash.
+- The Trash takes one of the File manager's three windows. Opened when it
+  is already shown, that window comes forward.
+- The Trash shows also when `C:\.trash` does not exist (nothing thrown away
+  yet, or just emptied); any other folder that goes away shows My Board.
+- New OS call: `os::ui::set_icon` (`app::Window::set_icon`), since a
+  window's icon was fixed when it was made.

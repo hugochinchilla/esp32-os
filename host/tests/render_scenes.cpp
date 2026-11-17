@@ -779,7 +779,7 @@ int main(int argc, char **argv)
     {
         // The Empty Trash button in the toolbar (File > Empty Trash does the same).
         const gfx::Rect c = desktop.active()->client();
-        click(c.x + 4 + 36, c.y + 17);
+        click(c.x + 96 + 36, c.y + 17); // after Back and Up
     }
     save("37m-empty-trash");
     key(wm::key::Enter); // Yes

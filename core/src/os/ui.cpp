@@ -1428,6 +1428,14 @@ void set_title(Window window, const char *title)
     }
 }
 
+void set_icon(Window window, const gfx::Bitmap *icon)
+{
+    const prog::InCall in_call;
+    if (Behind *w = behind(window)) {
+        w->set_icon(icon);
+    }
+}
+
 Control focus(Window window)
 {
     const prog::InCall in_call;
