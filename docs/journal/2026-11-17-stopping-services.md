@@ -87,3 +87,31 @@ removing the row would have left the task running: a lie in the list.
   second or two, the ports refuse), `kill` from a Terminal, and the same
   from a telnet session, which ends itself that way.
 - The services task's wakes: one a second now (the `stats` counters).
+
+
+## On the board (added by the board thread, 2026-11-17)
+
+Branch commit 067d05c with main a8a5bc0 merged in (no conflict). PC tests
+passed (38 of 38). The firmware was built after deleting `sdkconfig`
+(`CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y` in the result).
+
+With `[update]` and `[telnet]` on and `start console` in the start-up file
+(all three put back afterwards):
+
+1. `kill 1`, `kill 2` and `kill 3` (init, desktop, console) from telnet:
+   "it is protected", all three.
+2. End Task on inetd in the Task Manager (all processes shown) with a VNC
+   viewer connected: the viewer was dropped 0.3 s later. Of the 185,180
+   bytes of external RAM it held, 184,472 came back (the same few hundred
+   bytes as after any viewer). The rows inetd and telnetd were gone at once,
+   ports 23, 3232, 5900 and 80 refused, `dbg.py` answered, and no refill
+   was missed.
+3. After a restart inetd was back (PID 5) with all four ports open.
+4. `kill 5` (inetd) typed in a telnet session: that session's connection
+   closed. The ports refused afterwards and `dbg.py` answered.
+5. `kill` on inetd from a Terminal while `ota.py` was writing (36 %):
+   ota.py reported "the board hung up", and the next start was the old
+   version from 0x10000.
+6. The idle services loop: 28 rounds in 24 s after a start, then 15 in
+   about 15 s: one a second, as intended. No late or missed refill in 60 s
+   idle.

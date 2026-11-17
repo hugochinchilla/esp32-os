@@ -29,6 +29,15 @@ them with `tools/dbg.py monitor`.
 The speed comes from `sdkconfig.defaults`. After changing that file, delete
 `sdkconfig` and rebuild, or the old value is kept.
 
+Since 2026-11-17 the flash has two app slots (`ota_0`, `ota_1`) for updates
+over the network. A cable `idf.py flash` writes the app into `ota_0` and
+resets `otadata`, so the board starts the cable version whatever an update
+left in `ota_1`. Over the network: `[update] enabled = true` in
+`C:\.config\network.ini`, restart, `tools/ota.py chinchilla.local`, restart;
+a new version is on trial for 10 s and goes back to the old one if it does
+not get that far. Never run `erase_flash`: it wipes the Wi-Fi settings (NVS)
+and C:.
+
 ## Try it
 
 From the repository root, with the monitor closed (only one program can use
