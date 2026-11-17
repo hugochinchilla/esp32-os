@@ -282,6 +282,80 @@ void test_bad_input()
     pipe_.room = 1 << 20;
 }
 
+// Gives only so many blocks, to see what the server does without memory.
+class Scarce : public host::HostMemory {
+public:
+    int left = 0;
+    void *allocate(size_t bytes) override { return left-- > 0 ? host::HostMemory::allocate(bytes) : nullptr; }
+};
+
+// The buffers are held only while there is a viewer.
+void test_memory()
+{
+    // test_bad_input left a viewer connected.
+    CHECK(server.stats().connected && memory.in_use() == 3);
+    CHECK(memory.bytes_in_use() > 180000 && memory.bytes_in_use() < 190000);
+    // Another viewer takes over: the same buffers serve it.
+    connect();
+    CHECK(server.stats().connected && memory.in_use() == 3);
+    // The viewer goes: everything comes back, and stays back.
+    pipe_.open = false;
+    server.poll();
+    CHECK(!server.stats().connected && memory.in_use() == 0 && memory.bytes_in_use() == 0);
+    server.poll();
+    CHECK(memory.in_use() == 0);
+    // A viewer the server throws out leaves nothing behind either.
+    connect();
+    CHECK(memory.in_use() == 3);
+    pipe_.to_server = "\x7F";
+    server.poll();
+    CHECK(!server.stats().connected && memory.in_use() == 0);
+    // Many comings and goings: no block is lost on the way.
+    for (int i = 0; i < 50; i++) {
+        connect();
+        pipe_.open = false;
+        server.poll();
+    }
+    CHECK(memory.in_use() == 0);
+    // After all that a new viewer still gets a whole compressed screen.
+    connect();
+    desktop.take();
+    pipe_.from_server.clear();
+    pipe_.to_server = std::string("\2\0\0\1\0\0\0\x10", 8) + std::string("\3\0\0\0\0\0\2\x80\1\xE0", 10);
+    for (int i = 0; i < 200; i++) {
+        clock_.now += 10000;
+        server.poll();
+    }
+    CHECK(server.stats().compressed && pipe_.from_server.size() > 80 * 16);
+    CHECK(static_cast<uint8_t>(pipe_.from_server[3]) == 80);
+    tap('z');
+    CHECK(desktop.take() == "+1D -1D ");
+    pipe_.open = false;
+    server.poll();
+    CHECK(memory.in_use() == 0);
+
+    // Not enough memory for all three buffers: the viewer is turned away
+    // and the ones that were given go back.
+    for (int blocks = 0; blocks < 3; blocks++) {
+        Scarce scarce;
+        Pipe pipe;
+        rfb::Server small(display, pointer, desktop, clock_, scarce);
+        small.set_listener(&pipe);
+        scarce.left = blocks;
+        pipe.waiting = true;
+        small.poll();
+        CHECK(!small.stats().connected && !pipe.open && scarce.in_use() == 0);
+        // With memory again, the next viewer is served.
+        scarce.left = 3;
+        pipe.waiting = true;
+        small.poll();
+        CHECK(small.stats().connected && scarce.in_use() == 3);
+        pipe.open = false;
+        small.poll();
+        CHECK(scarce.in_use() == 0);
+    }
+}
+
 // For tools/test_vnc_sim.py: pieces of every kind through one stream.
 int dump(const char *base)
 {
@@ -468,6 +542,7 @@ int main(int argc, char **argv)
     test_keys();
     test_pointer();
     test_bad_input();
+    test_memory();
     test_web();
     if (failures == 0) {
         printf("rfb: all tests passed\n");

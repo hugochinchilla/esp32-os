@@ -152,15 +152,15 @@ void Server::start(net::Stream *stream)
     if (out_ == nullptr) {
         out_ = static_cast<uint8_t *>(memory_.allocate(kOutMax));
         tile_ = static_cast<uint8_t *>(memory_.allocate(kTileMax));
-        void *work = memory_.allocate(net::Deflater::kMemory);
-        if (out_ == nullptr || tile_ == nullptr || work == nullptr) {
-            out_ = nullptr; // no memory: no remote screen
+        work_ = memory_.allocate(net::Deflater::kMemory);
+        if (out_ == nullptr || tile_ == nullptr || work_ == nullptr) {
+            free_buffers(); // no memory: no remote screen
             stream->close();
             stream_ = nullptr;
             state_ = State::Idle;
             return;
         }
-        deflater_.init(work);
+        deflater_.init(work_);
     }
     collect(false);
     stream_ = stream;
@@ -270,7 +270,36 @@ void Server::mark(const gfx::Rect &r)
     any_dirty_ = true;
 }
 
+// Gives the buffers back to the Memory port. Only between viewers: nothing
+// reads them while state_ is Idle, and start() takes them again.
+void Server::free_buffers()
+{
+    if (out_ != nullptr) {
+        memory_.release(out_);
+    }
+    if (tile_ != nullptr) {
+        memory_.release(tile_);
+    }
+    if (work_ != nullptr) {
+        memory_.release(work_);
+    }
+    out_ = tile_ = nullptr;
+    work_ = nullptr;
+    out_size_ = out_sent_ = 0;
+}
+
 void Server::poll()
+{
+    turn();
+    // The last viewer has gone: its memory goes back. Here and not in
+    // drop(), which is called from the middle of reading and sending, and
+    // so that a viewer that takes over from another keeps the buffers.
+    if (state_ == State::Idle && out_ != nullptr) {
+        free_buffers();
+    }
+}
+
+void Server::turn()
 {
     for (net::Listener *listener : listeners_) {
         net::Stream *s = listener != nullptr ? listener->accept() : nullptr;
