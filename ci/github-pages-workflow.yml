@@ -1,0 +1,51 @@
+# Publishes Chinchilla for the browser (web/) on GitHub Pages, at
+# https://<owner>.github.io/<repository>/, every time main changes.
+#
+# Not active here. To turn it on (once):
+#   1. Copy this file to .github/workflows/pages.yml.
+#   2. On GitHub: Settings > Pages > Build and deployment > Source:
+#      "GitHub Actions".
+name: Publish the browser version
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "core/**"
+      - "host/**"
+      - "web/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 7.0.0 # the version the page was tested with
+      - run: emcmake cmake -S web -B build/web
+      - run: cmake --build build/web
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web/site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

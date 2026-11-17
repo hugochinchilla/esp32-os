@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chinchilla</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  /* The canvas is the monitor: the whole page. The program draws the 4:3
+     picture in the middle of it, as it does in a window of any size. */
+  #canvas { display: block; width: 100vw; height: 100vh; outline: none; touch-action: none; }
+  #note { position: fixed; left: 0; right: 0; top: 45%; text-align: center; color: #b6b6b6;
+          font: 16px monospace; }
+</style>
+</head>
+<body>
+<canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
+<div id="note">Starting Chinchilla...</div>
+<script>
+  var Module = {
+    canvas: document.getElementById('canvas'),
+    // The program has started: the picture takes over.
+    onRuntimeInitialized: function () { document.getElementById('note').remove(); },
+    printErr: function (text) { console.warn(text); },
+    onAbort: function () {
+      var note = document.createElement('div');
+      note.id = 'note';
+      note.textContent = 'Chinchilla stopped. Load the page again to restart it.';
+      document.body.appendChild(note);
+    }
+  };
+  // Keys go to Chinchilla as soon as the page is clicked.
+  window.addEventListener('load', function () { Module.canvas.focus(); });
+  Module.canvas.addEventListener('mousedown', function () { Module.canvas.focus(); });
+</script>
+{{{ SCRIPT }}}
+</body>
+</html>
