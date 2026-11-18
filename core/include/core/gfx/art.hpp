@@ -33,6 +33,7 @@ const Bitmap &saver_icon_16(); // Screen Saver settings
 const Bitmap &saver_icon_32();
 const Bitmap &display_icon_16(); // Display settings
 const Bitmap &display_icon_32();
+const Bitmap &services_icon_16(); // Services settings: a box with two lights
 const Bitmap &settings_icon_16();
 const Bitmap &settings_icon_32();
 const Bitmap &welcome_icon_16();

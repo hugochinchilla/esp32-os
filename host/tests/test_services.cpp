@@ -19,6 +19,7 @@
 #include "core/net/posix_tcp.hpp"
 #include "core/net/rfb.hpp"
 #include "core/net/services.hpp"
+#include "core/net/switch.hpp"
 #include "core/net/web.hpp"
 #include "../host_adapters.hpp"
 #include "../thread_queue.hpp"
@@ -177,6 +178,149 @@ public:
     std::string log, typed;
     int events = 0;
 };
+
+// One service switched off and on while the others go on (the `service`
+// command, docs/journal/2026-11-18-services.md): asked from any task, done
+// by the loop at its next round.
+void test_switching()
+{
+    host::FixedClock clock;
+    FakeWait wait;
+    wait.clock = &clock;
+    net::Services services(wait, clock);
+    FakeService a, b, other;
+    a.clock = b.clock = &clock;
+    static std::string told;
+    told.clear();
+    services.add(a);
+    // b joins switched off: no turns, nothing watched, not stopped.
+    CHECK(services.add(b, false, [](bool on, void *) { told += on ? "on " : "off "; }, nullptr));
+    CHECK(services.on(a) && !services.on(b) && !services.on(other) && !services.want(other, true));
+    CHECK(services.round() && a.polls == 1 && b.polls == 0 && wait.added_at_sleep == 1 && b.stops == 0);
+    // Wanted: nothing happens until the loop comes round.
+    CHECK(services.want(b, true) && !services.on(b) && told.empty());
+    CHECK(services.round() && services.on(b) && b.polls == 1 && a.polls == 2 && wait.added_at_sleep == 2);
+    CHECK(told == "on ");
+    // Off: stopped once, told after the stop, and no more turns. Its wish
+    // for a short sleep no longer counts.
+    b.wants = 5000;
+    CHECK(services.round() && wait.slept.back() == 5000);
+    services.want(b, false);
+    CHECK(services.on(b)); // until the loop has done it
+    CHECK(services.round() && !services.on(b) && b.stops == 1 && b.polls == 2 && told == "on off ");
+    CHECK(a.polls == 4 && wait.slept.back() == net::kNever && wait.added_at_sleep == 1);
+    CHECK(services.round() && b.stops == 1 && b.polls == 2);
+    // Off and on again between two rounds: the loop saw neither.
+    services.want(b, true);
+    services.want(b, false);
+    CHECK(services.round() && b.stops == 1 && b.polls == 2 && told == "on off ");
+    // On again, and it has its turns back.
+    services.want(b, true);
+    CHECK(services.round() && services.on(b) && b.polls == 3 && told == "on off on ");
+    // The loop ending stops only what is on.
+    services.want(b, false);
+    CHECK(services.round() && b.stops == 2);
+    services.request_stop();
+    CHECK(!services.round() && a.stops == 1 && b.stops == 2 && !services.on(a));
+}
+
+// net::Switch: the two halves of starting and stopping a service, the UI
+// task's and the loop's, with the row the service shows as.
+void test_switch()
+{
+    host::ThreadQueue queue;
+    msg::set_queue(&queue);
+    msg::Inbox inbox(queue, nullptr);
+    host::FixedClock clock;
+    FakeWait wait;
+    wait.clock = &clock;
+    net::Services services(wait, clock);
+    FakeService telnet;
+    telnet.clock = &clock;
+    struct Door {
+        int opens = 0, closes = 0;
+        bool open = false, works = true;
+        proc::Pid row = proc::kNone;
+    };
+    static Door door;
+    door = {};
+    proc::Table &procs = proc::table();
+    if (procs.count() == 0) {
+        procs.spawn("init", proc::kNone, proc::kSystem | proc::kProtected); // the root, which never goes
+    }
+    const int rows = procs.count();
+    net::Switch one(services, telnet,
+                    {[](void *) {
+                         door.opens++;
+                         door.open = door.works;
+                         return door.works;
+                     },
+                     [](void *) {
+                         door.closes++;
+                         door.open = false;
+                     },
+                     nullptr},
+                    "telnetd");
+    one.on_row([](proc::Pid pid, void *) { door.row = pid; }, nullptr);
+    const char *why = "";
+    CHECK(!one.running() && !services.on(telnet) && procs.count() == rows);
+    CHECK(services.round() && telnet.polls == 0);
+
+    // Started: the port is open and the row is there at once; the service
+    // has its turns from the loop's next round.
+    CHECK(one.start(why) && one.running() && door.open && door.opens == 1);
+    CHECK(one.pid() != proc::kNone && door.row == one.pid() && procs.find_by_name("telnetd") == one.pid());
+    CHECK(!one.start(why) && strcmp(why, "it is running already") == 0 && door.opens == 1);
+    CHECK(services.round() && telnet.polls == 1);
+
+    // Stopped: nothing changes until the loop comes round. Then the
+    // service is stopped, the port closed on the loop's side, and the row
+    // goes when the UI task has the message.
+    const proc::Pid first = one.pid();
+    one.stop();
+    CHECK(!one.running() && door.open && procs.alive(first));
+    CHECK(!one.start(why) && strstr(why, "still stopping") != nullptr && door.opens == 1);
+    CHECK(services.round() && telnet.stops == 1 && !door.open && door.closes == 1 && procs.alive(first));
+    while (inbox.deliver()) {
+    }
+    CHECK(!procs.alive(first) && one.pid() == proc::kNone && procs.count() == rows);
+    one.stop(); // not running: nothing
+    CHECK(services.round() && telnet.stops == 1 && door.closes == 1);
+
+    // Started again: a new row. Stopped and started before the message
+    // has come: the old row goes, and the message, late, takes nothing of
+    // the new one.
+    CHECK(one.start(why) && door.opens == 2 && one.pid() != proc::kNone && door.row == one.pid());
+    CHECK(services.round() && telnet.polls == 2);
+    const proc::Pid second = one.pid();
+    one.stop();
+    CHECK(services.round() && door.closes == 2);
+    CHECK(one.start(why) && !procs.alive(second) && one.pid() != second && procs.alive(one.pid()));
+    const proc::Pid third = one.pid();
+    while (inbox.deliver()) {
+    }
+    CHECK(procs.alive(third) && one.running() && procs.count() == rows + 1);
+    CHECK(services.round() && telnet.polls == 3);
+
+    // A port that cannot be had: not started, no row.
+    one.stop();
+    CHECK(services.round());
+    while (inbox.deliver()) {
+    }
+    door.works = false;
+    CHECK(!one.start(why) && strstr(why, "port") != nullptr && !one.running() && procs.count() == rows);
+    door.works = true;
+    CHECK(one.start(why) && services.round());
+
+    // The loop itself ends (End Task on inetd): the machine says so, the
+    // row goes, and the service cannot be started any more.
+    services.request_stop();
+    CHECK(!services.round() && telnet.stops == 4);
+    one.loop_ended();
+    CHECK(!one.running() && procs.count() == rows);
+    CHECK(!one.start(why) && strstr(why, "inetd") != nullptr && procs.count() == rows);
+    msg::set_queue(nullptr);
+}
 
 void test_posted_input()
 {
@@ -646,6 +790,8 @@ int main()
 {
     test_rounds();
     test_stop();
+    test_switching();
+    test_switch();
     test_posted_input();
     test_watch_sockets();
     test_two_tasks();

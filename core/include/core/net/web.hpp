@@ -55,6 +55,11 @@ public:
     // New connections, requests still arriving, answers still leaving.
     bool watch(Watch &watch) const override;
 
+    // Every request and the WebSocket are let go: before the port under
+    // the gate is stopped, so nothing here is left holding a connection the
+    // port will hand out again.
+    void hang_up();
+
     uint32_t pages_served() const { return pages_served_; }
 
 private:

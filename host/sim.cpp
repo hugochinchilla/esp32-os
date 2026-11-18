@@ -28,6 +28,7 @@
 #include "core/net/posix_tcp.hpp"
 #include "core/net/rfb.hpp"
 #include "core/net/services.hpp"
+#include "core/net/switch.hpp"
 #include "core/net/telnet.hpp"
 #include "core/net/update.hpp"
 #include "core/net/web.hpp"
@@ -220,26 +221,7 @@ int main(int argc, char **argv)
     static rfb::Server remote(display, pointer, remote_input, clock, memory);
     static host::ThreadLock damage_lock;
     remote.set_lock(&damage_lock);
-    static net::PosixTcpListener vnc_port;
     screen.set_damage_listener([](const gfx::Rect &r, void *) { remote.damage(r); }, nullptr);
-    if (argc > 2) {
-        if (vnc_port.listen(atoi(argv[2]), true)) {
-            remote.set_listener(&vnc_port);
-        } else {
-            fprintf(stderr, "cannot listen on port %s\n", argv[2]);
-        }
-    }
-    static net::PosixTcpPool web_port;
-    static net::WebGate web;
-    if (argc > 3) {
-        if (web_port.listen(atoi(argv[3]), true)) {
-            web.set_port(&web_port);
-            web.set_page(net::viewer_page(), net::viewer_page_size());
-            remote.set_listener(&web, 1);
-        } else {
-            fprintf(stderr, "cannot listen on port %s\n", argv[3]);
-        }
-    }
 
     // A real board first prints start-up text that is not part of the
     // protocol, then says hello.
@@ -249,24 +231,35 @@ int main(int argc, char **argv)
     protocol.send_log("simulated board ready\n", 22);
 
     // The services loop, as on the board: a thread asleep in select() on
-    // the remote screen's sockets. Only when a port was asked for.
+    // the services' sockets. Each port is opened when init starts its
+    // service (inetd for updates, vncd, telnetd), and only if one was asked
+    // for: ./sim folder vnc-port web-port telnet-port update-port.
     static net::PosixWait sockets;
     static net::Services services(sockets, clock);
-    services.add(remote);
-    // The command shell for `telnet localhost telnet-port`, as the board
-    // offers on port 23 when its settings file says so.
-    static net::PosixTcpListener telnet_port;
-    if (argc > 4 && !telnet_port.listen(atoi(argv[4]), true)) {
-        fprintf(stderr, "cannot listen on port %s\n", argv[4]);
+    static int ports[4] = {0, 0, 0, 0}; // vnc, web, telnet, update
+    for (int i = 0; i < 4; i++) {
+        ports[i] = argc > 2 + i ? atoi(argv[2 + i]) : 0;
     }
-
-    // Updates over the network (tools/ota.py localhost --port update-port):
-    // the image goes to memory, and to the file CHINCHILLA_UPDATE_OUT names
-    // if there is one; a restart ends this program.
-    static net::PosixTcpListener update_port;
-    if (argc > 5 && !update_port.listen(atoi(argv[5]), true)) {
-        fprintf(stderr, "cannot listen on port %s\n", argv[5]);
-    }
+    static net::PosixTcpListener vnc_port, telnet_port, update_port;
+    static net::PosixTcpPool web_port;
+    static net::WebGate web;
+    web.set_port(&web_port);
+    web.set_page(net::viewer_page(), net::viewer_page_size());
+    remote.set_listener(&vnc_port);
+    remote.set_listener(&web, 1);
+    static net::Switch vncd(services, remote,
+                            {[](void *) {
+                                 const bool vnc = ports[0] != 0 && vnc_port.listen(ports[0], true);
+                                 const bool page = ports[1] != 0 && web_port.listen(ports[1], true);
+                                 return vnc || page;
+                             },
+                             [](void *) {
+                                 web.hang_up();
+                                 vnc_port.stop();
+                                 web_port.stop();
+                             },
+                             nullptr});
+    static net::Switch *telnetd = nullptr;
 
     // init, as on the board: PID 1, which starts the desktop and the network
     // services from C:\.config\startup.txt (the RAM disk is new at every
@@ -275,10 +268,9 @@ int main(int argc, char **argv)
         ports::System *system;
         dbg::Protocol *protocol;
         bool any_port;
+        bool loop = false; // the services thread runs
     };
-    static Parts parts = {&system, &protocol,
-                          vnc_port.listening() || web_port.listening() || telnet_port.listening() ||
-                              update_port.listening()};
+    static Parts parts = {&system, &protocol, ports[0] != 0 || ports[1] != 0 || ports[2] != 0 || ports[3] != 0};
     static init::Init first(proc::table());
     first.set_log(
         [](const char *line, void *) {
@@ -311,20 +303,8 @@ int main(int argc, char **argv)
                 // the simulator ask for no port.
                 return true;
             }
-            if (telnet_port.listening() && first.started("desktop")) {
-                static host::ThreadLock telnet_lock;
-                static host::ThreadEvent telnet_typed, telnet_room, telnet_answered;
-                static host::ThreadTasks telnet_tasks;
-                static sh::QueueCall telnet_ui(queue, telnet_answered);
-                static net::TelnetKit kit;
-                kit.lock = &telnet_lock;
-                kit.typed = &telnet_typed;
-                kit.room = &telnet_room;
-                kit.tasks = &telnet_tasks;
-                const proc::Pid telnetd = proc::table().spawn_service("telnetd");
-                static net::Telnet telnet(shell::session_environment(&telnet_ui, telnetd), kit);
-                telnet.set_listener(&telnet_port);
-                services.add(telnet);
+            if (ports[3] != 0 && !update_port.listen(ports[3], true)) {
+                fprintf(stderr, "cannot listen on port %d\n", ports[3]);
             }
             if (update_port.listening()) {
                 static host::MemoryUpdater updater;
@@ -354,9 +334,8 @@ int main(int argc, char **argv)
                     nullptr);
                 services.add(update);
             }
-            static proc::Pid inetd_pid, telnetd_pid;
+            static proc::Pid inetd_pid;
             inetd_pid = proc::table().spawn_service("inetd");
-            telnetd_pid = proc::table().find_by_name("telnetd");
             // Stoppable, as on the board: End Task or kill on inetd.
             services.set_longest_sleep(200000);
             proc::table().set_stop(
@@ -364,6 +343,7 @@ int main(int argc, char **argv)
             std::thread([] {
                 while (services.round()) {
                 }
+                web.hang_up();
                 vnc_port.stop();
                 web_port.stop();
                 telnet_port.stop();
@@ -372,13 +352,78 @@ int main(int argc, char **argv)
                     proc::kNone,
                     [](const msg::Message &) {
                         proc::table().exit(inetd_pid);
-                        proc::table().exit(telnetd_pid);
+                        vncd.loop_ended();
+                        if (telnetd != nullptr) {
+                            telnetd->loop_ended();
+                        }
+                        first.down("inetd");
+                        first.down("vncd");
+                        first.down("telnetd");
                     },
                     nullptr, 0, 0, 1000);
             }).detach();
+            parts.loop = true;
             return true;
         },
         nullptr);
+    // The remote screen and telnet, as on the board: services of inetd
+    // with lines of their own, which `service NAME stop` and `service NAME
+    // start` switch while the machine runs. Without a port asked for there
+    // is nothing to listen on, which is not a line gone wrong.
+    first.add(
+        "vncd",
+        [](void *) {
+            if (ports[0] == 0 && ports[1] == 0) {
+                return true;
+            }
+            const char *why = "";
+            if (!parts.loop || !vncd.start(why)) {
+                fprintf(stderr, "vncd not started: %s\n", parts.loop ? why : "inetd is not running");
+                return false;
+            }
+            return true;
+        },
+        nullptr);
+    first.set_stop("vncd", [](void *) { vncd.stop(); });
+    first.add(
+        "telnetd",
+        [](void *) {
+            if (ports[2] == 0) {
+                return true;
+            }
+            if (!parts.loop || !first.started("desktop")) {
+                fprintf(stderr, "telnetd not started: the desktop and inetd go first\n");
+                return false;
+            }
+            static host::ThreadLock telnet_lock;
+            static host::ThreadEvent telnet_typed, telnet_room, telnet_answered;
+            static host::ThreadTasks telnet_tasks;
+            static sh::QueueCall telnet_ui(queue, telnet_answered);
+            static net::TelnetKit kit = {&telnet_lock, &telnet_typed, &telnet_room, &telnet_tasks};
+            static const sh::Env env = shell::session_environment(&telnet_ui, proc::kNone);
+            static net::Telnet telnet(env, kit);
+            static net::Switch one(services, telnet,
+                                   {[](void *) { return telnet_port.listen(ports[2], true); },
+                                    [](void *) { telnet_port.stop(); }, nullptr},
+                                   "telnetd");
+            if (telnetd == nullptr) {
+                telnet.set_listener(&telnet_port);
+                one.on_row([](proc::Pid pid, void *) { shell::set_session_owner(env, pid); }, nullptr);
+                telnetd = &one;
+            }
+            const char *why = "";
+            if (!one.start(why)) {
+                fprintf(stderr, "telnetd not started: %s\n", why);
+                return false;
+            }
+            return true;
+        },
+        nullptr);
+    first.set_stop("telnetd", [](void *) {
+        if (telnetd != nullptr) {
+            telnetd->stop();
+        }
+    });
     // The command shell on the "serial port" (the pseudo-terminal), sharing
     // it with the debug link as on the board.
     first.add(
