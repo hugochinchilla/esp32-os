@@ -415,7 +415,7 @@ and reasons are in `docs/journal/2026-11-17-program-lifecycle.md`.
 | How the PC build shows the screen | SDL window, image files only | Open |
 | Clock chip | DS3231 module, another I2C chip | DS3231 |
 | VGA pin 5 on the hand-built board, once the firmware reads the hat's monitor sense on GPIO47 | Wire pin 5 to GPIO47 with a pull-up as the hat; tie GPIO47 to ground; leave the board and have the firmware treat it as unknown | Wire it as the hat, when the firmware reads it (`docs/hardware/perfboard-build.md`) |
-| Cause of the lines at high Wi-Fi transmit power | 3.3 V supply dip, shared ground, radiation | Open until the supply test on the hand-built board is run (`docs/hardware/perfboard-build.md`) |
+| Cause of the lines at high Wi-Fi transmit power | 3.3 V supply dip, shared ground, radiation | Supply dip, by the first result: with a capacitor from 3V3 to ground on the hand-built board the owner no longer sees them (2026-11-18, by eye, colour returns still open; `docs/hardware/perfboard-build.md`). Follows: the hat's second 100 µF on 3.3 V, and whether the 2 dBm default can rise. Both for the owner to decide |
 
 ## Ideas kept for later
 

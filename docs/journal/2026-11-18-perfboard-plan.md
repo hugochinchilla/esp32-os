@@ -90,3 +90,18 @@ plug.
 - The owner fills in the test table; the result goes to the hat's design.
 - USB host in the firmware (a backlog item of its own when it is taken up).
 - VGA pin 5 on this board, when the firmware reads the monitor sense.
+
+## Later the same morning: the first result
+
+About two hours after the plan, the owner wrote in the project chat:
+
+> puedo confirmar que ya no veo scanlines por wifi
+
+As passed on with it: the capacitor is fitted, the radio at 20 dBm, the
+colour returns not yet grounded. So the capacitor alone did it, which is the
+supply-dip explanation from the hat's design thread. The parts picked from
+his kits an hour earlier were a 470 µF 10 V electrolytic and a "104" disc
+that measured 50 nF on his meter (cheap discs run far from their marking;
+it does not matter here). Which of them is on the board, and whether the
+lines were seen that day before the capacitor went in, is still to confirm.
+The result is in the table in `docs/hardware/perfboard-build.md`.

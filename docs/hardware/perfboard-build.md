@@ -52,7 +52,7 @@ does not show them.
 | Step | Board | Lines at 20 dBm | Lines at 2 dBm | Notes |
 | --- | --- | --- | --- | --- |
 | A | Beeper and audio fitted, no capacitor, returns open | | | The baseline. Lines expected, as on 2026-11-16 |
-| B | A plus the supply capacitor | | | |
+| B | A plus the supply capacitor | **None** (the owner, 2026-11-18: "ya no veo scanlines por wifi") | | Colour returns still open. To confirm with the owner: that step A showed the lines the same day, and which capacitor is fitted (470 µF 10 V and a 100 nF disc were the ones picked from his kits) |
 | C | B plus the colour returns grounded | | | |
 | D (optional) | C with the capacitor lifted or cut out | | | Tells whether the returns alone are enough |
 
@@ -60,6 +60,17 @@ For each cell write none, fewer or fainter, or the same. If B leaves fainter
 lines, try a larger capacitor or a second one; if it changes nothing, a
 capacitor from 5V to ground is a quick extra try (the dip may be on the USB
 cable's side of the regulator).
+
+### Result so far (2026-11-18)
+
+With the capacitor fitted and the colour returns still open, the owner no
+longer sees the lines. That points at the 3.3 V supply dipping during
+transmit bursts as the cause, or at least the main one, and says the hat
+should get its second 100 µF capacitor on 3.3 V. It is one look by eye on
+one board with one monitor; the details marked "to confirm" in the table are
+not yet confirmed. Steps C and D would add little now. Worth doing instead:
+a few restarts at 20 dBm to see that the lines stay away, and then a
+decision on the 2 dBm default.
 
 What each outcome means for the hat:
 
