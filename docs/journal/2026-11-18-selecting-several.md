@@ -176,3 +176,30 @@ windows closed, and once the Display dialog left open with the Sky theme saved
 after a right click on the desktop, Escape and a click. Nothing in this branch
 was found that would do either; the list of a drag (1 KB) goes back when the
 drag ends, which the PC leak check covers.
+
+## On the board (2026-11-18, bbbb0a6; items 54 and 55 together)
+
+Two board rounds. The first (1960963) passed everything of item 54 and most
+of item 55 but moved `welcome.txt` into the folder `big` when both icons were
+picked on the desktop and the folder was dragged. bbbb0a6 fixed that, and
+the second round on the board:
+
+- On the desktop, a rectangle over the folder `big` and `welcome.txt`, then a
+  drag of the folder to empty desktop: both moved and kept their spacing and
+  nothing went into `big`. The same two picked, dragging the file: both moved.
+  The same two picked and dragged onto the Trash: both went (the Trash takes
+  both), and Restore from the Trash brought both back to the desktop, with
+  their icons where they had been.
+- Two plain files picked by a rectangle and dragged: both moved. Two files
+  dragged onto a folder in a File manager window: both moved into it.
+- Right click on empty desktop, Escape, a click on empty desktop: the menu
+  closed and no dialog opened. (The desktop menu has Paste and a separator at
+  its top now, so earlier click positions no longer land on the same row.)
+- With every window closed, free internal RAM was identical to before and the
+  largest external block unchanged (external 3.9 KB lower, the taskbar's Start
+  menu, as always). `dbg.py misses`: none.
+
+From the first round: a 300 KB paste (six files of 50 KB) took 8.0 s to the
+desktop and 7.3 s inside a window, the hourglass over the window only; the
+`paste` task keeps 6,900 of its 10,240 bytes of stack never used; closing the
+window 1.5 s into a paste still finished the copy whole.
