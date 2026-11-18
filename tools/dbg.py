@@ -42,6 +42,7 @@ TASKS = 20
 FAULT = 21
 LOG_READ = 22
 FRAMES = 23
+PAINT_BENCH = 24
 WIFI = 0x20
 MAX_REQUEST = 1024  # largest request payload the board takes
 LOG, HELLO, SHOT_DATA, SHOT_END = 0x70, 0x71, 0x72, 0x73
@@ -401,6 +402,16 @@ class Board:
         """Where the board's memory goes: heaps and video timing, as text
         (task stacks are in tasks())."""
         return self.request(MEMORY_REPORT).decode("utf-8", "replace")
+
+    def paint_bench(self):
+        """How long each kind of drawing takes on the screen, and each open
+        window painted alone (Wm::paint_bench), as text. The board draws
+        over its screen for about a second and paints everything again."""
+        patience, self.timeout = self.timeout, 15.0
+        try:
+            return self.request(PAINT_BENCH, tries=1).decode("utf-8", "replace")
+        finally:
+            self.timeout = patience
 
     TASK_STATES = ("running", "ready", "blocked", "suspended", "deleted", "unknown")
 
@@ -907,6 +918,8 @@ def main(argv=None):
     p = sub.add_parser("animations", help="caret blinking on or off (off for stable screenshots)")
     p.add_argument("state", choices=["on", "off"])
     sub.add_parser("repaint", help="paint the whole screen again and time it")
+    sub.add_parser("paintbench", help="time each kind of drawing and each open window on the screen (it draws "
+                                      "over the screen for about a second)")
     sub.add_parser("memory", help="where the memory goes: heaps and video timing (stacks: tasks)")
     sub.add_parser("dmesg", help="the system log the board keeps, oldest first")
     p = sub.add_parser("misses", help="missed video refills in the log not caused by the debug link; exits 1 if any")
@@ -1031,6 +1044,8 @@ def main(argv=None):
             board.animations(args.state == "on")
         elif args.command == "repaint":
             print("repainted in %d us" % board.repaint())
+        elif args.command == "paintbench":
+            print(board.paint_bench(), end="")
         elif args.command == "memory":
             print(board.memory_report(), end="")
         elif args.command == "dmesg":

@@ -146,6 +146,15 @@ public:
     virtual void set_animations(bool on) = 0;
     // The desktop's count of frames over budget, if it keeps one.
     virtual sys::Frames *frames() { return nullptr; }
+    // Times each kind of drawing and every window on the real screen, then
+    // paints everything again; the figures as text, its length returned
+    // (at most capacity - 1). 0 when the desktop has no such bench.
+    virtual size_t paint_bench(char *out, size_t capacity)
+    {
+        (void)out;
+        (void)capacity;
+        return 0;
+    }
 
 protected:
     ~Desktop() = default;

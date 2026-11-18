@@ -47,6 +47,7 @@ enum FrameType : uint8_t {
     kFault = 0x15,        // a fault on purpose: hang, bad pointer or abort, charged to a process
     kLogRead = 0x16,      // a piece of the system log (dmesg) from a position
     kFrames = 0x17,       // the desktop's frames over budget (sys::Frames); bit 0 of the argument starts the count again
+    kPaintBench = 0x18,   // text: how long each kind of drawing and each window takes (Wm::paint_bench)
     kWifi = 0x20,       // Wi-Fi: status, scan, list, connect, disconnect, forget
     // Sent by the board without being asked.
     kLog = 0x70,

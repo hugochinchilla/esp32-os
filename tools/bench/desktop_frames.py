@@ -343,6 +343,23 @@ class Bench:
             self.board.doubleclick(x, y)
             time.sleep(0.5)
 
+    def paint_bench(self):
+        """Not the nine parts: the same five windows, then what each kind of
+        drawing and each window costs (dbg.py paintbench), three times, and
+        once more with the Editor filling the screen."""
+        self.setup()
+        for i in range(3):
+            print("\npaint bench, run %d:" % (i + 1))
+            print(self.board.paint_bench(), end="", flush=True)
+            time.sleep(1.0)
+        self.focus("Editor")
+        self.board.doubleclick(*self.grab_point("Editor"))
+        time.sleep(1.0)
+        print("\npaint bench, the Editor maximised:")
+        print(self.board.paint_bench(), end="", flush=True)
+        self.board.doubleclick(*self.grab_point("Editor"))
+        time.sleep(1.0)
+
     def run_all(self):
         self.setup()
         self.measure("idle", self.part_idle)
@@ -386,6 +403,9 @@ def main():
     parser.add_argument("--sim", metavar="PROGRAM", help="start this simulator (build/host/sim) and measure it")
     parser.add_argument("--seconds", type=float, default=6.0, help="how long each timed part lasts (default 6)")
     parser.add_argument("--json", metavar="FILE", help="write every figure there")
+    parser.add_argument("--paint", action="store_true",
+                        help="open the windows and time each kind of drawing and each window instead "
+                             "(dbg.py paintbench)")
     args = parser.parse_args()
 
     sim = None
@@ -398,6 +418,11 @@ def main():
         board = dbg.Board(port, timeout=2.0)
         wait_for_desktop(board)
         bench = Bench(board, args.seconds)
+        if args.paint:
+            bench.paint_bench()
+            board.close()
+            failed = False
+            return
         bench.run_all()
         rows = bench.rows
         budget = rows[0]["budget_us"]

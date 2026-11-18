@@ -446,6 +446,15 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
         break;
     }
 
+    case kPaintBench: {
+        // Text, as kMemoryReport. It draws over the screen for about a
+        // second and paints everything again before it answers.
+        char *text = reinterpret_cast<char *>(chunk_);
+        const size_t n = desktop_ != nullptr ? desktop_->paint_bench(text, kMaxReplyPayload - 1) : 0;
+        reply(type, seq, n > 0 ? kOk : kUnknownCommand, chunk_, static_cast<uint16_t>(n));
+        break;
+    }
+
     case kRepaint: {
         if (desktop_ == nullptr) {
             reply(type, seq, kUnknownCommand, nullptr, 0);
