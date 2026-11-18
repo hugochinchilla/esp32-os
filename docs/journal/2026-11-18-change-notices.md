@@ -167,3 +167,27 @@ in 6 KB); `dbg.py misses` stays at 0 while the job reads.
   job could do it; that is the File manager's, and item 56 (views) will be
   in that code.
 - The other finding of the benchmark, painting large windows, is untouched.
+
+## On the board (2026-11-18, a477196)
+
+App-flashed on the BIOS layout. Idle desktop, 30 s after `reboot --fast`
+and then 20 s more with nothing touched: the two readings of `dbg.py frames`
+are the same, two pieces over the budget in all, both from the first seconds
+(the first full paint at 213 ms, 17.0 ms; a timer of the desktop at 2.2 s,
+89.5 ms); none in the 20 s, where the taskbar's timer used to take 35 ms every
+two seconds. A file put from the PC (`from-pc.txt`) appeared on the desktop
+within 1.2 s and its removal took the icon away; each change cost one message
+of about 20 ms (21.8 and 19.5 ms, no painting). A file dragged to the Trash
+icon left the desktop, the Trash icon filled and, after File > Empty Trash,
+was empty again; a File manager window on Documents showed `seen.txt` when it
+was put and dropped it when it was removed, without F5. `dbg.py misses`: none.
+Free internal RAM on the idle desktop 202,091 bytes (main 202,103).
+
+The benchmark, three runs: 41, 40 and 41 frames over budget in all (item 63's
+branch: 66, 64, 64). The idle and pointer parts now have none or almost none
+(idle 0 over budget and 0.1 % busy; pointer 0), "culebra" 0 to 1; the parts
+with Chess or a repaint of a whole window are unchanged: drag + chess 2,
+drops + chess 13 to 14 (57 to 58 ms, a mouse event painting 181,484 pixels),
+drag + culebra 3, to front + chess 12 (up to 49.5 ms), typing + chess 3 to 4,
+maximise 6 (about 41 ms). No missed refill of the video signal in any run
+(the monitor was fed 59.51 to 59.53 frames a second by the PC's clock).
