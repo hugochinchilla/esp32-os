@@ -119,6 +119,12 @@ constexpr uint8_t kLanding[] = {4, 4, 3, 3, 2, 1, 1, 1, 2, 2, 2, 1, 1, 1};
 constexpr int kLandingSteps = static_cast<int>(sizeof(kLanding));
 constexpr uint32_t kLandingStepUs = 1000000 / 60;
 
+// The computer does not answer the instant the user's piece is down (backlog
+// item 67, the owner's request, for the feel of it): its move is shown no
+// sooner than this long after it began to think, another length each move.
+// Thinking that takes longer is not made longer.
+constexpr uint32_t kReplyMinUs = 250000, kReplyMaxUs = 350000;
+
 constexpr uint16_t kF2 = 0x3B;
 
 const char kHowToPlay[] =
@@ -345,6 +351,7 @@ public:
     ~ChessWindow() override
     {
         stop_clock();
+        stop_reply();
         stop_landing();
         if (pieces_ != nullptr) {
             os::release(pieces_);
@@ -895,6 +902,8 @@ private:
         thinking_ = true;
         set_hourglass(true);
         say("The computer is thinking...");
+        asked_at_ = os::now_us();
+        reply_after_us_ = kReplyMinUs + seed() % (kReplyMaxUs - kReplyMinUs + 1);
         if (brain_ != nullptr && brain_->running) {
             return; // an answer nobody wants is still on its way: thought() comes back here
         }
@@ -1005,12 +1014,42 @@ private:
             }
             return;
         }
+        // Found sooner than a move should come: it is kept until then. The
+        // game still waits for the computer meanwhile, hourglass and all.
+        const uint64_t thought_for = os::now_us() - asked_at_;
+        if (thought_for < reply_after_us_) {
+            reply_ = os::start_timer(static_cast<uint32_t>(reply_after_us_ - thought_for), 0,
+                                     &ChessWindow::reply_is_due, this);
+            if (reply_ != 0) {
+                return;
+            }
+        }
+        play_answer();
+    }
+
+    void play_answer()
+    {
         thinking_ = false;
         if (brain_->result.best != chess::kNoMove && game_.play(brain_->result.best)) {
             pick(-1);
             start_landing(chess::to_of(brain_->result.best));
         }
         turn();
+    }
+
+    static void reply_is_due(void *context)
+    {
+        auto *w = static_cast<ChessWindow *>(context);
+        w->reply_ = 0; // it fired once and is gone
+        w->play_answer();
+    }
+
+    void stop_reply()
+    {
+        if (reply_ != 0) {
+            os::stop_timer(reply_);
+            reply_ = 0;
+        }
     }
 
     static void time_is_up(void *context)
@@ -1040,6 +1079,7 @@ private:
         }
         thinking_ = false;
         stop_clock();
+        stop_reply(); // an answer found and waiting to be shown is dropped too
         set_hourglass(false);
     }
 
@@ -1168,6 +1208,9 @@ private:
     bool thinking_ = false;     // the game waits for the computer's move
     bool fresh_ = true;         // the engine has not been told of this game yet
     int clock_ = 0;             // the timer that says the level's time is up
+    int reply_ = 0;             // the timer that shows an answer found too soon
+    uint64_t asked_at_ = 0;     // when the computer began to think
+    uint32_t reply_after_us_ = 0; // its move is not shown sooner than this after
 
     int landing_ = -1;           // the square the computer's piece is landing on, or -1
     int lift_ = 0;               // how many pixels above its place it is painted
