@@ -2349,6 +2349,31 @@ void Wm::paint_window(Window &w, const RectList &clip)
     frames_.ran(sys::Frames::kWindowPaint, w.owner_, clock_.micros() - start);
 }
 
+// A window's border: its edge and the strip inside it, which `paint` draws
+// whole (the fills of `parts` and the edge lines). The two sides are tall
+// and a few pixels wide, and the screen's memory is slow one line at a
+// time: a line from top to bottom costs as much as sixty-four pixels for
+// each of its own, and a side used to be three such lines. So the four
+// strips go through the scratch band, where the lines are drawn in fast
+// memory and each row of a side reaches the screen in one piece.
+template <typename Fn> void Wm::paint_border(Canvas &c, const Rect &f, const RectList &parts, Fn paint)
+{
+    const int b = Window::kBorder;
+    const Rect inside = {f.x + b, f.y + b, f.w - 2 * b, f.h - 2 * b};
+    for (const Rect &strip : {Rect{f.x, f.y, f.w, b}, Rect{f.x, f.bottom() - b, f.w, b},
+                              Rect{f.x, f.y + b, b, f.h - 2 * b}, Rect{f.right() - b, f.y + b, b, f.h - 2 * b}}) {
+        c.layered(strip, paint);
+    }
+    // What `parts` has inside the border: the lines between the title bar,
+    // the menu bar and the client area.
+    for (int i = 0; i < parts.size(); i++) {
+        const Rect gap = parts[i].intersect(inside);
+        if (!gap.empty()) {
+            c.layered(gap, paint);
+        }
+    }
+}
+
 void Wm::paint_frame(Canvas &c, Window &w)
 {
     const gfx::Theme &t = gfx::theme();
@@ -2367,18 +2392,22 @@ void Wm::paint_frame(Canvas &c, Window &w)
         // One line around the window, the rest of the border in the
         // frame's colour.
         const gfx::Colour frame = active ? t.frame_on : t.frame_off, rim = active ? t.rim_on : t.rim_off;
-        for (int i = 0; i < parts.size(); i++) {
-            c.fill(parts[i], frame);
-        }
-        c.edge(f, rim, rim);
-        c.edge(f.inset(1), frame, frame);
+        paint_border(c, f, parts, [&](Canvas &c) {
+            for (int i = 0; i < parts.size(); i++) {
+                c.fill(parts[i], frame);
+            }
+            c.edge(f, rim, rim);
+            c.edge(f.inset(1), frame, frame);
+        });
         c.layered(title, [&](Canvas &c) { paint_flat_title(c, w, title, active); });
         return;
     }
-    for (int i = 0; i < parts.size(); i++) {
-        c.fill(parts[i], t.face);
-    }
-    c.raised(f);
+    paint_border(c, f, parts, [&](Canvas &c) {
+        for (int i = 0; i < parts.size(); i++) {
+            c.fill(parts[i], t.face);
+        }
+        c.raised(f);
+    });
 
     // The title bar in one pass: fade, icon, title and buttons layered in a
     // scratch band, each screen pixel written once.
