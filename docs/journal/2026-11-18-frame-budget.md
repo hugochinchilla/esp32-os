@@ -1,9 +1,8 @@
 # Does the desktop keep up with the monitor?
 
-2026-11-18. Backlog item 63. Built and tested on the PC; the firmware side
-is small (one call that sets the budget, one wrapper in the loop). Not yet
-run on the board: the figures that answer the owner's question come from
-the board turn.
+2026-11-18. Backlog item 63. Built and tested on the PC; the firmware
+compiles and links in the cloud (ESP-IDF v5.5). Not yet run on the board:
+the figures that answer the owner's question come from the board turn.
 
 ## What was asked
 
