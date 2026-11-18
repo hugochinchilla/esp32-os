@@ -2649,7 +2649,7 @@ Journal: `docs/journal/2026-11-18-hourglass-on-demand.md`. Backlog item 49.
 
 ### The web browser, Vizcacha (2026-11-17)
 
-Backlog item 52, asked by the owner. Journal:
+Backlog item 53, asked by the owner. Journal:
 `docs/journal/2026-11-17-web-browser.md`.
 
 The owner's:

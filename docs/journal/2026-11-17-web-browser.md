@@ -1,6 +1,6 @@
 # Vizcacha, a web browser
 
-Backlog item 52 (it was 47 on the branch until main took that number). Branch `claude/project-thread-w6qa7m`. PC only: the firmware
+Backlog item 53 (it was 47 on the branch until main took that number). Branch `claude/project-thread-w6qa7m`. PC only: the firmware
 side has not run on the board.
 
 ## What was asked
@@ -240,7 +240,8 @@ for the relay. By then `main` had moved and the branch no longer merged:
 - The program table's rows had gained two fields (a task of its own, its
   stack). Vizcacha stays on the UI task, as it was checked on the board; a
   task of its own wants its stack measured first.
-- The backlog number 47 had been taken on `main`: the browser is item 52.
+- The backlog number 47 had been taken on `main`: the browser is item 53
+  (52 went to another branch the same day).
 - The three themed Start-menu pictures gained the Vizcacha row.
 
 The PC tests pass (47) and the firmware compiles and links. This merge has
