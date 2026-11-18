@@ -266,6 +266,8 @@ int main()
     storage.write_file("C:\\docs\\old\\in.txt", "in", 2);
     storage.write_file("C:\\docs\\notes.txt", "mine", 4);
     storage.write_file("C:\\docs\\only.txt", "only", 4);
+    storage.make_folder("C:\\.config");
+    storage.write_file("C:\\.config\\chime.txt", "# not a tune\n", 13);
     shell::start(desktop, system_, storage, memory);
     desktop.start();
     // The desktop is up: the beeper's chime, once.

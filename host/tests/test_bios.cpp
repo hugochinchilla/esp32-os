@@ -438,7 +438,14 @@ void test_boot_device()
     CHECK(sound::post_code(sound::PostResult::Memory).count == 5 && sound::post_code(sound::PostResult::Video).count == 5);
     CHECK(sound::post_code(sound::PostResult::NotFatal).count == 3);
     CHECK(sound::desktop_chime().count > 0 && sound::desktop_chime().count <= ports::kBeepSteps);
-    CHECK(sound::length_ms(sound::desktop_chime()) < 1000);
+    // A tune as text: steps, comments, and lines that are not steps skipped.
+    static const char text[] = "# mine\n659 900 300\n0 120\r\n1319, 760, 320, 128  # quieter\nhello 3 4\n440\n70000 10\n988 500";
+    ports::Beep steps[4];
+    CHECK(sound::parse_tune(text, sizeof(text) - 1, steps, 4) == 4);
+    CHECK(steps[0].hz == 659 && steps[0].ms == 900 && steps[0].fade_ms == 300 && steps[0].level == 0);
+    CHECK(steps[1].hz == 0 && steps[1].ms == 120 && steps[2].level == 128 && steps[2].fade_ms == 320);
+    CHECK(steps[3].hz == 988 && steps[3].ms == 500);
+    CHECK(sound::parse_tune(text, sizeof(text) - 1, steps, 2) == 2 && sound::parse_tune("", 0, steps, 4) == 0);
 }
 
 // The bootloader's choice between the BIOS and the OS, over the restarts

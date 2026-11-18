@@ -976,9 +976,21 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
         start_taskbar_again();
     }
     // The desktop starts with no windows open (the owner's choice).
-    // The beeper says it is up.
-    const sound::Tune chime = sound::desktop_chime();
-    os::beep(chime.steps, chime.count);
+    // The beeper says it is up: the tune in C:\.config\chime.txt if there
+    // is one with a step in it, the system's own otherwise.
+    {
+        char text[2048];
+        size_t size = 0;
+        ports::Beep own[ports::kBeepSteps];
+        sound::Tune chime = sound::desktop_chime();
+        if (os::file::read_file(sound::kChimeFile, text, sizeof(text), size) == os::file::Error::Ok) {
+            const int count = sound::parse_tune(text, size, own, ports::kBeepSteps);
+            if (count > 0) {
+                chime = {own, count};
+            }
+        }
+        os::beep(chime.steps, chime.count);
+    }
 }
 
 void open_demo_windows()

@@ -45,4 +45,47 @@ uint32_t length_ms(Tune t)
     return ms;
 }
 
+int parse_tune(const char *text, size_t size, ports::Beep *out, int capacity)
+{
+    int count = 0;
+    size_t i = 0;
+    while (i < size && count < capacity) {
+        // One line: up to four numbers.
+        uint32_t numbers[4] = {0, 0, 0, 0};
+        int have = 0;
+        bool bad = false;
+        while (i < size && text[i] != '\n') {
+            const char ch = text[i];
+            if (ch == '#') {
+                while (i < size && text[i] != '\n') {
+                    i++;
+                }
+                break;
+            }
+            if (ch >= '0' && ch <= '9') {
+                uint32_t n = 0;
+                while (i < size && text[i] >= '0' && text[i] <= '9') {
+                    n = n < 100000 ? n * 10 + static_cast<uint32_t>(text[i] - '0') : n;
+                    i++;
+                }
+                if (have < 4) {
+                    numbers[have] = n;
+                }
+                have++;
+                continue;
+            }
+            bad = bad || !(ch == ' ' || ch == '\t' || ch == '\r' || ch == ',');
+            i++;
+        }
+        i++; // the line's end
+        if (bad || have < 2 || have > 4 || numbers[0] > 20000 || numbers[1] == 0 || numbers[1] > 10000 ||
+            numbers[2] > 10000 || numbers[3] > 255) {
+            continue;
+        }
+        out[count++] = {static_cast<uint16_t>(numbers[0]), static_cast<uint16_t>(numbers[1]),
+                        static_cast<uint16_t>(numbers[2]), static_cast<uint8_t>(numbers[3])};
+    }
+    return count;
+}
+
 } // namespace sound

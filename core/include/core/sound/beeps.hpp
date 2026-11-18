@@ -4,6 +4,8 @@
 // tools/sounds/make_beeps.py, which holds the same lists.
 #pragma once
 
+#include <cstddef>
+
 #include "core/ports.hpp"
 
 namespace sound {
@@ -35,5 +37,12 @@ Tune post_code(PostResult result);
 Tune desktop_chime();
 
 uint32_t length_ms(Tune tune);
+
+// A tune written as text, one step a line: the pitch in Hz (0: silence),
+// how long in ms, and optionally the fade in ms and the starting loudness,
+// 1 to 255 (ports::Beep). A '#' starts a comment; a line that is not a step
+// is skipped. Returns how many steps were written to `out`.
+constexpr const char *kChimeFile = "C:\\.config\\chime.txt";
+int parse_tune(const char *text, size_t size, ports::Beep *out, int capacity);
 
 } // namespace sound
