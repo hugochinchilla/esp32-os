@@ -43,6 +43,9 @@ add_executable(test_paint tests/test_paint.cpp)
 target_link_libraries(test_paint PRIVATE core)
 target_link_libraries(test_shell PRIVATE core)
 
+add_executable(test_canvas tests/test_canvas.cpp)
+target_link_libraries(test_canvas PRIVATE core)
+
 add_executable(test_image tests/test_image.cpp)
 target_link_libraries(test_image PRIVATE core)
 
@@ -71,6 +74,7 @@ add_test(NAME fs COMMAND test_fs)
 add_test(NAME image_pictures
          COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/gen_pictures.py tests ${CMAKE_CURRENT_BINARY_DIR}/pictures)
 set_tests_properties(image_pictures PROPERTIES FIXTURES_SETUP pictures)
+add_test(NAME canvas COMMAND test_canvas)
 add_test(NAME image COMMAND test_image ${CMAKE_CURRENT_BINARY_DIR}/pictures)
 set_tests_properties(image PROPERTIES FIXTURES_REQUIRED pictures)
 add_test(NAME edit COMMAND test_edit)

@@ -141,8 +141,10 @@ public:
         }
         const Rect s = r.offset(ox_, oy_).intersect(limit_);
         for (int y = s.y; y < s.bottom(); y += kBandRows) {
-            const Rect band = {s.x, y, s.w, s.bottom() - y < kBandRows ? s.bottom() - y : kBandRows};
-            if (!touches(band)) {
+            // Only as much of the band as is asked for: a small part of a
+            // wide picture is not painted across its whole width.
+            const Rect band = asked({s.x, y, s.w, s.bottom() - y < kBandRows ? s.bottom() - y : kBandRows});
+            if (band.empty()) {
                 continue;
             }
             RectList whole;
@@ -184,15 +186,30 @@ private:
     }
     template <typename BgFn> int text_cells(int x, int y, const char *s, Colour fg, BgFn bg, int caret_x);
     void copy_band(const Rect &band); // scratch band to the screen, through the clip
-    bool touches(const Rect &r) const
+    // The rectangle around the parts of `r` that the clip lets through;
+    // empty when there are none.
+    Rect asked(const Rect &r) const
     {
+        Rect all = {};
         for (int i = 0; i < clip_.size(); i++) {
-            if (clip_[i].overlaps(r)) {
-                return true;
+            const Rect part = clip_[i].intersect(r);
+            if (!part.empty()) {
+                all = all.empty() ? part : bounding(all, part);
             }
         }
-        return false;
+        return all;
     }
+    // A left-to-right fade as the four rows of pixels its dither repeats
+    // in, for every column of the screen (fill_fade).
+    static constexpr int kFadeWidth = 640;
+    struct FadeRows {
+        bool valid;
+        int sx0, span;
+        Rgb from, to;
+        int x; // the screen column of row[k][0]
+        Colour row[4][kFadeWidth];
+    };
+    static const FadeRows &fade_rows(Rgb from, Rgb to, int span, int sx0);
     static uint8_t *write_counts_;
     static uint8_t band_[kBandRows * 640];
     bool counting_ = true; // false for the scratch band
