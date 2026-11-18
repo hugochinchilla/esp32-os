@@ -1237,6 +1237,21 @@ int main(int argc, char **argv)
         check(icons.picked_count() >= 1 && icons.picked(2) && !icons.picked(0), "the rectangle on the desktop");
         click(600, 300); // the desktop itself: nothing picked
         check(icons.picked_count() == 0, "a click on the desktop itself");
+        // The desktop's menu, closed with Escape, is gone: a click where
+        // each of its entries was does nothing (asked after the board turn
+        // of 2026-11-18, where the Display dialog was once found open).
+        for (int item = 0; item < 6; item++) {
+            mouse(300, 200, 0);
+            mouse(300, 200, 2);
+            mouse(300, 200, 0);
+            check(desktop.menu_open() && desktop.popup_menu(0)->count == 6, "the desktop's menu has six entries");
+            int ix, iy;
+            centre_of(desktop.popup_item(0, item), ix, iy);
+            key(wm::key::Escape);
+            check(!desktop.menu_open(), "Escape closes the desktop's menu");
+            click(ix, iy);
+            check(desktop.window_count() == 0 && gfx::theme_index() == 0, "a click after Escape did what the menu entry does");
+        }
     }
 
     // Shut Down from the Start menu: Enter picks Shut Down, and the screen
