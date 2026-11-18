@@ -18,6 +18,10 @@ Output (default /mnt/project-files/look/sounds/beeper/):
   manifest.tsv        name, seconds and the steps of each
 
 Needs only numpy.  Run:  python3 tools/sounds/make_beeps.py [out_dir]
+
+To hear a tune of your own before it goes to C:\\.config\\chime.txt (the
+format is in docs/settings.md: "Hz ms [fade_ms [loudness]]" a line):
+  python3 tools/sounds/make_beeps.py --file chime.txt     -> chime.txt.wav
 """
 import os
 import sys
@@ -27,7 +31,8 @@ import numpy as np
 
 SR = 44100
 OVER = 8  # the square wave is made at 8 times the rate, then averaged down
-OUT = sys.argv[1] if len(sys.argv) > 1 else "/mnt/project-files/look/sounds/beeper"
+FILE = sys.argv[sys.argv.index("--file") + 1] if "--file" in sys.argv else None
+OUT = sys.argv[1] if len(sys.argv) > 1 and not FILE else "/mnt/project-files/look/sounds/beeper"
 
 
 def note(name):
@@ -253,6 +258,34 @@ def main():
             print(f"{folder}/{name}.wav  {seconds:.2f} s  {text}")
 
 
+def from_file(path):
+    """A chime.txt as the firmware reads it (sound::parse_tune) -> steps."""
+    steps = []
+    for line in open(path):
+        words = line.split("#")[0].replace(",", " ").split()
+        if not 2 <= len(words) <= 4 or not all(w.isdigit() for w in words):
+            continue
+        hz, ms, fade, level = (list(map(int, words)) + [0, 0])[:4]
+        if hz > 20000 or not 0 < ms <= 10000 or fade > 10000 or level > 255 or len(steps) >= 64:
+            continue
+        top = level / 255 if level else 1.0
+        if hz == 0 or (not fade and not level):
+            steps.append((hz, ms))
+        elif not fade:
+            steps.append((hz, ms, top))
+        else:  # as firmware/common/beeper.h: narrower every 20 ms
+            done = 0
+            while done < ms:
+                steps.append((hz, min(20, ms - done), max(0.03, top * np.exp(-done / fade))))
+                done += 20
+    return steps
+
+
 if __name__ == "__main__":
-    os.makedirs(OUT, exist_ok=True)
-    main()
+    if FILE:
+        x, path = write(FILE + ".wav", from_file(FILE))
+        save(os.path.abspath(path), x, max(1e-9, np.abs(x).max()))
+        print(path)
+    else:
+        os.makedirs(OUT, exist_ok=True)
+        main()
