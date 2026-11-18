@@ -443,6 +443,7 @@ protected:
     void set_focus(const Control &control) { os::ui::set_focus(number_, control.number()); }
     Control focus() const { return {number_, os::ui::focus(number_)}; }
     void set_title(const char *title) { os::ui::set_title(number_, title); } // must stay valid
+    void set_icon(const gfx::Bitmap *icon) { os::ui::set_icon(number_, icon); }
     // The window was opened with kMenuBar; the table must stay valid.
     void set_menu_bar(const wm::MenuBar *bar) { os::ui::set_menu_bar(number_, bar); }
     int radio_value(int group) const { return os::ui::radio_value(number_, group); }

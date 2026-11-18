@@ -5,9 +5,14 @@
 #include <string>
 
 #include "core/fs/memory_volume.hpp"
+#include "core/gfx/art.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/wm.hpp"
 #include "../host_adapters.hpp"
+
+namespace shell {
+void open_trash(); // the Trash icon's action (core/src/shell/internal.hpp)
+}
 
 static int failures = 0;
 #define CHECK(condition)                                                   \
@@ -250,6 +255,69 @@ void test_file_manager()
     CHECK(no_stale_pixels());
 }
 
+// The Trash is the File manager on C:\\.trash: the same window, which gains
+// Restore and Empty Trash there and loses them on the way out.
+void test_trash_view()
+{
+    while (desktop.active() != nullptr) {
+        desktop.close(*desktop.active());
+    }
+    const auto icon = [] { return desktop.active() != nullptr ? desktop.active()->icon() : nullptr; };
+    // "trastos" went to the Trash in test_file_manager.
+    CHECK(exists("C:\\.trash\\trastos\\inside.txt"));
+    shell::open_trash();
+    CHECK(strcmp(title(), "Trash") == 0 && icon() == &gfx::bin_icon_16());
+    // Asked for again, or as a folder: the window there is, not another.
+    shell::open_trash();
+    shell::open_folder("C:\\.trash");
+    CHECK(desktop.window_count() == 1);
+
+    // A folder window beside it is a folder window: its own icon, and the
+    // Trash is still the Trash when it is gone.
+    shell::open_folder("C:\\");
+    CHECK(desktop.window_count() == 2 && icon() == &gfx::folder_icon_16());
+    key(wm::key::F4, 4);
+    CHECK(strcmp(title(), "Trash") == 0 && icon() == &gfx::bin_icon_16() && desktop.window_count() == 1);
+    // The Trash has no Back and no Up (the owner): their keys do nothing.
+    key(wm::key::Backspace);
+    key(wm::key::Left, 4);
+    CHECK(strcmp(title(), "Trash") == 0);
+
+    // A folder in the Trash opens like any other; nothing is renamed or
+    // made in there (F2, File > New Folder greyed).
+    key(wm::key::Home);
+    key(wm::key::Enter);
+    CHECK(strcmp(title(), "trastos") == 0);
+    key(wm::key::Home);
+    key(0x3B); // F2
+    CHECK(strcmp(title(), "trastos") == 0);
+    letter('f', 4);
+    key(wm::key::Down);
+    key(wm::key::Enter); // New Folder..., greyed
+    key(wm::key::Escape);
+    CHECK(strcmp(title(), "trastos") == 0);
+    key(wm::key::Backspace); // Up, there again inside a folder of the Trash
+    CHECK(strcmp(title(), "Trash") == 0 && icon() == &gfx::bin_icon_16());
+
+    // File > Restore puts the folder back where it was.
+    key(wm::key::Home);
+    letter('f', 4);
+    letter('r');
+    CHECK(!exists("C:\\.trash\\trastos") && exists("C:\\Documents\\trastos\\inside.txt"));
+    CHECK(strcmp(title(), "Trash") == 0);
+
+    // File > Empty Trash asks, then removes it all; the window stays, empty.
+    storage.write_file("C:\\.trash\\gone.txt", "x", 1);
+    key(0x3E); // F5
+    letter('f', 4);
+    letter('e');
+    CHECK(strcmp(title(), "Empty Trash") == 0);
+    key(wm::key::Enter); // Yes
+    CHECK(!exists("C:\\.trash\\gone.txt") && strcmp(title(), "Trash") == 0);
+    CHECK(no_stale_pixels());
+    key(wm::key::F4, 4);
+}
+
 } // namespace
 
 int main()
@@ -275,6 +343,7 @@ int main()
     }
     test_editor();
     test_file_manager();
+    test_trash_view();
     if (failures == 0) {
         printf("all tests passed\n");
     }

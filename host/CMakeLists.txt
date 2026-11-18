@@ -119,6 +119,11 @@ add_test(NAME cactus_pictures
 add_executable(test_snake tests/test_snake.cpp)
 target_link_libraries(test_snake PRIVATE core Threads::Threads)
 add_test(NAME snake COMMAND test_snake)
+# Chess: the rules against the published move counts, and the engine.
+add_executable(test_chess tests/test_chess.cpp)
+target_link_libraries(test_chess PRIVATE core)
+target_compile_options(test_chess PRIVATE -O2)
+add_test(NAME chess COMMAND test_chess)
 add_executable(test_saver tests/test_saver.cpp)
 target_link_libraries(test_saver PRIVATE core)
 add_test(NAME saver COMMAND test_saver)
@@ -154,6 +159,9 @@ add_program(hello ../programs/hello/hello.cpp)
 # system also has them built in.
 add_program(culebra ../programs/culebra/culebra.cpp)
 add_program(cactus_patch ../programs/cactus_patch/cactus_patch.cpp)
+# Not a program of the system: the chess engine's measuring program for
+# board checks (tools/bench/chess_bench), built here so that it stays whole.
+add_program(chess_bench ../tools/bench/chess_bench/chess_bench.cpp)
 add_executable(test_loaded tests/test_loaded.cpp)
 target_link_libraries(test_loaded PRIVATE core ${CMAKE_DL_LIBS} Threads::Threads)
 set_target_properties(test_loaded PROPERTIES ENABLE_EXPORTS ON)

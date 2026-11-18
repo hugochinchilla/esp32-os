@@ -11,6 +11,7 @@ set(CORE_SRCS
     src/fs/memory_volume.cpp
     src/fs/sample_pictures.cpp
     src/games/cactus.cpp
+    src/games/chess.cpp
     src/games/snake.cpp
     src/image/blue_noise.cpp
     src/image/bmp.cpp
@@ -108,7 +109,7 @@ if(ESP_PLATFORM)
     # backlog item 27; the owner's choice, 2026-11-17): built by themselves,
     # carried by the firmware as data and installed in C:\Programs. They
     # are not part of this library there; on the PC they are.
-    list(REMOVE_ITEM CORE_SRCS src/games/cactus.cpp src/games/snake.cpp src/shell/cactus_patch.cpp
+    list(REMOVE_ITEM CORE_SRCS src/games/cactus.cpp src/games/chess.cpp src/games/snake.cpp src/shell/cactus_patch.cpp
          src/shell/culebra.cpp)
     idf_component_register(SRCS ${CORE_SRCS} INCLUDE_DIRS "include" LDFRAGMENTS "linker.lf")
     target_compile_definitions(${COMPONENT_LIB} PUBLIC CHINCHILLA_GAMES_IN_FILES=1)
@@ -119,3 +120,6 @@ add_library(core STATIC ${CORE_SRCS})
 target_include_directories(core PUBLIC include)
 target_compile_features(core PUBLIC cxx_std_17)
 target_compile_options(core PRIVATE -Wall -Wextra -Woverloaded-virtual -Werror -fno-exceptions -fno-rtti)
+# The chess engine's tests look at millions of positions: optimised even in
+# the PC's checked build, where everything else is not.
+set_source_files_properties(src/games/chess.cpp PROPERTIES COMPILE_OPTIONS "-O2")

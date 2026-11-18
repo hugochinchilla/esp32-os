@@ -247,3 +247,34 @@ for the relay. By then `main` had moved and the branch no longer merged:
 The PC tests pass (47) and the firmware compiles and links. This merge has
 not run on the board.
 
+## A page from the File manager stopped the board (2026-11-18)
+
+The board turn on the merged branch (f6be44c) passed four checks and failed
+one: a double click on `C:\Programs\test.htm` (131 bytes) in the File
+manager ended in "A stack overflow in task File manager has been detected".
+The report is in `C:\crash.txt`.
+
+Why: `open_browser(path)` made the window and read the page where it was
+called, and since item 26 the File manager runs on a task of its own. The
+page was read, laid out and its address handled on the File manager's
+stack, which has no room for that; and Vizcacha, with no task of its own,
+would have gone on running on whoever started it. The first board turn did
+not see it because it opened the browser from the Start menu, on the UI
+task and its 16 KB.
+
+The fix, the one the Picture viewer and the Editor already had:
+
+- `open_browser` hands the opening over with `in_program("Vizcacha", ...)`,
+  the path by value (`PathArg`).
+- Vizcacha has a task of its own, like every other program now, with 12 KB
+  of stack. That figure is a guess: addresses are 600 bytes and several
+  lie on the stack at once (a link resolved, a form submitted, a moved
+  site). The board measures what is never used and it is trimmed then.
+
+Tested on the simulator, which has program tasks: a page double-clicked in
+a File manager window opens in a window that belongs to Vizcacha's process,
+and from a desktop icon too. The simulator's stacks are the PC's, so it
+cannot show whether 12 KB is enough: only the board can. The PC tests pass
+(48) and the firmware compiles and links; this state has not run on the
+board.
+

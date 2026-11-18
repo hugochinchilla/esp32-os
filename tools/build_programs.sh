@@ -6,6 +6,9 @@
 #
 #   tools/build_programs.sh                    # build
 #   tools/build_programs.sh <firmware build>   # and check against the firmware
+#   EXTRA_PROGRAMS="tools/bench/chess_bench/" tools/build_programs.sh ...
+#                                              # and programs kept elsewhere
+#                                              # (folders, from the repository)
 #
 # With the firmware's build folder it also checks that everything each
 # program asks the system for by name is in the firmware's table of exports
@@ -23,7 +26,11 @@ OBJCOPY="${OBJCOPY:-xtensa-esp32s3-elf-objcopy}"
 OUT="${PROGRAMS_OUT:-$HERE/build/programs}"
 mkdir -p "$OUT"
 built=""
-for dir in "$HERE"/programs/*/; do
+extra=""
+for dir in $EXTRA_PROGRAMS; do
+    extra="$extra $HERE/${dir%/}/"
+done
+for dir in "$HERE"/programs/*/ $extra; do
     name="$(basename "$dir")"
     # The flags Espressif's loader asks for (elf_loader.cmake, project_elf):
     # position independent, nothing of the libraries linked in, the way in

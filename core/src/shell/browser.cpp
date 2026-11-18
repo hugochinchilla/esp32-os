@@ -1089,28 +1089,34 @@ private:
 
 void open_browser(const char *address)
 {
-    const AsProgram as(kName);
-    if (!app::bring_forward(g_browser)) {
-        app::Look look;
-        look.title = kName;
-        look.width = 600;
-        look.height = 420;
-        look.icon = &gfx::browser_icon_16();
-        look.flags = app::kMenuBar;
-        g_browser = app::open<BrowserWindow>(look);
-        if (g_browser == app::kNone) {
-            no_memory_for(kName);
-            return;
+    // On the browser's own task where it has one: whoever asks (the File
+    // manager, with a page on a drive) lends neither its process nor its
+    // stack to the reading of a page.
+    const PathArg given(address);
+    in_program(kName, [given] {
+        const char *address = given.get();
+        if (!app::bring_forward(g_browser)) {
+            app::Look look;
+            look.title = kName;
+            look.width = 600;
+            look.height = 420;
+            look.icon = &gfx::browser_icon_16();
+            look.flags = app::kMenuBar;
+            g_browser = app::open<BrowserWindow>(look);
+            if (g_browser == app::kNone) {
+                no_memory_for(kName);
+                return;
+            }
+            if (address == nullptr) {
+                address = kHome;
+            }
         }
-        if (address == nullptr) {
-            address = kHome;
+        if (address != nullptr) {
+            if (BrowserWindow *w = app::program<BrowserWindow>(g_browser)) {
+                w->open_typed(address);
+            }
         }
-    }
-    if (address != nullptr) {
-        if (BrowserWindow *w = app::program<BrowserWindow>(g_browser)) {
-            w->open_typed(address);
-        }
-    }
+    });
 }
 
 void open_browser_home() { open_browser(nullptr); }
