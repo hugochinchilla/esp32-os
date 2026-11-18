@@ -2697,7 +2697,7 @@ Chosen by the agent, to confirm:
 - New OS call: `os::ui::set_icon` (`app::Window::set_icon`), since a
   window's icon was fixed when it was made.
 
-### The mouse wheel (2026-11-18, the owner's request; the choices are the agent's, to confirm)
+### The mouse wheel (2026-11-18, the owner's request; the agent's choices, which the owner approved the same day)
 
 Journal: `docs/journal/2026-11-18-mouse-wheel.md`. Backlog item 61.
 
