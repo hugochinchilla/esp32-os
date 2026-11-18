@@ -99,5 +99,36 @@ constexpr app::Ink kCactus32Inks[] = {
     {'D', rgb(4, 2, 0)},
 };
 
+// Chess: the knight of the game's Contour set, drawn small by the same
+// script (tools/mockup/chess_pieces.py icon).
+constexpr const char *kChess16[16] = {
+    "................", "................", "......KK........", ".....KKKKK......",
+    ".....KWWWK......", "....KKWWWKK.....", "...KKWWWWWKK....", "...KWWWWWWWK....",
+    "...KKKKWWWWK....", "......KWWWWKK...", ".....KKWWWWWK...", ".....KWWWWWKK...",
+    "....KKWWWWWK....", "...KKWWWWWWKK...", "....KKKKKKKK....", "................",
+};
+constexpr const char *kChess32[32] = {
+    "................................", "................................",
+    "................................", "..............K.................",
+    "...........KK.KK................", "...........KKKKK................",
+    "...........KWWWKKKK.............", "..........KKWWWWWWKK............",
+    "..........KWWWWWWWWK............", ".........KKWWWWWWWWKK...........",
+    ".........KWWWWWWWWWWKKK.........", "........KKWWWWWWWWWWWWK.........",
+    ".......KKWWWWWWWWWWWWWK.........", ".......KWWWWWWWWWWWWWWKK........",
+    "......KKWWWWKKKWWWWWWWWKK.......", "......KWWWWKK.KWWWWWWWWWK.......",
+    "......KKWWKK.KKWWWWWWWWWK.......", ".......KKKK.KKWWWWWWWWWWK.......",
+    "............KWWWWWWWWWWWK.......", "...........KKWWWWWWWWWWWKK......",
+    "...........KWWWWWWWWWWWWK.......", "..........KKWWWWWWWWWWWWK.......",
+    "..........KWWWWWWWWWWWWWK.......", ".........KKWWWWWWWWWWWKKK.......",
+    ".........KWWWWWWWWWWWWK.........", ".........KWWWWWWWWWWWWK.........",
+    ".......KKKWWWWWWWWWWWWKKK.......", ".......KWWWWWWWWWWWWWWWWK.......",
+    ".......KKKKKKKKKKKKKKKKKK.......", "................................",
+    "................................", "................................",
+};
+constexpr app::Ink kChessInks[] = {
+    {'K', rgb(0, 0, 0)},
+    {'W', rgb(7, 7, 3)},
+};
+
 } // namespace game_art
 } // namespace gfx

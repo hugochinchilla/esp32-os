@@ -77,6 +77,11 @@ public:
     // Changes how a task stands against the desktop (a program that has
     // stopped answering goes to Low until it answers again).
     virtual void set_priority(TaskId, Priority) {}
+    // Any task. The calling task gives the processor away for about `ms`
+    // (at least one turn of the scheduler): what a long piece of work at
+    // low priority does now and then so that the kernel's idle tasks get
+    // their turn. Nothing where there are no tasks.
+    virtual void rest(uint32_t /*ms*/) {}
     // Takes away a task whose fn has not returned (a program that hangs).
     // True if it is gone and its stack given back: end() is then not called.
     // False where a task cannot be taken away (a thread of the PC): it is

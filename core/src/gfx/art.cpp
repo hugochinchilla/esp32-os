@@ -788,6 +788,20 @@ const Bitmap &cactus_icon_16()
     return bitmap;
 }
 
+const Bitmap &chess_icon_32()
+{
+    static constexpr Pixels<32> pixels = paint<32>(game_art::kChess32, game_art::kChessInks);
+    static constexpr Bitmap bitmap = {32, 32, pixels.p, kClear};
+    return bitmap;
+}
+
+const Bitmap &chess_icon_16()
+{
+    static constexpr Pixels<16> pixels = paint<16>(game_art::kChess16, game_art::kChessInks);
+    static constexpr Bitmap bitmap = {16, 16, pixels.p, kClear};
+    return bitmap;
+}
+
 const Bitmap &network_icon_32()
 {
     static constexpr const char *rows[32] = {
@@ -1199,6 +1213,24 @@ const Bitmap &run_icon_16()
         {'W', rgb(0, 0, 2)},
         {'B', rgb(5, 5, 2)},
         {'S', rgb(7, 7, 3)},
+    };
+    static constexpr Pixels<16> pixels = paint<16>(rows, inks);
+    static constexpr Bitmap bitmap = {16, 16, pixels.p, kClear};
+    return bitmap;
+}
+
+const Bitmap &browser_icon_16()
+{
+    static constexpr const char *rows[16] = {
+        "....KKKKKKKK....", "..KKBBGGBBBBKK..", ".KBBGGGGBBBBBBK.", ".KBGGGGGGBBBBBK.",
+        "KBBGGGGGBBBBGGBK", "KBBBGGGBBBBGGGBK", "KBBBBGBBBBBGGGBK", "KBBBBBBBBBBBGGBK",
+        "KBBBBBBGGBBBBBBK", "KBBBBBGGGGBBBBBK", "KBBBBBGGGGGBBBBK", ".KBBBBBGGGBBBBK.",
+        ".KBBBBBBGGBBBBK.", "..KKBBBBBBBBKK..", "....KKKKKKKK....", "................",
+    };
+    static constexpr Ink inks[] = {
+        {'K', rgb(0, 0, 0)},
+        {'B', rgb(1, 3, 3)},
+        {'G', rgb(1, 5, 1)},
     };
     static constexpr Pixels<16> pixels = paint<16>(rows, inks);
     static constexpr Bitmap bitmap = {16, 16, pixels.p, kClear};

@@ -30,6 +30,7 @@
 #endif
 
 #include "core/init/init.hpp"
+#include "core/os/tcp.hpp"
 #include "core/fs/fs.hpp"
 #include "core/fs/samples.hpp"
 #include "core/gfx/art.hpp"
@@ -40,6 +41,11 @@
 #include "../folder_volume.hpp"
 #include "../host_adapters.hpp"
 #include "screen.hpp"
+#ifdef __EMSCRIPTEN__
+#include "web_dialer.hpp"
+#else
+#include "core/net/posix_dialer.hpp"
+#endif
 
 namespace {
 
@@ -547,6 +553,14 @@ void Machine::start()
 
     // No Wi-Fi: the Network panel says it is not available. The clock is
     // the PC's.
+    // Programs reach the internet all the same (os::tcp): through the PC's
+    // own sockets, or in a web page through the relay (web_dialer.hpp).
+#ifdef __EMSCRIPTEN__
+    static host::WebDialer dialer;
+#else
+    static net::PosixDialer dialer;
+#endif
+    os::install_dialer(&dialer);
     // init is PID 1 and starts the desktop from C:\.config\startup.txt, as
     // on the board.
     static init::Init init_process(proc::table());

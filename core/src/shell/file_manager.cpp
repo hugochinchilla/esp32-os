@@ -769,7 +769,7 @@ void open_folder(const char *path)
 }
 
 // What opens what, by extension: 1 the Editor, 2 the Picture viewer, 3 a
-// program that is loaded and run, 0 nothing.
+// program that is loaded and run, 4 the web browser, 0 nothing.
 static int program_kind(const char *path)
 {
     static const char *const kText[] = {"txt", "log", "ini", "md"};
@@ -788,6 +788,9 @@ static int program_kind(const char *path)
         if (strcmp(ext, e) == 0) {
             return 2;
         }
+    }
+    if (strcmp(ext, "htm") == 0 || strcmp(ext, "html") == 0) {
+        return 4;
     }
     return 0;
 }
@@ -813,6 +816,9 @@ bool open_file(const char *path)
         }
         return true;
     }
+    case 4:
+        open_browser(path);
+        return true;
     default:
         break;
     }

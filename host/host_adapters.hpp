@@ -239,6 +239,11 @@ public:
     }
     void end(ports::TaskId) override { ended++; }
     void set_priority(ports::TaskId, ports::Priority priority) override { last_priority = priority; }
+    void rest(uint32_t ms) override
+    {
+        rests++;
+        std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+    }
     // Live while the thread runs; what it had used at its end afterwards.
     uint64_t run_time_us(ports::TaskId task) override
     {
@@ -279,6 +284,7 @@ public:
 
     bool refuse = false; // "no memory for the stack"
     int started = 0;
+    std::atomic<int> rests{0}; // rest() calls, from the tasks themselves
     int ended = 0; // end() calls: one for every task, once its job is over
     ports::Priority last_priority = ports::Priority::Normal;
 
