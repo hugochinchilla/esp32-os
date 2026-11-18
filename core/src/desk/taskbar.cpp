@@ -78,6 +78,7 @@ Rect Taskbar::button(int index) const
     int w = kButtonW;
     if (shown > 0 && shown * (kButtonW + kButtonGap) > room) {
         w = room / shown - kButtonGap;
+        w = w < 4 ? 4 : w; // with very many windows the last buttons are off the bar
     }
     return {buttons_x() + index * (w + kButtonGap), ty + 4, w, 22};
 }
@@ -213,31 +214,47 @@ void Taskbar::paint(const gfx::RectList &clip)
     const Rect bar = wm_.taskbar();
     const int ty = bar.y;
     Canvas screen = wm_.canvas(clip, bar);
+    const gfx::Theme &t = gfx::theme();
+    const bool flat = t.flat();
     screen.layered(bar, [&](Canvas &c) {
-    c.fill(bar, gfx::kGrey);
-    c.hline(0, ty + 1, bar.w, gfx::kWhite);
+    // Bevelled: the face colour with a light line along the top, and every
+    // button a button. Flat: the bar, the Start button and the windows'
+    // buttons each in a colour of the theme, with no edges.
+    c.fill(bar, flat ? t.bar : t.face);
+    if (flat) {
+        c.hline(0, ty, bar.w, t.bar_line);
+    } else {
+        c.hline(0, ty + 1, bar.w, gfx::kWhite);
+    }
 
     // Start button: the mascot and "Start", pressed in while its menu is open.
     const Rect start = button(-1);
     const bool start_in = wm_.start_menu_open() || (held_ && held_index_ == -1 && held_inside_);
-    c.button(start, start_in ? ButtonLook::Pressed : ButtonLook::Raised);
+    if (flat) {
+        c.fill(start, start_in ? t.task_on : t.start);
+    } else {
+        c.button(start, start_in ? ButtonLook::Pressed : ButtonLook::Raised);
+    }
     const int sd = start_in ? 1 : 0;
     c.blit(gfx::mascot_16(), 5 + sd, ty + 7 + sd);
-    c.text(25 + sd, ty + 9 + sd, "Start", gfx::kBlack, true);
+    c.text(25 + sd, ty + 9 + sd, "Start", flat ? (start_in ? t.task_on_ink : t.start_ink) : t.ink, true);
 
     // A groove, then the quick-launch icons if there are any (flat, pressed
-    // in while held), another groove, then the window buttons.
-    c.vline(kButtonsX - 4, ty + 5, 20, gfx::kDarkGrey);
-    c.vline(kButtonsX - 3, ty + 5, 20, gfx::kWhite);
+    // in while held), another groove, then the window buttons. A flat theme
+    // has no grooves.
+    if (!flat) {
+        c.vline(kButtonsX - 4, ty + 5, 20, gfx::kDarkGrey);
+        c.vline(kButtonsX - 3, ty + 5, 20, gfx::kWhite);
+    }
     for (int i = 0; i < quick_count_; i++) {
         const Rect r = quick_launch_rect(i);
         const bool held = held_ && held_index_ == kQuickIndex - i && held_inside_;
         if (held) {
-            c.edge(r, gfx::kDarkGrey, gfx::kWhite);
+            c.dent(r);
         }
         c.blit(*quick_[i].icon, r.x + 3 + (held ? 1 : 0), r.y + 3 + (held ? 1 : 0));
     }
-    if (quick_count_ > 0) {
+    if (quick_count_ > 0 && !flat) {
         c.vline(buttons_x() - 4, ty + 5, 20, gfx::kDarkGrey);
         c.vline(buttons_x() - 3, ty + 5, 20, gfx::kWhite);
     }
@@ -251,29 +268,39 @@ void Taskbar::paint(const gfx::RectList &clip)
         const bool held = held_ && held_index_ == i && held_inside_;
         const bool owns_active = active != nullptr && active->modal_owner() == &w;
         const bool on = (active == &w || owns_active) && w.state() != wm::WindowState::Minimized;
-        c.button(r, on ? ButtonLook::Checked : (held ? ButtonLook::Pressed : ButtonLook::Raised));
-        const int d = (on || held) ? 1 : 0;
+        if (flat) {
+            // A block with a line two pixels thick along its bottom.
+            const bool lit = on || held;
+            c.fill({r.x, r.y, r.w, r.h - 2}, lit ? t.task_on : t.task);
+            c.fill({r.x, r.bottom() - 2, r.w, 2}, lit ? t.task_on_line : t.task_line);
+        } else {
+            c.button(r, on ? ButtonLook::Checked : (held ? ButtonLook::Pressed : ButtonLook::Raised));
+        }
+        const int d = (on || held) && !flat ? 1 : 0;
         Canvas inner = c.sub(r.inset(3));
         if (w.icon() != nullptr) {
             inner.blit(*w.icon(), 1 + d, 0 + d);
         }
-        inner.text(21 + d, 2 + d, w.title(), gfx::kBlack, on);
+        inner.text(21 + d, 2 + d, w.title(), flat ? (on || held ? t.task_on_ink : t.bar_ink) : t.ink, on);
     }
 
-    // The clock, 12-hour as in the target picture.
+    // The clock, 12-hour as in the target picture. Bevelled: in a dent,
+    // with the tray icon if there is one.
     const Rect clock = clock_rect();
     if (tray_icon_ != nullptr) {
         const Rect icon = tray_icon_rect();
-        c.edge({icon.x, clock.y, kTrayW + kClockW, clock.h}, gfx::kDarkGrey, gfx::kWhite);
+        if (!flat) {
+            c.dent({icon.x, clock.y, kTrayW + kClockW, clock.h});
+        }
         c.blit(*tray_icon_, icon.x + 3, icon.y + 3);
-    } else {
-        c.edge(clock, gfx::kDarkGrey, gfx::kWhite);
+    } else if (!flat) {
+        c.dent(clock);
     }
     int h, m, s;
     wm_.get_time(h, m, s);
     char time[12];
     snprintf(time, sizeof(time), "%d:%02d %s", h % 12 == 0 ? 12 : h % 12, m, h < 12 ? "AM" : "PM");
-    c.text(clock.x + (kClockW - Canvas::text_width(time)) / 2, ty + 9, time, gfx::kBlack);
+    c.text(clock.x + (kClockW - Canvas::text_width(time)) / 2, ty + 9, time, flat ? t.bar_ink : t.ink);
     });
 }
 

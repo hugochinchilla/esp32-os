@@ -15,11 +15,10 @@ using gfx::RectList;
 
 namespace {
 
-// Colours from tools/mockup/desktop.py (98 style).
-constexpr Rgb kActiveFrom = {0, 0, 128}, kActiveTo = {16, 132, 208};
-constexpr Rgb kInactiveFrom = {128, 128, 128}, kInactiveTo = {192, 192, 192};
-constexpr Rgb kHighlight = {0, 0, 128};                         // chosen menu item
-constexpr Rgb kBannerTop = {0, 0, 48}, kBannerBottom = {16, 100, 190}; // Start menu
+// The fade of the Start menu's banner in the classic look (from
+// tools/mockup/desktop.py, 98 style). The title bars' colours are the
+// theme's (core/gfx/theme.hpp).
+constexpr Rgb kBannerTop = {0, 0, 48}, kBannerBottom = {16, 100, 190};
 
 const char *const kCloseGlyph[] = {"XX    XX", " XX  XX ", "  XXXX  ", "   XX   ",
                                    "  XXXX  ", " XX  XX ", "XX    XX"};
@@ -29,6 +28,13 @@ const char *const kRestoreGlyph[] = {"  XXXXXX", "  XXXXXX", "  X    X", "XXXXXX
                                      "X    XXX", "X    X  ", "X    X  ", "XXXXXX  "};
 const char *const kMinGlyph[] = {"      ", "      ", "      ", "      ",
                                  "      ", "      ", "XXXXXX", "XXXXXX"};
+// The same three for the flat themes, lighter: they sit on the bar or on a
+// small tile with no button under them.
+const char *const kFlatMaxGlyph[] = {"XXXXXXXXX", "XXXXXXXXX", "X       X", "X       X",
+                                     "X       X", "X       X", "X       X", "XXXXXXXXX"};
+const char *const kFlatRestoreGlyph[] = {"  XXXXXXX", "  X     X", "XXXXXXX X", "X     X X", "X     X X",
+                                         "X     XXX", "X     X  ", "XXXXXXX  "};
+const char *const kFlatMinGlyph[] = {"XXXXXXX", "XXXXXXX"};
 const char *const kCheckGlyph[] = {"      X", "     XX", "X   XXX", "XX XXX ",
                                    "XXXXX  ", " XXX   ", "  X    "};
 const char *const kArrowGlyph[] = {"X   ", "XX  ", "XXX ", "XXXX", "XXX ", "XX  ", "X   "};
@@ -179,13 +185,41 @@ Window *Wm::topmost_visible() const
     return nullptr;
 }
 
+// Room in the two lists for another window: twice the room, in one block,
+// when they are full. False: there is no memory for it.
+bool Wm::room_for_one_more()
+{
+    if (count_ < room_) {
+        return true;
+    }
+    if (memory_ == nullptr) {
+        return false;
+    }
+    const int room = room_ * 2;
+    auto **block = static_cast<Window **>(memory_->allocate(2 * room * sizeof(Window *)));
+    if (block == nullptr) {
+        return false;
+    }
+    for (int i = 0; i < count_; i++) {
+        block[i] = stack_[i];
+        block[room + i] = order_[i];
+    }
+    if (stack_ != first_stack_) {
+        memory_->release(stack_);
+    }
+    stack_ = block;
+    order_ = block + room;
+    room_ = room;
+    return true;
+}
+
 void Wm::add(Window &w)
 {
     if (w.wm_ == this) {
         activate(w);
         return;
     }
-    if (count_ == kMaxWindows || w.wm_ != nullptr) {
+    if (w.wm_ != nullptr || !room_for_one_more()) {
         return;
     }
     keep(w); // open again before it was disposed of
@@ -196,6 +230,7 @@ void Wm::add(Window &w)
     w.owner_ = current_pid();
     if (procs_ != nullptr) {
         procs_->set_state(w.owner_, proc::State::Running); // not on its way out after all
+        procs_->opened_window(w.owner_);
     }
     w.state_ = WindowState::Normal;
     stack_[count_] = &w;
@@ -225,6 +260,18 @@ void Wm::close(Window &w)
         }
     }
     count_--;
+    if (stack_ != first_stack_ && count_ <= kFirstWindows) {
+        // Few enough again for the lists it began with: the block goes back.
+        Window **block = stack_;
+        for (int i = 0; i < count_; i++) {
+            first_stack_[i] = stack_[i];
+            first_order_[i] = order_[i];
+        }
+        stack_ = first_stack_;
+        order_ = first_order_;
+        room_ = kFirstWindows;
+        memory_->release(block);
+    }
     if (drop_window_ == &w) {
         drop_window_ = nullptr;
     }
@@ -259,6 +306,8 @@ void Wm::close(Window &w)
             procs_->set_state(w.owner_, proc::State::Exiting);
         }
     }
+    // The pointer may have been an hourglass over it.
+    update_pointer_shape();
     // A window that lives only while open is destroyed at the safe point,
     // unless closed() has opened it again.
     discard(w);
@@ -297,20 +346,33 @@ void Wm::dispose_closed()
 {
     // The windows of a process with a job running are left for a later safe
     // point: the job may be reading what they hold.
-    Window *held[kMaxWindows];
-    int held_count = 0;
+    Window *held = nullptr;
     while (closed_ != nullptr) {
         Window &w = *closed_;
         keep(w);
-        if (procs_ != nullptr && procs_->jobs(w.owner_) > 0 && held_count < kMaxWindows) {
-            held[held_count++] = &w;
+        if (procs_ != nullptr && procs_->jobs(w.owner_) > 0) {
+            if (!w.held_) { // once, though it may be opened and closed again meanwhile
+                w.held_ = true;
+                w.next_held_ = held;
+                held = &w;
+            }
             continue;
         }
         for (int z = count_ - 1; z >= 0; z--) {
-            if (stack_[z]->modal_owner_ == &w) {
-                close(*stack_[z]); // its closed() runs while `w` still exists
-                z = count_;
+            if (stack_[z]->modal_owner_ != &w) {
+                continue;
             }
+            if (stack_[z]->owner_ != w.owner_) {
+                // Another program's message that came up over this window
+                // (the Run dialog starts a program that has something to
+                // say, and is gone a moment later): it is not this
+                // window's to take along. It stands alone from here on.
+                stack_[z]->modal_owner_ = nullptr;
+                tell_panels(PanelNews::Windows);
+                continue;
+            }
+            close(*stack_[z]); // its closed() runs while `w` still exists
+            z = count_;
         }
         if (w.wm_ != nullptr || w.waiting_dispose_) {
             continue; // opened again by one of them, or closed again: later
@@ -325,8 +387,12 @@ void Wm::dispose_closed()
         }
         w.dispose_(w);
     }
-    for (int i = 0; i < held_count; i++) {
-        discard(*held[i]); // nothing happens to one that was opened again
+    while (held != nullptr) {
+        Window &w = *held;
+        held = w.next_held_;
+        w.next_held_ = nullptr;
+        w.held_ = false;
+        discard(w); // nothing happens to one that was opened again
     }
 }
 
@@ -410,6 +476,15 @@ void Wm::reap()
         if (!p.is(proc::kWindowed) || windows_of(p.pid) != 0 || p.jobs > 0) {
             continue; // one with a job running waits for it (proc::Table::job_started)
         }
+        if (!p.is(proc::kOpened) && procs_->busy(p.pid)) {
+            // Late in a call on its own task before it has opened any
+            // window: it is still starting (a large folder being listed),
+            // not finished. Ending it here took its task away in the
+            // middle and lost what it had asked for. It is looked at again
+            // when it has come back; End Task still ends it. One that
+            // hangs after its last window was closed is ended as before.
+            continue;
+        }
         end_process(p.pid);
     }
     dispose_closed();
@@ -466,19 +541,23 @@ bool Wm::deliver_signals()
 // TERM: the close button of every window of the process that has one.
 void Wm::ask_to_close(proc::Pid pid)
 {
-    Window *windows[kMaxWindows];
-    int n = 0;
-    for (int i = 0; i < count_; i++) {
-        Window *w = order_[i];
-        if (w->owner_ == pid && !(w->modal_ && w->modal_owner_ != nullptr)) {
-            windows[n++] = w;
+    // Those open now, oldest first, by their numbers: asking one may close
+    // others, or open new ones, which are not asked.
+    const int newest = next_id_;
+    for (int asked = 0;;) {
+        Window *next = nullptr;
+        for (int i = 0; i < count_; i++) {
+            Window *w = order_[i];
+            if (w->owner_ == pid && !(w->modal_ && w->modal_owner_ != nullptr) && w->id_ > asked && w->id_ < newest &&
+                (next == nullptr || w->id_ < next->id_)) {
+                next = w;
+            }
         }
-    }
-    for (int i = 0; i < n; i++) {
-        Window &w = *windows[i];
-        if (w.wm_ != this) {
-            continue; // closed by one asked before it
+        if (next == nullptr) {
+            break;
         }
+        Window &w = *next;
+        asked = w.id_;
         // As a click on the close button would, the window comes to the
         // front first: a question the program asks is then its own (a
         // message box belongs to the window in use). One busy with a dialog
@@ -512,7 +591,8 @@ void Wm::end_process(proc::Pid pid)
             break;
         }
     }
-    for (int tries = 0; tries < 2 * kMaxWindows; tries++) {
+    const int most = 2 * count_ + 2;
+    for (int tries = 0; tries < most; tries++) {
         Window *top = nullptr;
         for (int z = count_ - 1; z >= 0 && top == nullptr; z--) {
             top = stack_[z]->owner_ == pid ? stack_[z] : nullptr;
@@ -590,6 +670,7 @@ void Wm::minimize(Window &w)
             activate(*next);
         }
     }
+    update_pointer_shape(); // it may have been an hourglass over it
 }
 
 void Wm::restore(Window &w)
@@ -1548,18 +1629,20 @@ void Wm::on_release()
 void Wm::update_pointer_shape()
 {
     uint8_t edges = 0;
-    bool over_locked = false; // a busy window: the hourglass, except on its borders
+    bool over_locked = false; // a locked window: the hourglass, except on its borders
+    bool over_thinking = false; // one that asked for the hourglass: over its client area
     if (capture_ == Capture::Resize) {
         edges = resize_edges_;
     } else if (capture_ == Capture::None && !menu_open()) {
         if (Window *w = window_under(pointer_x_, pointer_y_)) {
             edges = edges_at(*w, pointer_x_, pointer_y_);
             over_locked = w->locked_ && edges == 0;
+            over_thinking = w->hourglass_ && part_at(*w, pointer_x_, pointer_y_) == Part::Client;
         }
     }
     const video::PointerShape *shape = &video::arrow_pointer();
     const bool horizontal = edges & (kLeft | kRight), vertical = edges & (kTop | kBottom);
-    if (waiting_ > 0 || over_locked) {
+    if (waiting_ > 0 || over_locked || over_thinking) {
         shape = &video::busy_pointer();
     } else if (horizontal && vertical) {
         const bool falling = (edges & kLeft) == ((edges & kTop) ? kLeft : 0);
@@ -1767,6 +1850,9 @@ void Wm::open_start_menu()
     }
     close_menus();
     const proc::Scope as(procs_, owner_of(PanelPlace::Bar));
+    if (start_opening_ != nullptr) {
+        start_opening_(start_opening_context_);
+    }
     open_popup(*start_menu_, 0, height_ - kTaskbarHeight, true, false);
     start_open_ = true;
     tell_panels(PanelNews::Menu);
@@ -2083,6 +2169,14 @@ void Wm::set_backdrop(const Backdrop &backdrop)
     invalidate({0, 0, width_, height_});
 }
 
+void Wm::set_theme(int index)
+{
+    if (index != gfx::theme_index()) {
+        gfx::use_theme(index);
+        invalidate({0, 0, width_, height_});
+    }
+}
+
 void Wm::fill_backdrop(Canvas &c, const Rect &r) const
 {
     bool plain = true;
@@ -2128,32 +2222,45 @@ void Wm::paint_window(Window &w, const RectList &clip)
 
 void Wm::paint_frame(Canvas &c, Window &w)
 {
+    const gfx::Theme &t = gfx::theme();
     const Rect &f = w.frame_;
     const int b = Window::kBorder;
     const Rect title = {f.x + b, f.y + b, f.w - 2 * b, Window::kTitleHeight};
-    // Each pixel once: the grey border inside the two-pixel edge, around the
+    const bool active = active_ == &w;
+    // Each pixel once: the border inside the two-pixel edge, around the
     // title bar, client area and menu bar; the fade around the buttons.
     static RectList parts; // ponytail: one UI task
     parts.set(f.inset(2));
     parts.subtract(w.client());
     parts.subtract(title);
     parts.subtract(w.menu_bar_rect());
+    if (t.flat()) {
+        // One line around the window, the rest of the border in the
+        // frame's colour.
+        const gfx::Colour frame = active ? t.frame_on : t.frame_off, rim = active ? t.rim_on : t.rim_off;
+        for (int i = 0; i < parts.size(); i++) {
+            c.fill(parts[i], frame);
+        }
+        c.edge(f, rim, rim);
+        c.edge(f.inset(1), frame, frame);
+        c.layered(title, [&](Canvas &c) { paint_flat_title(c, w, title, active); });
+        return;
+    }
     for (int i = 0; i < parts.size(); i++) {
-        c.fill(parts[i], gfx::kGrey);
+        c.fill(parts[i], t.face);
     }
     c.raised(f);
 
-    const bool active = active_ == &w;
     // The title bar in one pass: fade, icon, title and buttons layered in a
     // scratch band, each screen pixel written once.
     c.layered(title, [&](Canvas &c) {
-    c.fill_fade(title, active ? kActiveFrom : kInactiveFrom, active ? kActiveTo : kInactiveTo);
+    c.fill_fade(title, active ? t.title_from : t.title_off_from, active ? t.title_to : t.title_off_to);
     if (w.icon_ != nullptr) {
         c.blit(*w.icon_, f.x + 5, f.y + 6);
     }
     const Rect first = title_button(w, w.dialog_ ? Part::Close : Part::Minimize);
     Canvas text = c.sub({title.x, title.y, first.x - 2 - title.x, title.h});
-    text.text(22, 3, w.title_, active ? gfx::kWhite : gfx::kGrey, true);
+    text.text(22, 3, w.title_, active ? t.title_ink_on : t.title_ink_off, true);
 
     for (Part p : {Part::Close, Part::Maximize, Part::Minimize}) {
         const Rect r = title_button(w, p);
@@ -2165,7 +2272,7 @@ void Wm::paint_frame(Canvas &c, Window &w)
         c.button(r, held ? ButtonLook::Pressed : ButtonLook::Raised);
         const int d = held ? 1 : 0;
         // A window that cannot be resized shows its maximise button greyed.
-        const gfx::Colour ink = (p == Part::Maximize && !w.resizable_) ? gfx::kDarkGrey : gfx::kBlack;
+        const gfx::Colour ink = (p == Part::Maximize && !w.resizable_) ? t.title_dim : t.ink;
         if (p == Part::Close) {
             c.pattern(r.x + 4 + d, r.y + 3 + d, kCloseGlyph, 7, ink);
         } else if (p == Part::Maximize) {
@@ -2173,7 +2280,7 @@ void Wm::paint_frame(Canvas &c, Window &w)
                 c.pattern(r.x + 4 + d, r.y + 3 + d, kRestoreGlyph, 9, ink);
             } else {
                 if (!w.resizable_) {
-                    c.pattern(r.x + 5, r.y + 4, kMaxGlyph, 9, gfx::kWhite);
+                    c.pattern(r.x + 5, r.y + 4, kMaxGlyph, 9, t.paper);
                 }
                 c.pattern(r.x + 4 + d, r.y + 3 + d, kMaxGlyph, 9, ink);
             }
@@ -2184,19 +2291,88 @@ void Wm::paint_frame(Canvas &c, Window &w)
     });
 }
 
+// The title bar of a flat theme, into the scratch band: the bar (one colour,
+// or a fade from top to bottom), the icon, the title, and the buttons as
+// small tiles or as bare shapes. The buttons are where title_button() says,
+// as in every theme.
+void Wm::paint_flat_title(Canvas &c, Window &w, const Rect &title, bool active)
+{
+    const gfx::Theme &t = gfx::theme();
+    const Rect &f = w.frame_;
+    const gfx::Colour bar = active ? t.frame_on : t.frame_off;
+    const gfx::Colour ink = active ? t.title_ink_on : t.title_ink_off;
+    if (t.title_bar == gfx::TitleBar::FadeDown && active) {
+        // The fade runs a little past the bar, so its ends are not the
+        // fade's extremes.
+        const Rect span = {title.x, title.y - 3, title.w, title.h + 6};
+        c.fill_fade(title, t.title_from, t.title_to, true, &span);
+    } else {
+        c.fill(title, bar);
+    }
+    if (t.title_rule) {
+        c.hline(title.x, title.bottom() - 1, title.w, active ? t.rim_on : t.rim_off);
+    }
+    if (w.icon_ != nullptr) {
+        c.blit(*w.icon_, f.x + 5, f.y + 5);
+    }
+    const Rect first = title_button(w, w.dialog_ ? Part::Close : Part::Minimize);
+    Canvas text = c.sub({title.x, title.y, first.x - 4 - title.x, title.h});
+    if (t.title_bar == gfx::TitleBar::FadeDown) {
+        text.text(23, 4, w.title_, t.title_shadow, true);
+    }
+    text.text(22, 3, w.title_, ink, true);
+
+    for (Part p : {Part::Close, Part::Maximize, Part::Minimize}) {
+        const Rect r = title_button(w, p);
+        if (r.empty()) {
+            continue;
+        }
+        const bool held = capture_ == Capture::TitleButton && captured_ == &w &&
+                          captured_part_ == p && captured_inside_;
+        const bool greyed = p == Part::Maximize && !w.resizable_;
+        const Rect box = {r.x, title.y + 2, 15, 14};
+        gfx::Colour shape = greyed ? t.title_dim : ink;
+        if (t.title_buttons == gfx::TitleButtons::Tiles) {
+            // A tile with a light rim, its corners left to the bar; the
+            // close one in its own colour. Held: the outline's colour.
+            const gfx::Colour tile = held ? t.outline
+                                     : p == Part::Close ? (active ? t.close_on : t.close_off)
+                                                        : (active ? t.tile_on : t.tile_off);
+            c.fill(box.inset(1), tile);
+            c.hline(box.x + 1, box.y, box.w - 2, t.tile_rim);
+            c.hline(box.x + 1, box.bottom() - 1, box.w - 2, t.tile_rim);
+            c.vline(box.x, box.y + 1, box.h - 2, t.tile_rim);
+            c.vline(box.right() - 1, box.y + 1, box.h - 2, t.tile_rim);
+            shape = greyed ? t.title_dim : t.tile_ink;
+        } else if (held) {
+            // A bare shape, held: the colours change places.
+            c.fill(box, ink);
+            shape = bar;
+        }
+        if (p == Part::Close) {
+            c.pattern(box.x + 4, box.y + 4, kCloseGlyph, 7, shape);
+        } else if (p == Part::Maximize) {
+            const bool restore = w.state_ == WindowState::Maximized;
+            c.pattern(box.x + 3, box.y + 3, restore ? kFlatRestoreGlyph : kFlatMaxGlyph, 8, shape);
+        } else {
+            c.pattern(box.x + 4, box.y + 9, kFlatMinGlyph, 2, shape);
+        }
+    }
+}
+
 void Wm::paint_menu_bar(Canvas &c, Window &w)
 {
     const Rect bar = w.menu_bar_rect();
     c.layered(bar, [&](Canvas &c) {
-    c.fill(bar, gfx::kGrey);
+    c.fill(bar, gfx::face());
     for (int i = 0; i < w.menu_bar_->count; i++) {
         const Rect r = menu_bar_entry(w, i);
         const bool open = menu_window_ == &w && menu_entry_ == i;
         if (open) {
-            c.edge({r.x, r.y + 1, r.w, r.h - 1}, gfx::kDarkGrey, gfx::kWhite);
+            c.dent({r.x, r.y + 1, r.w, r.h - 1});
         }
         const int d = open ? 1 : 0;
-        draw_label(c, r.x + 6 + d, r.y + 2 + d, w.menu_bar_->entries[i].label, gfx::kBlack);
+        draw_label(c, r.x + 6 + d, r.y + 2 + d, w.menu_bar_->entries[i].label, gfx::ink());
     }
     });
 }
@@ -2207,27 +2383,32 @@ void Wm::paint_popup(int level, const RectList &clip)
     const Rect &r = p.rect;
     Canvas screen(display_.pixels(), width_, height_, clip, r);
     screen.layered(r, [&](Canvas &c) {
-    c.fill(r, gfx::kGrey);
+    c.fill(r, gfx::face());
     c.raised(r);
     if (p.start) {
         const Rect banner = {r.x + kMenuEdge, r.y + kMenuEdge, kBannerW, r.h - 2 * kMenuEdge};
-        c.fill_fade(banner, kBannerTop, kBannerBottom, true);
-        c.text_up(banner.x + (kBannerW - 12) / 2, banner.bottom() - 6, start_banner_, gfx::kWhite, true);
+        const gfx::Theme &t = gfx::theme();
+        if (t.flat()) {
+            c.fill_rgb(banner, t.select);
+        } else {
+            c.fill_fade(banner, kBannerTop, kBannerBottom, true);
+        }
+        c.text_up(banner.x + (kBannerW - 12) / 2, banner.bottom() - 6, start_banner_, t.select_ink, true);
     }
     for (int i = 0; i < p.menu->count; i++) {
         const MenuItem &item = p.menu->items[i];
         const Rect ir = popup_item(level, i);
         if (!selectable(item)) {
-            c.hline(ir.x + 1, ir.y + 3, ir.w - 2, gfx::kDarkGrey);
-            c.hline(ir.x + 1, ir.y + 4, ir.w - 2, gfx::kWhite);
+            c.hline(ir.x + 1, ir.y + 3, ir.w - 2, gfx::dim());
+            c.hline(ir.x + 1, ir.y + 4, ir.w - 2, gfx::paper());
             continue;
         }
         const bool hover = i == p.hover;
         const bool disabled = item.flags & kMenuDisabled;
         if (hover) {
-            c.fill_rgb(ir, kHighlight);
+            c.fill_rgb(ir, gfx::theme().select);
         }
-        const gfx::Colour ink = hover ? (disabled ? gfx::kGrey : gfx::kWhite) : gfx::kBlack;
+        const gfx::Colour ink = hover ? (disabled ? gfx::face() : gfx::theme().select_ink) : gfx::ink();
         const bool icons = p.start || has_icons(*p.menu);
         const int tx = icons ? ir.x + 26 : ir.x + 17;
         const int ty = ir.y + (ir.h - 12) / 2;
@@ -2235,17 +2416,17 @@ void Wm::paint_popup(int level, const RectList &clip)
             c.blit(*item.icon, ir.x + 4, ir.y + (ir.h - 16) / 2);
         }
         if (item.flags & kMenuChecked) {
-            c.pattern(ir.x + 5, ir.y + (ir.h - 7) / 2, kCheckGlyph, 7, disabled && !hover ? gfx::kDarkGrey : ink);
+            c.pattern(ir.x + 5, ir.y + (ir.h - 7) / 2, kCheckGlyph, 7, disabled && !hover ? gfx::dim() : ink);
         }
         if (disabled && !hover) {
-            draw_label(c, tx + 1, ty + 1, item.label, gfx::kWhite);
-            draw_label(c, tx, ty, item.label, gfx::kDarkGrey);
+            draw_label(c, tx + 1, ty + 1, item.label, gfx::paper());
+            draw_label(c, tx, ty, item.label, gfx::dim());
         } else {
             draw_label(c, tx, ty, item.label, ink);
         }
         if (item.submenu != nullptr) {
             c.pattern(ir.right() - 10, ir.y + (ir.h - 7) / 2, kArrowGlyph, 7,
-                      disabled && !hover ? gfx::kDarkGrey : ink);
+                      disabled && !hover ? gfx::dim() : ink);
         }
     }
     });

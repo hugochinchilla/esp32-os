@@ -367,3 +367,124 @@ Merged with `main` 2d7ad53; PC gate 44 of 44; the app alone flashed.
   `dbg.py misses` none.
 
 The slow-but-alive case left open in the previous entry is now checked.
+
+## More programs on tasks: the ways in (2026-11-17)
+
+**Asked.** "Left: the other programs." Which ones is the owner's choice
+and was put to him on a card (the programs but not the dialogs,
+recommended; every one, dialogs included; only those that can take long;
+leave it at Culebra). This section is the work done on the recommended
+answer while the card is open, and all of it is needed by the first three
+answers alike.
+
+**What stood in the way.** Culebra was easy: nothing but `launch` calls
+into it. The other programs are called by each other, and those calls
+were plain function calls, so the callee's code ran on the caller's task:
+
+| Call | From | Into |
+|---|---|---|
+| `open_folder`, `open_trash` | the desktop's icons, Run, the tests | File manager |
+| `open_in_editor`, `open_picture` | File manager (a double click), Run, the desktop | Editor, Picture viewer |
+| `open_task_manager` | Ctrl+Alt+Del (the power code) | Task Manager |
+| `refresh_folder_windows` (in `files_changed`) | the Trash, the desktop, anything that moves a file | File manager |
+| the answer to `ask` | the desktop, which owns the box | whoever asked |
+
+The Open, Save As, text and colour dialogs were looked at and are not in
+the table: their windows belong to the program that opened them, so their
+events, and with them the callback, already arrive on that program's task.
+
+**Options for the calls.**
+
+| Option | Chosen | Why |
+|---|---|---|
+| One helper, `in_program(name, callable)`: finds or makes the process, starts its task if the program table says it has one, and hands the callable over through `proc::Table::call` | Yes | One place decides where a program's code runs; a way in reads as before with its body inside a lambda; without tasks (the PC tests, a full pool) it is the same direct call as before |
+| Post a message to the program ("open this path") and return | No, not yet | It is what the queue of events will do (the last part of this item), but today the callers use the result at once: the tests and Run expect the window to be there on return |
+| Leave them and take the big lock by hand in each | No | The callee's code would still run on the caller's stack and count against the caller's two seconds |
+
+What is handed over is copied (`PathArg` holds a path by value), as
+everywhere in this item: a caller that gives up on a late program leaves
+nothing behind for it to read.
+
+**One program calling another.** The File manager's task, inside an OS
+call, asks for the Editor: the Editor's task takes the turn and the File
+manager's task waits for it, as the UI task would, with the same two
+seconds. If the Editor calls back into the File manager meanwhile (a save
+that makes folder windows read again), that runs where the caller is,
+because the File manager's task is waiting: nobody waits for each other.
+The worst case for the desktop is two limits in a row (the File manager
+late because the Editor was).
+
+**The answer to a question.** `ask` now remembers who asked. The answer
+is called as that process, on its task; if the asker has ended
+meanwhile the answer is dropped (before, it was called anyway, with a
+context that could be gone).
+
+**Stack size per program.** The program table has a `stack` figure next
+to `own_task`; `prog::Runner::start` takes it and counts it as the
+program's memory. The OS's own code runs on the caller's task, so a
+program that lists a folder needs room for the file system too. The UI
+task, which ran every program until now, has 16 KB.
+
+**The first tranche** (the agent's choice, to confirm with the card and
+with the board's figures):
+
+| Program | Task | Stack |
+|---|---|---|
+| Culebra, Cactus Patch | yes | 4 KB |
+| Editor (each copy), File manager, Picture viewer, Task Manager, Defragmenter | yes | 8 KB, a first figure to trim |
+| About, Welcome, Widget gallery | yes | 4 KB (see "The last three" below) |
+| Terminal | no | see below |
+| Display, Network, Run, Screen Saver, Shut Down, the dialogs | no | the recommended answer leaves them on the UI task |
+
+Eight tasks at most at a time (`kMaxTasks`); a program started beyond
+that runs on its caller's task, as before.
+
+**Tested.** On the PC, `test_os` has a round with real threads: the
+desktop opens a folder (File manager's task), a key in that window opens
+a file (the Editor's task, started from the File manager's, its parent),
+Delete asks and the answer comes back to the File manager, which moves
+the file and re-reads its windows; the viewer and the Task Manager open
+on tasks of their own; closing everything gives the four tasks back.
+Thirty runs in a row passed. The gate passes (43 tests). The firmware
+compiles and links; **it has not run on the board**, and the stack
+figures are guesses until it has.
+
+**For the board.** Unused stack of each program's task after using it
+hard (`dbg.py tasks`): the Editor loading and saving a large file, the
+File manager in a folder of many files and on the SD card, the viewer
+with a PNG and a JPEG, the Task Manager with everything open, a
+defragmentation run. Free internal RAM with all of them open. Processor
+time and repaint time against `main`. `dbg.py fault hang` and `slow` on
+the Editor and the File manager. `dbg.py misses`.
+
+## The last three programs, and the Terminal (2026-11-17)
+
+**About, Welcome and the Widget gallery** were the last windows of the
+system's kind outside the desktop itself: three classes in `apps.cpp`
+that inherited from the window class and held their buttons as objects.
+A program like that cannot have a task (its events do not pass through
+the one way in) and could not be loaded from a file either (item 27). They
+are now three files (`about.cpp`, `welcome.cpp`, `gallery.cpp`) on the
+thin classes, on the `MOVED` list of `tools/check_os_calls.py`, and
+`apps.cpp` is only the program table. The reference pictures did not
+change by a pixel (the bold name in About is now text the program
+paints, since a label has no bold). Each has a task, 4 KB. About is
+opened from other programs' Help menus, so its way in goes through
+`in_program` like the others; the PC round with threads checks it (the
+gallery's Help menu opens About, on a task of its own, as the gallery's
+child).
+
+**The Terminal stays on the UI task** (the agent's choice, to confirm).
+
+| Option | Chosen | Why |
+|---|---|---|
+| Leave the window on the UI task | Yes | The window is a device and nothing else: the shell and every command already run in the session, which has a task of its own on the board. What is left on the UI task is painting a grid and passing keys on |
+| A task for the window too | No | A third task on the grid's lock (the UI task, the session, the window) for no work taken off the UI task; and the session's "ended" call comes into the window from the system, one more border to cross |
+
+**Tested.** PC gate (43 tests), the round with threads ten times in a
+row. The firmware compiles and links; not run on the board.
+
+**The owner's answer** (the card, 2026-11-17): "Los programas, no los
+diálogos", the recommended option, which is what was built above. The
+stack figures and the Terminal's exception are still the agent's, to
+confirm with the board's measurements.

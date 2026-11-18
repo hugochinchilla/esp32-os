@@ -1,5 +1,6 @@
 #include "core/prog/prog.hpp"
 
+#include <cstddef>
 #include <cstring>
 
 namespace prog {
@@ -11,18 +12,21 @@ Runner::Runner(proc::Table &procs) : procs_(procs)
 {
     procs_.set_caller(&Runner::call_for_table, this);
     procs_.set_between([](void *self) { static_cast<Runner *>(self)->serve(); }, this);
+    procs_.set_busy([](proc::Pid pid, void *self) { return static_cast<Runner *>(self)->late(pid); }, this);
     procs_.on_exit(&Runner::exited, this);
 }
 
 Runner::~Runner()
 {
     for (Slot &s : slots_) {
+        forget(s);
         if (s.used && s.depth == 0) {
             give_back(s);
         }
     }
     procs_.set_caller(nullptr, nullptr);
     procs_.set_between(nullptr, nullptr);
+    procs_.set_busy(nullptr, nullptr);
 }
 
 void Runner::set_tasks(ports::Tasks *tasks, Kit *kits, int count)
@@ -44,6 +48,16 @@ Runner::Slot *Runner::slot_of(proc::Pid pid)
 
 const Runner::Slot *Runner::slot_of(proc::Pid pid) const { return const_cast<Runner *>(this)->slot_of(pid); }
 
+bool Runner::task_left(proc::Pid pid) const
+{
+    for (const Slot &s : slots_) {
+        if (s.used && s.pid == pid) {
+            return true;
+        }
+    }
+    return false;
+}
+
 int Runner::tasks() const
 {
     int n = 0;
@@ -63,8 +77,9 @@ bool Runner::late(proc::Pid pid) const
     return state == Late || state == LateDone;
 }
 
-bool Runner::start(proc::Pid pid)
+bool Runner::start(proc::Pid pid, uint32_t stack_bytes)
 {
+    stack_bytes = stack_bytes < kStackBytes ? kStackBytes : stack_bytes;
     if (!threaded() || !procs_.alive(pid)) {
         return false;
     }
@@ -86,17 +101,18 @@ bool Runner::start(proc::Pid pid)
         s.state.store(Idle);
         s.in_call.store(0);
         s.wants.store(false);
+        s.handing = false;
         s.used = true;
         // Nothing left over from whoever had the kit before.
         s.kit.go->wait(0);
         s.kit.done->wait(0);
         const proc::Process *row = procs_.find(pid);
-        s.task = tasks_->start(row->name, &Runner::task, &s, kStackBytes, ports::Priority::High);
+        s.task = tasks_->start(row->name, &Runner::task, &s, stack_bytes, ports::Priority::High);
         if (s.task == nullptr) {
             s.used = false;
             return false;
         }
-        procs_.add_memory(pid, static_cast<int32_t>(kStackBytes));
+        procs_.add_memory(pid, static_cast<int32_t>(stack_bytes));
         return true;
     }
     return false;
@@ -151,12 +167,86 @@ void Runner::wait_out_of_calls(Slot &s)
     }
 }
 
-bool Runner::call(proc::Pid pid, proc::CallFn fn, void *context, size_t size)
+int Runner::kept(proc::Pid pid) const
+{
+    const Slot *s = slot_of(pid);
+    return s != nullptr ? s->kept : 0;
+}
+
+// A call that cannot be made now, put behind those already waiting for the
+// program if it is one to keep.
+void Runner::keep_for(Slot &s, proc::CallFn fn, const void *context, size_t size, proc::Keep keep)
+{
+    if (keep == proc::kDropped || size == 0 || size > proc::kCallRoom || memory_ == nullptr) {
+        return;
+    }
+    if (s.kept >= kMostKept) {
+        return; // more than can be: lost
+    }
+    const size_t bytes = offsetof(Kept, bytes) + size;
+    Kept *k = static_cast<Kept *>(memory_->allocate(bytes));
+    if (k == nullptr) {
+        return;
+    }
+    k->next = nullptr;
+    k->fn = fn;
+    k->size = static_cast<uint32_t>(size);
+    memcpy(k->bytes, context, size);
+    (s.last != nullptr ? s.last->next : s.first) = k;
+    s.last = k;
+    s.kept++;
+    procs_.add_memory(s.pid, static_cast<int32_t>(bytes));
+}
+
+// The program answers again: what waited for it, oldest first, each call
+// made as any other. If it is late again in one of them the rest go on
+// waiting.
+void Runner::hand_out(Slot &s)
+{
+    s.handing = true;
+    while (s.first != nullptr && s.used && !s.quit.load() && s.state.load() == Idle) {
+        Kept *k = s.first;
+        s.first = k->next;
+        if (s.first == nullptr) {
+            s.last = nullptr;
+        }
+        s.kept--;
+        procs_.add_memory(s.pid, -static_cast<int32_t>(offsetof(Kept, bytes) + k->size));
+        const bool in_time = make(&s, s.pid, k->fn, k->bytes, k->size);
+        memory_->release(k);
+        if (!in_time) {
+            break;
+        }
+    }
+    s.handing = false;
+}
+
+// The queue of a program that has ended, or of a slot about to be lent.
+void Runner::forget(Slot &s)
+{
+    while (s.first != nullptr) {
+        Kept *k = s.first;
+        s.first = k->next;
+        memory_->release(k);
+    }
+    s.last = nullptr;
+    s.kept = 0;
+}
+
+bool Runner::call(proc::Pid pid, proc::CallFn fn, void *context, size_t size, proc::Keep keep)
 {
     Slot *s = slot_of(pid);
-    if (s != nullptr && s->depth > 0 && s->state.load() != Running) {
-        return false; // late: its task is still in the call that was too long
+    if (s != nullptr && ((s->depth > 0 && s->state.load() != Running) || (s->first != nullptr && !s->handing))) {
+        // Late: its task is still in the call that was too long, or has
+        // only just left it. Nothing reaches it before what already waits.
+        keep_for(*s, fn, context, size, keep);
+        return false;
     }
+    return make(s, pid, fn, context, size);
+}
+
+bool Runner::make(Slot *s, proc::Pid pid, proc::CallFn fn, void *context, size_t size)
+{
     if (s == nullptr || s->depth > 0 || size > proc::kCallRoom) {
         if (s != nullptr) {
             s->depth++;
@@ -265,6 +355,7 @@ void Runner::serve()
         }
         if (s.state.load() == LateDone) {
             take_back(s);
+            hand_out(s);
         }
     }
 }
@@ -318,6 +409,7 @@ void Runner::exited(proc::Pid pid, void *self)
     if (s == nullptr) {
         return;
     }
+    r.forget(*s); // what waited for it has nobody to go to
     const int state = s->state.load();
     if (state == Late) {
         // Ended while it hangs. It is outside every OS call (it cannot get
@@ -334,9 +426,10 @@ void Runner::exited(proc::Pid pid, void *self)
     }
 }
 
-bool Runner::call_for_table(proc::Pid pid, proc::CallFn fn, void *context, size_t size, void *self)
+bool Runner::call_for_table(proc::Pid pid, proc::CallFn fn, void *context, size_t size, proc::Keep keep,
+                            void *self)
 {
-    return static_cast<Runner *>(self)->call(pid, fn, context, size);
+    return static_cast<Runner *>(self)->call(pid, fn, context, size, keep);
 }
 
 Runner &runner()

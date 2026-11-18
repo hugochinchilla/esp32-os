@@ -44,6 +44,7 @@ enum Flag : uint8_t {
     kProtected = 2, // cannot be signalled: signal() answers NotPermitted
     kRespawn = 4,   // started again if it ends, whatever ended it: init marks what it looks after
     kWindowed = 8,  // a window program: it ends when its last window closes
+    kOpened = 16,   // it has opened a window: one without is still starting, not finished
 };
 
 // What a process can be told.
@@ -72,7 +73,14 @@ using ExitFn = void (*)(Pid pid, void *context);
 // A call into a program's code, and whoever makes such calls on the
 // program's own task (see Table::call).
 using CallFn = void (*)(void *context);
-using CallerFn = bool (*)(Pid pid, CallFn fn, void *context, size_t size, void *self);
+// What becomes of a call for a program that is not responding: dropped,
+// as its keys and paints are (the owner's choice, 2026-11-17), or kept for
+// it until it answers again, as the result of a job is, which must not be
+// lost. Only a call handed over by copy can be kept.
+enum class Keep : uint8_t { Dropped, Kept };
+constexpr Keep kDropped = Keep::Dropped;
+constexpr Keep kKept = Keep::Kept;
+using CallerFn = bool (*)(Pid pid, CallFn fn, void *context, size_t size, Keep keep, void *self);
 // The most a call's context may be when it is handed over by copy.
 constexpr size_t kCallRoom = 384;
 
@@ -247,8 +255,10 @@ public:
     // has it made there; without a caller set, it is made here. With a
     // size, the context is that many bytes, copied for the program and back
     // (prog::Runner::call). False: not made, or not finished in time (the
-    // program is not responding).
-    bool call(Pid pid, CallFn fn, void *context, size_t size = 0);
+    // program is not responding). `keep` says whether a call that cannot
+    // be made now waits for the program in its queue: it is then made
+    // later, in order, and the answer here is still false.
+    bool call(Pid pid, CallFn fn, void *context, size_t size = 0, Keep keep = kDropped);
     void set_caller(CallerFn caller, void *self)
     {
         caller_ = caller;
@@ -261,6 +271,23 @@ public:
     {
         between_ = fn;
         between_self_ = self;
+    }
+    // Whether a call into the process is still under way on a task of
+    // its own after the caller stopped waiting (it is late). Such a process
+    // is in the middle of something: a program that has not opened its
+    // first window yet is not one that has closed its last.
+    void set_busy(bool (*fn)(Pid pid, void *self), void *self)
+    {
+        busy_ = fn;
+        busy_self_ = self;
+    }
+    bool busy(Pid pid) const { return busy_ != nullptr && busy_(pid, busy_self_); }
+    // The window manager says so when the process opens a window.
+    void opened_window(Pid pid)
+    {
+        if (Process *p = row(pid)) {
+            p->flags |= kOpened;
+        }
     }
     void between()
     {
@@ -292,6 +319,8 @@ private:
 
     Supervisor *supervisor_ = nullptr;
     CallerFn caller_ = nullptr;
+    bool (*busy_)(Pid pid, void *self) = nullptr;
+    void *busy_self_ = nullptr;
     void (*between_)(void *self) = nullptr;
     void *between_self_ = nullptr;
     void *caller_self_ = nullptr;
@@ -330,8 +359,10 @@ private:
 // holds by value is safe from a program that does not come back in time,
 // and results it keeps in itself can be read afterwards (pass it by name).
 // What it holds by reference must outlive a late program. A null table
-// calls it here.
-template <class F> bool call_as(Table *table, Pid pid, F &&f)
+// calls it here. With `keep`, a callable that could not be called now is
+// called when the program answers again (Table::call), and whatever it
+// points at must still be there then.
+template <class F> bool call_as(Table *table, Pid pid, F &&f, Keep keep = kDropped)
 {
     using Fn = typename std::remove_const<typename std::remove_reference<F>::type>::type;
     static_assert(std::is_trivially_copyable<Fn>::value && sizeof(Fn) <= kCallRoom, "handed over by copy");
@@ -341,7 +372,7 @@ template <class F> bool call_as(Table *table, Pid pid, F &&f)
     }
     return table->call(
         pid, [](void *context) { (*static_cast<Fn *>(context))(); },
-        const_cast<void *>(static_cast<const void *>(&f)), sizeof(Fn));
+        const_cast<void *>(static_cast<const void *>(&f)), sizeof(Fn), keep);
 }
 
 // The figures as text, for whoever lists processes: processor time as

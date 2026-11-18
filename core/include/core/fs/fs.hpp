@@ -80,6 +80,7 @@ public:
 
     FsError info(char letter, VolumeInfo &out) const;
     FsError entry(const char *folder, int index, DirEntry &out) const;
+    FsError entries(const char *folder, int first, DirEntry *out, int capacity, int &count) const;
     FsError stat(const char *path, DirEntry &out) const;
     FsError make_folder(const char *path) const;
     FsError remove(const char *path) const;

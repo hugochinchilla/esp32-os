@@ -104,8 +104,9 @@ def screen(g, grid=False):
     img.paste(MASCOT, (640 - 88 - 16, 16))      # logo: cols 67..77, rows 1..5
     return img
 
-for key, name, note, g in FONTS:
-    screen(g).save(f"{OUT}/bios-text-{key}.png")
+if len(FONTS) > 1:  # the font mock-ups, only when all five can be drawn
+    for key, name, note, g in FONTS:
+        screen(g).save(f"{OUT}/bios-text-{key}.png")
 
 # ---- The reference for the PC test (host/tests/test_bios.cpp): the screen
 # as core/src/bios/post.cpp lays it out, drawn here from Spleen's BDF file
@@ -129,18 +130,19 @@ def post_reference(g):
                     for x in range(5):
                         px[68 * 8 + q * 5 + x, 16 + r * 5 + y] = colours[ch]
     rows = [
-        (1, [(HI, "Chinchilla BIOS v0.3")]),
+        (1, [(HI, "Rodent BIOS v0.3")]),
         (2, [(TXT, "Copyleft 2026, built on nine resistors")]),
         (4, [(TXT, "Main Processor : ESP32-S3 dual core, 240 MHz")]),
         (5, [(TXT, "Memory Test    : "), (HI, "  8192K OK"), (TXT, "   (external)")]),
         (6, [(TXT, "               : "), (HI, "   376K OK"), (TXT, "   (internal)")]),
         (8, [(TXT, "Detecting video ....... VGA 640x480, 256 colours")]),
-        (9, [(TXT, "Detecting drive C: .... 12 MB flash disk")]),
+        (9, [(TXT, "Detecting drive C: .... 11 MB flash disk")]),
         (10, [(TXT, "Detecting keyboard .... serial debug link")]),
         (11, [(TXT, "Detecting sound ....... none")]),
-        (13, [(YEL, "Starting Chinchilla...")]),
-        (15, [(TXT, "Press any key to continue")]),
-        (16, [(HI, "Booting in 5")]),
+        (13, [(TXT, "Boot device ........... ota_0, 1.4 MB, image OK")]),
+        (15, [(YEL, "Starting Chinchilla...")]),
+        (17, [(TXT, "Press any key to continue")]),
+        (18, [(HI, "Booting in 5")]),
         (28, [(DARK, "Press DEL to enter SETUP (there is no setup)")]),
         (29, [(DARK, "17/11/2026-ESP32S3-N16R8-CHINCHILLA")]),
     ]
@@ -152,6 +154,57 @@ def post_reference(g):
     return img
 
 
+# ---- The BIOS's first screen (the owner's idea, 2026-11-17): as old BIOSes
+# opened with their maker's logo and an energy badge, ours with the mascot
+# and a badge of our own. Shown while the monitor wakes. core/src/bios/
+# post.cpp draws the same; the PC test compares the two. ----
+LEAF12 = [
+    ".........GGG", ".......GGGGG", ".....GGGYGGG", "....GGGYYGGG", "...GGGYYGGG.", "..GGGYYYYGG.",
+    "..GGGGGYYGG.", ".GGGGGYYGG..", ".GGGGYYGGG..", ".GGGYGGGG...", "D.GGGGGG....", "DD.........."]
+LEAF, LEAF_DARK = c(1, 6, 1), c(1, 3, 0)
+
+def squares(img, rows, x0, y0, scale, colours):
+    px = img.load()
+    for r, line in enumerate(rows):
+        for q, ch in enumerate(line):
+            if ch in colours:
+                for y in range(scale):
+                    for x in range(scale):
+                        px[x0 + q * scale + x, y0 + r * scale + y] = colours[ch]
+
+def splash_reference(g):
+    img = Image.new("RGB", (640, 480), BLACK)
+    squares(img, MASCOT16, 4 * 8, 2 * 16, 8,
+            {"G": TXT, "D": TXT, "L": HI, "P": c(7, 4, 2), "K": BLACK, "N": c(7, 3, 2)})
+    squares(img, LEAF12, 62 * 8, 2 * 16, 4, {"G": LEAF, "Y": YEL, "D": LEAF_DARK})
+    for col, row, colour, text in [
+        (58, 7, LEAF, "Energy Nibbler"),
+        (56, 8, TXT, "Runs on a USB port"),
+        (4, 12, HI, "Rodent BIOS v0.3"),
+        (4, 13, TXT, "Copyleft 2026, built on nine resistors"),
+        (4, 16, DARK, "Waking the monitor..."),
+        (2, 28, DARK, "Press DEL to enter SETUP (there is no setup)"),
+        (2, 29, DARK, "17/11/2026-ESP32S3-N16R8-CHINCHILLA"),
+    ]:
+        put(img, g, col, row, text, colour)
+    # The ring round the leaf, two pixels: the midpoint circle, radius 37
+    # and 36, about the leaf's middle.
+    px = img.load()
+    for radius in (37, 36):
+        x, y, err = radius, 0, 1 - radius
+        while x >= y:
+            for dx, dy in ((x, y), (y, x), (-y, x), (-x, y), (-x, -y), (-y, -x), (y, -x), (x, -y)):
+                px[520 + dx, 56 + dy] = LEAF
+            y += 1
+            if err < 0:
+                err += 2 * y + 1
+            else:
+                x -= 1
+                err += 2 * (y - x) + 1
+    return img
+
+
+splash_reference(FONTS[0][3]).save(f"{OUT}/bios-splash.png")
 post_reference(FONTS[0][3]).save(f"{OUT}/bios-post.png")
 
 # comparison sheet: the same lines in each font, twice the size

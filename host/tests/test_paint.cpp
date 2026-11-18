@@ -241,6 +241,20 @@ int main(int argc, char **)
     shell::open_task_manager();
     check_window("the Task Manager");
 
+    // The same in every other theme (backlog item 47): the flat edges, title
+    // bars and taskbar write each pixel once too.
+    for (int theme = 1; theme < gfx::theme_count(); theme++) {
+        desktop.set_theme(theme);
+        desktop.update();
+        w.reset();
+        desktop.repaint_all();
+        char what[64];
+        snprintf(what, sizeof(what), "a full repaint in the %s theme", gfx::theme_at(theme).name);
+        expect_once(what);
+        w.reset();
+    }
+    desktop.set_theme(0);
+
     writes = nullptr;
     if (failures == 0) {
         printf("all tests passed\n");

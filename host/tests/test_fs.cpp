@@ -264,6 +264,41 @@ static void check_drive(ports::Volume &v, const char *what)
     s.remove("C:\\docs\\C.txt");
     CHECK(s.remove("C:\\docs") == FsError::Ok);
     CHECK(s.entry("C:\\", 0, e) == FsError::NotFound); // empty again
+
+    // A run of entries in one pass gives what asking one by one gives, in
+    // the same order, whatever the size of the run; fewer than asked for
+    // is the end; a folder that is not there has none.
+    CHECK(s.make_folder("C:\\many") == FsError::Ok);
+    for (int i = 0; i < 20; i++) {
+        char name[32];
+        snprintf(name, sizeof(name), "C:\\many\\f%02d.txt", i);
+        CHECK(s.write_file(name, "x", 1) == FsError::Ok);
+    }
+    for (int run : {1, 7, 20, 32}) {
+        ports::DirEntry got[32];
+        int total = 0;
+        for (;;) {
+            int count = -1;
+            CHECK(s.entries("C:\\many", total, got, run, count) == FsError::Ok);
+            for (int i = 0; i < count; i++) {
+                CHECK(s.entry("C:\\many", total + i, e) == FsError::Ok && strcmp(e.name, got[i].name) == 0 &&
+                      e.size == got[i].size && e.folder == got[i].folder);
+            }
+            total += count;
+            if (count < run) {
+                break;
+            }
+        }
+        CHECK(total == 20);
+    }
+    int none = -1;
+    CHECK(s.entries("C:\\gone", 0, &e, 1, none) == FsError::Ok && none == 0);
+    for (int i = 0; i < 20; i++) {
+        char name[32];
+        snprintf(name, sizeof(name), "C:\\many\\f%02d.txt", i);
+        CHECK(s.remove(name) == FsError::Ok);
+    }
+    CHECK(s.remove("C:\\many") == FsError::Ok);
 }
 
 static void test_drives_behave_alike()

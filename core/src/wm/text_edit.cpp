@@ -11,7 +11,6 @@ using gfx::Canvas;
 
 namespace {
 
-constexpr gfx::Rgb kHighlight = {0, 0, 128};
 constexpr int kBar = ScrollBar::kThickness;
 
 uint8_t *g_clip = nullptr;
@@ -837,7 +836,7 @@ void TextEdit::paint(Canvas &c)
     const Rect r = {0, 0, rect.w, rect.h};
     c.sunken(r);
     const Rect t = text_rect();
-    c.fill({t.right(), t.bottom(), kBar, kBar}, gfx::kGrey); // corner between the bars
+    c.fill({t.right(), t.bottom(), kBar, kBar}, gfx::face()); // corner between the bars
     {
         Canvas vb = c.sub(vbar_.rect);
         vbar_.paint(vb);
@@ -846,7 +845,7 @@ void TextEdit::paint(Canvas &c)
     }
     Canvas inner = c.sub(t);
     if (buf_ == nullptr) {
-        inner.fill({0, 0, t.w, t.h}, gfx::kWhite);
+        inner.fill({0, 0, t.w, t.h}, gfx::paper());
         return;
     }
     // Each pixel once (one screen buffer: drawing white and then the text
@@ -856,7 +855,7 @@ void TextEdit::paint(Canvas &c)
     const size_t s0 = selection_start(), s1 = selection_end();
     const int rows = visible_rows() + 1, cols = visible_columns() + 1;
     const size_t len = length();
-    inner.fill({0, 0, t.w, 1}, gfx::kWhite); // the line above the first row
+    inner.fill({0, 0, t.w, 1}, gfx::paper()); // the line above the first row
     size_t line = top_;
     int y = 1;
     for (int row = 0; row < rows && y < t.h; row++, y += kLineHeight) {
@@ -893,11 +892,11 @@ void TextEdit::paint(Canvas &c)
         const int caret_x = caret_on && caret_col >= left_col_ ? 1 + (caret_col - left_col_) * 6 : -1;
         // Two pixels left of the text (the caret can be in the second).
         if (caret_x == 1) {
-            inner.fill({0, y, 1, kLineHeight}, gfx::kWhite);
-            inner.fill({1, y, 1, kLineHeight - 1}, gfx::kBlack);
-            inner.fill({1, y + kLineHeight - 1, 1, 1}, gfx::kWhite);
+            inner.fill({0, y, 1, kLineHeight}, gfx::paper());
+            inner.fill({1, y, 1, kLineHeight - 1}, gfx::ink());
+            inner.fill({1, y + kLineHeight - 1, 1, 1}, gfx::paper());
         } else {
-            inner.fill({0, y, 2, kLineHeight}, gfx::kWhite);
+            inner.fill({0, y, 2, kLineHeight}, gfx::paper());
         }
         // The text in runs of the same look; the line under each run in its
         // background colour.
@@ -921,28 +920,28 @@ void TextEdit::paint(Canvas &c)
             const int x = 2 + a * 6, w = (b - a) * 6;
             const int cx = caret_x > x && caret_x < x + w ? caret_x : -1;
             if (chosen[a]) {
-                inner.text_opaque(x, y, run, gfx::kWhite, kHighlight, cx);
-                inner.fill_rgb({x, y + kLineHeight - 1, w, 1}, kHighlight);
+                inner.text_opaque(x, y, run, gfx::theme().select_ink, gfx::theme().select, cx);
+                inner.fill_rgb({x, y + kLineHeight - 1, w, 1}, gfx::theme().select);
             } else {
-                inner.text_opaque(x, y, run, gfx::kBlack, gfx::kWhite, cx);
-                inner.fill({x, y + kLineHeight - 1, w, 1}, gfx::kWhite);
+                inner.text_opaque(x, y, run, gfx::ink(), gfx::paper(), cx);
+                inner.fill({x, y + kLineHeight - 1, w, 1}, gfx::paper());
             }
             a = b;
         }
         int x = 2 + count * 6;
         // A selected line end shows as one highlighted cell.
         if (eol_chosen && col >= left_col_ && x < t.w) {
-            inner.fill_rgb({x, y, 6, kLineHeight}, kHighlight);
+            inner.fill_rgb({x, y, 6, kLineHeight}, gfx::theme().select);
             x += 6;
         }
-        inner.fill({x, y, t.w - x, kLineHeight}, gfx::kWhite);
+        inner.fill({x, y, t.w - x, kLineHeight}, gfx::paper());
         if (i >= len) {
             y += kLineHeight;
             break;
         }
         line = i + 1;
     }
-    inner.fill({0, y, t.w, t.h - y}, gfx::kWhite); // below the last line
+    inner.fill({0, y, t.w, t.h - y}, gfx::paper()); // below the last line
 }
 
 } // namespace wm

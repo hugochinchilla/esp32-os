@@ -228,6 +228,26 @@ public:
     virtual FsError info(VolumeInfo &out) = 0;
     // The index-th entry of a folder; NotFound past the last one.
     virtual FsError entry(const char *folder, int index, DirEntry &out) = 0;
+    // Entries of a folder from the first-th on, as many as `out` holds, in
+    // one pass over it: what a listing asks, so that a folder of n files
+    // does not cost n passes. `count` is how many were given; fewer than
+    // `capacity` means the folder ends there (a folder that is not there
+    // gives none). A drive that can do no better is asked entry by entry.
+    virtual FsError entries(const char *folder, int first, DirEntry *out, int capacity, int &count)
+    {
+        count = 0;
+        while (count < capacity) {
+            const FsError e = entry(folder, first + count, out[count]);
+            if (e == FsError::NotFound) {
+                break;
+            }
+            if (e != FsError::Ok) {
+                return e;
+            }
+            count++;
+        }
+        return FsError::Ok;
+    }
     virtual FsError stat(const char *path, DirEntry &out) = 0;
     virtual FsError make_folder(const char *path) = 0;
     virtual FsError remove(const char *path) = 0; // a file or an empty folder
@@ -275,6 +295,28 @@ public:
 
 protected:
     ~Memory() = default;
+};
+
+// Programs kept in files (backlog item 27): machine code compiled apart
+// from the firmware, made ready to run in memory. What the program asks of
+// the system by name (the OS calls) is joined to it as it is loaded. The
+// adapters: Espressif's ELF loader on the board, the PC's own dynamic
+// loader for the tests.
+class Loader {
+public:
+    // Makes the program in `image` (the file's bytes, whole; not kept) ready
+    // to run. nullptr if it cannot be, with `why` in plain words.
+    virtual void *load(const uint8_t *image, size_t size, const char *&why) = 0;
+    // Calls its way in (APP_MAIN in core/app/app.hpp) and returns what it
+    // returned: 0 if it started.
+    virtual int enter(void *module) = 0;
+    // How much memory it takes while loaded, in bytes (its code and data).
+    virtual size_t bytes(void *module) = 0;
+    // Takes it out of memory. None of its code may run after this.
+    virtual void unload(void *module) = 0;
+
+protected:
+    ~Loader() = default;
 };
 
 struct SystemStats {

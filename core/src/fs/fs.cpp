@@ -226,6 +226,15 @@ FsError Storage::entry(const char *folder, int index, DirEntry &out) const
     return v != nullptr ? v->entry(path::relative(folder), index, out) : e;
 }
 
+FsError Storage::entries(const char *folder, int first, DirEntry *out, int capacity, int &count) const
+{
+    const Held held(lock_);
+    count = 0;
+    FsError e;
+    ports::Volume *v = resolve(folder, e);
+    return v != nullptr ? v->entries(path::relative(folder), first, out, capacity, count) : e;
+}
+
 FsError Storage::stat(const char *p, DirEntry &out) const
 {
     const Held held(lock_);

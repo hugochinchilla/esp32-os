@@ -360,7 +360,7 @@ void test_desktop_calls()
     shell::display_dialog();
     shell::screen_saver_dialog();
     wait(10000);
-    CHECK(os::blocks_out() == blocks + 13 + 11); // each its window and its controls: twelve and ten
+    CHECK(os::blocks_out() == blocks + 15 + 11); // each its window and its controls: fourteen and ten
     while (desktop.active() != nullptr) {
         desktop.close(*desktop.active());
         wait(10000);
@@ -515,9 +515,36 @@ void test_ui()
     os::ui::select(number, 99, 1);
     CHECK(os::ui::value(number, s.rows_.number()) == 0 && !os::ui::checked(number, 0));
 
+    // The hourglass on demand (item 49): asked for by number, shown over
+    // the client area only, and the program still gets its keys.
+    const auto shape_is = [](const video::PointerShape &shape) {
+        const video::PointerShape *now = pointer.state().shape;
+        return now != nullptr && memcmp(now, &shape, sizeof(video::PointerShape)) == 0;
+    };
+    desktop.mouse({true, static_cast<int16_t>(client.x + 200), static_cast<int16_t>(client.y + 100), 0, 0});
+    CHECK(!s.hourglass() && shape_is(video::arrow_pointer()));
+    s.set_hourglass(true);
+    CHECK(s.hourglass() && os::ui::hourglass(number) && !s.locked() && shape_is(video::busy_pointer()));
+    desktop.mouse({true, static_cast<int16_t>(client.x + 200), static_cast<int16_t>(client.y - 10), 0, 0});
+    CHECK(shape_is(video::arrow_pointer())); // the title bar
+    desktop.mouse({true, static_cast<int16_t>(client.x + 200), static_cast<int16_t>(client.y + 100), 0, 0});
+    CHECK(shape_is(video::busy_pointer()));
+    s.set_focus(s.tick_);
+    press(wm::key::Space);
+    CHECK(!s.tick_.checked() && s.ticks == 2);
+    s.set_hourglass(false);
+    CHECK(!os::ui::hourglass(number) && shape_is(video::arrow_pointer()));
+    // A number of no window does nothing and answers no.
+    os::ui::set_hourglass(app::kNone, true);
+    CHECK(!os::ui::hourglass(app::kNone));
+    // Left on when the window closes: it goes with the window.
+    s.set_hourglass(true);
+    CHECK(shape_is(video::busy_pointer()));
+
     // Closed: the program's object is destroyed, everything goes back, the
     // process ends and the number is dead.
     s.close();
+    CHECK(shape_is(video::arrow_pointer()) && !os::ui::hourglass(number));
     // Dead to the program at once, before the system has taken it apart.
     CHECK(sample_gone == 1 && !os::ui::alive(number) && !os::ui::show(number));
     wait(10000);
@@ -583,6 +610,52 @@ template <class F> bool soon(F &&f)
         wait(10000);
     }
     return f();
+}
+
+// A program that is late before it has opened its first window (a large
+// folder being listed, on the board) is still starting: it is not taken for
+// one whose last window has closed and ended in the middle.
+host::ThreadEvent slow_start_gate;
+app::Number slow_start_number = app::kNone;
+
+void test_late_before_its_first_window()
+{
+    static host::ThreadTasks tasks;
+    static host::ThreadEvent events[2];
+    static prog::Kit kit = {&events[0], &events[1]};
+    prog::Runner &runner = prog::runner();
+    runner.set_tasks(&tasks, &kit, 1);
+    runner.set_limit(50);
+    const uint32_t blocks = os::blocks_out();
+
+    const proc::Pid pid = os::spawn("Slow start");
+    CHECK(runner.start(pid));
+    const bool in_time = proc::table().call(
+        pid,
+        [](void *) {
+            slow_start_gate.wait(0xFFFFFFFF); // busy with something of its own, in no OS call
+            app::Look look;
+            look.title = "Slow start";
+            look.width = 200;
+            look.height = 120;
+            slow_start_number = app::open<Sample>(look);
+        },
+        nullptr);
+    CHECK(!in_time && !os::responding(pid));
+    for (int i = 0; i < 5; i++) {
+        wait(10000); // safe points come and go
+    }
+    CHECK(os::alive(pid) && runner.has_task(pid) && tasks.ended == 0);
+    slow_start_gate.set();
+    CHECK(soon([&] { return os::responding(pid) && slow_start_number != app::kNone; }));
+    CHECK(desktop.active() != nullptr && desktop.active()->owner() == pid && os::alive(pid));
+    desktop.close(*desktop.active());
+    wait(10000);
+    wait(10000);
+    CHECK(!os::alive(pid) && os::blocks_out() == blocks);
+    CHECK(soon([&] { return runner.tasks() == 0; }));
+    runner.set_limit(prog::kForever);
+    runner.set_tasks(nullptr, nullptr, 0);
 }
 
 void test_not_responding()
@@ -651,6 +724,113 @@ void test_not_responding()
     runner.set_tasks(nullptr, nullptr, 0);
 }
 
+// The programs that have tasks of their own (backlog item 26), with real
+// threads: one program opening another, a question answered, files changing
+// under a File manager window. Whose task each piece of code runs on is
+// what is checked.
+void test_programs_on_tasks()
+{
+    static host::ThreadTasks tasks;
+    static host::ThreadEvent events[2 * prog::Runner::kMaxTasks];
+    static prog::Kit kits[prog::Runner::kMaxTasks];
+    for (int i = 0; i < prog::Runner::kMaxTasks; i++) {
+        kits[i] = {&events[2 * i], &events[2 * i + 1]};
+    }
+    prog::Runner &runner = prog::runner();
+    runner.set_tasks(&tasks, kits, prog::Runner::kMaxTasks);
+    proc::Table &t = proc::table();
+    const auto title = [] { return desktop.active() != nullptr ? desktop.active()->title() : ""; };
+
+    storage.make_folder("C:\\Work");
+    CHECK(storage.write_file("C:\\Work\\a.txt", "hello", 5) == ports::FsError::Ok);
+
+    // A folder of many files opens like any other.
+    storage.make_folder("C:\\Many");
+    for (int i = 0; i < 81; i++) {
+        char name[40];
+        snprintf(name, sizeof(name), "C:\\Many\\file%02d.txt", i);
+        CHECK(storage.write_file(name, "x", 1) == ports::FsError::Ok);
+    }
+    // Even when listing it takes longer than the system waits: the File
+    // manager is late for a while, and the window comes when it is done.
+    runner.set_limit(1);
+    shell::open_folder("C:\\Many");
+    runner.set_limit(prog::kForever);
+    // Late, with no window yet: it is not taken for a program whose last
+    // window has closed (on the board that ended it, task and all, in the
+    // middle of the listing).
+    const proc::Pid listing = t.find_by_name("File manager");
+    wait(10000);
+    CHECK(listing != proc::kNone && t.alive(listing) && runner.has_task(listing));
+    CHECK(soon([&] { return desktop.active() != nullptr && strcmp(title(), "Many") == 0; }));
+    CHECK(desktop.active() != nullptr && desktop.active()->owner() == listing);
+    CHECK(os::responding(t.find_by_name("File manager")));
+    while (desktop.active() != nullptr) {
+        desktop.close(*desktop.active());
+        wait(10000);
+    }
+    CHECK(soon([&] { return runner.tasks() == 0; }));
+
+    // From the desktop: the File manager gets a process and a task, and its
+    // window is made on that task.
+    shell::open_folder("C:\\Work");
+    const proc::Pid files = t.find_by_name("File manager");
+    CHECK(files != proc::kNone && runner.has_task(files) && runner.tasks() == 1);
+    CHECK(desktop.active() != nullptr && desktop.active()->owner() == files);
+    CHECK(t.current() == t.find_by_name("desktop"));
+
+    // The File manager opens a file: the Editor is another process with
+    // another task, started from the File manager's.
+    press(wm::key::Down);
+    press(wm::key::Enter);
+    wait(10000);
+    const proc::Pid editor = t.find_by_name("Editor");
+    CHECK(editor != proc::kNone && runner.has_task(editor) && runner.tasks() == 2);
+    CHECK(strcmp(title(), "a.txt - Editor") == 0 && desktop.active()->owner() == editor);
+    CHECK(t.find(editor) != nullptr && t.find(editor)->parent == files);
+
+    // Delete in the File manager asks; the answer goes back to the File
+    // manager, which moves the file and has every folder window read again.
+    desktop.activate(*desktop.main_window_of(files));
+    press(wm::key::Delete);
+    wait(10000);
+    CHECK(strcmp(title(), "Confirm File Delete") == 0);
+    press(wm::key::Enter); // Yes
+    wait(10000);
+    ports::DirEntry e;
+    CHECK(storage.stat("C:\\Work\\a.txt", e) != ports::FsError::Ok);
+    CHECK(os::responding(files) && os::responding(editor));
+
+    // The viewer and the Task Manager, each on its own.
+    shell::open_picture(nullptr);
+    shell::open_task_manager();
+    wait(1100000); // the Task Manager's list fills on its timer
+    CHECK(runner.tasks() == 4 && strcmp(title(), "Task Manager") == 0);
+    // One program's menu opens another: the gallery's Help, About.
+    shell::launch(*shell::find_app("Widget gallery"));
+    const proc::Pid gallery = t.find_by_name("Widget gallery");
+    CHECK(runner.has_task(gallery) && runner.tasks() == 5);
+    desktop.key(wm::key::LeftAlt, true); // Alt+H: Help, and its one entry
+    press(wm::key::A + 7);
+    desktop.key(wm::key::LeftAlt, false);
+    press(wm::key::Enter);
+    wait(10000);
+    const proc::Pid about = t.find_by_name("About Chinchilla");
+    CHECK(strcmp(title(), "About Chinchilla") == 0 && runner.has_task(about) && runner.tasks() == 6);
+    CHECK(about != proc::kNone && t.find(about)->parent == gallery);
+    CHECK(runner.has_task(t.find_by_name("Picture viewer")) && runner.has_task(t.find_by_name("Task Manager")));
+
+    // All closed: the processes end and every task is given back.
+    while (desktop.active() != nullptr) {
+        desktop.close(*desktop.active());
+        wait(10000);
+    }
+    CHECK(soon([&] { return runner.tasks() == 0; }));
+    CHECK(t.find_by_name("File manager") == proc::kNone && t.find_by_name("Editor") == proc::kNone);
+    CHECK(tasks.started == tasks.ended);
+    runner.set_tasks(nullptr, nullptr, 0);
+}
+
 int main()
 {
     static fs::MemoryVolume disk(memory.allocate(1 << 18), 1 << 18, "RAM disk");
@@ -667,6 +847,8 @@ int main()
     test_process_list();
     test_programs_give_back();
     test_ui();
+    test_programs_on_tasks();
+    test_late_before_its_first_window();
     test_not_responding(); // before the last one, which ends with the screen taken by Shut Down
     test_desktop_calls();
 

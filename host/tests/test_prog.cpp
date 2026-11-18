@@ -4,6 +4,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <cstring>
 #include <thread>
 
 #include "core/prog/prog.hpp"
@@ -153,6 +154,142 @@ void test_late()
     CHECK(procs.exit(b) && runner.tasks() == 0);
 }
 
+// What is kept for a program that is not responding (the result of a job,
+// in practice): it waits for the program and reaches it, in order, when it
+// answers again. Everything else is lost, as the owner chose.
+struct Note {
+    char *out; // what the program has been handed, one letter a call
+    char letter;
+    void operator()()
+    {
+        size_t n = strlen(out);
+        out[n] = letter;
+        out[n + 1] = 0;
+    }
+};
+
+// A call that hangs until the gate opens, then leaves its letter.
+struct Hang {
+    host::ThreadEvent *gate;
+    char *out;
+    char letter;
+    void operator()()
+    {
+        gate->wait(0xFFFFFFFF);
+        Note{out, letter}();
+    }
+};
+
+void test_kept()
+{
+    using proc::Pid;
+    proc::Table procs;
+    const Pid root = procs.spawn("desktop", proc::kNone);
+    const Pid a = procs.spawn("a", root, proc::kWindowed);
+    prog::Runner runner(procs);
+    host::ThreadTasks tasks;
+    host::ThreadEvent events[2], gate;
+    host::HostMemory memory;
+    prog::Kit kits[1] = {{&events[0], &events[1]}};
+    runner.set_tasks(&tasks, kits, 1);
+    runner.set_memory(&memory);
+    News news;
+    runner.set_news(&News::told, &news);
+    CHECK(runner.start(a));
+    const uint32_t stack = procs.find(a)->memory;
+    static char got[64];
+    got[0] = 0;
+    const auto back = [&] {
+        return soon([&] {
+            runner.serve();
+            return !runner.late(a);
+        });
+    };
+
+    // A program that answers gets its calls at once: nothing waits.
+    runner.set_limit(2000);
+    CHECK(proc::call_as(&procs, a, Note{got, 'a'}, proc::kKept) && runner.kept(a) == 0 && memory.in_use() == 0);
+
+    // It hangs. What is to be kept waits, in memory counted as its own;
+    // what is not is dropped.
+    runner.set_limit(30);
+    CHECK(!proc::call_as(&procs, a, Hang{&gate, got, 'h'}, proc::kKept) && runner.late(a));
+    CHECK(!proc::call_as(&procs, a, Note{got, 'b'}, proc::kKept));
+    CHECK(!proc::call_as(&procs, a, Note{got, 'x'})); // dropped
+    CHECK(!proc::call_as(&procs, a, Note{got, 'c'}, proc::kKept));
+    {
+        // By pointer: it cannot be kept.
+        bool made = false;
+        CHECK(!procs.call(a, [](void *flag) { *static_cast<bool *>(flag) = true; }, &made, 0, proc::kKept) && !made);
+    }
+    CHECK(runner.kept(a) == 2 && memory.in_use() == 2 && procs.find(a)->memory > stack);
+    CHECK(strcmp(got, "a") == 0);
+
+    // It answers again: all of it, in order, before anything new, and the
+    // memory goes back.
+    gate.set();
+    CHECK(back());
+    CHECK(strcmp(got, "ahbc") == 0);
+    CHECK(runner.kept(a) == 0 && memory.in_use() == 0 && procs.find(a)->memory == stack && news.back == 1);
+    runner.set_limit(2000);
+    gate.set();
+    CHECK(proc::call_as(&procs, a, Note{got, 'd'}, proc::kKept) && strcmp(got, "ahbcd") == 0);
+
+    // Late again in the middle of what waited: the rest goes on waiting,
+    // and what comes now goes behind it.
+    got[0] = 0;
+    gate.wait(0); // closed
+    runner.set_limit(30);
+    CHECK(!proc::call_as(&procs, a, Hang{&gate, got, '1'}, proc::kKept));
+    CHECK(!proc::call_as(&procs, a, Hang{&gate, got, '2'}, proc::kKept));
+    CHECK(!proc::call_as(&procs, a, Note{got, '3'}, proc::kKept));
+    gate.set(); // lets the first go; the second closes the gate behind it and hangs
+    CHECK(soon([&] {
+        runner.serve();
+        return strcmp(got, "1") == 0 && runner.kept(a) == 1;
+    }));
+    CHECK(runner.late(a));
+    CHECK(!proc::call_as(&procs, a, Note{got, '4'}, proc::kKept) && runner.kept(a) == 2);
+    gate.set();
+    CHECK(back());
+    CHECK(strcmp(got, "1234") == 0 && runner.kept(a) == 0 && memory.in_use() == 0);
+
+    // No more than there can be jobs: past that, calls are lost.
+    got[0] = 0;
+    gate.wait(0);
+    CHECK(!proc::call_as(&procs, a, Hang{&gate, got, 'h'}, proc::kKept));
+    for (int i = 0; i < prog::Runner::kMostKept + 5; i++) {
+        proc::call_as(&procs, a, Note{got, static_cast<char>('A' + i % 26)}, proc::kKept);
+    }
+    CHECK(runner.kept(a) == prog::Runner::kMostKept && memory.in_use() == prog::Runner::kMostKept);
+
+    // Ended while it hangs: what waited for it goes with it.
+    CHECK(procs.exit(a));
+    CHECK(memory.in_use() == 0 && !procs.alive(a));
+    gate.set();
+    CHECK(soon([&] {
+        runner.serve();
+        return runner.tasks() == 0;
+    }));
+    CHECK(strlen(got) == 1); // none of them was made
+
+    // No Memory port: nothing is kept, as before there was a queue.
+    const Pid b = procs.spawn("b", root, proc::kWindowed);
+    runner.set_memory(nullptr);
+    CHECK(runner.start(b));
+    got[0] = 0;
+    gate.wait(0);
+    CHECK(!proc::call_as(&procs, b, Hang{&gate, got, 'h'}, proc::kKept));
+    CHECK(!proc::call_as(&procs, b, Note{got, 'b'}, proc::kKept) && runner.kept(b) == 0);
+    gate.set();
+    CHECK(soon([&] {
+        runner.serve();
+        return !runner.late(b);
+    }));
+    CHECK(strcmp(got, "h") == 0);
+    CHECK(procs.exit(b) && runner.tasks() == 0);
+}
+
 } // namespace
 
 int main()
@@ -257,6 +394,7 @@ int main()
     CHECK(procs.exit(c) && runner.tasks() == 0);
 
     test_late();
+    test_kept();
 
     if (failures == 0) {
         printf("all tests passed\n");

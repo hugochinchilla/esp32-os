@@ -15,6 +15,8 @@ Last updated: 2026-11-16.
 | Resolution | 640x480 at 60 Hz | Basic VGA mode; fits the PSRAM bandwidth with room to spare |
 | Colour depth | 256 colours (red 3 bits, green 3, blue 2), with 64 colours (2 bits each) as a fallback | Enough for the look; one byte per pixel sent straight to the pins, no palette step |
 | Adapter board | One 5x7 cm perfboard carrier holds the VGA resistors, the audio output filter and the beeper |  It all fits beside the dev board |
+| Two boards, one pin map | The hand-built perfboard board and the manufactured hat are separate designs with separate documents (the owner, 2026-11-18): `docs/hardware/` is the perfboard, `hardware/hat/` the hat. Both keep the same pin map so that one firmware serves both. What is tried on the perfboard feeds the hat (`docs/hardware/perfboard-build.md`) | Owner's choice |
+| Supply capacitor | An electrolytic capacitor across 3.3 V next to the dev board is a permanent part of both boards (the owner, 2026-11-18): 100 to 470 µF on the hand-built board (470 µF fitted), and one on the hat's 3.3 V, whose value is recorded with the hat in `hardware/hat/` | On the hand-built board it removed the lines seen at high Wi-Fi transmit power, with the colour returns still open: the radio's bursts were dipping the 3.3 V supply that the video voltage is divided from. One look by eye on one board (`docs/hardware/perfboard-build.md`) |
 | VGA wiring | Resistor DAC on a 5x7 cm perfboard carrier: 510, 1k, 2k ohm per colour, 100 ohm on each sync line, 1/4 W | Simple to build; every signal is on the left header next to its resistor |
 | Blue's third pin | GPIO8 repeats blue's top bit | Keeps white and four greys neutral with only two blue bits in the byte |
 | Video pins | Red 4, 5, 6. Green 7, 15, 16. Blue 17, 18, 8. HSYNC 9. VSYNC 10 | See `docs/hardware/README.md` |
@@ -121,10 +123,13 @@ manager and from the desktop; the Trash window's File menu has Empty Trash.
 
 ### Wi-Fi transmit power (2026-11-16)
 
-Decided by the owner: the radio's transmit power defaults to the minimum,
-2 dBm, adjustable as `tx_power_dbm` in C:\.config\network.ini (2 to 20),
-because at full power its transmit bursts put lines on the picture while it
-connects (see Found on the bench). Joining goes straight to the remembered
+Decided by the owner, 2026-11-18: the radio's transmit power defaults to
+the maximum, 20 dBm, adjustable as `tx_power_dbm` in C:\.config\network.ini
+(2 to 20). From 2026-11-16 until then the default was the minimum, 2 dBm,
+because at full power the transmit bursts put lines on the picture while it
+connected (see Found on the bench). A capacitor across 3.3 V cured the
+lines (Decided, "Supply capacitor"), and both boards carry it. A board
+without the capacitor sets `tx_power_dbm = 2`. Joining goes straight to the remembered
 network's channel and access point (kept in NVS with the networks) instead
 of scanning every channel first, so the radio transmits less; a full scan
 follows only if it is not found there.
@@ -355,9 +360,12 @@ and reasons are in `docs/journal/2026-11-17-program-lifecycle.md`.
   window for it; the shell's `make_window`, `one` and `open_one`
   (`core/src/shell/internal.hpp`) are how programs use it. A new window or
   dialog is written this way; it is no longer possible to "owe" the memory.
-- **The Editor can run several times** (four at most), each a process with
+- **The Editor can run several times**, each a process with
   its own window, text and dialogs; a file already open in one comes to the
-  front. The File manager keeps its one process with up to three windows.
+  front. The File manager keeps its one process, with a window for every
+  folder opened. (Until 2026-11-17 there were four Editors and three folder
+  windows at most; the owner had both caps removed: "No window limit of
+  the system's" below.)
   Every other program runs once at a time (`shell::App::many` switches it).
 - **Open, Save As and the text question are made per asker**; two programs
   can each have one up. The message box stays one at a time.
@@ -401,7 +409,7 @@ and reasons are in `docs/journal/2026-11-17-program-lifecycle.md`.
 | --- | --- | --- |
 | Window manager details chosen while building step 4, closest to the 98 look; to confirm or overrule | See the list under "Chosen in step 4" below | As built |
 | Remote keyboard, mouse and screen for a person | VNC server, web page, debug tool only | VNC server |
-| How apps are delivered | Built into the firmware, or loadable from disk | Built in first, behind an app interface. Still the owner's question; the shell works on that assumption: programs are entries in a table (`core/include/core/shell/shell.hpp`: name, icon, open function) that the Start menu and desktop icons launch the same way |
+| How apps are delivered | Built into the firmware, or loadable from disk | Decided 2026-11-17: both. The built-in programs stay rows in the program table, and a program can also be a file loaded from a drive ("Programs loaded from files" below, backlog item 27) |
 | Shell details chosen while building menus, the Start menu and widgets; to confirm or overrule | See "Chosen in the shell milestone" below | As built |
 | A RAM disk as well as C: | Drop it, or keep a small one as a separate temporary drive | Dropped with LittleFS, since nothing needs it; the RAM disk code stays for the PC tests and the simulator |
 | Details chosen in the files milestone; to confirm or overrule | See "Chosen in the files milestone" below | As built |
@@ -413,6 +421,34 @@ and reasons are in `docs/journal/2026-11-17-program-lifecycle.md`.
 | A PC build of the desktop for testing | Yes, no | Decided: yes. See Decided |
 | How the PC build shows the screen | SDL window, image files only | Open |
 | Clock chip | DS3231 module, another I2C chip | DS3231 |
+| VGA pin 5 on the hand-built board, once the firmware reads the hat's monitor sense on GPIO47 | Wire pin 5 to GPIO47 with a pull-up as the hat; tie GPIO47 to ground; leave the board and have the firmware treat it as unknown | Wire it as the hat, when the firmware reads it (`docs/hardware/perfboard-build.md`) |
+
+### The chess game (the owner's decisions, 2026-11-18)
+
+Backlog item 50; the mock-ups are in `docs/look/chess/` and the reasoning
+in `docs/journal/2026-11-18-chess-design.md`. Designed and approved, not
+built.
+
+- The engine is one written for this project in `core/src/games/`, tested
+  on the PC (chosen on a card). Not micro-Max (through mcu-max), and not a
+  port of a larger engine.
+- A piece is moved by dragging it, or by a click on it and a click on
+  where it goes.
+- What each side has taken is shown as small pieces, evenly spaced: the
+  engine's captures above the board, the user's below, with the lead in
+  pawns.
+- The game offers sets of pieces to choose from (Options > Pieces), as it
+  offers board colours (Options > Board). Three sets, drawn by
+  `tools/mockup/chess_pieces.py`: Contour (the detail all in the outline),
+  Symbols (plain signs) and Classic (with inner lines).
+- Approved as shown ("perfect, go ahead"), and so to confirm only if it
+  turns out not to be what he meant: Contour is the set a new installation
+  starts with; squares of 40 pixels; green with white squares or brown
+  with cream ones; the last move in yellow, dots where a picked piece can
+  go, letters and numbers inside the squares, the board turned so the
+  user's side is at the bottom; five levels of difficulty, and White,
+  Black or Random, in a dialog before each game; everything chosen kept in
+  `C:\.config\chess.ini`; the program is called "Chess".
 
 ## Ideas kept for later
 
@@ -1638,7 +1674,9 @@ by the agent under the owner's "dejo a tu criterio" of 2026-11-16.
   `rmdir`. Each command expands them itself (the DOS way); there is no heap
   to hold a list. A star does not match names that start with a dot, so
   `del *` leaves `C:\.config` and `C:\.trash` alone.
-- `rm` deletes for good; it does not use the Trash. `rm -r` and `rmdir`
+- `rm` deletes for good; it does not use the Trash (**confirmed by the
+  owner, 2026-11-17**: "el comando RM no debe utilizar la papelera, borra
+  el archivo directamente"). `rm -r` and `rmdir`
   refuse the folder the session is in and a drive's root.
 - `mv` onto an existing file replaces it in one step. Between drives it
   copies and deletes, files only. `cp` writes the safe way (temporary file,
@@ -2174,10 +2212,10 @@ option of a card the owner has not answered yet.
   panels are pictures it paints itself. The one thing a program holds
   that is not a number is the Editor's reader for its text while a save
   job runs (good only while the window is locked).
-- All 17 programs are written with the thin classes. What is left on
-  `core/wm`'s classes is the desktop itself and its own windows (About,
-  Welcome, the widget gallery, the message box).
-- Events through a queue: with item 26.
+- All 17 programs are written with the thin classes, and since item 26
+  About, Welcome and the widget gallery too (20 files). What is left on
+  `core/wm`'s classes is the desktop itself and the message box.
+- Events through a queue: decided against ("No queue of events" below).
 
 ### Chosen for background jobs (2026-11-17, to confirm)
 
@@ -2256,13 +2294,146 @@ The rest is the agent's, to confirm:
   Rejected: a mutex held by the UI task whenever it runs.
 - What goes to a program goes by copy, never as a pointer into the
   caller's stack.
+- A program's code is entered from outside only through `in_program`
+  (or `launch`): one program opening another, the desktop opening a
+  folder, files changing under a File manager window, the answer to a
+  question. Rejected for now: posting a message and returning (it comes
+  with the queue of events).
+- **The programs have tasks, the dialogs and settings tools do not** (the
+  owner's choice on a card, 2026-11-17: "Los programas, no los
+  diálogos"; every one with dialogs included, only those that can take
+  long, and leaving it at Culebra were the others).
+- Stack per program in the program table (the figures are the agent's,
+  to confirm with the board): Cactus
+  Patch at 4 KB; Editor, File manager, Picture viewer, Task Manager and
+  Defragmenter at 8 KB; About, Welcome and Widget gallery at 4 KB, now
+  written on the OS calls like the rest. The Terminal's window stays on
+  the UI task (its shell already has a task: the session). The settings
+  tools and dialogs stay on the UI task.
 - A late program's task runs at the idle priority until it answers: it
   may spin for ever, and the kernel's idle tasks must still get their
   turn (ESP-IDF's task watchdog watches them, 5 s).
 - A late program's task is taken away when it is ended; it is outside
   every OS call by then, so it holds no lock.
-- Not yet: the queue of events (what a late program missed is lost),
-  the other programs, programs that call each other's code directly.
+- The queue of events was decided against: "No queue of events" below.
+  Still not done: programs that call each other's code directly.
+
+### No window limit of the system's (the owner's decision, 2026-11-17)
+
+Asked whether the system should own one limit on open windows or each
+program keep its own cap, the owner chose neither kind of common limit: "creo
+que no tiene que haber un límite de ventanas común. Prefiero ver el sistema
+fallar por falta de memoria dado el caso. Me parece un caso divertido y de
+época."
+
+- **There is no limit on the windows open at once.** The window server's
+  two lists and the list of numbered windows (`os::ui`) begin with room for
+  sixteen and grow out of the Memory port, twice the room each time; the
+  block goes back when sixteen or fewer are left. Before, the seventeenth
+  window did not open.
+- **Running out of memory is how the machine says it has had enough**, and
+  that is accepted. A window that finds no memory does not open and
+  nothing of it is left ("There is not enough memory to open ...", when
+  there is memory for the message).
+- **The caps programs set for themselves are gone too** (the owner,
+  asked: "Quítalos"): any number of Editors, at 576 KB each, where there
+  were four and a message for the fifth; a File manager window for every
+  folder opened, where there were three and the first was reused for a
+  fourth folder. The one that finds no memory says so.
+- Left as they were: the 32 rows of the process table and the 8 program
+  tasks (a ninth program runs on the UI task). They are not limits on
+  windows.
+- With very many windows the taskbar's buttons shrink to four pixels and
+  the last ones are off the bar. To confirm; nothing is drawn for it.
+
+### No queue of events (the owner's decision, 2026-11-17)
+
+Backlog items 26 and 37, the last part of both.
+[Journal](journal/2026-11-17-event-queue.md).
+
+- **What happens to a program while it is not responding is lost**, as
+  it was: its keys, its clicks, its timer's ticks. The owner's choice on a
+  card ("Dejarlo como está"). Rejected: a queue that keeps them for the
+  program until it answers (built first, on the agent's recommendation,
+  and taken out again); and a message loop in every program, as Win16
+  programs had, with the desktop waiting only to paint (all twenty
+  programs rewritten, and locks around the OS calls).
+- **The one exception is the result of a background job**, which the card
+  named: a save that finishes while its program is away is kept
+  (`proc::kKept`, said by `job::Jobs::finish` alone) and handed to the
+  program when it answers again, before anything new. Before, it was lost
+  and the Editor's window stayed locked for good. It waits in external
+  RAM counted as the program's memory, and goes with the program if that
+  is ended. At most eight a program, as many as there can be jobs.
+- Events therefore still reach a program as calls that the server waits
+  for. Item 37's "events through a queue" is closed as not wanted.
+
+### Programs loaded from files (2026-11-17)
+
+Backlog item 27. [Journal](journal/2026-11-17-loaded-programs.md).
+
+- **Native code loaded from C:** (the owner's choice on a card,
+  2026-11-17: "Código nativo cargado de C:"). Rejected: WebAssembly (safe
+  but 10 to 30 times slower), an interpreted language of our own, nothing.
+  A loaded program has no protection, as a built-in one has none.
+
+The rest is the agent's, to confirm:
+
+- A program file is `name.app`: **a header of ours, then the code** (an
+  ELF shared object for the ESP32-S3). The header
+  (`core/include/core/app/file.hpp`, 1,332 bytes) carries the program's
+  name, the stack its task asks for and a 16x16 and a 32x32 picture; the
+  program writes it with `APP_INFO` and the build copies it to the front
+  of the file (`tools/pack_app.sh`). The system reads it without loading
+  the program. A file without it is refused. Put to the owner on a card
+  (2026-11-17), built on the recommended option, answer pending; the
+  others: the code alone with one picture for every program, or the
+  picture in a file beside it.
+- Programs are built from the same thin classes as the built-in ones
+  (`programs/`, `tools/build_programs.sh`), with `APP_MAIN` as the way in.
+- It reaches the system **by name** (the owner's choice on a card,
+  2026-11-17: "Por nombre (como está hecho)"; a table of calls by number
+  was the other): the loader fills in the calls from a table written out
+  of the firmware's core library at build time (`tools/gen_exports.py`).
+  Only the OS calls, the pictures, the shell's dialogs and a short list
+  of libc are in it.
+- The loader on the board is Espressif's `elf_loader` (2.1.0, Apache 2.0)
+  behind `ports::Loader`; its own symbol tables are off.
+- A loaded program is a process with the name its header gives (its
+  file's if it gives none), windowed like the others. **Every loaded
+  program has a task of its own** where the machine has tasks, with the
+  stack its header asks for (4 KB if it says nothing): the owner's rule
+  for item 26, "los programas, no los diálogos", applied to files. Put to
+  him on a card (2026-11-17), answer pending; the others: only programs
+  that mark it, or none for now.
+- What a loaded program takes in memory is counted as its process's.
+- It is unloaded after its process has ended, its last window is
+  destroyed and its task has gone. 1 MB a file, eight at a time.
+- **Start > Programs lists the program files of `C:\Programs`**, after
+  the built-in programs, flat, by the name and picture of each header;
+  the folder is read as the menu opens. Put to the owner on a card
+  (2026-11-17), answer pending; the others: subfolders as submenus, or
+  the menu left alone. In the File manager a `.app` has one picture for
+  the kind, not each program's own (the listing keeps no pixels).
+
+- **Programs that come with the system are carried in the firmware and
+  installed** (the owner's choice on a card, 2026-11-17: "Dentro del
+  firmware, se instalan"): the firmware build makes `programs/*` into
+  `.app` files and carries them as data; at start-up the system writes to
+  `C:\Programs` those that are missing or from another build
+  (`C:\Programs\installed.txt` holds the build's stamp). Rejected: a
+  read-only system partition (the partition table changes, the network
+  update does not write it) and copying with `dbg.py` (a wiped C: loses
+  them). A bundled program deleted by the user comes back at the next
+  start.
+
+- **Culebra and Cactus Patch are files on the board and built in on the
+  PC** (the owner's choice on a card, 2026-11-17: "Archivo en placa,
+  integrado en PC"): one source with two forms (`APP_FILE`). Rejected: a
+  file everywhere (the browser build cannot load files and would lose
+  them) and leaving them built in. A program file runs one copy at a time
+  unless its header says `many`. The firmware does not shrink by this:
+  the files are carried in it.
 
 ### Missed video refills are logged (2026-11-17, the owner's request)
 
@@ -2375,6 +2546,107 @@ Step 1 of backlog item 46, built on the PC only
   `tools/mockup/bios_text.py` from the font's BDF file; the PC test compares
   the screen with it pixel for pixel.
 
+### Window themes (the owner's decision, 2026-11-17)
+
+The desktop has themes, chosen in Display: Classic (the look it always
+had), Sky, Glacier and Midnight. The owner picked the three new ones from
+five that were drawn; the one-bit and workbench looks were not taken.
+
+- A theme changes only what is painted: frames, title bars, buttons, fields,
+  scroll bars, menus, the taskbar. Sizes and places are the same in every
+  theme, so no layout and no hit test depends on it.
+- The table is `core/gfx/theme.hpp`. What draws a part of the user
+  interface asks it (`gfx::face()`, `ink()`, `paper()`, `dim()`,
+  `gfx::theme()`); `gfx::kGrey`, `kBlack` and `kWhite` are for drawings that
+  keep their colours (icons, games, boot screens).
+- Every flat colour of a theme is one the board has exactly.
+- Kept in `desktop.ini`, `[look] theme`. The desktop's colour is not part
+  of a theme.
+
+The agent's, to confirm: the table as rows in the code (not files on C:),
+the kinds of edge, title bar and title button as fields of a row. Not
+decided: icon themes, themes that move the title buttons. Rejected for now:
+rounded corners (a window is a rectangle to the window manager).
+
+Journal: [first round](journal/2026-11-17-window-themes.md),
+[second round](journal/2026-11-17-window-themes-modern.md),
+[built](journal/2026-11-17-window-themes-built.md).
+
+### Chosen for the BIOS firmware (2026-11-17, to confirm)
+
+Step 2 of backlog item 46, compiled but not run on the board
+(`docs/journal/2026-11-17-bios-second-stage.md`).
+
+- The BIOS is the app partition `bios` (subtype `test`, 960 KB at 0x10000);
+  C: is 11 MB; `nvs` did not move.
+- Our bootloader file starts the BIOS at every start unless a word in the
+  reserved RTC memory asks for the OS. The BIOS writes the word and
+  restarts. With no good BIOS image in the flash the OS starts as before.
+- The OS started by the BIOS does not repeat the self-test. Until step 3
+  the OS keeps its own, for a flash with no BIOS.
+- An armed fast start (`tools/dbg.py reboot --fast`, after a cable flash)
+  passes the BIOS without a picture.
+- Any byte on serial counts as a key in the BIOS.
+- A "Boot device" line names the slot and checks its image; with nothing to
+  start the BIOS says so and stops.
+- The BIOS compiles the OS's `vga.c` and has small adapters of its own;
+  sharing the adapters is step 3.
+- The BIOS is flashed with `tools/flash-bios.sh`, never `idf.py flash` in
+  `firmware/bios`, which would write a bootloader without our file.
+
+### The BIOS's first screen (the owner, 2026-11-17)
+
+`docs/journal/2026-11-17-bios-first-screen.md`.
+
+- Before the self-test the BIOS shows a first screen (asked for as 2 or
+  3 s; held until 7 s after the reset, the owner's choice on a card, because the bench
+  monitor was measured to show a steady picture only 5.5 to 6 s after a
+  reset, for the BIOS and for `main` alike, not the 2.4 s recorded on
+  2026-11-16), as the PCs
+  of the nineties showed their BIOS maker's logo and an energy badge. It
+  covers the time the monitor takes to wake; nothing that matters is on it.
+- The badge is our own: a leaf with a lightning bolt in a round ring, the
+  name under it, and "Runs on a USB port". No square frame, no "no fan, no
+  noise" (the owner's changes to the first drawing). The real Energy Star
+  mark is not used.
+- The name "Energy Nibbler" is to confirm.
+- The BIOS is called "Rodent BIOS" on its screens, on serial and in the
+  docs from here on (the owner, 2026-11-17: so that not everything is
+  called Chinchilla). Earlier journal entries keep the words of their day.
+  The OS's own self-test screen, which still says "Chinchilla BIOS" and is
+  shown only without a BIOS or after an error, goes away in step 3.
+- The second drawing of the first screen is approved by the owner.
+- The memory count in the BIOS runs at the speed of the test, without the
+  pause between steps that the OS's self-test has.
+- After an error the OS restarts without the BIOS, and a reset by a
+  watchdog or a brownout starts the OS directly. Left as it is for now.
+- The BIOS will not show the OS's error screen (the owner, 2026-11-17,
+  reversing the "to confirm" point of the first discussion): the BIOS is
+  to have no link with the OS's errors. It is a self-test and, later, a
+  Setup with the partition to start, the clock and other settings. The OS
+  is to say on the desktop that the last session failed, with a button
+  that opens the report in the text editor. Not built; what is still open
+  is in `docs/handoff/bios-step-3.md`.
+
+### The hourglass on demand (the owner's decision, 2026-11-18)
+
+Journal: `docs/journal/2026-11-18-hourglass-on-demand.md`. Backlog item 49.
+
+- A program that is working something out asks for the hourglass with
+  `os::ui::set_hourglass(window, true)` and gives the arrow back with
+  `false`. It is a switch, not a count, and it goes with the window.
+- The hourglass shows over the window's client area only (the owner's
+  choice of three). Over the title bar, its buttons and the menu bar the
+  pointer is the arrow, because they still answer; the borders keep their
+  sizing arrows. Not chosen: the whole window, as a locked window shows it
+  (the pointer would say "wait" over a Close button that works), and a call
+  that sets any pointer shape (more than asked; no program needs it).
+- The window is not locked: keys, clicks, menus and Close work as before.
+  `os::ui::set_locked` stays what it was, for a program whose job is using
+  what the window holds, and `os::Busy` stays the whole-screen wait.
+- To try it before Chess exists: Widget gallery > Options > Hourglass.
+- To confirm (the agent's): the name `set_hourglass` rather than `set_busy`.
+
 ### The Trash is the File manager on C:\.trash (the owner's request, 2026-11-17)
 
 Asked for by the owner: one File manager that also shows the Trash, so that
@@ -2404,8 +2676,8 @@ Chosen by the agent, to confirm:
   Inside the Trash nothing is made or renamed, hidden names are always
   shown, and Delete is for good, after asking. Restore and Empty Trash are
   only at the top of the Trash.
-- The Trash takes one of the File manager's three windows. Opened when it
-  is already shown, that window comes forward.
+- The Trash is a folder window like the others. Opened when it is already
+  shown, that window comes forward.
 - The Trash shows also when `C:\.trash` does not exist (nothing thrown away
   yet, or just emptied); any other folder that goes away shows My Board.
 - New OS call: `os::ui::set_icon` (`app::Window::set_icon`), since a

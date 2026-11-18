@@ -1,6 +1,6 @@
 # One File manager, also for the Trash
 
-2026-11-17. Backlog item 47.
+2026-11-17. Backlog item 52 (it was 47 until the merge of 2026-11-18, when the window themes had taken that number).
 
 ## What was asked
 
@@ -111,3 +111,28 @@ again; it is closed, like the Trash opened from the desktop.
 Tested on the PC only (43 of 43; `test_trash_view` and the Trash pictures
 changed to match). This second commit has not been compiled for the board
 nor run on it.
+
+## 2026-11-18: main merged in
+
+The board passed the second commit too (`3e84ce9`, no missed refills). By
+the time the owner asked for the merge, `main` had moved under it: folder
+windows are no longer three places in a table but a list with no limit, the
+File manager opens on a task of its own (`in_program`), and the window
+themes had taken backlog number 47. `main` was merged into the branch:
+`open_trash()` stays one line, `open_folder(kTrashFolder)`, now on top of
+the new `open_folder`; this item is 52; "the Trash takes one of the three
+windows" no longer means anything and was taken out of the decisions.
+
+The merge turned up a fault that was already on `main`. The new list of
+folder windows had a way out (the destructor unlinks the window) and no way
+in: nothing ever put a window on it. So on `main` no folder window was
+found again: a change to the files did not refresh an open folder, and
+opening a folder already shown made a second window. Nothing tested either,
+and the old Trash window hid it for the Trash, because it was kept apart in
+a variable of its own. With the Trash a folder window, `test_trash_view`
+failed at once (two Trash windows) and picture `37n` showed the emptied
+Trash still holding its file. The constructor now joins the list.
+
+PC tests: 44 of 44. The two Task Manager pictures were redrawn (the File
+manager's memory figure). PC only; the merge has not been compiled for the
+board nor run on it.
