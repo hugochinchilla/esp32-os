@@ -226,3 +226,39 @@ reading after 20 more seconds of idle shows ten such ticks, each 2 to 4
 frames long. Free internal memory with the five windows open: 161,351 against
 202,103 bytes; external 5,172,200 against 6,205,392; the largest external
 block 5,111,808 against 6,160,384.
+
+## How to run it again (2026-11-18)
+
+The owner, while the second board turn ran: "I'm liking the benchmark as it
+is being performed, please save the instructions on how to replicate it as I
+will want to replay it later for my youtube video". They are in
+[`docs/benchmark.md`](../benchmark.md): what is needed, the two commands,
+what each part shows on the screen and how to read the lines.
+
+## What the board's figures say (2026-11-18)
+
+Read by the thread that built the benchmark, from the three runs above.
+
+- The video signal is steady: no missed refill in any run, 59.52 frames a
+  second. Nothing tears or shifts.
+- The desktop is not: 64 to 66 pieces of work over budget in about 1,890
+  frames drawn, and the three runs agree within 1 to 2 ms.
+- A drag never goes over budget, and neither does a game. In the two drag
+  parts and in the Culebra part the only pieces over budget are the
+  taskbar's timer and the clicks and keys that set the part up. The outline
+  steps, the snake's steps and Chess thinking on its own task all fit.
+- Two things account for the rest:
+  1. The taskbar's timer that lists the desktop's folder, 35 ms every two
+     seconds (84 ms just after a start), whatever else is going on. It is
+     three of the pieces over budget in every six-second part, about 27 of
+     the 64.
+  2. Painting a large window. Whenever 180,000 to 290,000 pixels are
+     painted in one go (a window dropped, brought to the front or
+     maximised) the piece takes 30 to 59 ms, two to four frames. The time
+     is in the programs' own painting: the Terminal's window up to 40 ms,
+     Chess's 28 to 40 ms, the Editor's 15 to 21 ms, Culebra's and the File
+     manager's 15 to 25 ms.
+
+Nothing is fixed here: which of the two to take first, and how, is the
+owner's choice.
+
