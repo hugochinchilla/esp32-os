@@ -3,7 +3,10 @@
 #include <cstring>
 
 #include <algorithm>
+#include <atomic>
 #include <strings.h>
+#include "core/job/job.hpp"
+#include "core/msg/queue.hpp"
 #include "core/prog/prog.hpp"
 #include "core/fs/ini.hpp"
 #include "core/gfx/art.hpp"
@@ -583,7 +586,6 @@ void drop_on_desktop(const char *path, int x, int y, void *)
         write_place(ini, "files", fs::path::name(path), x, y);
         save_settings("icons", ini);
     }
-    files_changed();
     if (e != ports::FsError::Ok) {
         static char text[fs::kMaxPath + 60];
         snprintf(text, sizeof(text), "Cannot move '%s':\n%s.", fs::path::name(path),
@@ -596,7 +598,6 @@ void drop_on_desktop(const char *path, int x, int y, void *)
 void drop_on_folder(const char *path, void *context)
 {
     const ports::FsError e = move_to_folder(path, static_cast<const DesktopFile *>(context)->path);
-    files_changed();
     if (e != ports::FsError::Ok) {
         static char text[fs::kMaxPath + 60];
         snprintf(text, sizeof(text), "Cannot move '%s':\n%s.", fs::path::name(path),
@@ -625,53 +626,87 @@ const gfx::Bitmap *file_picture(const char *name, bool folder)
     return &gfx::file_icon_32();
 }
 
-// Reads C:\Documents\Desktop again; the icons change only if the files did.
-// ponytail: looked at every 2 s (a few directory reads), so files put there
-// any way (File manager, a save, tools/dbg.py put) appear without hooks.
-void refresh_desktop_files(bool force)
-{
-    if (!g_taskbar_up) {
-        return; // no shell, no icons to keep right
-    }
-    uint32_t signature = 2166136261u;
-    int n = 0;
+// What is in C:\Documents\Desktop, and whether the Trash holds anything:
+// what the desktop's icons are made from. Read by list_desktop() on any
+// task (a job's), shown by show_desktop() on the UI task.
+struct DesktopListing {
     struct Found {
         char name[64];
         bool folder;
     };
-    static Found found[desk::Icons::kMax - kSystemIcons];
-    for (int i = 0; n < desk::Icons::kMax - kSystemIcons; i++) {
-        ports::DirEntry e;
-        if (storage().entry(kDesktopFolder, i, e) != ports::FsError::Ok) {
+    Found found[desk::Icons::kMax - kSystemIcons];
+    int count = 0;
+    bool trash_full = false;
+};
+// One: only one listing is made at a time (g_listing_busy).
+DesktopListing g_listing;
+
+// Any task. One pass over the desktop's folder and one look into the Trash.
+// (Until 2026-11-18 each file was asked for by its index, which walks the
+// folder again from the start: n + 1 walks for n files, and as many for the
+// Trash, on the UI task, every 2 s.)
+void list_desktop(DesktopListing &out)
+{
+    out.count = 0;
+    constexpr int kRun = 8;
+    static ports::DirEntry run[kRun]; // one listing at a time
+    for (int first = 0; out.count < desk::Icons::kMax - kSystemIcons;) {
+        int got = 0;
+        if (storage().entries(kDesktopFolder, first, run, kRun, got) != ports::FsError::Ok) {
             break;
         }
-        if (e.name[0] == '.') {
-            continue; // hidden
+        for (int i = 0; i < got && out.count < desk::Icons::kMax - kSystemIcons; i++) {
+            if (run[i].name[0] == '.') {
+                continue; // hidden
+            }
+            DesktopListing::Found &f = out.found[out.count++];
+            static_assert(sizeof(f.name) == sizeof(run[i].name), "a name is copied whole");
+            memcpy(f.name, run[i].name, sizeof(f.name));
+            f.folder = run[i].folder;
         }
-        snprintf(found[n].name, sizeof(found[n].name), "%s", e.name);
-        found[n].folder = e.folder;
-        for (const char *c = e.name; *c != 0; c++) {
-            signature = (signature ^ static_cast<uint8_t>(*c)) * 16777619u;
+        if (got < kRun) {
+            break;
         }
-        signature = (signature ^ (e.folder ? 1u : 2u)) * 16777619u;
-        n++;
+        first += got;
     }
-    signature ^= static_cast<uint32_t>(n);
-    // The Trash's picture: with paper in it when it holds anything.
-    const bool full = trash_count() > 0;
-    signature = (signature ^ (full ? 3u : 4u)) * 16777619u;
-    g_icons[3].picture = full ? &gfx::bin_full_icon_32() : &gfx::bin_icon_32();
-    if (!force && signature == g_files_signature) {
-        return;
+    int in_trash = 0;
+    storage().entries(kTrashFolder, 0, run, 1, in_trash);
+    out.trash_full = in_trash > 0;
+}
+
+// The UI task. The icons change only if the files did.
+bool g_files_shown = false; // false: show them whatever the signature says
+void show_desktop(DesktopListing &l)
+{
+    if (!g_taskbar_up) {
+        return; // no shell, no icons to keep right
     }
-    g_files_signature = signature;
+    DesktopListing::Found *found = l.found;
+    const int n = l.count;
     // Folders first, then by name, ignoring case, as in the File manager.
-    std::sort(found, found + n, [](const Found &a, const Found &b) {
+    std::sort(found, found + n, [](const DesktopListing::Found &a, const DesktopListing::Found &b) {
         if (a.folder != b.folder) {
             return a.folder;
         }
         return strcasecmp(a.name, b.name) < 0;
     });
+    uint32_t signature = 2166136261u;
+    for (int i = 0; i < n; i++) {
+        for (const char *c = found[i].name; *c != 0; c++) {
+            signature = (signature ^ static_cast<uint8_t>(*c)) * 16777619u;
+        }
+        signature = (signature ^ (found[i].folder ? 1u : 2u)) * 16777619u;
+    }
+    signature ^= static_cast<uint32_t>(n);
+    // The Trash's picture: with paper in it when it holds anything.
+    const bool full = l.trash_full;
+    signature = (signature ^ (full ? 3u : 4u)) * 16777619u;
+    g_icons[3].picture = full ? &gfx::bin_full_icon_32() : &gfx::bin_icon_32();
+    if (g_files_shown && signature == g_files_signature) {
+        return;
+    }
+    g_files_shown = true;
+    g_files_signature = signature;
     fs::Ini places;
     load_settings("icons", places);
     for (int i = 0; i < n; i++) {
@@ -692,20 +727,190 @@ void refresh_desktop_files(bool force)
     g_desk->set_icons(g_icons, kSystemIcons + n);
 }
 
-void desktop_files_tick(void *) { refresh_desktop_files(false); }
+// The desktop's folder or the Trash changed: the folder is read again by a
+// job, so that the desktop goes on meanwhile (on the board's flash drive the
+// reading is longer than a video frame), and the icons are set when the job
+// comes back. One job at a time; a change that comes while it reads has it
+// read once more. The job is the desktop's (PID of "desktop"), which never
+// ends, so nothing waits for it.
+bool g_listing_busy = false;  // a job is reading into g_listing
+bool g_listing_again = false; // something changed while it read
+bool g_listing_owed = false;  // no job could be started: tried again by desktop_files_tick
+
+void desktop_changed();
+
+uint32_t list_work(const job::Job &, void *)
+{
+    list_desktop(g_listing);
+    return 0;
+}
+
+void listed(void *, uint32_t, bool)
+{
+    g_listing_busy = false;
+    if (g_listing_again) {
+        g_listing_again = false;
+        desktop_changed(); // what it read may already be old
+        return;
+    }
+    show_desktop(g_listing);
+}
+
+// The UI task, as any process.
+void desktop_changed()
+{
+    if (!g_taskbar_up) {
+        return;
+    }
+    if (g_listing_busy) {
+        g_listing_again = true;
+        return;
+    }
+    const proc::Scope as(&proc::table(), proc::table().find_by_name("desktop"));
+    job::Spec spec;
+    spec.name = "desktop";
+    spec.work = &list_work;
+    spec.done = &listed;
+    spec.stack_bytes = 8192; // the file system's calls for a listing
+    // Where there are no tasks the work, and `listed`, are over when this
+    // returns.
+    g_listing_busy = true;
+    g_listing_owed = false;
+    if (!job::jobs().start(spec)) {
+        g_listing_busy = false;
+        g_listing_owed = true;
+    }
+}
+
+// When the taskbar starts: read here and now, so that the first picture of
+// the desktop has its icons.
+void show_desktop_now()
+{
+    g_files_shown = false;
+    if (g_listing_busy) {
+        g_listing_again = true; // g_listing is the job's until it is back
+        return;
+    }
+    list_desktop(g_listing);
+    show_desktop(g_listing);
+}
+
+/* ---- Change notices -------------------------------------------------------------- */
+
+// fs::Storage says which folder changed (Storage::set_changed), on whatever
+// task changed it. Here that becomes work on the UI task: the folders are
+// kept as keys (fs::path::key) in a few slots, a message to the desktop says
+// there is something to look at, and settle() then has the desktop read its
+// folder again if it or the Trash is among them, and the File manager its
+// windows on those folders. This took the place of the 2 s timer that read
+// the desktop's folder whether or not anything had changed, and of the
+// files_changed() calls after each move and delete
+// (docs/journal/2026-11-18-change-notices.md).
+constexpr int kChangeSlots = 8;
+std::atomic<uint32_t> g_changed[kChangeSlots]; // 0: free
+std::atomic<bool> g_changed_all{false};        // more folders than slots: every one
+std::atomic<bool> g_change_told{false};        // a message is on its way, or a timer set
+// With a queue, other tasks can bring changes at any pace (a paste of a
+// hundred files): after settling, nothing is settled again for this long.
+constexpr uint32_t kSettleGapUs = 250000;
+bool g_settle_wait = false; // the UI task's: inside that gap
+
+void settle();
+
+void settle_later(void *)
+{
+    g_settle_wait = false;
+    if (g_change_told.load()) {
+        settle();
+    }
+}
+
+void change_message(const msg::Message &)
+{
+    if (!g_settle_wait) {
+        settle();
+    }
+}
+
+// The UI task, as the desktop.
+void settle()
+{
+    g_change_told.store(false); // from here on a change sends word again
+    FolderKeys keys;
+    keys.all = g_changed_all.exchange(false);
+    for (std::atomic<uint32_t> &slot : g_changed) {
+        const uint32_t key = slot.exchange(0);
+        if (key != 0) {
+            keys.key[keys.count++] = key;
+        }
+    }
+    if (g_listing_owed || keys.has(kDesktopFolder) || keys.has(kTrashFolder)) {
+        desktop_changed();
+    }
+    if (keys.all || keys.count > 0) {
+        // The File manager's windows are the File manager's to touch.
+        const proc::Pid files = proc::table().find_by_name("File manager");
+        if (files != proc::kNone) {
+            in_process(files, nullptr, [keys] { refresh_folder_windows(keys); });
+        }
+    }
+    if (msg::queue() != nullptr && !g_settle_wait) {
+        g_settle_wait = os::start_timer(kSettleGapUs, 0, &settle_later, nullptr) != 0;
+    }
+}
+
+// Any task, and in the middle of whatever changed the folder: nothing is
+// read or painted here.
+void folder_changed(const char *folder, void *)
+{
+    uint32_t key = fs::path::key(folder);
+    key = key != 0 ? key : 1; // 0 means a free slot
+    bool kept = false;
+    for (std::atomic<uint32_t> &slot : g_changed) {
+        uint32_t free_slot = 0;
+        if (slot.load() == key || slot.compare_exchange_strong(free_slot, key) || free_slot == key) {
+            kept = true;
+            break;
+        }
+    }
+    if (!kept) {
+        g_changed_all.store(true);
+    }
+    if (g_change_told.exchange(true)) {
+        return;
+    }
+    const proc::Pid desktop = proc::table().find_by_name("desktop");
+    if (msg::queue() != nullptr) {
+        if (!msg::post(desktop, &change_message)) {
+            g_change_told.store(false); // no room: the next change, or the tick, tries again
+        }
+        return;
+    }
+    // A machine with no queue has one task: this is it, in the middle of a
+    // program's work. A timer of the desktop's, due at once, is the same
+    // "between two rounds".
+    const proc::Scope as(&proc::table(), desktop);
+    if (os::start_timer(0, 0, [](void *) { settle(); }, nullptr) == 0) {
+        g_change_told.store(false);
+    }
+}
+
+// Every 2 s, and nearly always nothing: a notice whose message found the
+// queue full, or a listing whose job could not be started, is picked up
+// here. It reads no folder itself.
+void desktop_files_tick(void *)
+{
+    bool waiting = g_listing_owed || g_changed_all.load();
+    for (const std::atomic<uint32_t> &slot : g_changed) {
+        waiting = waiting || slot.load() != 0;
+    }
+    if (waiting && !g_settle_wait && !g_change_told.load()) {
+        const proc::Scope as(&proc::table(), proc::table().find_by_name("desktop"));
+        settle();
+    }
+}
 
 } // namespace
-
-void files_changed()
-{
-    const prog::InCall in_call;
-    // The File manager's windows are the File manager's to touch.
-    const proc::Pid files = proc::table().find_by_name("File manager");
-    if (files != proc::kNone) {
-        enter_program(files, nullptr, [](void *) { refresh_folder_windows(); }, nullptr, 0);
-    }
-    refresh_desktop_files(false);
-}
 
 namespace {
 
@@ -984,7 +1189,7 @@ void start_taskbar(void *)
     g_desk->set_moved(&icons_moved, nullptr);
     g_desk->set_menu(&desktop_menu, nullptr);
     g_taskbar_up = true;
-    refresh_desktop_files(true);
+    show_desktop_now();
     wm.start_timer(2000000, 2000000, &desktop_files_tick, nullptr);
     g_desk->attach(owner);
     g_bar->attach(owner);
@@ -1035,6 +1240,7 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
     g_wm = &wm;
     g_system = &system;
     g_storage = &storage;
+    storage.set_changed(&folder_changed, nullptr);
     wm.set_memory(&memory); // its lists of windows grow from there
     os::Kit kit;
     kit.wm = &wm;

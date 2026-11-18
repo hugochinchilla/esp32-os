@@ -37,12 +37,20 @@ bool valid_name(const char *name);
 // in the same folder ("C:\docs\a.txt" -> "C:\docs\.~a.txt.tmp"). False if it
 // does not fit.
 bool temporary(const char *path, char *out, int capacity);
+// A number that stands for a folder, the same however its path is written:
+// case, '/' or '\\' and a separator at the end do not count. Two folders
+// may share one (it is a 32-bit hash), so it says "may be the same folder",
+// never "is". What a change notice is matched by (Storage::set_changed).
+uint32_t key(const char *folder);
 } // namespace path
 
 // A file opened through Storage.
 struct File {
     ports::Volume *volume = nullptr;
     int handle = -1;
+    // The folder it is in, for a file opened to be written: closing it is a
+    // change to that folder (Storage::set_changed). "" when opened to read.
+    char folder[kMaxPath] = {};
     bool open() const { return volume != nullptr; }
 };
 
@@ -72,6 +80,26 @@ public:
     // which is right while only one task uses the file system. Set it before
     // a second task starts, never while a call is running.
     void set_lock(ports::Lock *lock) { lock_ = lock; }
+
+    // Change notices: `changed` is called with the folder ("C:\\Documents")
+    // whose list of files has just changed, after every call here that made,
+    // removed, renamed or finished writing something in it. A rename or a
+    // replace across folders tells both. It is called on the task that made
+    // the change, after the lock has been given back, so it may be any task
+    // and must be short and must not wait: set a flag, post a message
+    // (msg::post). `folder` is only good during the call. One listener; set
+    // it before a second task starts. The shell's is in
+    // core/src/shell/desktop.cpp (docs/journal/2026-11-18-change-notices.md).
+    //
+    // What is not told: files written behind Storage's back (straight to a
+    // Volume), and the hidden temporary file of a save, which comes and goes
+    // inside one call.
+    using Changed = void (*)(const char *folder, void *context);
+    void set_changed(Changed changed, void *context)
+    {
+        changed_ = changed;
+        changed_context_ = context;
+    }
 
     void mount(char letter, ports::Volume &volume);
     ports::Volume *volume(char letter) const;
@@ -123,7 +151,14 @@ private:
     FsError do_begin_save(const char *path, Save &save) const;
     FsError do_finish_save(Save &save, bool keep) const;
 
+    // Tells the listener that the folder holding `path` changed. Never with
+    // the lock held.
+    void tell(const char *path) const;
+    void tell_both(const char *from, const char *to) const;
+
     ports::Lock *lock_ = nullptr;
+    Changed changed_ = nullptr;
+    void *changed_context_ = nullptr;
     char letters_[kMaxDrives] = {};
     ports::Volume *volumes_[kMaxDrives] = {};
     int count_ = 0;

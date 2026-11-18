@@ -191,6 +191,7 @@ File system, folders, the Trash, settings files, saving.
 - [Trash](decisions/trash.md) (2026-11-16, owner, decided): Deleting moves to the Trash; dragging onto its icon; Empty Trash
 - [Chosen for file dates](decisions/file-dates.md) (2026-11-17, agent, to-confirm): One date per file, when it was last written, in UTC seconds (backlog 24)
 - [The Trash is the File manager on C:\.trash](decisions/trash-is-the-file-manager.md) (2026-11-17, owner, decided): There is no Trash window: a File manager window that shows C:\.trash is the Trash
+- [Change notices from the file system](decisions/change-notices.md) (2026-11-18, owner+agent, decided): Storage says which folder changed; the desktop reads its folder only then, in a job, not every 2 s (backlog 66)
 
 ### desktop
 
@@ -228,6 +229,7 @@ The programs and games, one decision each.
 - [Chosen for Copy, Cut and Paste of files](decisions/file-copy-cut-paste.md) (2026-11-18, agent, to-confirm): One clipboard for text or files; Copy, Cut and Paste in the File manager and on the desktop (backlog 54)
 - [Chosen for selecting several files](decisions/selecting-several-files.md) (2026-11-18, owner+agent, to-confirm): Ctrl+click and a rubber-band rectangle in the File manager (backlog 55)
 - [The chess game](decisions/chess-game.md) (2026-11-18, owner, decided): Chess: own engine, moving by drag or click, piece sets, board colours, levels (backlog 50)
+- [The computer's chess piece lands](decisions/chess-landing.md) (2026-11-18, owner+agent, decided): The computer's piece drops 4 pixels onto its square and bounces once, 233 ms (backlog 64); details to confirm
 
 ### console
 

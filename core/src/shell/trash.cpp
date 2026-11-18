@@ -147,7 +147,6 @@ void delete_answer(int choice, void *)
     }
     const bool permanent = p->permanent;
     forget_pending();
-    files_changed();
     report(e, permanent ? "delete" : "move to the Trash", path); // the one it stopped at
 }
 
@@ -374,7 +373,6 @@ void drop_in_trash(const char *path)
         return;
     }
     const ports::FsError e = to_trash(path);
-    files_changed();
     report(e, "move to the Trash", path);
 }
 

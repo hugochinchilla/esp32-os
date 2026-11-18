@@ -407,18 +407,12 @@ public:
                          e == ports::FsError::Exists ? "there is one with that name there already"
                                                      : fs::error_text(e));
             }
-            drop_moved_ = true;
         }
         if (os::drops_to_come() > 0) {
             return;
         }
         const int failed = drop_failed_;
-        const bool moved = drop_moved_;
         drop_failed_ = 0;
-        drop_moved_ = false;
-        if (moved) {
-            files_changed();
-        }
         if (failed > 1) {
             const size_t n = strlen(message_);
             snprintf(message_ + n, sizeof(message_) - n, "\n%d more could not be moved either.", failed - 1);
@@ -820,7 +814,6 @@ private:
         if (n == 0) {
             return;
         }
-        files_changed();
         if (e != ports::FsError::Ok) {
             snprintf(w->message_, sizeof(w->message_), "Cannot put back '%s':\n%s.", name,
                      e == ports::FsError::NotFound ? "where it came from is not known" : fs::error_text(e));
@@ -852,7 +845,6 @@ private:
             return;
         }
         const ports::FsError e = empty_trash();
-        files_changed();
         if (e != ports::FsError::Ok) {
             static char text[120];
             snprintf(text, sizeof(text), "Cannot empty the Trash:\n%s.", fs::error_text(e));
@@ -884,7 +876,6 @@ private:
     char title_text_[64] = "My Board";
     char message_[fs::kMaxPath + 120] = "";
     int drop_failed_ = 0;     // of the files being dropped here, how many could not be moved
-    bool drop_moved_ = false; // and whether any was tried
     Listing listing_;
     const gfx::Bitmap *icons_[Listing::kMax] = {};
     int width_ = 100; // of the client area
@@ -914,11 +905,27 @@ private:
 
 } // namespace
 
-void refresh_folder_windows()
+void refresh_folder_windows(const FolderKeys &changed)
 {
     for (FolderWindow *w = g_windows; w != nullptr; w = w->next_) {
-        if (w->on_screen()) {
-            w->refresh();
+        if (!w->on_screen() || w->folder()[0] == 0) {
+            continue; // My Board lists drives, not files
+        }
+        // The folder itself, or one it is inside: a folder that was removed
+        // or renamed is a change to the one that held it.
+        char at[fs::kMaxPath];
+        snprintf(at, sizeof(at), "%s", w->folder());
+        for (;;) {
+            if (changed.has(at)) {
+                w->refresh();
+                break;
+            }
+            char up[fs::kMaxPath];
+            fs::path::parent(at, up, sizeof(up));
+            if (strcmp(up, at) == 0 || strlen(at) <= 3) {
+                break; // the drive's root
+            }
+            snprintf(at, sizeof(at), "%s", up);
         }
     }
 }

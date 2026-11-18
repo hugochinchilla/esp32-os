@@ -54,6 +54,7 @@ void mouse(int x, int y, uint8_t buttons)
 {
     clock_.now += 300000;
     desktop.mouse({true, static_cast<int16_t>(x), static_cast<int16_t>(y), buttons, 0});
+    desktop.tick(); // as the UI loop does after every event: change notices settle there
 }
 
 void click(int x, int y)
@@ -83,6 +84,7 @@ void key(uint16_t usage, bool alt = false)
     if (alt) {
         desktop.key(wm::key::LeftAlt, false);
     }
+    desktop.tick(); // as the UI loop does after every event
 }
 
 wm::Window *find(const char *title)

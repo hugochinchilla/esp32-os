@@ -551,6 +551,152 @@ void test_game()
     storage.remove("C:\\.config\\chess.ini");
 }
 
+/* ---- The computer's piece landing ------------------------------------------------ */
+
+// The 40 by 40 pixels of a square, as the screen shows them now.
+std::string square_pixels(int sq)
+{
+    const bool white = shell::chess_user() == White;
+    const int file = chess::file_of(sq), rank = chess::rank_of(sq);
+    const gfx::Rect c = board()->client();
+    const int x = c.x + 8 + (white ? file : 7 - file) * 40, y = c.y + 32 + (white ? 7 - rank : rank) * 40;
+    desktop.update();
+    std::string out;
+    for (int row = 0; row < 40; row++) {
+        out.append(reinterpret_cast<const char *>(display.pixels()) + (y + row) * 640 + x, 40);
+    }
+    return out;
+}
+// The lowest row of a square with something of the piece in it, looked for
+// in the middle columns, where no letter, number or corner mark is.
+int foot(const std::string &square)
+{
+    const char ground = square[1 * 40 + 20];
+    for (int row = 39; row >= 0; row--) {
+        for (int col = 10; col < 30; col++) {
+            if (square[row * 40 + col] != ground) {
+                return row;
+            }
+        }
+    }
+    return -1;
+}
+// The screen without one square of the board and without the taskbar's clock.
+std::string all_but(int sq)
+{
+    const bool white = shell::chess_user() == White;
+    const int file = chess::file_of(sq), rank = chess::rank_of(sq);
+    const gfx::Rect c = board()->client();
+    const int x = c.x + 8 + (white ? file : 7 - file) * 40, y = c.y + 32 + (white ? 7 - rank : rank) * 40;
+    desktop.update();
+    std::string out(reinterpret_cast<const char *>(display.pixels()), 640 * desktop.work_area().h);
+    for (int row = 0; row < 40; row++) {
+        memset(&out[(y + row) * 640 + x], 0, 40);
+    }
+    return out;
+}
+
+// The second click of a move, as far as the press: the move is played on
+// it, and the test's clock does not go on as it does for the release.
+int pressed_x = 0, pressed_y = 0;
+void press_square(const char *name)
+{
+    square_xy(name, pressed_x, pressed_y);
+    mouse(pressed_x, pressed_y, 0);
+    mouse(pressed_x, pressed_y, 1);
+}
+void release()
+{
+    desktop.mouse({true, static_cast<int16_t>(pressed_x), static_cast<int16_t>(pressed_y), 0, 0});
+}
+
+void test_landing()
+{
+    start_desktop();
+    // The taskbar's clock is painted on a tick; no minute ends in this test.
+    desktop.set_time(9, 41, 0);
+    wait(1000);
+    const uint32_t bytes_before = os::bytes_out();
+    open_chess();
+    choose(1, 0);
+    chess::Game &g = shell::chess_game();
+
+    // The computer answers inside the click: its piece is painted four
+    // pixels above its place, comes down, bounces once and rests within a
+    // quarter of a second. Nothing but its square changes meanwhile.
+    click_square("e2");
+    press_square("e4");
+    CHECK(g.plies() == 2);
+    const int to = chess::to_of(g.last());
+    const std::string first = square_pixels(to);
+    const std::string around = all_but(to);
+    CHECK(no_stale_pixels());
+    std::vector<int> feet = {foot(first)};
+    std::string now = first;
+    int changes = 0;
+    for (int step = 1; step < 14; step++) {
+        wait(1000000 / 60);
+        const std::string next = square_pixels(to);
+        changes += next != now;
+        now = next;
+        feet.push_back(foot(now));
+        CHECK(no_stale_pixels());
+        CHECK(all_but(to) == around);
+    }
+    wait(1000000 / 60);
+    const std::string rest = square_pixels(to);
+    const int ground = foot(rest);
+    CHECK(rest != first && ground == 36);
+    // 4 4 3 3 2 1 1 1 2 2 2 1 1 1 above the ground, and painted only when
+    // the height changes: 5 times in the 13 steps, and once more to rest.
+    static const int kHeights[14] = {4, 4, 3, 3, 2, 1, 1, 1, 2, 2, 2, 1, 1, 1};
+    for (int step = 0; step < 14; step++) {
+        CHECK(ground - feet[static_cast<size_t>(step)] == kHeights[step]);
+    }
+    CHECK(changes == 5);
+    // It stays at rest, and the rest of the window was left alone.
+    release();
+    wait(500000);
+    CHECK(square_pixels(to) == rest && all_but(to) == around && no_stale_pixels());
+
+    // A late tick skips steps: the landing takes as long by the clock.
+    click_square("d2");
+    press_square("d4");
+    CHECK(g.plies() == 4);
+    const int second = chess::to_of(g.last());
+    CHECK(foot(square_pixels(second)) == ground - 4);
+    wait(8 * (1000000 / 60) + 1000);
+    CHECK(foot(square_pixels(second)) == ground - 2);
+    wait(1000000);
+    CHECK(foot(square_pixels(second)) == ground && no_stale_pixels());
+
+    // The game goes back while the piece lands: nothing is left lifted, and
+    // the square the piece came back from is as any other.
+    release();
+    click_square("g1");
+    press_square("f3");
+    CHECK(g.plies() == 6);
+    const int third = chess::to_of(g.last());
+    CHECK(foot(square_pixels(third)) < ground);
+    release();
+    CHECK(foot(square_pixels(third)) < ground);
+    letter('z', kCtrl);
+    CHECK(g.plies() == 4 && no_stale_pixels());
+    wait(1000000);
+    CHECK(no_stale_pixels());
+    // The user's own piece does not land: it was put there by hand.
+    click_square("g1");
+    click_square("f3");
+    CHECK(foot(square_pixels(chess::square(5, 2))) == ground);
+
+    // The window closes while a piece lands: its timer goes with it.
+    desktop.close(*board());
+    wait(1000);
+    wait(1000000);
+    CHECK(board() == nullptr && os::bytes_out() == bytes_before);
+    storage.remove("C:\\.config\\chess.ini");
+}
+
 /* ---- The engine in a background job, on a real thread --------------------------- */
 
 void let_job_finish(msg::Inbox &inbox)
@@ -756,6 +902,7 @@ int main(int argc, char **argv)
         return write_pictures(argv[1]);
     }
     test_game();
+    test_landing();
     msg::set_queue(&queue);
     job::jobs().set_tasks(&tasks);
     test_background();
