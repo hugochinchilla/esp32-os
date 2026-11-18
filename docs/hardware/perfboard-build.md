@@ -44,7 +44,7 @@ result.
 
 Set-up, the same for every row: same monitor or VGA-to-HDMI adapter, same
 power supply and cable, same place relative to the router. In
-`C:\.config\network.ini`, `[wifi]`, set `tx_power_dbm = 20` and restart.
+`C:\.config\network.ini`, `[wifi]`, set `tx_power_dbm = 20` (the default was 2 at the time) and restart.
 Watch from the first picture until about ten seconds after the Wi-Fi bars
 appear; that is when the lines showed on 2026-11-16. Look by eye: the webcam
 does not show them.
@@ -73,8 +73,8 @@ colour returns.
 
 Later the same day the owner reported that Wi-Fi at 20 dBm works well, and
 decided that the capacitor goes on the board for good, on the hand-built
-board and on the hat. Whether the firmware's 2 dBm default rises is still
-open.
+board and on the hat. The firmware's default then went from 2 dBm to
+20 dBm (the owner's decision; `docs/DECISIONS.md`, "Wi-Fi transmit power").
 
 What each outcome means for the hat:
 
@@ -88,7 +88,8 @@ What each outcome means for the hat:
 - If 20 dBm comes out clean, the 2 dBm default in "Wi-Fi transmit power"
   (`docs/DECISIONS.md`) can be looked at again.
 
-After the test set `tx_power_dbm` back to 2, or remove the line.
+The test was run when the default was 2 dBm. Since 2026-11-18 the default
+is 20 dBm, so the `tx_power_dbm` line can be removed from `network.ini`.
 
 ## Open: VGA pin 5
 

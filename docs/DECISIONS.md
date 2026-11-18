@@ -123,10 +123,13 @@ manager and from the desktop; the Trash window's File menu has Empty Trash.
 
 ### Wi-Fi transmit power (2026-11-16)
 
-Decided by the owner: the radio's transmit power defaults to the minimum,
-2 dBm, adjustable as `tx_power_dbm` in C:\.config\network.ini (2 to 20),
-because at full power its transmit bursts put lines on the picture while it
-connects (see Found on the bench). Joining goes straight to the remembered
+Decided by the owner, 2026-11-18: the radio's transmit power defaults to
+the maximum, 20 dBm, adjustable as `tx_power_dbm` in C:\.config\network.ini
+(2 to 20). From 2026-11-16 until then the default was the minimum, 2 dBm,
+because at full power the transmit bursts put lines on the picture while it
+connected (see Found on the bench). A capacitor across 3.3 V cured the
+lines (Decided, "Supply capacitor"), and both boards carry it. A board
+without the capacitor sets `tx_power_dbm = 2`. Joining goes straight to the remembered
 network's channel and access point (kept in NVS with the networks) instead
 of scanning every channel first, so the radio transmits less; a full scan
 follows only if it is not found there.
@@ -419,7 +422,6 @@ and reasons are in `docs/journal/2026-11-17-program-lifecycle.md`.
 | How the PC build shows the screen | SDL window, image files only | Open |
 | Clock chip | DS3231 module, another I2C chip | DS3231 |
 | VGA pin 5 on the hand-built board, once the firmware reads the hat's monitor sense on GPIO47 | Wire pin 5 to GPIO47 with a pull-up as the hat; tie GPIO47 to ground; leave the board and have the firmware treat it as unknown | Wire it as the hat, when the firmware reads it (`docs/hardware/perfboard-build.md`) |
-| Wi-Fi transmit power default, now that the supply capacitor cures the lines | Keep 2 dBm; raise it to 20 dBm | Open, asked 2026-11-18. The owner reports 20 dBm works well on the hand-built board with the capacitor |
 
 ### The chess game (the owner's decisions, 2026-11-18)
 

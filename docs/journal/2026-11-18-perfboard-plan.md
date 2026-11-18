@@ -116,3 +116,23 @@ be: the capacitor alone cured the lines. It becomes a permanent part of the
 hand-built board and of the hat (`docs/DECISIONS.md`, "Supply capacitor").
 The firmware's 2 dBm default was not changed here; whether it rises is
 asked and open.
+
+## The default goes back up
+
+Asked whether the default should rise now, the owner answered in the
+project chat:
+
+> WiFi, si sube a 20.
+
+`firmware/os/main/main.cpp` now reads `tx_power_dbm` with a default of 20
+instead of 2; `docs/settings.md` and "Wi-Fi transmit power" in
+`docs/DECISIONS.md` say so. The other option was to keep 2 dBm and have
+each board ask for more in its `network.ini`; it was not taken because both
+boards carry the capacitor and nobody else has one. What 2 dBm cost, as
+measured on 2026-11-16: 270 KB/s instead of 370 to 408.
+
+Tested: the PC tests (the change is in the firmware's adapter, which they
+do not build). The firmware was not compiled here and has not run; a board
+check is asked for: the log line "wifi transmit power 20 dBm" with no
+`tx_power_dbm` in `network.ini`, a steady picture while Wi-Fi connects, and
+`tools/dbg.py misses`.

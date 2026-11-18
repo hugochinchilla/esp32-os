@@ -858,12 +858,12 @@ void ui_task(void *)
     // were. If the radio does not start, the Network panel says so.
     const int64_t wifi_start = esp_timer_get_time();
     // C:\.config\network.ini [wifi]: enabled (false: the radio is not
-    // started) and tx_power_dbm, 2 to 20, default 2: the radio's transmit
-    // bursts put lines on the analogue picture, and at 2 dBm they are gone
-    // (docs/DECISIONS.md).
+    // started) and tx_power_dbm, 2 to 20, default 20. On a board without
+    // a capacitor across 3.3 V the radio's transmit bursts put lines on
+    // the analogue picture, and 2 dBm removes them (docs/DECISIONS.md).
     static EXT_RAM_BSS_ATTR fs::Ini network;
     network.load(storage, "C:\\.config\\network.ini");
-    const int tx_dbm = network.get_int("wifi", "tx_power_dbm", 2);
+    const int tx_dbm = network.get_int("wifi", "tx_power_dbm", 20);
     const int8_t tx = static_cast<int8_t>((tx_dbm < 2 ? 2 : (tx_dbm > 20 ? 20 : tx_dbm)) * 4); // quarter dBm
     static const bool radio = network.get_bool("wifi", "enabled", true) && wifi_begin();
     if (radio) {
