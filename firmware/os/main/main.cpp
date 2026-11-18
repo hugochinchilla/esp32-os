@@ -515,7 +515,11 @@ public:
         }
         return false;
     }
-    void beep(const ports::Beep *steps, int count) override { beeper::play(steps, count); }
+    void beep(const ports::Beep *steps, int count) override
+    {
+        ESP_LOGI(TAG, "beeper: a tune of %d step%s", count, count == 1 ? "" : "s");
+        beeper::play(steps, count);
+    }
     void arm_fast_boot() override { arm_fast_next(); }
     void fault(ports::Fault kind) override { crash_fault(kind); }
     void reboot() override
@@ -1188,6 +1192,9 @@ extern "C" void app_main(void)
     // What the last session left behind, before anything can go wrong in
     // this one.
     crash_init();
+    // The beeper, so that it is silent whatever the last session left on
+    // its pin.
+    beeper::begin();
 
     // The message queue first: every task made from here on may post.
     static RtosQueue queue;

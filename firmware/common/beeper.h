@@ -9,7 +9,13 @@
 #include <cmath>
 
 #include "core/ports.hpp"
+#include "driver/gpio.h"
 #include "driver/ledc.h"
+#include "esp_err.h"
+#include "esp_log.h"
+#include "esp_rom_gpio.h"
+#include "esp_system.h"
+#include "soc/gpio_sig_map.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -30,6 +36,7 @@ struct State {
     ports::Beep now = {};         // the step playing
     int64_t start_us = 0, end_us = 0;
     bool playing = false;
+    bool driving = false; // the pin is the PWM's (a tone), not let go
     esp_timer_handle_t timer = nullptr;
     SemaphoreHandle_t lock = nullptr;
     StaticSemaphore_t lock_buffer;
@@ -37,7 +44,28 @@ struct State {
 };
 inline State g;
 
-inline void silence() { ledc_stop(kMode, kChannel, 1); }
+// Silent is the pin let go (neither high nor low), not the pin held high:
+// nothing flows through the beeper however it is wired and whatever kind
+// it is, and the pin stays so through a restart, which does not reset the
+// PWM. On the board the first version held it high and the beeper "never
+// stopped" (docs/journal/2026-11-18-beeper-never-stopped.md).
+inline void silence()
+{
+    gpio_set_direction(static_cast<gpio_num_t>(kPin), GPIO_MODE_DISABLE);
+    ledc_stop(kMode, kChannel, 1);
+    g.driving = false;
+}
+
+// The pin given to the PWM again, for a tone.
+inline void drive()
+{
+    if (!g.driving) {
+        // As the driver does when a channel is set up (ledc_set_pin, but
+        // that one warns each time that the pin is already taken).
+        esp_rom_gpio_connect_out_signal(kPin, LEDC_LS_SIG_OUT0_IDX + kChannel, false, false);
+        g.driving = true;
+    }
+}
 
 // The pulse's width for a loudness of 0 to 1: the fundamental of a pulse
 // goes as the sine of its width, so the width is the arcsine.
@@ -80,8 +108,16 @@ inline void advance()
         }
         ledc_set_duty(kMode, kChannel, duty);
         ledc_update_duty(kMode, kChannel);
+        drive();
     }
-    esp_timer_start_once(g.timer, static_cast<uint64_t>(wait < 1000 ? 1000 : wait));
+    const esp_err_t err = esp_timer_start_once(g.timer, static_cast<uint64_t>(wait < 1000 ? 1000 : wait));
+    if (err != ESP_OK) {
+        // Nothing would end the note: better none.
+        ESP_LOGE("beeper", "timer not started (%s): silent", esp_err_to_name(err));
+        g.count = g.next = 0;
+        g.playing = false;
+        silence();
+    }
 }
 
 // Once, before the first play(). False: the beeper stays silent.
@@ -106,6 +142,8 @@ inline bool begin()
         return false;
     }
     silence();
+    // A restart in the middle of a tune would leave the tone on for ever.
+    esp_register_shutdown_handler([]() { gpio_set_direction(static_cast<gpio_num_t>(kPin), GPIO_MODE_DISABLE); });
     g.lock = xSemaphoreCreateMutexStatic(&g.lock_buffer);
     esp_timer_create_args_t args = {};
     args.callback = [](void *) {
@@ -119,6 +157,7 @@ inline bool begin()
     };
     args.name = "beeper";
     g.ready = esp_timer_create(&args, &g.timer) == ESP_OK;
+    ESP_LOGI("beeper", "GPIO%d: %s", kPin, g.ready ? "ready" : "no timer, silent");
     return g.ready;
 }
 
@@ -136,6 +175,7 @@ inline void play(const ports::Beep *steps, int count)
     }
     g.next = 0;
     g.playing = false;
+    ESP_LOGD("beeper", "%d step%s", g.count, g.count == 1 ? "" : "s");
     advance();
     xSemaphoreGive(g.lock);
 }

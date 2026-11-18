@@ -68,6 +68,11 @@ void let_beep_end(BootIo &io)
             io.idle(io.context);
         }
     }
+    if (io.beeping) {
+        // Said outright as well: on the board the first beep did not end
+        // by itself (docs/journal/2026-11-18-beeper-never-stopped.md).
+        io.system.beep(nullptr, 0);
+    }
     io.beeping = false;
 }
 

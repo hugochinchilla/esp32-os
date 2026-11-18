@@ -314,6 +314,7 @@ extern "C" void app_main(void)
     // reading and writing.
     ESP_ERROR_CHECK(uart_driver_install(kSerial, 2048, 2048, 0, nullptr, 0));
 
+    beeper::begin(); // silent from here on, whatever was left on its pin
     if (fast_start_armed()) {
         static const char line[] = "\r\nRodent BIOS: fast start asked for, no self-test\r\n";
         uart_write_bytes(kSerial, line, sizeof(line) - 1);

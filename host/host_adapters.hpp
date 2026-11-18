@@ -406,9 +406,14 @@ public:
     // The PC has no beeper: it keeps the last tune asked for, and how many.
     void beep(const ports::Beep *steps, int count) override
     {
+        if (count == 0) {
+            beep_silenced++; // told to be silent: the last tune is kept
+            return;
+        }
         beeps.assign(steps, steps + count);
         beep_calls++;
     }
+    int beep_silenced = 0;
     std::vector<ports::Beep> beeps;
     int beep_calls = 0;
 

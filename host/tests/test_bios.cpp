@@ -405,6 +405,7 @@ void test_boot_device()
     CHECK(bios::run_post(post, true) == 0 && post.bootable);
     // All well: one short beep.
     CHECK(post.result == sound::PostResult::Ok && system.beep_calls == 1);
+    CHECK(system.beep_silenced == 1); // and told to stop when its time is up
     CHECK(system.beeps.size() == 1 && system.beeps[0].hz == sound::kBeepHz && system.beeps[0].ms == 200);
     CHECK(row(s, bios::kDriveRow) == "  Detecting drive C: .... 11 MB flash disk");
     CHECK(row(s, bios::kBootRow) == "  Boot device ........... ota_0, 1.4 MB, image OK");
