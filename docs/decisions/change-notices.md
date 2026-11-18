@@ -4,13 +4,13 @@ date: 2026-11-18
 by: owner+agent
 status: decided
 area: storage
-summary: "Storage says which folder changed; the desktop reads its folder only then, in a job, not every 2 s (backlog 65)"
+summary: "Storage says which folder changed; the desktop reads its folder only then, in a job, not every 2 s (backlog 66)"
 ---
 
 # Change notices from the file system
 
 Chosen by the owner after the 60 fps benchmark, from his own question (a
-background listing, or something like inotify): both. Backlog item 65,
+background listing, or something like inotify): both. Backlog item 66,
 `docs/journal/2026-11-18-change-notices.md`. The smaller choices below are
 the agent's, each easy to change.
 

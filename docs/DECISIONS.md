@@ -191,7 +191,7 @@ File system, folders, the Trash, settings files, saving.
 - [Trash](decisions/trash.md) (2026-11-16, owner, decided): Deleting moves to the Trash; dragging onto its icon; Empty Trash
 - [Chosen for file dates](decisions/file-dates.md) (2026-11-17, agent, to-confirm): One date per file, when it was last written, in UTC seconds (backlog 24)
 - [The Trash is the File manager on C:\.trash](decisions/trash-is-the-file-manager.md) (2026-11-17, owner, decided): There is no Trash window: a File manager window that shows C:\.trash is the Trash
-- [Change notices from the file system](decisions/change-notices.md) (2026-11-18, owner+agent, decided): Storage says which folder changed; the desktop reads its folder only then, in a job, not every 2 s (backlog 65)
+- [Change notices from the file system](decisions/change-notices.md) (2026-11-18, owner+agent, decided): Storage says which folder changed; the desktop reads its folder only then, in a job, not every 2 s (backlog 66)
 
 ### desktop
 
