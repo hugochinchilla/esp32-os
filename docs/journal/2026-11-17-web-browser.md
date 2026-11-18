@@ -278,3 +278,23 @@ cannot show whether 12 KB is enough: only the board can. The PC tests pass
 (48) and the firmware compiles and links; this state has not run on the
 board.
 
+
+## On the board, second round (2026-11-18, f9cce0d)
+
+The first try of this round's code (f6be44c) failed: a double-click on a `.htm`
+file in the File manager overflowed the File manager task's stack and the
+board restarted (`panic, A stack overflow in task File manager`). f9cce0d
+gives the browser a task of its own with 12 KB of stack and a page from the
+File manager is opened there.
+
+On the board: the home page opens from Start > Programs; a FrogFind search
+gives results, a result opens, Page Down runs down a long page, Back twice
+returns to the home page; an https address shows the "cannot encrypt" page
+and `http://no-such-host.invalid/` the error page. Double-clicking
+`C:\Programs\test.htm` in the File manager opens it in Vizcacha and
+`hello.app` still runs from the same window. Stacks never used: the
+Vizcacha task 4,252 bytes after the page from the File manager and 1,424 at
+the lowest (while a Wikipedia page was loaded and scrolled), the File manager
+task 5,184. Closing everything returns internal memory exactly and external
+memory to 3.9 KB below the figure before (the taskbar's Start menu).
+`dbg.py misses`: none.
