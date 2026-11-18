@@ -28,6 +28,8 @@ The journal entry with the reasons is
 | Time | `os::now_us()` | Microseconds since start-up |
 | | `os::start_timer(delay, period, fn, context)` | A timer of the asking process; the system stops it when the process ends |
 | | `os::stop_timer(id)` | |
+| Jobs | `os::start_job(spec)` | Work on a task of its own for the asking process (`core/job/job.hpp`), while the desktop and the program's window go on: `work` runs on the new task, `done` afterwards where the program's events run. The process is not ended before its jobs have, but the program's object goes when its window closes: what the work reads must outlive the window. Where there are no tasks the work is done inside the call (Chess, the Editor's save) |
+| | `os::job_rest(ms)` | From a job's own task: gives the processor away for about `ms`. Work that computes for seconds calls it a few times a second |
 | Memory | `os::allocate(bytes)` | Zeroed memory, counted as the asking process's (Task Manager, `top`) |
 | | `os::release(block)` | Gives it back; taken off the count of whoever asked for it |
 | | `os::memory()` | The same two as a Memory port, for code that takes one |
@@ -70,8 +72,10 @@ Dialogs that any program may open (message box, questions, the file
 dialogs) stay where they are, in `core/shell/shell.hpp`: they are programs
 of their own, not calls into the system.
 
-All calls are for the UI task. The file calls may also be made from a
-background job: the drives have their own lock.
+All calls are for the UI task, but `os::job_rest`, which is for a job's.
+The file calls may also be made from a background job: the drives have
+their own lock. A job cannot ask the time (`os::now_us()` is the UI
+task's): the program sets a timer and tells its job.
 
 ## Which programs have moved
 

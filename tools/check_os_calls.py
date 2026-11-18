@@ -17,6 +17,7 @@ MOVED = [
     "about.cpp",
     "browser.cpp",
     "cactus_patch.cpp",
+    "chess.cpp",
     "colour_dialog.cpp",
     "culebra.cpp",
     "defrag.cpp",
@@ -57,6 +58,7 @@ FORBIDDEN = [
     (r"\bsystem_port\(\)", "os::restart"),
     (r"\bproc::table\(\)", "os::self, os::spawn, os::As"),
     (r"\bwm::Wait\b", "os::Busy"),
+    (r"\bjob::jobs\(\)", "os::start_job"),
     (r"\bg_(wm|storage|system)\b", "the os:: calls"),
 ]
 

@@ -43,7 +43,8 @@ bool Jobs::start(const Spec &spec)
     slot->charged = 0;
     slot->stack = 0;
     slot->task = nullptr;
-    if (tasks_ != nullptr && msg::queue() != nullptr) {
+    slot->job.own_task_ = tasks_ != nullptr && msg::queue() != nullptr;
+    if (slot->job.own_task_) {
         // The stack is memory the process holds while the job runs. Counted
         // before the task exists: it may have finished by the next line.
         slot->stack = spec.stack_bytes;
@@ -130,6 +131,13 @@ void Jobs::finish(Slot &slot)
         // heard the end of would leave its window locked for good.
         proc::call_as(
             &procs_, owner, [spec, result, stopped] { spec.done(spec.context, result, stopped); }, proc::kKept);
+    }
+}
+
+void Jobs::rest(uint32_t ms)
+{
+    if (tasks_ != nullptr) {
+        tasks_->rest(ms);
     }
 }
 

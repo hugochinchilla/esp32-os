@@ -788,6 +788,20 @@ const Bitmap &cactus_icon_16()
     return bitmap;
 }
 
+const Bitmap &chess_icon_32()
+{
+    static constexpr Pixels<32> pixels = paint<32>(game_art::kChess32, game_art::kChessInks);
+    static constexpr Bitmap bitmap = {32, 32, pixels.p, kClear};
+    return bitmap;
+}
+
+const Bitmap &chess_icon_16()
+{
+    static constexpr Pixels<16> pixels = paint<16>(game_art::kChess16, game_art::kChessInks);
+    static constexpr Bitmap bitmap = {16, 16, pixels.p, kClear};
+    return bitmap;
+}
+
 const Bitmap &network_icon_32()
 {
     static constexpr const char *rows[32] = {

@@ -227,7 +227,7 @@ private:
         spec.stack_bytes = 8192; // the file system's calls, a 1 KB piece and the paths
         // Where the caller does the work, the whole desktop waits as it used to.
         const os::Busy hourglass;
-        if (!job::jobs().start(spec)) {
+        if (!os::start_job(spec)) {
             set_locked(false);
             next_ = Then::Nothing;
             snprintf(message_, sizeof(message_), "Cannot save %s:\nthe system is too busy. Try again in a moment.",
