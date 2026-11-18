@@ -29,8 +29,9 @@ The agent's, to confirm:
   five times. No TLS: an https address gets a page that says so and offers
   a FrogFind search. Rejected for now: mbedTLS (internal RAM, certificates,
   and a second and third implementation for the PC and the page).
-- Forms with GET only. Tables as rows, frames as links, pictures as a box
-  with their `alt` text. A page is 256 KB at most.
+- Forms with GET only. Tables as rows, frames as links. A page is 256 KB at
+  most. Pictures were a box with their `alt` text at first; since
+  2026-11-18 they are shown (`browser-pictures.md`).
 - Outgoing connections are OS calls, `os::tcp`: handles the system keeps
   per process (four in all, two each), closed when the process ends;
   `connect` never waits, the dialling is a background job. The machine

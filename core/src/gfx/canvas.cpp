@@ -28,10 +28,34 @@ unsigned channel(unsigned v, const uint8_t *levels, unsigned count, unsigned t, 
     return 2 * n * (v - levels[lo]) > (2 * t + 1) * span ? lo + 1 : lo;
 }
 
+// channel() for the 16 thresholds of the 4x4 dither, as two tables worked
+// out the first time a colour is dithered (8 KB): the level of every value
+// at every threshold, already in its place in the byte for red and blue.
+struct Levels {
+    uint8_t three[16][256]; // red and green: 0..7
+    uint8_t blue[16][256];  // 0..3
+    bool ready;
+};
+Levels levels;
+
+const Levels &dither_levels()
+{
+    if (!levels.ready) {
+        for (unsigned t = 0; t < 16; t++) {
+            for (unsigned v = 0; v < 256; v++) {
+                levels.three[t][v] = static_cast<uint8_t>(channel(v, kLevels3, 8, t));
+                levels.blue[t][v] = static_cast<uint8_t>(channel(v, kLevelsB, 4, t));
+            }
+        }
+        levels.ready = true;
+    }
+    return levels;
+}
+
 Colour dither_t(Rgb c, unsigned t)
 {
-    return rgb(channel(c.r, kLevels3, 8, t), channel(c.g, kLevels3, 8, t),
-               channel(c.b, kLevelsB, 4, t));
+    const Levels &l = dither_levels();
+    return rgb(l.three[t][c.r], l.three[t][c.g], l.blue[t][c.b]);
 }
 
 } // namespace
@@ -592,46 +616,82 @@ int Canvas::text_cells(int x, int y, const char *s, Colour fg, BgFn bg, int care
     const Colour caret = ink();
     // A character at a time: its glyph's row is read once and its pixels
     // written one after the other. Only a character cut by the edge of the
-    // part, or with the caret in it, is checked pixel by pixel.
+    // part, or with the caret in it, is checked pixel by pixel. The
+    // characters of a part are decoded once, a stretch at a time, not once
+    // for each of their rows.
     const int cell = f.width;
+    const int caret_cell = scaret >= sx0 ? (scaret - sx0) / cell : -1;
     each({x, y, len * cell, f.height}, [&](const Rect &part) {
         const int first = (part.x - sx0) / cell, last = (part.right() - 1 - sx0) / cell;
-        // The first character of the part, found once for all its rows.
-        const char *start = s;
+        const char *p = s;
         for (int i = 0; i < first; i++) {
-            next_latin1(start);
+            next_latin1(p);
         }
-        for (int py = part.y; py < part.bottom(); py++) {
-            const int row = py - sy0;
-            uint8_t *dst = pixels_ + py * width_;
-            const char *p = start;
-            int cell_x = sx0 + first * cell;
-            for (int index = first; index <= last; index++, cell_x += cell) {
-                const unsigned bits = f.glyph(next_latin1(p))[row];
-                if (cell_x >= part.x && cell_x + cell <= part.right() && (scaret < cell_x || scaret >= cell_x + cell)) {
-                    uint8_t *out = dst + cell_x;
-                    if (cell == 6) { // the font there is: no loop to count
-                        out[0] = (bits & 0x80u) ? fg : bg(cell_x, py);
-                        out[1] = (bits & 0x40u) ? fg : bg(cell_x + 1, py);
-                        out[2] = (bits & 0x20u) ? fg : bg(cell_x + 2, py);
-                        out[3] = (bits & 0x10u) ? fg : bg(cell_x + 3, py);
-                        out[4] = (bits & 0x08u) ? fg : bg(cell_x + 4, py);
-                        out[5] = (bits & 0x04u) ? fg : bg(cell_x + 5, py);
-                        continue;
-                    }
+        constexpr int kStretch = 96;
+        uint8_t codes[kStretch];
+        for (int from = first; from <= last; from += kStretch) {
+            const int count = last - from + 1 < kStretch ? last - from + 1 : kStretch;
+            for (int i = 0; i < count; i++) {
+                codes[i] = next_latin1(p);
+            }
+            const int x0 = sx0 + from * cell; // the stretch's first pixel
+            // The cells of the stretch that are whole inside the part.
+            const int whole_from = x0 < part.x ? 1 : 0;
+            const int whole_to = x0 + count * cell > part.right() ? count - 1 : count;
+            const int caret_at = caret_cell - from; // in the stretch, if 0 <= caret_at < count
+            for (int py = part.y; py < part.bottom(); py++) {
+                const int row = py - sy0;
+                uint8_t *const dst = pixels_ + py * width_;
+                // One cell, each pixel checked.
+                const auto careful = [&](int i) {
+                    const unsigned bits = f.glyph(codes[i])[row];
                     for (int col = 0; col < cell; col++) {
-                        out[col] = (bits & (0x80u >> col)) ? fg : bg(cell_x + col, py);
+                        const int px = x0 + i * cell + col;
+                        if (px >= part.x && px < part.right()) {
+                            // The caret is always the text colour, even on a selection.
+                            dst[px] = px == scaret ? caret : ((bits & (0x80u >> col)) ? fg : bg(px, py));
+                        }
                     }
-                    continue;
+                };
+                // Cells [a, b), all of them whole and without the caret.
+                const auto straight = [&](int a, int b) {
+                    int px = x0 + a * cell;
+                    uint8_t *out = dst + px;
+                    if (cell == 6) { // the font there is: no loop to count
+                        for (int i = a; i < b; i++, out += 6, px += 6) {
+                            const unsigned bits = f.glyph(codes[i])[row];
+                            out[0] = (bits & 0x80u) ? fg : bg(px, py);
+                            out[1] = (bits & 0x40u) ? fg : bg(px + 1, py);
+                            out[2] = (bits & 0x20u) ? fg : bg(px + 2, py);
+                            out[3] = (bits & 0x10u) ? fg : bg(px + 3, py);
+                            out[4] = (bits & 0x08u) ? fg : bg(px + 4, py);
+                            out[5] = (bits & 0x04u) ? fg : bg(px + 5, py);
+                        }
+                        return;
+                    }
+                    for (int i = a; i < b; i++) {
+                        const unsigned bits = f.glyph(codes[i])[row];
+                        for (int col = 0; col < cell; col++, px++) {
+                            *out++ = (bits & (0x80u >> col)) ? fg : bg(px, py);
+                        }
+                    }
+                };
+                for (int i = 0; i < whole_from && i < count; i++) {
+                    careful(i);
                 }
-                for (int col = 0; col < cell; col++) {
-                    const int px = cell_x + col;
-                    if (px >= part.x && px < part.right()) {
-                        // The caret is always the text colour, even on a selection.
-                        dst[px] = px == scaret ? caret : ((bits & (0x80u >> col)) ? fg : bg(px, py));
-                    }
+                if (caret_at >= whole_from && caret_at < whole_to) {
+                    straight(whole_from, caret_at);
+                    careful(caret_at);
+                    straight(caret_at + 1, whole_to);
+                } else {
+                    straight(whole_from, whole_to);
+                }
+                for (int i = whole_to > whole_from ? whole_to : whole_from; i < count; i++) {
+                    careful(i);
                 }
             }
+        }
+        for (int py = part.y; py < part.bottom(); py++) {
             mark(part.x, py, part.w);
         }
     });
