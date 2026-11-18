@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <new>
 #include <strings.h>
 
 #include "core/www/url.hpp"
@@ -1361,11 +1362,33 @@ bool Document::load(const uint8_t *bytes, size_t size, bool plain)
         begin += 3;
         size -= 3;
     }
-    Reader count(*this, begin, begin + size, false);
-    if (plain) {
-        count.read_plain();
-    } else {
-        count.read_html();
+    // The reader is some 2 KB, too much for the stack of a program's task
+    // twice over: it lives in the Memory port's memory, one at a time, and
+    // only its counts are kept.
+    struct Counts {
+        int items, links, fields, options, forms, pictures, typed;
+        size_t pool;
+    };
+    const auto read = [&](bool fill, Counts &out) {
+        void *room = memory_.allocate(sizeof(Reader));
+        if (room == nullptr) {
+            return false;
+        }
+        Reader *reader = new (room) Reader(*this, begin, begin + size, fill);
+        if (plain) {
+            reader->read_plain();
+        } else {
+            reader->read_html();
+        }
+        out = {reader->items, reader->links,  reader->fields, reader->options,
+               reader->forms, reader->pictures, reader->typed,  reader->pool};
+        reader->~Reader();
+        memory_.release(room);
+        return true;
+    };
+    Counts count = {};
+    if (!read(false, count)) {
+        return false;
     }
     title_[0] = 0;
 
@@ -1401,11 +1424,10 @@ bool Document::load(const uint8_t *bytes, size_t size, bool plain)
     at += typed_bytes;
     pool_ = at;
 
-    Reader fill(*this, begin, begin + size, true);
-    if (plain) {
-        fill.read_plain();
-    } else {
-        fill.read_html();
+    Counts fill = {};
+    if (!read(true, fill)) {
+        clear();
+        return false;
     }
     item_count_ = fill.items;
     link_count_ = fill.links;

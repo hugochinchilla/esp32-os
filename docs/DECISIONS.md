@@ -2786,6 +2786,20 @@ The agent's, to confirm:
 - The User-Agent is `Mozilla/4.0 (compatible; Vizcacha 1.0; Chinchilla;
   ESP32-S3)`: FrogFind refuses one that does not look like a browser's.
 
+### The relay is deployed from GitHub (the owner's decision, 2026-11-18)
+
+Journal: `docs/journal/2026-11-18-relay-workflow.md`.
+
+- The owner's: the web version's relay goes to Cloudflare from a GitHub
+  workflow, again whenever it changes; he turns the workflow on and gives
+  the secrets.
+- The agent's, to confirm: the trigger is the folder `web/relay/` on
+  `main`; `web/relay/test.mjs` must pass first; the secrets are
+  `CLOUDFLARE_API_TOKEN` (Account > Workers Scripts > Edit, one account)
+  and `CLOUDFLARE_ACCOUNT_ID`; the page's build takes the relay's address
+  from the repository variable `CHINCHILLA_RELAY`. The workflows wait in
+  `ci/` until the owner copies them to `.github/workflows/`.
+
 ### Services are lines of the start-up file (the owner's request, 2026-11-18)
 
 Backlog item 62. Journal: `docs/journal/2026-11-18-services.md`. The owner
