@@ -31,6 +31,7 @@ public:
     int64_t utc = 0;
     int scans = 0, connects = 0;
     std::string last_password; // what the last connect() was given
+    int tx_power = 0;          // what the last set_tx_power() was given; 0: never asked
 
     void add(const char *ssid, int rssi, const char *password, int channel = 6)
     {
@@ -55,6 +56,7 @@ public:
         }
     }
 
+    void set_tx_power(int dbm) override { tx_power = dbm; }
     void start_scan() override
     {
         scans++;

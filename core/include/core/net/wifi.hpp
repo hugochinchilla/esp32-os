@@ -54,6 +54,14 @@ struct LinkStatus {
     uint8_t mac[6];
 };
 
+// The radio's top transmit power, in dBm: the range of `tx_power_dbm` in
+// C:\.config\network.ini, and what a board uses when the file says nothing.
+constexpr int kTxPowerMin = 2, kTxPowerMax = 20, kTxPowerDefault = 20;
+constexpr int clamp_tx_power(int dbm)
+{
+    return dbm < kTxPowerMin ? kTxPowerMin : (dbm > kTxPowerMax ? kTxPowerMax : dbm);
+}
+
 // The radio.
 class WifiPort {
 public:
@@ -68,6 +76,9 @@ public:
     virtual void connect(const char *ssid, const char *password) = 0;
     virtual void disconnect() = 0;
     virtual void status(LinkStatus &out) = 0;
+    // The most the radio transmits with, in dBm, from now on. The Manager
+    // gives a value from kTxPowerMin to kTxPowerMax.
+    virtual void set_tx_power(int dbm) = 0;
     // The time from the network (NTP), in seconds since 1970, UTC. False
     // until it is known.
     virtual bool utc_time(int64_t &seconds) = 0;
@@ -143,6 +154,9 @@ public:
     // Stays disconnected until connect() is asked again.
     void disconnect();
     void forget(const char *ssid);
+    // The radio's top transmit power, at once. Not kept: whoever asks
+    // writes `tx_power_dbm` in network.ini, which the board reads at start.
+    void set_tx_power(int dbm) { radio_.set_tx_power(clamp_tx_power(dbm)); }
 
     const LinkStatus &link() const { return link_; }
     bool scanning() const { return scanning_; }
