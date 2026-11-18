@@ -44,7 +44,8 @@ The journal entry with the reasons is
 | | `os::ui::icon_view`, `set_items`, `item_at`, `reset_view`; events Drag, DragOver, Dropped | The view of icons with names (File manager), and files dragged out of it and dropped on a window |
 | | `os::ui::draw::fill`, `text`, `blit`, `part`, `dent`, ... | Drawing while a Paint event is answered, on a number good only until it returns (`app::Canvas`) |
 | | `os::begin_drag(path)` | A file starts being dragged |
-| | `os::Busy busy;` | The hourglass until the end of the block |
+| | `os::Busy busy;` | The hourglass over the whole screen until the end of the block |
+| | `os::ui::set_hourglass(window, on)`, `os::ui::hourglass(window)` | The hourglass on demand (item 49): over the window's client area while it is on, and the window answers as before. A switch the program turns off itself; it goes with the window |
 | Desktop | `os::set_backdrop(backdrop)` | The desktop's colour and pattern (Display) |
 | Desktop | `os::set_theme(index)` | The look of windows, buttons and the taskbar, a row of the table in `core/gfx/theme.hpp` (Display); the whole screen is painted again |
 | | `os::set_screen_saver(animation, seconds)` | Which animation and after how long; -1 for none (Screen Saver) |

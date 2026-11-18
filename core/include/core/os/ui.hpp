@@ -212,6 +212,15 @@ size_t clipboard_size();
 void set_locked(Window window, bool locked);
 bool locked(Window window);
 
+// The hourglass on demand: while it is on, the pointer is an hourglass over
+// the window's client area. Nothing else changes: the window takes its keys
+// and clicks, can be closed, and the pointer is the arrow over its title
+// bar and menu bar. For a program that is working something out and wants
+// the user to see it (Chess while the engine thinks). The program turns it
+// off when it has finished; a window that closes takes it with it.
+void set_hourglass(Window window, bool on);
+bool hourglass(Window window);
+
 // Icons in a grid with their names under them: what a folder holds. The
 // names and the pictures (32 by 32) are the program's tables and must stay
 // valid; set_items() is a list's, and keeps what is picked. One entry is

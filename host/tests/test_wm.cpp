@@ -710,6 +710,119 @@ static void test_menus()
     CHECK(rig.no_stale_pixels());
 }
 
+/* ---- The hourglass on demand --------------------------------------------------- */
+
+static bool pointer_is(Rig &rig, const video::PointerShape &shape)
+{
+    const video::PointerShape *now = rig.pointer.state().shape;
+    return now != nullptr && memcmp(now, &shape, sizeof(video::PointerShape)) == 0;
+}
+
+// A program that is working something out asks for the hourglass over its
+// window (backlog item 49). Only the pointer changes: the window answers.
+static void test_hourglass()
+{
+    Rig rig;
+    TestWindow other("Other", {420, 300, 180, 120}, 0xE0);
+    MenuWindow w; // frame {100, 60, 300, 200}
+    rig.wm.add(other);
+    rig.wm.add(w);
+    rig.wm.start();
+    memset(g_runs, 0, sizeof(g_runs));
+    const Rect c = w.client();
+    const int cx = c.x + c.w / 2, cy = c.y + c.h / 2;
+    const Rect file = rig.wm.menu_bar_entry(w, 0);
+
+    rig.move(cx, cy, 0);
+    CHECK(!w.hourglass() && pointer_is(rig, video::arrow_pointer()));
+
+    // Asked for with the pointer at rest over the client area: it changes
+    // at once, without a move of the mouse.
+    w.set_hourglass(true);
+    CHECK(w.hourglass() && !w.locked() && !rig.wm.waiting());
+    CHECK(pointer_is(rig, video::busy_pointer()));
+    // Every corner of the client area, and nothing beside it.
+    rig.move(c.x, c.y, 0);
+    CHECK(pointer_is(rig, video::busy_pointer()));
+    rig.move(c.right() - 1, c.bottom() - 1, 0);
+    CHECK(pointer_is(rig, video::busy_pointer()));
+    // The menu bar, the title bar and its buttons still answer: the arrow.
+    rig.move(file.x + 5, file.y + 5, 0);
+    CHECK(pointer_is(rig, video::arrow_pointer()));
+    rig.move(100 + 150, 60 + 12, 0);
+    CHECK(pointer_is(rig, video::arrow_pointer()));
+    rig.move(100 + 300 - 14, 60 + 12, 0); // Close
+    CHECK(pointer_is(rig, video::arrow_pointer()));
+    // The borders keep their arrows for sizing.
+    rig.move(100 + 1, 60 + 100, 0);
+    CHECK(pointer_is(rig, video::resize_we_pointer()));
+    // Outside it and over another window: the arrow.
+    rig.move(50, 200, 0);
+    CHECK(pointer_is(rig, video::arrow_pointer()));
+    rig.move(420 + 90, 300 + 60, 0);
+    CHECK(pointer_is(rig, video::arrow_pointer()));
+
+    // The window is not locked: its menus open and run. While a menu is
+    // open the pointer is the arrow, over the client area too.
+    rig.click(file.x + 5, file.y + 5);
+    CHECK(rig.wm.popup_count() == 1);
+    rig.move(cx + 100, cy + 40, 0);
+    CHECK(pointer_is(rig, video::arrow_pointer()));
+    const Rect open = rig.wm.popup_item(0, 0);
+    rig.click(open.x + 10, open.y + 5);
+    CHECK(g_runs[0] == 1 && rig.wm.popup_count() == 0);
+    rig.move(cx, cy, 0);
+    CHECK(pointer_is(rig, video::busy_pointer()));
+
+    // Another window in front covers it where the two overlap.
+    TestWindow cover("Cover", {cx - 40, cy - 40, 160, 120}, 0x03);
+    rig.wm.add(cover);
+    rig.move(cx, cy, 0);
+    CHECK(pointer_is(rig, video::arrow_pointer()));
+    rig.move(c.x + 5, c.y + 5, 0); // a part of it still seen
+    CHECK(pointer_is(rig, video::busy_pointer()));
+    cover.close();
+    CHECK(pointer_is(rig, video::busy_pointer()));
+
+    // It can be moved by its title bar, and the hourglass goes with it.
+    rig.drag(100 + 150, 60 + 12, 100 + 170, 60 + 22);
+    CHECK(w.frame().x == 120 && w.frame().y == 70);
+    rig.move(cx + 20, cy + 10, 0);
+    CHECK(pointer_is(rig, video::busy_pointer()));
+
+    // Asked for twice and given back once: it is a switch, not a count.
+    w.set_hourglass(true);
+    w.set_hourglass(false);
+    CHECK(!w.hourglass() && pointer_is(rig, video::arrow_pointer()));
+
+    // Minimised with the hourglass on: the arrow where the window was, and
+    // the hourglass again when it comes back.
+    w.set_hourglass(true);
+    CHECK(pointer_is(rig, video::busy_pointer()));
+    rig.wm.minimize(w);
+    CHECK(pointer_is(rig, video::arrow_pointer()));
+    rig.wm.restore(w);
+    rig.move(cx + 21, cy + 10, 0);
+    CHECK(pointer_is(rig, video::busy_pointer()));
+
+    // The whole-screen wait is over it as over everything, and ends as it was.
+    {
+        const wm::Wait wait(rig.wm);
+        rig.move(50, 200, 0);
+        CHECK(pointer_is(rig, video::busy_pointer()));
+    }
+    CHECK(pointer_is(rig, video::arrow_pointer()));
+
+    // Closed with the hourglass on and the pointer over it: the arrow at
+    // once, and a window opened again starts without it.
+    rig.move(cx + 20, cy + 10, 0);
+    CHECK(pointer_is(rig, video::busy_pointer()));
+    w.close();
+    CHECK(pointer_is(rig, video::arrow_pointer()));
+    rig.wm.update();
+    CHECK(rig.no_stale_pixels());
+}
+
 // A slow pointer, as a person moves it: from a parent item into its open
 // submenu, 2 pixels every 20 ms, straight across and on a slant that
 // crosses the next parent item. The submenu must stay open and end with the
@@ -1559,6 +1672,7 @@ int main()
     test_resize();
     test_shortcuts();
     test_menus();
+    test_hourglass();
     test_slow_submenu();
     test_submenu_switches_at_once();
     test_slow_key_does_not_repeat();

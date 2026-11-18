@@ -1331,6 +1331,21 @@ bool locked(Window window)
     return w != nullptr && w->locked();
 }
 
+void set_hourglass(Window window, bool on)
+{
+    const prog::InCall in_call;
+    if (Behind *w = behind(window)) {
+        w->set_hourglass(on);
+    }
+}
+
+bool hourglass(Window window)
+{
+    const prog::InCall in_call;
+    Behind *w = behind(window);
+    return w != nullptr && w->hourglass();
+}
+
 void set_caret(Window window, Control control, const gfx::Rect &caret)
 {
     const prog::InCall in_call;
