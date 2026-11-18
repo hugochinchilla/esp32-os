@@ -212,6 +212,7 @@ Window manager, menus, taskbar, themes, icons, pointer.
 - [The default desktop colour is solid](decisions/default-desktop-colour.md) (2026-11-17, owner, decided): The default desktop colour is solid Steel blue (backlog 43)
 - [The window server and the desktop shell](decisions/window-server-and-desktop-shell.md) (2026-11-17, owner, decided): The code is cut in two on one task: the window server (`core/wm`) and the desktop shell (backlog 21)
 - [Window themes](decisions/window-themes.md) (2026-11-17, owner, decided): Themes chosen in Display: Classic, Sky, Glacier, Midnight; a theme changes only what is painted (backlog 47)
+- [Slow repaints: faster drawing first](decisions/faster-drawing-first.md) (2026-11-18, owner, decided): Large windows painted slowly (backlog 65): fix the drawing code first, measure, kept window pictures only if still needed
 - [The hourglass on demand](decisions/hourglass-on-demand.md) (2026-11-18, owner, decided): A program asks for the hourglass with `os::ui::set_hourglass`; it shows over its client area only (backlog 49)
 - [The mouse wheel](decisions/mouse-wheel.md) (2026-11-18, owner+agent, decided): The wheel scrolls what is under the pointer; how far, and which widgets take it (backlog 61)
 

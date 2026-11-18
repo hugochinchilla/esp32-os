@@ -335,6 +335,8 @@ public:
             set_ = choice("look", "pieces", kSetKeys, chess_art::kSets, set_);
             hints_ = settings_.get_bool("look", "dots", hints_);
         }
+        pieces_ = static_cast<uint8_t *>(os::allocate(kPiecesBytes));
+        colour_pieces();
         memset(shown_, 0xFF, sizeof(shown_));
         tick_menus();
         say("Choose a game.");
@@ -344,6 +346,9 @@ public:
     {
         stop_clock();
         stop_landing();
+        if (pieces_ != nullptr) {
+            os::release(pieces_);
+        }
         if (brain_ != nullptr && brain_->running) {
             // The job still reads the block: it is told to stop, and the
             // block goes back when it has (thought()).
@@ -383,8 +388,7 @@ public:
         }
         if (lifted()) {
             const chess::Piece p = game_.position().at(picked_);
-            draw_piece(c, scratch_, set_, chess::color_of(p), chess::type_of(p), true, drag_x_ - kBig / 2,
-                       drag_y_ - kBig / 2, gfx::rgb(0, 0, 0));
+            draw_big(c, chess::color_of(p), chess::type_of(p), drag_x_ - kBig / 2, drag_y_ - kBig / 2, 0);
         }
     }
 
@@ -583,6 +587,44 @@ private:
         return v;
     }
 
+    // The board's pieces are coloured once, when the window opens and when
+    // another set is chosen, not each time one is painted: the twelve of
+    // them, kBig by kBig each, in memory the window gives back when it
+    // closes. Without that memory each is coloured as it is painted.
+    static constexpr size_t kPiecesBytes = 2 * 6 * kBig * kBig;
+    void colour_pieces()
+    {
+        if (pieces_ == nullptr) {
+            return;
+        }
+        for (int side = 0; side < 2; side++) {
+            for (int type = 0; type < 6; type++) {
+                const uint8_t *packed = chess_art::kBig[set_][type];
+                const Colour inks[3] = {gfx::rgb(0, 0, 0), kInks[side][1], kInks[side][2]};
+                uint8_t *out = pieces_ + (side * 6 + type) * kBig * kBig;
+                for (int i = 0; i < kBig * kBig; i++) {
+                    const int v = (packed[i >> 2] >> ((i & 3) * 2)) & 3;
+                    out[i] = v == 0 ? static_cast<uint8_t>(kClear) : inks[v - 1];
+                }
+            }
+        }
+    }
+    // A piece of the board at (x, y); `lift` as draw_piece has it.
+    void draw_big(app::Canvas &c, Color side, Type type, int x, int y, int lift)
+    {
+        if (type == chess::NoType) {
+            return;
+        }
+        if (pieces_ == nullptr) {
+            draw_piece(c, scratch_, set_, side, type, true, x, y, gfx::rgb(0, 0, 0), lift);
+            return;
+        }
+        // Lifted, the piece's top rows are left out and it starts higher
+        // in its picture: the same pixels draw_piece gives.
+        const uint8_t *pixels = pieces_ + (side * 6 + (type - 1)) * kBig * kBig;
+        c.blit({kBig, kBig - lift, pixels + lift * kBig, kClear}, x, y);
+    }
+
     void paint_square(app::Canvas &c, int sq)
     {
         const BoardColours &k = kBoards[board_];
@@ -593,8 +635,7 @@ private:
         c.fill(r, (shown & 0x20) != 0 ? (dark ? k.moved_dark : k.moved_light) : dark ? k.dark : k.light);
         const chess::Piece p = game_.position().at(sq);
         if (p != chess::kEmpty && (shown & 0x80) == 0) {
-            draw_piece(c, scratch_, set_, chess::color_of(p), chess::type_of(p), true, r.x, r.y, gfx::rgb(0, 0, 0),
-                       sq == landing_ ? lift_ : 0);
+            draw_big(c, chess::color_of(p), chess::type_of(p), r.x, r.y, sq == landing_ ? lift_ : 0);
         }
         if ((shown & 0x40) != 0) {
             const Colour dot = dark ? k.dot_dark : k.dot_light;
@@ -1076,6 +1117,7 @@ private:
         board_ = board;
         set_ = set;
         hints_ = hints;
+        colour_pieces();
         tick_menus();
         settings_.set("look", "board", kBoardKeys[board_]);
         settings_.set("look", "pieces", kSetKeys[set_]);
@@ -1146,6 +1188,7 @@ private:
     uint32_t shown_strips_ = 0;
     char text_[48] = "";
     uint8_t scratch_[kBig * kBig]; // a piece being coloured
+    uint8_t *pieces_ = nullptr;    // the board's twelve, coloured (colour_pieces)
 
     wm::MenuItem game_items_[5];
     wm::MenuItem board_items_[2];

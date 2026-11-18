@@ -40,6 +40,14 @@ python3 tools/bench/desktop_frames.py --port /dev/ttyACM1
 python3 tools/bench/desktop_frames.py --sim build/host/sim   # no board: the PC simulator
 ```
 
+What each kind of drawing and each window costs, instead of the nine parts
+(the paint bench of backlog item 65; `python3 tools/dbg.py paintbench`
+prints one run by hand):
+
+```
+python3 tools/bench/desktop_frames.py --paint
+```
+
 For the simulator, build it first (`cmake -S host -B build/host && cmake
 --build build/host`). It shows that the script works, not how fast the board
 is: the PC is far faster, and there Chess thinks inside the click that makes

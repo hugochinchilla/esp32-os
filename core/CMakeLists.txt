@@ -101,6 +101,7 @@ set(CORE_SRCS
     src/shell/viewer.cpp
     src/tty/screen.cpp
     src/tty/tty.cpp
+    src/wm/paint_bench.cpp
     src/wm/text_edit.cpp
     src/wm/widgets.cpp
     src/wm/window.cpp

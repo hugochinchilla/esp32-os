@@ -335,6 +335,7 @@ public:
     // Inspection (ports::Desktop), used by the debug protocol and tests.
     size_t describe_windows(char *out, size_t capacity) override;
     uint32_t repaint_all() override;
+    size_t paint_bench(char *out, size_t capacity) override; // paint_bench.cpp
     void set_time(int hours, int minutes, int seconds) override;
     void get_time(int &hours, int &minutes, int &seconds) override;
     void set_animations(bool on) override;

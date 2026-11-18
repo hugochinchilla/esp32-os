@@ -222,27 +222,59 @@ void Canvas::fill_fade(const Rect &r, Rgb from, Rgb to, bool vertical, const Rec
         });
         return;
     }
+    // Left to right. The dither repeats every four lines, so the whole fade
+    // is four rows of pixels: they are worked out once and copied, row by
+    // row, and kept for the next call that asks for the same fade (a title
+    // bar is painted in two bands, and again whenever its window is).
     const int span = whole.w > 1 ? whole.w - 1 : 1;
     const int sx0 = whole.x + ox_; // screen x of the fade's first column
+    const FadeRows &rows = fade_rows(from, to, span, sx0);
     each(r, [&](const Rect &s) {
-        for (int x = s.x; x < s.right(); x++) {
-            const int i = x - sx0;
-            const Rgb c = {
-                static_cast<uint8_t>(from.r + (to.r - from.r) * i / span),
-                static_cast<uint8_t>(from.g + (to.g - from.g) * i / span),
-                static_cast<uint8_t>(from.b + (to.b - from.b) * i / span),
-            };
-            Colour column[4];
-            for (int k = 0; k < 4; k++) {
-                column[k] = dither_t(c, kBayer[k][x & 3]);
-            }
-            uint8_t *p = pixels_ + s.y * width_ + x;
-            for (int y = s.y; y < s.bottom(); y++, p += width_) {
-                *p = column[y & 3];
-                mark(x, y, 1);
-            }
+        for (int y = s.y; y < s.bottom(); y++) {
+            memcpy(pixels_ + y * width_ + s.x, rows.row[y & 3] + (s.x - rows.x), static_cast<size_t>(s.w));
+            mark(s.x, y, s.w);
         }
     });
+}
+
+const Canvas::FadeRows &Canvas::fade_rows(Rgb from, Rgb to, int span, int sx0)
+{
+    static FadeRows kept; // ponytail: one fade kept, the last one asked for
+    FadeRows &f = kept;
+    if (f.valid && f.sx0 == sx0 && f.span == span && f.from.r == from.r && f.from.g == from.g &&
+        f.from.b == from.b && f.to.r == to.r && f.to.g == to.g && f.to.b == to.b) {
+        return f;
+    }
+    f.valid = true;
+    f.sx0 = sx0;
+    f.span = span;
+    f.from = from;
+    f.to = to;
+    f.x = 0;
+    Rgb back[4] = {}; // the colours of the four columns before this one
+    for (int x = 0; x < kFadeWidth; x++) {
+        const int i = x - sx0;
+        const Rgb c = {
+            static_cast<uint8_t>(from.r + (to.r - from.r) * i / span),
+            static_cast<uint8_t>(from.g + (to.g - from.g) * i / span),
+            static_cast<uint8_t>(from.b + (to.b - from.b) * i / span),
+        };
+        // The colour changes every few columns, and four columns back the
+        // dither is at the same place: the same colour there gives the
+        // same four pixels.
+        Rgb &was = back[x & 3];
+        if (x >= 4 && c.r == was.r && c.g == was.g && c.b == was.b) {
+            for (int k = 0; k < 4; k++) {
+                f.row[k][x] = f.row[k][x - 4];
+            }
+        } else {
+            for (int k = 0; k < 4; k++) {
+                f.row[k][x] = dither_t(c, kBayer[k][x & 3]);
+            }
+        }
+        was = c;
+    }
+    return f;
 }
 
 void Canvas::focus_rect(const Rect &r)
@@ -558,25 +590,47 @@ int Canvas::text_cells(int x, int y, const char *s, Colour fg, BgFn bg, int care
     const int sx0 = x + ox_, sy0 = y + oy_;
     const int scaret = caret_x >= 0 ? caret_x + ox_ : -1;
     const Colour caret = ink();
-    each({x, y, len * f.width, f.height}, [&](const Rect &part) {
+    // A character at a time: its glyph's row is read once and its pixels
+    // written one after the other. Only a character cut by the edge of the
+    // part, or with the caret in it, is checked pixel by pixel.
+    const int cell = f.width;
+    each({x, y, len * cell, f.height}, [&](const Rect &part) {
+        const int first = (part.x - sx0) / cell, last = (part.right() - 1 - sx0) / cell;
+        // The first character of the part, found once for all its rows.
+        const char *start = s;
+        for (int i = 0; i < first; i++) {
+            next_latin1(start);
+        }
         for (int py = part.y; py < part.bottom(); py++) {
             const int row = py - sy0;
             uint8_t *dst = pixels_ + py * width_;
-            // Walk the characters that cross this part.
-            const char *p = s;
-            int index = 0;
-            uint8_t code = 0;
-            int cell_x = sx0;
-            for (int px = part.x; px < part.right(); px++) {
-                const int want = (px - sx0) / f.width;
-                while (index <= want) {
-                    code = next_latin1(p);
-                    cell_x = sx0 + index * f.width;
-                    index++;
+            const char *p = start;
+            int cell_x = sx0 + first * cell;
+            for (int index = first; index <= last; index++, cell_x += cell) {
+                const unsigned bits = f.glyph(next_latin1(p))[row];
+                if (cell_x >= part.x && cell_x + cell <= part.right() && (scaret < cell_x || scaret >= cell_x + cell)) {
+                    uint8_t *out = dst + cell_x;
+                    if (cell == 6) { // the font there is: no loop to count
+                        out[0] = (bits & 0x80u) ? fg : bg(cell_x, py);
+                        out[1] = (bits & 0x40u) ? fg : bg(cell_x + 1, py);
+                        out[2] = (bits & 0x20u) ? fg : bg(cell_x + 2, py);
+                        out[3] = (bits & 0x10u) ? fg : bg(cell_x + 3, py);
+                        out[4] = (bits & 0x08u) ? fg : bg(cell_x + 4, py);
+                        out[5] = (bits & 0x04u) ? fg : bg(cell_x + 5, py);
+                        continue;
+                    }
+                    for (int col = 0; col < cell; col++) {
+                        out[col] = (bits & (0x80u >> col)) ? fg : bg(cell_x + col, py);
+                    }
+                    continue;
                 }
-                const int col = px - cell_x;
-                // The caret is always the text colour, even on a selection.
-                dst[px] = px == scaret ? caret : ((f.glyph(code)[row] & (0x80u >> col)) ? fg : bg(px, py));
+                for (int col = 0; col < cell; col++) {
+                    const int px = cell_x + col;
+                    if (px >= part.x && px < part.right()) {
+                        // The caret is always the text colour, even on a selection.
+                        dst[px] = px == scaret ? caret : ((bits & (0x80u >> col)) ? fg : bg(px, py));
+                    }
+                }
             }
             mark(part.x, py, part.w);
         }
