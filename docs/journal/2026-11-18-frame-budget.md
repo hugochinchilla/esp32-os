@@ -188,3 +188,11 @@ would come late. `dbg.py misses` stayed at 0: the picture itself is not
 disturbed, it is only late. What to do about it (list on a job's task,
 list only when something says the folder changed, list less often) is the
 owner's to choose and a separate piece of work.
+
+## How to run it again (2026-11-18)
+
+The owner, while the second board turn ran: "I'm liking the benchmark as it
+is being performed, please save the instructions on how to replicate it as I
+will want to replay it later for my youtube video". They are in
+[`docs/benchmark.md`](../benchmark.md): what is needed, the two commands,
+what each part shows on the screen and how to read the lines.

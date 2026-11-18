@@ -58,6 +58,7 @@ resistor values and build notes.
 | `docs/DECISIONS.md` | What has been decided, what was rejected, and what is still open |
 | `docs/hardware/` | VGA adapter pin map, resistor values and board diagram |
 | `docs/debug-protocol.md` | The serial protocol for screenshots and injected input |
+| `docs/benchmark.md` | How to run the 60 fps benchmark again and read its results |
 | `core/` | The portable part of the OS (C++). Depends on no hardware; builds for the board and for a PC |
 | `firmware/os/` | The OS firmware: ESP-IDF project with the ESP32 adapters for `core/` |
 | `firmware/vga-test/` | ESP-IDF test program for the VGA wiring |
