@@ -449,6 +449,20 @@ built.
   user's side is at the bottom; five levels of difficulty, and White,
   Black or Random, in a dialog before each game; everything chosen kept in
   `C:\.config\chess.ini`; the program is called "Chess".
+- The engine as built (`docs/journal/2026-11-18-chess-engine.md`): a
+  120-square board, moves checked by playing them, one shared list of
+  moves in the engine's own 13 KB (about 100 bytes of stack per half move
+  looked ahead), a table of positions in memory the caller hands in, and
+  no task of its own: it calls a clock and a poll it is given, and the
+  poll or `stop()` ends it. The evaluation's tables are made from rules,
+  not copied.
+- The five levels (the owner, on a card, 2026-11-18, with the board's
+  figures: about 35,000 positions a second;
+  `docs/journal/2026-11-18-chess-levels.md`): depth 1, 2 and 3 with
+  mistakes on purpose of 2.5, 1.2 and 0.5 pawns, answering at once; level
+  4 looks 6 half moves ahead for at most 3 s; level 5 as deep as 10 s
+  allow. Not level 4 at depth 5 (half a second, too far below level 5),
+  and not 5 s or 20 s for level 5.
 
 ## Ideas kept for later
 
