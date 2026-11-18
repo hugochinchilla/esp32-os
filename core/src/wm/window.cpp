@@ -177,6 +177,16 @@ void Window::set_locked(bool on)
     }
 }
 
+void Window::set_hourglass(bool on)
+{
+    if (hourglass_ != on) {
+        hourglass_ = on;
+        if (wm_ != nullptr) {
+            wm_->hourglass_changed();
+        }
+    }
+}
+
 void Window::close()
 {
     if (wm_ != nullptr) {

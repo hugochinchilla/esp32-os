@@ -306,6 +306,8 @@ void Wm::close(Window &w)
             procs_->set_state(w.owner_, proc::State::Exiting);
         }
     }
+    // The pointer may have been an hourglass over it.
+    update_pointer_shape();
     // A window that lives only while open is destroyed at the safe point,
     // unless closed() has opened it again.
     discard(w);
@@ -668,6 +670,7 @@ void Wm::minimize(Window &w)
             activate(*next);
         }
     }
+    update_pointer_shape(); // it may have been an hourglass over it
 }
 
 void Wm::restore(Window &w)
@@ -1626,18 +1629,20 @@ void Wm::on_release()
 void Wm::update_pointer_shape()
 {
     uint8_t edges = 0;
-    bool over_locked = false; // a busy window: the hourglass, except on its borders
+    bool over_locked = false; // a locked window: the hourglass, except on its borders
+    bool over_thinking = false; // one that asked for the hourglass: over its client area
     if (capture_ == Capture::Resize) {
         edges = resize_edges_;
     } else if (capture_ == Capture::None && !menu_open()) {
         if (Window *w = window_under(pointer_x_, pointer_y_)) {
             edges = edges_at(*w, pointer_x_, pointer_y_);
             over_locked = w->locked_ && edges == 0;
+            over_thinking = w->hourglass_ && part_at(*w, pointer_x_, pointer_y_) == Part::Client;
         }
     }
     const video::PointerShape *shape = &video::arrow_pointer();
     const bool horizontal = edges & (kLeft | kRight), vertical = edges & (kTop | kBottom);
-    if (waiting_ > 0 || over_locked) {
+    if (waiting_ > 0 || over_locked || over_thinking) {
         shape = &video::busy_pointer();
     } else if (horizontal && vertical) {
         const bool falling = (edges & kLeft) == ((edges & kTop) ? kLeft : 0);

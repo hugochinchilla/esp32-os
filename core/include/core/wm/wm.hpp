@@ -218,6 +218,9 @@ public:
     // For Window::set_locked(): a menu of the window goes, and the pointer
     // takes the shape that fits where it is now.
     void lock_changed(Window &w);
+    // For Window::set_hourglass(): the pointer takes the shape that fits
+    // where it is now, without waiting for the mouse to move.
+    void hourglass_changed() { update_pointer_shape(); }
 
     // The Start menu, supplied by the shell: what the Start key opens, at
     // the bottom left, with `banner` down its side. nullptr: none.
