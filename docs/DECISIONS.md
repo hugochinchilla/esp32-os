@@ -2834,7 +2834,10 @@ Backlog item 55, `docs/journal/2026-11-18-selecting-several.md`. The owner
 asked for Ctrl+click and a rectangle. He was asked how far it should go (the
 File manager only or the desktop too; with or without Shift+click, Ctrl+A and
 dragging the group) with the first of these recommended, and the work went
-ahead on it while the answer was pending. To confirm or overrule:
+ahead on it while the answer was pending. He chose the first the same day:
+the File manager and the desktop, with Shift+click, Ctrl+A and dragging the
+group. The scope is decided; the details below are still to confirm or
+overrule:
 
 - In a folder window: a click picks one alone; Ctrl+click adds or takes away
   one; Shift+click picks from the last one clicked to this one; a rectangle

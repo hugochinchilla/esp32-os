@@ -142,3 +142,9 @@ fast the rectangle follows the pointer there is not known.
 - The view does not scroll by itself while a rectangle is pulled past its
   edge.
 - A board turn: the rectangle's speed, and `tools/dbg.py misses` after it.
+
+## 8. The owner's answer
+
+At 18:24 UTC the same day, after the pull request was open, the owner chose
+the first answer: the File manager and the desktop, complete. Nothing in the
+code changes for it.
