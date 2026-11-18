@@ -192,8 +192,11 @@ is `/dev/video4`.
 
 - Whether the board may stay on the new layout between BIOS tries (card
   unanswered).
-- Older, unanswered: whether `rm` uses the Trash; the visible pause when the
+- Older, unanswered: the visible pause when the
   taskbar restarts; checks with a real mouse and a USB keyboard; a true power
   cycle; two entries holding the Wi-Fi details in
   `~/.local/share/lean-ctx/context_radar.jsonl` on the laptop, disclosed and
-  not yet removed; one system-owned window limit against per-program caps.
+  not yet removed.
+- Answered 2026-11-17 (`docs/DECISIONS.md`): `rm` does not use the Trash;
+  there is no window limit of the system's, the machine may run out of
+  memory instead.

@@ -916,6 +916,7 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
     g_wm = &wm;
     g_system = &system;
     g_storage = &storage;
+    wm.set_memory(&memory); // its lists of windows grow from there
     os::Kit kit;
     kit.wm = &wm;
     kit.system = &system;

@@ -89,7 +89,12 @@ protected:
 
 class Wm : public ports::InputSink, public ports::Desktop {
 public:
-    static constexpr int kMaxWindows = 16;
+    // No limit on the windows open at once (the owner's decision,
+    // 2026-11-17: the machine may run out of memory instead). The lists
+    // start with room for this many and grow out of the Memory port
+    // (set_memory); with no port, or no memory left, the next window does
+    // not open.
+    static constexpr int kFirstWindows = 16;
     static constexpr int kMaxPopups = 4;  // a menu and its open submenus
     static constexpr int kTaskbarHeight = 28;
     static constexpr int kOutline = 3;        // width of the outline while dragging
@@ -102,6 +107,9 @@ public:
     using TimerFn = void (*)(void *context);
 
     Wm(ports::Display &display, ports::Pointer &pointer, ports::Clock &clock);
+    // Where the lists of windows grow from once more than kFirstWindows are
+    // open. Not counted as any program's.
+    void set_memory(ports::Memory *memory) { memory_ = memory; }
 
     // Sets the pointer up and paints the whole screen.
     void start();
@@ -409,8 +417,13 @@ private:
     ports::Clock &clock_;
     int width_, height_;
 
-    Window *stack_[kMaxWindows] = {}; // stacking order, 0 at the bottom
-    Window *order_[kMaxWindows] = {}; // order of opening, for the taskbar
+    bool room_for_one_more();
+    Window *first_stack_[kFirstWindows] = {};
+    Window *first_order_[kFirstWindows] = {};
+    Window **stack_ = first_stack_; // stacking order, 0 at the bottom
+    Window **order_ = first_order_; // order of opening, for the taskbar
+    int room_ = kFirstWindows;      // how many the two lists hold
+    ports::Memory *memory_ = nullptr;
     int count_ = 0;
     int next_id_ = 1;
     Window *active_ = nullptr;

@@ -355,9 +355,12 @@ and reasons are in `docs/journal/2026-11-17-program-lifecycle.md`.
   window for it; the shell's `make_window`, `one` and `open_one`
   (`core/src/shell/internal.hpp`) are how programs use it. A new window or
   dialog is written this way; it is no longer possible to "owe" the memory.
-- **The Editor can run several times** (four at most), each a process with
+- **The Editor can run several times**, each a process with
   its own window, text and dialogs; a file already open in one comes to the
-  front. The File manager keeps its one process with up to three windows.
+  front. The File manager keeps its one process, with a window for every
+  folder opened. (Until 2026-11-17 there were four Editors and three folder
+  windows at most; the owner had both caps removed: "No window limit of
+  the system's" below.)
   Every other program runs once at a time (`shell::App::many` switches it).
 - **Open, Save As and the text question are made per asker**; two programs
   can each have one up. The message box stays one at a time.
@@ -1638,7 +1641,9 @@ by the agent under the owner's "dejo a tu criterio" of 2026-11-16.
   `rmdir`. Each command expands them itself (the DOS way); there is no heap
   to hold a list. A star does not match names that start with a dot, so
   `del *` leaves `C:\.config` and `C:\.trash` alone.
-- `rm` deletes for good; it does not use the Trash. `rm -r` and `rmdir`
+- `rm` deletes for good; it does not use the Trash (**confirmed by the
+  owner, 2026-11-17**: "el comando RM no debe utilizar la papelera, borra
+  el archivo directamente"). `rm -r` and `rmdir`
   refuse the folder the session is in and a drive's root.
 - `mv` onto an existing file replaces it in one step. Between drives it
   copies and deletes, files only. `cp` writes the safe way (temporary file,
@@ -2177,7 +2182,7 @@ option of a card the owner has not answered yet.
 - All 17 programs are written with the thin classes, and since item 26
   About, Welcome and the widget gallery too (20 files). What is left on
   `core/wm`'s classes is the desktop itself and the message box.
-- Events through a queue: with item 26.
+- Events through a queue: decided against ("No queue of events" below).
 
 ### Chosen for background jobs (2026-11-17, to confirm)
 
@@ -2277,8 +2282,58 @@ The rest is the agent's, to confirm:
   turn (ESP-IDF's task watchdog watches them, 5 s).
 - A late program's task is taken away when it is ended; it is outside
   every OS call by then, so it holds no lock.
-- Not yet: the queue of events (what a late program missed is lost),
-  the other programs, programs that call each other's code directly.
+- The queue of events was decided against: "No queue of events" below.
+  Still not done: programs that call each other's code directly.
+
+### No window limit of the system's (the owner's decision, 2026-11-17)
+
+Asked whether the system should own one limit on open windows or each
+program keep its own cap, the owner chose neither kind of common limit: "creo
+que no tiene que haber un límite de ventanas común. Prefiero ver el sistema
+fallar por falta de memoria dado el caso. Me parece un caso divertido y de
+época."
+
+- **There is no limit on the windows open at once.** The window server's
+  two lists and the list of numbered windows (`os::ui`) begin with room for
+  sixteen and grow out of the Memory port, twice the room each time; the
+  block goes back when sixteen or fewer are left. Before, the seventeenth
+  window did not open.
+- **Running out of memory is how the machine says it has had enough**, and
+  that is accepted. A window that finds no memory does not open and
+  nothing of it is left ("There is not enough memory to open ...", when
+  there is memory for the message).
+- **The caps programs set for themselves are gone too** (the owner,
+  asked: "Quítalos"): any number of Editors, at 576 KB each, where there
+  were four and a message for the fifth; a File manager window for every
+  folder opened, where there were three and the first was reused for a
+  fourth folder. The one that finds no memory says so.
+- Left as they were: the 32 rows of the process table and the 8 program
+  tasks (a ninth program runs on the UI task). They are not limits on
+  windows.
+- With very many windows the taskbar's buttons shrink to four pixels and
+  the last ones are off the bar. To confirm; nothing is drawn for it.
+
+### No queue of events (the owner's decision, 2026-11-17)
+
+Backlog items 26 and 37, the last part of both.
+[Journal](journal/2026-11-17-event-queue.md).
+
+- **What happens to a program while it is not responding is lost**, as
+  it was: its keys, its clicks, its timer's ticks. The owner's choice on a
+  card ("Dejarlo como está"). Rejected: a queue that keeps them for the
+  program until it answers (built first, on the agent's recommendation,
+  and taken out again); and a message loop in every program, as Win16
+  programs had, with the desktop waiting only to paint (all twenty
+  programs rewritten, and locks around the OS calls).
+- **The one exception is the result of a background job**, which the card
+  named: a save that finishes while its program is away is kept
+  (`proc::kKept`, said by `job::Jobs::finish` alone) and handed to the
+  program when it answers again, before anything new. Before, it was lost
+  and the Editor's window stayed locked for good. It waits in external
+  RAM counted as the program's memory, and goes with the program if that
+  is ended. At most eight a program, as many as there can be jobs.
+- Events therefore still reach a program as calls that the server waits
+  for. Item 37's "events through a queue" is closed as not wanted.
 
 ### Programs loaded from files (2026-11-17)
 
