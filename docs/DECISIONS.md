@@ -229,6 +229,7 @@ The programs and games, one decision each.
 - [Chosen for Copy, Cut and Paste of files](decisions/file-copy-cut-paste.md) (2026-11-18, agent, to-confirm): One clipboard for text or files; Copy, Cut and Paste in the File manager and on the desktop (backlog 54)
 - [Chosen for selecting several files](decisions/selecting-several-files.md) (2026-11-18, owner+agent, to-confirm): Ctrl+click and a rubber-band rectangle in the File manager (backlog 55)
 - [The chess game](decisions/chess-game.md) (2026-11-18, owner, decided): Chess: own engine, moving by drag or click, piece sets, board colours, levels (backlog 50)
+- [The computer's chess piece lands](decisions/chess-landing.md) (2026-11-18, owner+agent, decided): The computer's piece drops 4 pixels onto its square and bounces once, 233 ms (backlog 64); details to confirm
 
 ### console
 
