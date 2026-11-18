@@ -317,3 +317,30 @@ yet.
 - The debug link's window list still answers "too many windows" at about
   ten windows: its reply buffer, not a limit on windows.
 - Item 27 goes on in its own thread.
+
+## On the board (2026-11-18, e5f6ed9)
+
+App-flashed on the BIOS layout. Passed:
+
+- A 300 KB Editor save followed at once by `dbg.py fault slow --pid` ended
+  unlocked, title without the star, file the right size. On `main` (PR 44)
+  the same run left the title `big.txt*` with the hourglass: the result was
+  lost there.
+- `fault hang --pid` during a save, then End Task: Editor, window and task
+  gone, internal memory exactly as before.
+- With ten Editors open (232 KB of external RAM left) the eleventh try from
+  Run, a second try from Run and one from Start > Programs > Editor each
+  left a box titled "Editor", "There is not enough memory for the Editor.",
+  on the screen after Run had gone; no process left behind, memory as before
+  the attempt (the box itself 772 bytes while it is open).
+- Editor with unsaved text and Alt+F4 (the "Save changes?" question), then
+  End Task from the Task Manager: the question comes back to the front, the
+  second End Task asks "has not closed", End Now: Editor, its window and its
+  question all gone, no task. A Task Manager question cannot be left open
+  while the Task Manager is closed, because the question is modal to it;
+  Alt+F4 closes the question first.
+- Everything closed: internal memory identical, external 3.9 KB lower (the
+  taskbar's Start menu), as with PR 44.
+- Earlier, on the commit before this one (batch 6): more than twenty windows
+  at once with the taskbar buttons shrinking, and an open Culebra costs
+  nothing measurable.
