@@ -277,6 +277,19 @@ int main(int argc, char **argv)
     key(wm::key::Escape);
     key(wm::key::Escape);
 
+    // Options > Hourglass: the gallery asks for the hourglass over its
+    // controls (item 49), and gives the arrow back when it is chosen again.
+    {
+        const gfx::Rect gc = find("Widget gallery")->client();
+        // (the clock is left alone, so the scenes after this one keep their times)
+        desktop.mouse({true, static_cast<int16_t>(gc.x + 200), static_cast<int16_t>(gc.y + 200), 0, 0});
+        key(0x12, true); // Alt+O
+        key(0x0B);       // H
+        save("10b-gallery-hourglass", true, true);
+        key(0x12, true);
+        key(0x0B);
+    }
+
     // Resize the gallery by its bottom right corner.
     const gfx::Rect wf = find("Widget gallery")->frame();
     mouse(wf.right() - 2, wf.bottom() - 2, 0);

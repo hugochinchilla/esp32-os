@@ -318,6 +318,10 @@ public:
     // Locked: it takes no keys, no clicks and no request to close.
     void set_locked(bool on) { os::ui::set_locked(number_, on); }
     bool locked() const { return os::ui::locked(number_); }
+    // The hourglass over the client area while the program works something
+    // out; the window answers as before.
+    void set_hourglass(bool on) { os::ui::set_hourglass(number_, on); }
+    bool hourglass() const { return os::ui::hourglass(number_); }
     bool caret_lit() const { return os::ui::caret_lit(number_); } // the lit half of the text cursor's blink
     // Asks for a part of the client area to be painted again.
     void redraw(const gfx::Rect &part) { os::ui::redraw(number_, part); }

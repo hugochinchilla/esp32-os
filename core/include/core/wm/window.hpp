@@ -216,6 +216,15 @@ public:
     void set_locked(bool on);
     bool locked() const { return locked_; }
 
+    // The hourglass on demand: while it is on, the pointer is an hourglass
+    // over the window's client area and nothing else changes. The window
+    // takes its keys and clicks as before, and the pointer is the arrow over
+    // its title bar and menu bar, which still answer. For a program that is
+    // working something out (Chess while the engine thinks). The program
+    // turns it off itself; it goes with the window when the window closes.
+    void set_hourglass(bool on);
+    bool hourglass() const { return hourglass_; }
+
     void add(Widget &w);
     // Takes the widget added last out again (it could not be finished).
     void remove_last();
@@ -292,6 +301,7 @@ private:
     bool modal_ = false;
     bool system_modal_ = false;
     bool locked_ = false;
+    bool hourglass_ = false;
     Window *modal_owner_ = nullptr;
     const MenuBar *menu_bar_ = nullptr;
     Wm *wm_ = nullptr;

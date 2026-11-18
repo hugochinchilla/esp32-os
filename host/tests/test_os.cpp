@@ -515,9 +515,36 @@ void test_ui()
     os::ui::select(number, 99, 1);
     CHECK(os::ui::value(number, s.rows_.number()) == 0 && !os::ui::checked(number, 0));
 
+    // The hourglass on demand (item 49): asked for by number, shown over
+    // the client area only, and the program still gets its keys.
+    const auto shape_is = [](const video::PointerShape &shape) {
+        const video::PointerShape *now = pointer.state().shape;
+        return now != nullptr && memcmp(now, &shape, sizeof(video::PointerShape)) == 0;
+    };
+    desktop.mouse({true, static_cast<int16_t>(client.x + 200), static_cast<int16_t>(client.y + 100), 0, 0});
+    CHECK(!s.hourglass() && shape_is(video::arrow_pointer()));
+    s.set_hourglass(true);
+    CHECK(s.hourglass() && os::ui::hourglass(number) && !s.locked() && shape_is(video::busy_pointer()));
+    desktop.mouse({true, static_cast<int16_t>(client.x + 200), static_cast<int16_t>(client.y - 10), 0, 0});
+    CHECK(shape_is(video::arrow_pointer())); // the title bar
+    desktop.mouse({true, static_cast<int16_t>(client.x + 200), static_cast<int16_t>(client.y + 100), 0, 0});
+    CHECK(shape_is(video::busy_pointer()));
+    s.set_focus(s.tick_);
+    press(wm::key::Space);
+    CHECK(!s.tick_.checked() && s.ticks == 2);
+    s.set_hourglass(false);
+    CHECK(!os::ui::hourglass(number) && shape_is(video::arrow_pointer()));
+    // A number of no window does nothing and answers no.
+    os::ui::set_hourglass(app::kNone, true);
+    CHECK(!os::ui::hourglass(app::kNone));
+    // Left on when the window closes: it goes with the window.
+    s.set_hourglass(true);
+    CHECK(shape_is(video::busy_pointer()));
+
     // Closed: the program's object is destroyed, everything goes back, the
     // process ends and the number is dead.
     s.close();
+    CHECK(shape_is(video::arrow_pointer()) && !os::ui::hourglass(number));
     // Dead to the program at once, before the system has taken it apart.
     CHECK(sample_gone == 1 && !os::ui::alive(number) && !os::ui::show(number));
     wait(10000);

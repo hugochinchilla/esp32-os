@@ -45,8 +45,9 @@ public:
         file_items_[0] = {"&Close", &GalleryWindow::menu_close, this, nullptr, nullptr, 0};
         option_items_[0] = {"&Bold", &GalleryWindow::toggle_bold, this, nullptr, nullptr, 0};
         option_items_[1] = {"&Size", nullptr, nullptr, &size_menu_, nullptr, 0};
-        option_items_[2] = {nullptr, nullptr, nullptr, nullptr, nullptr, wm::kMenuSeparator};
-        option_items_[3] = {"&Not yet", nullptr, nullptr, nullptr, nullptr, wm::kMenuDisabled};
+        option_items_[2] = {"&Hourglass", &GalleryWindow::toggle_hourglass, this, nullptr, nullptr, 0};
+        option_items_[3] = {nullptr, nullptr, nullptr, nullptr, nullptr, wm::kMenuSeparator};
+        option_items_[4] = {"&Not yet", nullptr, nullptr, nullptr, nullptr, wm::kMenuDisabled};
         size_items_[0] = {"&Small", &GalleryWindow::pick_small, this, nullptr, nullptr, 0};
         size_items_[1] = {"&Medium", &GalleryWindow::pick_medium, this, nullptr, nullptr, 0};
         size_items_[2] = {"&Large", &GalleryWindow::pick_large, this, nullptr, nullptr, 0};
@@ -78,6 +79,7 @@ public:
     void menu_opening(int) override
     {
         option_items_[0].flags = bold_.checked() ? wm::kMenuChecked : 0;
+        option_items_[2].flags = hourglass() ? wm::kMenuChecked : 0;
         for (int i = 0; i < 3; i++) {
             size_items_[i].flags = radio_value(kSize) == i ? wm::kMenuChecked : 0;
         }
@@ -89,6 +91,9 @@ private:
     static void menu_close(void *context) { self(context).close(); }
     static void menu_about(void *) { open_about(); }
     static void toggle_bold(void *context) { self(context).bold_.set_checked(!self(context).bold_.checked()); }
+    // The hourglass on demand, to look at: over the controls, and the window
+    // answers as before.
+    static void toggle_hourglass(void *context) { self(context).set_hourglass(!self(context).hourglass()); }
     static void pick_small(void *context) { self(context).set_radio_value(kSize, 0); }
     static void pick_medium(void *context) { self(context).set_radio_value(kSize, 1); }
     static void pick_large(void *context) { self(context).set_radio_value(kSize, 2); }
@@ -111,12 +116,12 @@ private:
     app::Button close_;
 
     wm::MenuItem file_items_[1];
-    wm::MenuItem option_items_[4];
+    wm::MenuItem option_items_[5];
     wm::MenuItem size_items_[3];
     wm::MenuItem help_items_[1];
     wm::Menu file_ = {file_items_, 1};
     wm::Menu size_menu_ = {size_items_, 3};
-    wm::Menu options_ = {option_items_, 4};
+    wm::Menu options_ = {option_items_, 5};
     wm::Menu help_ = {help_items_, 1};
     const wm::MenuBarEntry entries_[3] = {{"&File", &file_}, {"&Options", &options_}, {"&Help", &help_}};
     const wm::MenuBar bar_ = {entries_, 3};
