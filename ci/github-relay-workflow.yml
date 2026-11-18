@@ -1,0 +1,46 @@
+# Puts the relay of the web version (web/relay/, a Cloudflare Worker) on
+# Cloudflare every time it changes on main: worker.js is the relay, and
+# wrangler.toml is its configuration (its name, its date).
+#
+# Not active here: agent sessions cannot push workflow files. To turn it on
+# (once), as web/relay/README.md tells with more words:
+#   1. Copy this file to .github/workflows/relay.yml.
+#   2. On GitHub: Settings > Secrets and variables > Actions > Secrets, add
+#        CLOUDFLARE_API_TOKEN   a token with "Workers Scripts: Edit" on the account
+#        CLOUDFLARE_ACCOUNT_ID  the account's id
+#   3. Run it once by hand (Actions > Deploy the relay > Run workflow), or
+#      change a file in web/relay/.
+name: Deploy the relay
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/relay/**"
+      - ".github/workflows/relay.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: relay
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # The relay answers as the comment at its top says, before it goes out.
+      - run: node web/relay/test.mjs
+      - uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: web/relay
+          command: deploy
