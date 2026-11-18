@@ -56,8 +56,8 @@ The control:
 
 The owner was asked on a card in the thread with the first of each
 recommended: a slider, applied on OK. The work went ahead on that
-recommendation while the card was open; a later entry says so if he
-chooses otherwise.
+recommendation while the card was open. He chose it the same evening:
+"Slider, applies on OK".
 
 ## What was built
 
