@@ -12,6 +12,7 @@ The protocol is described in docs/debug-protocol.md.
   tools/dbg.py type "hello"
   tools/dbg.py stats
   tools/dbg.py tasks                      # the kernel's tasks and their processor time
+  tools/dbg.py frames                     # did the desktop keep up with the monitor?
   tools/dbg.py monitor                    # show the board's log text
 
 The port comes from --port, else the DBG_PORT variable, else /dev/ttyACM0 (the board's UART bridge on the bench).
@@ -40,6 +41,7 @@ MEMORY_REPORT = 19
 TASKS = 20
 FAULT = 21
 LOG_READ = 22
+FRAMES = 23
 WIFI = 0x20
 MAX_REQUEST = 1024  # largest request payload the board takes
 LOG, HELLO, SHOT_DATA, SHOT_END = 0x70, 0x71, 0x72, 0x73
@@ -587,6 +589,31 @@ class Board:
         """The windows, bottom to top, as a list of dicts."""
         return json.loads(self.request(WINDOWS).decode("utf-8"))["windows"]
 
+    FRAME_WORK = ("key", "mouse event", "typed text", "tick", "message")
+    FRAME_TOP = (None, "timer", "window painting", "panel painting")
+    FRAME_BUCKETS = ("under 1 ms", "1 to 2 ms", "2 to 4 ms", "4 to 8 ms", "8 ms to the budget",
+                     "1 to 2 frames", "2 to 4 frames", "4 frames or more")
+
+    def frames(self, reset=False):
+        """What the desktop counted against one video frame
+        (core/sys/frames.hpp): a dict with budget_us, pieces (of work),
+        painted, over (pieces longer than a frame), late (pieces with a timer
+        a frame or more late), worst_us, worst_late_us, busy_us, buckets (8
+        counts by length) and slow (the last pieces that were over or late,
+        oldest first). With reset the board starts counting again."""
+        body = self.request(FRAMES, b"\x01" if reset else b"")
+        names = ("budget_us", "pieces", "painted", "over", "late", "worst_us", "worst_late_us", "busy_us")
+        out = dict(zip(names, struct.unpack_from("<7IQ", body)))
+        out["buckets"] = list(struct.unpack_from("<8I", body, 36))
+        out["slow"] = []
+        for i in range(body[68]):
+            at_ms, total, paint, pixels, timers, top_us, late, pid, work, top = \
+                struct.unpack_from("<7IHBB", body, 69 + 32 * i)
+            out["slow"].append({"at_ms": at_ms, "total_us": total, "paint_us": paint, "pixels": pixels,
+                                "timers_us": timers, "top_us": top_us, "late_us": late, "top_pid": pid,
+                                "work": self.FRAME_WORK[min(work, 4)], "top": self.FRAME_TOP[min(top, 3)]})
+        return out
+
     def repaint(self):
         """Paints the whole screen again; returns the time it took in µs."""
         return struct.unpack("<I", self.request(REPAINT))[0]
@@ -670,6 +697,27 @@ def run_console(board):
             termios.tcsetattr(keyboard, termios.TCSADRAIN, before)
         board.console = None
         sys.stderr.write("\r\n")
+
+
+def frames_report(f):
+    """The lines `dbg.py frames` prints for Board.frames()."""
+    hz = 1e6 / f["budget_us"]
+    lines = ["budget: %d us a frame (%.2f frames a second)" % (f["budget_us"], hz),
+             "pieces of work: %d, %d of them painted; busy %.1f ms in all" %
+             (f["pieces"], f["painted"], f["busy_us"] / 1000),
+             "over budget: %d; longest piece %d us" % (f["over"], f["worst_us"]),
+             "timers a frame or more late: %d; latest %d us" % (f["late"], f["worst_late_us"])]
+    for name, count in zip(Board.FRAME_BUCKETS, f["buckets"]):
+        if count:
+            lines.append("  %-20s %d" % (name, count))
+    for s in f["slow"]:
+        top = ""
+        if s["top"]:
+            top = "; longest %s %d us, PID %d" % (s["top"], s["top_us"], s["top_pid"])
+        late = "; timer %d us late" % s["late_us"] if s["late_us"] else ""
+        lines.append("  at %d ms: a %s took %d us (painting %d us for %d pixels, timers %d us%s%s)" %
+                     (s["at_ms"], s["work"], s["total_us"], s["paint_us"], s["pixels"], s["timers_us"], top, late))
+    return lines
 
 
 def wait_for_desktop(board, timeout=15):
@@ -863,6 +911,10 @@ def main(argv=None):
     sub.add_parser("dmesg", help="the system log the board keeps, oldest first")
     p = sub.add_parser("misses", help="missed video refills in the log not caused by the debug link; exits 1 if any")
     p.add_argument("--all", action="store_true", help="also the lines caused only by dbg.py tasks")
+    p = sub.add_parser("frames", help="whether the desktop keeps up with the monitor: pieces of work longer than "
+                                      "one video frame, and where their time went; exits 1 if any")
+    p.add_argument("--reset", action="store_true", help="start counting again after reading")
+    p.add_argument("--json", action="store_true", help="the figures as JSON")
     p = sub.add_parser("tasks", help="the kernel's tasks: state, priority, core, processor time, unused stack")
     p.add_argument("--interval", type=float, default=1.0,
                    help="seconds between the two readings behind the %%NOW column (default 1; 0: one reading)")
@@ -992,6 +1044,11 @@ def main(argv=None):
             print("%d missed-refill line(s) not caused by the debug link; %d caused only by it (dbg.py tasks)" %
                   (len(own), debug), file=sys.stderr)
             if own:
+                exit_code = 1
+        elif args.command == "frames":
+            f = board.frames(reset=args.reset)
+            print(json.dumps(f, indent=1) if args.json else "\n".join(frames_report(f)))
+            if f["over"]:
                 exit_code = 1
         elif args.command == "tasks":
             earlier = None

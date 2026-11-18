@@ -78,6 +78,18 @@ def main():
 
         stats = board.stats()
         assert stats["keys"] == 2, stats
+
+        # The desktop against the video frame (core/sys/frames.hpp): what
+        # was done above is counted, and the count starts again on request.
+        frames = board.frames(reset=True)
+        assert frames["budget_us"] == 16800, frames
+        assert frames["pieces"] > 10 and frames["painted"] >= 4, frames  # the drag, the drop, the key
+        assert sum(frames["buckets"]) == frames["pieces"], frames
+        assert frames["over"] <= len(frames["slow"]) <= 16, frames
+        assert frames["busy_us"] >= frames["worst_us"] > 0, frames
+        again = board.frames()
+        assert again["pieces"] < frames["pieces"] and again["slow"] == [], again
+        assert dbg.frames_report(frames)[0] == "budget: 16800 us a frame (59.52 frames a second)"
         assert stats["mouse_events"] == 7, stats
         assert stats["receive_errors"] == 0, stats
 

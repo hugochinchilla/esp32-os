@@ -1,9 +1,11 @@
 #include "core/dbg/protocol.hpp"
+#include "core/sys/frames.hpp"
 #include "core/sys/log.hpp"
 #include "core/proc/table.hpp"
 #include "core/net/wifi.hpp"
 
 #include <cstring>
+#include <initializer_list>
 
 #include "core/dbg/crc.hpp"
 
@@ -396,6 +398,51 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
         char *json = reinterpret_cast<char *>(chunk_);
         size_t size = desktop_->describe_windows(json, kMaxReplyPayload - 1);
         reply(type, seq, kOk, chunk_, size);
+        break;
+    }
+
+    case kFrames: {
+        // What the desktop counted against the video frame (sys::Frames).
+        // Reply: budget, pieces, painted, over, late, worst, worst late
+        // (4 each), busy (8), the 8 buckets (4 each), how many slow pieces
+        // follow (1), then for each, oldest first: at_ms, total, painting,
+        // pixels, timers, top, late (4 each), top's PID (2), the work (1),
+        // what the top was (1). Bit 0 of the optional argument starts the
+        // count again after the reply is made.
+        sys::Frames *frames = desktop_ != nullptr ? desktop_->frames() : nullptr;
+        if (frames == nullptr) {
+            reply(type, seq, kUnknownCommand, nullptr, 0);
+            break;
+        }
+        const sys::Frames::Totals &t = frames->totals();
+        uint8_t *body = chunk_;
+        size_t at = 0;
+        for (const uint32_t v : {t.budget_us, t.pieces, t.painted, t.over, t.late, t.worst_us, t.worst_late_us}) {
+            put32(body + at, v);
+            at += 4;
+        }
+        put64(body + at, t.busy_us);
+        at += 8;
+        for (const uint32_t v : t.buckets) {
+            put32(body + at, v);
+            at += 4;
+        }
+        body[at++] = static_cast<uint8_t>(frames->slow_count());
+        for (int i = 0; i < frames->slow_count(); i++) {
+            const sys::Frames::Slow &s = frames->slow(i);
+            for (const uint32_t v : {s.at_ms, s.total_us, s.paint_us, s.pixels, s.timers_us, s.top_us, s.late_us}) {
+                put32(body + at, v);
+                at += 4;
+            }
+            body[at++] = static_cast<uint8_t>(s.top_pid);
+            body[at++] = static_cast<uint8_t>(s.top_pid >> 8);
+            body[at++] = s.work;
+            body[at++] = s.top;
+        }
+        reply(type, seq, kOk, body, at);
+        if (args_size >= 1 && (args[0] & 1)) {
+            frames->reset();
+        }
         break;
     }
 

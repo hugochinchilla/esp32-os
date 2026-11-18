@@ -500,7 +500,11 @@ int main(int argc, char **argv)
             protocol.line_idle();
         }
         queue.quiet();
-        const bool more = inbox.deliver();
+        bool more;
+        {
+            const wm::Wm::Work piece(screen, sys::Frames::kMessage);
+            more = inbox.deliver();
+        }
         screen.tick();
         if (more || got == static_cast<ssize_t>(sizeof(buffer))) {
             continue; // there may be more
