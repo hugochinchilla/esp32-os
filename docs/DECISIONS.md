@@ -426,8 +426,12 @@ in `docs/journal/2026-11-18-chess-design.md`. Nothing is built.
   for this project in `core/src/games/`, tested on the PC. Not micro-Max
   (through mcu-max), and not a port of a larger engine. The points below
   are still his to choose.
+- Decided by the owner (2026-11-18): a piece is moved by dragging it, or
+  by a click on it and a click on where it goes. The captured pieces are
+  evenly spaced.
 - The look: squares of 40 pixels, the pieces as drawn by
-  `tools/mockup/chess_pieces.py`, green with white squares or brown with
+  `tools/mockup/chess_pieces.py` (two sets: "symbols", plainer, asked
+  for by the owner after the first, "classic"; which stays is open), green with white squares or brown with
   cream ones, the last move in yellow, dots where a picked piece can go,
   letters and numbers inside the squares, the board turned so the user's
   side is at the bottom.

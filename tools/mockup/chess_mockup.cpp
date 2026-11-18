@@ -169,14 +169,14 @@ private:
         }
     }
 
-    // A row of captured pieces, those of a kind close together, and by how
-    // many pawns that side leads.
+    // A row of captured pieces, evenly spaced, and by how many pawns that
+    // side leads. Fifteen fit.
     void paint_strip(app::Canvas &c, int top, const char *taken, int lead)
     {
         int x = kMargin + 2;
         for (const char *p = taken; *p != 0; p++) {
             draw_piece(c, x, top + 2, *p, false);
-            x += p[1] == p[0] ? 10 : kSmallSize + 2;
+            x += kSmallSize - 2; // one step for all of them
         }
         if (lead > 0) {
             char text[16];

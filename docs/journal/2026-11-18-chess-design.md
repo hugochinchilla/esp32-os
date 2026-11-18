@@ -196,3 +196,28 @@ mcu-max, something else), the owner chose **our own engine**. It is
 recorded in `docs/DECISIONS.md`. The look, the levels and the name have not
 been answered yet. The rules and the search do not depend on them, so they
 can be written and tested on the PC meanwhile, as their own piece of work.
+
+## The owner's first look at the mock-ups (the same day)
+
+> the captured pieces show non regular spacing between them.
+>
+> Produce a new pieces theme, more symbolic, less detail.
+>
+> Pieces move either by dragging or by click on piece and click on
+> destination
+
+- The spacing: the first drawing put pieces of one kind close together
+  and left a gap between kinds, as the online boards do. The owner read it
+  as uneven. Now every captured piece is one step of 18 pixels from the
+  last; all fifteen a side can lose still fit beside the "+1".
+- A second set of pieces, "symbols", in `tools/mockup/chess_pieces.py`
+  beside the first ("classic"): each piece is its sign and little else. A
+  flat slab to stand on, heavier shapes, three points on the queen's crown
+  instead of five, and no inner lines but the bishop's cut and the knight's
+  eye. The mock-ups use it; `chess-pieces.png` shows the new set on the
+  left and the first on the right. Which of the two stays is the owner's
+  to say.
+- Moving a piece by dragging it, or by a click on it and a click on where
+  it goes: decided by the owner, as proposed.
+
+The three mock-ups were drawn again. PC only; nothing built.

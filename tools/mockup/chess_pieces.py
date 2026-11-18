@@ -8,6 +8,9 @@ drawings serve both sides.
 
     python3 tools/mockup/chess_pieces.py header out.inc   the rows, for C++
     python3 tools/mockup/chess_pieces.py sheet out.png    a sheet to look at
+
+There are two sets: the first one drawn ("classic"), and "symbols", plainer,
+which the mock-up uses. The sheet shows both.
 """
 import sys
 
@@ -119,8 +122,65 @@ def king(p):
     p.foot()
 
 
-PIECES = [("pawn", pawn), ("knight", knight), ("bishop", bishop), ("rook", rook), ("queen", queen),
-          ("king", king)]
+CLASSIC = [("pawn", pawn), ("knight", knight), ("bishop", bishop), ("rook", rook), ("queen", queen),
+           ("king", king)]
+
+
+# The second set (the owner asked for one "more symbolic, less detail"):
+# each piece is its sign and little else. Heavier shapes, a flat slab to
+# stand on, and no inner lines but the bishop's cut and the knight's eye.
+def slab(p):
+    p.box(9, 31.5, 31, 36.5)
+
+
+def s_pawn(p):
+    p.oval(20, 14.5, 6.6)
+    p.poly((16, 20), (24, 20), (28.5, 32), (11.5, 32))
+    slab(p)
+
+
+def s_knight(p):
+    p.poly((11.5, 32), (13, 26), (18.5, 19.5), (13.5, 22.5), (9.5, 23), (7.5, 19.5), (12.5, 11.5),
+           (14.5, 4.5), (19, 8), (25, 9), (30, 14.5), (31.5, 23), (30.5, 32))
+    p.dot(15.2, 13.2, 1.3)
+    slab(p)
+
+
+def s_bishop(p):
+    p.oval(20, 5.4, 2.6)
+    p.poly((20, 6.5), (25, 11.5), (27, 17), (25.5, 22), (22.5, 25), (17.5, 25), (14.5, 22), (13, 17),
+           (15, 11.5))
+    p.poly((17, 24), (23, 24), (28, 32), (12, 32))
+    p.line((22.4, 9.5), (18, 17), width=1.6)
+    slab(p)
+
+
+def s_rook(p):
+    p.box(10.5, 6.5, 29.5, 16)
+    p.cut(15, 5, 18, 10.5)
+    p.cut(22, 5, 25, 10.5)
+    p.box(14, 15.5, 26, 32)
+    slab(p)
+
+
+def s_queen(p):
+    for x, y in ((8.2, 11.5), (20, 7.4), (31.8, 11.5)):
+        p.oval(x, y, 2.7)
+    p.poly((11, 32), (8.2, 12.5), (14.5, 21), (20, 9), (25.5, 21), (31.8, 12.5), (29, 32))
+    slab(p)
+
+
+def s_king(p):
+    p.box(18.2, 2.6, 21.8, 15)
+    p.box(14.4, 5.8, 25.6, 9.2)
+    p.poly((12.5, 32), (9, 19.5), (12, 14.5), (28, 14.5), (31, 19.5), (27.5, 32))
+    slab(p)
+
+
+SYMBOLS = [("pawn", s_pawn), ("knight", s_knight), ("bishop", s_bishop), ("rook", s_rook),
+           ("queen", s_queen), ("king", s_king)]
+SETS = {"classic": CLASSIC, "symbols": SYMBOLS}
+PIECES = SYMBOLS
 
 
 def rows(draw, size):
@@ -168,8 +228,11 @@ def sheet(path):
     squares = [(255, 255, 255), (109, 146, 85), (255, 219, 170), (182, 146, 85)]
     white = {"X": (0, 0, 0), "o": (255, 255, 255), "-": (0, 0, 0)}
     black = {"X": (0, 0, 0), "o": (73, 73, 85), "-": (182, 182, 170)}
-    img = Image.new("RGB", (6 * BIG, 8 * BIG + 2 * SMALL + 8), (182, 182, 170))
-    for i, (name, draw) in enumerate(PIECES):
+    img = Image.new("RGB", (12 * BIG + 8, 8 * BIG + 2 * SMALL + 8), (182, 182, 170))
+    # The new set on the left, the first one on the right.
+    both = [(i * BIG, d) for i, (_, d) in enumerate(SYMBOLS)]
+    both += [(6 * BIG + 8 + i * BIG, d) for i, (_, d) in enumerate(CLASSIC)]
+    for left, draw in both:
         big, small = rows(draw, BIG), rows(draw, SMALL)
         for band in range(8):
             ink = white if band % 2 == 0 else black
@@ -177,13 +240,13 @@ def sheet(path):
             for y in range(BIG):
                 for x in range(BIG):
                     ch = big[y][x]
-                    img.putpixel((i * BIG + x, band * BIG + y), sq if ch == " " else ink[ch])
+                    img.putpixel((left + x, band * BIG + y), sq if ch == " " else ink[ch])
         for band, ink in enumerate((white, black)):
             for y in range(SMALL):
                 for x in range(SMALL):
                     ch = small[y][x]
                     if ch != " ":
-                        img.putpixel((i * BIG + 11 + x, 8 * BIG + 4 + band * SMALL + y), ink[ch])
+                        img.putpixel((left + 10 + x, 8 * BIG + 4 + band * SMALL + y), ink[ch])
     img.resize((img.width * 2, img.height * 2), Image.Resampling.NEAREST).save(path)
 
 
