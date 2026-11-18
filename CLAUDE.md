@@ -1,8 +1,13 @@
 # Notes for agents
 
-Read `docs/DECISIONS.md` before proposing or changing anything. It records what
-has been decided, what was rejected and why, and what is still open. Update it
-in the same change whenever a decision is made or reversed.
+Read `docs/DECISIONS.md` before proposing or changing anything. It is an
+index: what always applies, then one line per decision. Read it whole, then
+open only the files in `docs/decisions/` that touch your work; do not read
+them all. Whenever a decision is made or reversed, record it in the same
+change as that file's "Recording a decision" says: a file of its own in
+`docs/decisions/` (or an edit to the one it changes), then
+`tools/decisions_index.py` to rewrite the list. Do not add decisions to
+`docs/DECISIONS.md` itself.
 
 - Language (the owner's rule, 2026-11-17): code, comments, commit messages and
   all documentation in the repo are written in English, whatever language the
@@ -15,7 +20,7 @@ in the same change whenever a decision is made or reversed.
     on the PC only, and opens a pull request. It never pushes to `main` and
     never merges its own pull request: the laptop-and-board thread merges each
     branch into `main` once it has passed on the board (the owner's decision). Keep
-    changes to shared files (`docs/DECISIONS.md`, the program table in
+    changes to shared files (the program table in
     `core/shell/`, CMake lists) small and additive so branches merge cleanly.
   - There is one board. A branch that needs a real-board check asks the
     coordinator for a turn; the laptop thread checks the branch out in a git
@@ -44,8 +49,8 @@ in the same change whenever a decision is made or reversed.
   others were not, what was built and how it was tested. Update the item's
   status in `docs/BACKLOG.md` too.
 - A new dialog or settings tool is a program of its own, not a part of the
-  desktop (the owner's rule, 2026-11-17; `docs/DECISIONS.md`, "Dialogs and
-  settings tools are programs"): its own process row, its own file, no reach
+  desktop (the owner's rule, 2026-11-17;
+  `docs/decisions/dialogs-are-programs.md`): its own process row, its own file, no reach
   into the desktop's private variables, and no memory kept while it is closed.
 - Windows are made when they open and destroyed when they close (backlog
   items 19 and 34, `docs/journal/2026-11-17-program-lifecycle.md`). Do not add

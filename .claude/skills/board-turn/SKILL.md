@@ -7,7 +7,8 @@ description: How to run a board turn for the ESP32-S3 OS on the owner's laptop. 
 
 A board turn tests one or more branches on the one real board, connected to the
 laptop at `/dev/ttyACM0`. Source of truth for state and history:
-`docs/handoff/board.md`, `CLAUDE.md`, `docs/DECISIONS.md`. Everything written in
+`docs/handoff/board.md`, `CLAUDE.md`, `docs/DECISIONS.md` (an index: open only
+the files in `docs/decisions/` that the branches under test touch). Everything written in
 the repo is in English; reply to the owner in the language he writes.
 
 ## Ground rules
@@ -86,6 +87,7 @@ offsets in `build/flash_args` first.
 | `tasks` | kernel tasks, priorities, unused stack in bytes (stack high-water marks) |
 | `windows` | windows with their pids; answers "too many windows" at about ten |
 | `misses` | missed video refills not caused by the debug link; exit 1 if any |
+| `frames [--reset]` | pieces of the desktop's work longer than one video frame (16.8 ms), with where the time went; exit 1 if any. `tools/bench/desktop_frames.py` is the scripted benchmark |
 | `dmesg`, `monitor` | the board's log |
 | `ls`, `get`, `put`, `rm`, `mkdir` | files on C: (`put build/programs/hello.app 'C:\hello.app'`) |
 | `fault hang\|pointer\|abort\|slow [--pid N]` | fail on purpose; report in `C:\crash.txt` |

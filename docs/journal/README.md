@@ -7,8 +7,9 @@ why the others were not.
 
 It complements two other files:
 
-- [`docs/DECISIONS.md`](../DECISIONS.md) is the reference: the current state of
-  every decision, short, kept up to date.
+- [`docs/DECISIONS.md`](../DECISIONS.md) is the reference: the index of every
+  decision, each in a short file of its own in `docs/decisions/` that holds
+  its current state.
 - [`docs/BACKLOG.md`](../BACKLOG.md) is the list of work, with its status.
 
 The journal is the story. Entries are not rewritten later; a correction is a new
@@ -140,3 +141,5 @@ Plain words, real numbers, no summaries of summaries.
 | 2026-11-18 | [The relay deployed from GitHub](2026-11-18-relay-workflow.md) | The owner's request: a workflow that puts the web version's relay on Cloudflare whenever it changes; the token's one permission, the two secrets, the page told the address by a variable |
 | 2026-11-18 | [Services: a dialog, a command, and a stop that sticks](2026-11-18-services.md) | Backlog item 62: telnet and the remote screen become lines of the start-up file that a Services dialog ticks on and off; `service NAME stop` and `start` switch one while the others run; what the owner stops, init leaves stopped until the next start. What was found on the way: neither was in the init config, and nothing of the network could be started twice |
 | 2026-11-18 | [The computer's chess piece lands](2026-11-18-chess-landing.md) | Backlog item 64: a move played while the user looked away was easy to miss. Four landings drawn as GIFs, the owner's choice of drop and bounce, one square painted again 6 times in 233 ms. PC only |
+| 2026-11-18 | [Does the desktop keep up with the monitor?](2026-11-18-frame-budget.md) | Backlog item 63: every piece of the desktop's work measured against one video frame (16.8 ms: the board shows 59.52 frames a second), slow ones logged with where the time went, `dbg.py frames`, and a scripted benchmark with windows dragged while Culebra runs and Chess thinks |
+| 2026-11-18 | [The decisions log, cut into files](2026-11-18-decisions-in-files.md) | The owner's idea: `docs/DECISIONS.md` (193 KB, read by every thread) becomes an index of 26 KB and one file per decision in `docs/decisions/`, the list written by a tool |

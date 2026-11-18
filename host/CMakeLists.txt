@@ -148,6 +148,9 @@ target_link_libraries(test_os PRIVATE core Threads::Threads)
 add_test(NAME os COMMAND test_os)
 add_test(NAME os_calls
          COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/check_os_calls.py ${CMAKE_CURRENT_SOURCE_DIR}/..)
+# The list in docs/DECISIONS.md is written from the files in docs/decisions/.
+add_test(NAME decisions_index
+         COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/decisions_index.py --check ${CMAKE_CURRENT_SOURCE_DIR}/..)
 # Programs loaded from files (backlog 27). The sample program is built as a
 # shared library of the PC and loaded by the PC's own loader; the test
 # program lets it find the OS calls by name, as the firmware does.
@@ -248,6 +251,10 @@ add_test(NAME crash COMMAND test_crash)
 add_executable(test_missed_refills tests/test_missed_refills.cpp)
 target_link_libraries(test_missed_refills PRIVATE core)
 add_test(NAME missed_refills COMMAND test_missed_refills)
+# The desktop against the video frame: frames over budget and late timers.
+add_executable(test_frames tests/test_frames.cpp)
+target_link_libraries(test_frames PRIVATE core)
+add_test(NAME frames COMMAND test_frames)
 
 # Chinchilla as a desktop program (backlog item 32): the same core in an SDL2
 # window. Its parts that need no window are tested everywhere; the program

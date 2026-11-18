@@ -7,6 +7,10 @@
 
 #include "core/video/pointer.hpp"
 
+namespace sys {
+class Frames;
+}
+
 namespace ports {
 
 // Somewhere to send bytes, such as a serial port.
@@ -140,6 +144,8 @@ public:
     virtual void get_time(int &hours, int &minutes, int &seconds) = 0;
     // Blinking off (caret always shown), for screenshots that compare.
     virtual void set_animations(bool on) = 0;
+    // The desktop's count of frames over budget, if it keeps one.
+    virtual sys::Frames *frames() { return nullptr; }
 
 protected:
     ~Desktop() = default;

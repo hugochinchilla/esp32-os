@@ -65,6 +65,7 @@ set(CORE_SRCS
     src/sh/ted.cpp
     src/sys/crash.cpp
     src/sys/log.cpp
+    src/sys/frames.cpp
     src/sys/missed_refills.cpp
     src/shell/about.cpp
     src/shell/apps.cpp
