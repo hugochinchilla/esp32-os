@@ -1,7 +1,7 @@
 # The computer's chess piece lands
 
 2026-11-18. Backlog item 64. Built and tested on the PC. The firmware and
-`chess.app` (51,904 bytes, 50,688 before the hourglass and this) compile in
+`chess.app` (51,904 bytes; 50,688 when the window was first built) compile in
 the cloud. Nothing here has run on the board.
 
 ## 1. What was asked
