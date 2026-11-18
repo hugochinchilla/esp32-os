@@ -125,3 +125,15 @@ the direction turns.
 - An event for programs, if one ever draws something that scrolls without a
   scroll bar.
 - Scrolling with the wheel while a selection is being dragged.
+
+## On the board (2026-11-18, d65676e)
+
+App-flashed on the BIOS layout. `dbg.py mouse wheel` scrolls what is under the
+pointer: the Widget gallery's list (three notches down moved it to "Lemon" at
+the top, two up brought it back), a 200-file folder window's icons while the
+window was behind the Editor (the folder scrolled, the Editor stayed in
+front: the order did not change), the Terminal's text back through its
+history (up is positive), and the Picture viewer's scroll bars at actual
+size (vertical and, with `--x`, sideways). `--x 4` scrolled the Editor's
+300 KB text sideways. `dbg.py misses`: none. The remote screen's wheel was not
+tried.
