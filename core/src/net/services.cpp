@@ -11,10 +11,25 @@ bool Services::add(Service &service, bool on, SwitchedFn switched, void *context
     s.service = &service;
     s.switched = switched;
     s.context = context;
+    s.joined_on = on;
     s.wanted = on;
     s.on = on;
     count_++; // only now does the loop see it
     return true;
+}
+
+void Services::restart()
+{
+    if (!stopped_.load()) {
+        return;
+    }
+    for (int i = 0, n = count_.load(); i < n; i++) {
+        slots_[i].wanted = slots_[i].joined_on;
+        slots_[i].on = slots_[i].joined_on;
+    }
+    working_ = false;
+    stop_ = false;
+    stopped_ = false;
 }
 
 const Services::Slot *Services::slot(const Service &service) const

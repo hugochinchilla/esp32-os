@@ -48,11 +48,16 @@ public:
     // The process the job works for: what it opens through the OS calls is
     // that process's.
     proc::Pid owner() const { return owner_; }
+    // True if the work runs on a task of its own. False where there are no
+    // tasks and start() does the work itself: the starter waits for it, so
+    // long work should make itself short there.
+    bool own_task() const { return own_task_; }
 
 private:
     friend class Jobs;
     std::atomic<bool> stop_{false};
     proc::Pid owner_ = proc::kNone;
+    bool own_task_ = false;
 };
 
 // The work. Runs on the job's own task (or inside start() without tasks).
@@ -100,6 +105,11 @@ public:
     // could not be started (too many jobs, no memory for the task, the
     // process has a KILL waiting): nothing was called then.
     bool start(const Spec &spec);
+
+    // From a job's own task: the work gives the processor away for about
+    // `ms`. A job that computes for seconds calls it now and then (see
+    // ports::Tasks::rest). Nothing where the work runs inside start().
+    void rest(uint32_t ms);
 
     // The UI task only. Asks every job of the process to stop.
     void stop(proc::Pid pid);

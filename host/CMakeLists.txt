@@ -124,6 +124,13 @@ add_executable(test_chess tests/test_chess.cpp)
 target_link_libraries(test_chess PRIVATE core)
 target_compile_options(test_chess PRIVATE -O2)
 add_test(NAME chess COMMAND test_chess)
+# The chess window: a game played with the mouse, the engine in a job on a
+# real thread, and the game's reference pictures.
+add_executable(test_chess_window tests/test_chess_window.cpp)
+target_link_libraries(test_chess_window PRIVATE core Threads::Threads)
+add_test(NAME chess_window COMMAND test_chess_window)
+add_test(NAME chess_window_pictures
+         COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/check_pictures.py $<TARGET_FILE:test_chess_window>)
 add_executable(test_saver tests/test_saver.cpp)
 target_link_libraries(test_saver PRIVATE core)
 add_test(NAME saver COMMAND test_saver)
@@ -155,19 +162,24 @@ function(add_program name source)
                                $<TARGET_FILE:${name}_app> ${CMAKE_CURRENT_BINARY_DIR}/${name}.app)
 endfunction()
 add_program(hello ../programs/hello/hello.cpp)
-# The two games in the form the board has them in (a file each); the PC's
+# The games in the form the board has them in (a file each); the PC's
 # system also has them built in.
 add_program(culebra ../programs/culebra/culebra.cpp)
 add_program(cactus_patch ../programs/cactus_patch/cactus_patch.cpp)
+add_program(chess ../programs/chess/chess.cpp)
+# With the engine in it: optimised, as the engine is in the core, and
+# without the checkers, which would make the file larger than the megabyte
+# a program may be (the same source is checked as part of the core).
+target_compile_options(chess_app PRIVATE -O2 -fno-sanitize=all)
 # Not a program of the system: the chess engine's measuring program for
 # board checks (tools/bench/chess_bench), built here so that it stays whole.
 add_program(chess_bench ../tools/bench/chess_bench/chess_bench.cpp)
 add_executable(test_loaded tests/test_loaded.cpp)
 target_link_libraries(test_loaded PRIVATE core ${CMAKE_DL_LIBS} Threads::Threads)
 set_target_properties(test_loaded PROPERTIES ENABLE_EXPORTS ON)
-add_dependencies(test_loaded hello_app culebra_app cactus_patch_app)
+add_dependencies(test_loaded hello_app culebra_app cactus_patch_app chess_app)
 add_test(NAME loaded COMMAND test_loaded ${CMAKE_CURRENT_BINARY_DIR}/hello.app ${CMAKE_CURRENT_BINARY_DIR}/culebra.app
-         ${CMAKE_CURRENT_BINARY_DIR}/cactus_patch.app)
+         ${CMAKE_CURRENT_BINARY_DIR}/cactus_patch.app ${CMAKE_CURRENT_BINARY_DIR}/chess.app)
 # The serial console on the debug link's wire (backlog 14).
 add_executable(test_console tests/test_console.cpp)
 target_link_libraries(test_console PRIVATE core)
@@ -262,6 +274,21 @@ if(SDL2_FOUND)
 else()
     message(STATUS "SDL2 not found: the desktop program (chinchilla) is not built")
 endif()
+
+# The browser's portable parts: addresses, HTML, layout, HTTP.
+add_executable(test_www tests/test_www.cpp)
+target_link_libraries(test_www PRIVATE core)
+add_test(NAME www COMMAND test_www)
+add_executable(test_dialer tests/test_dialer.cpp)
+target_link_libraries(test_dialer PRIVATE core Threads::Threads)
+add_test(NAME dialer COMMAND test_dialer)
+
+# The browser on the desktop, against a web kept in the test: its screens
+# compared with the reference pictures.
+add_executable(render_browser_scenes tests/render_browser_scenes.cpp)
+target_link_libraries(render_browser_scenes PRIVATE core)
+add_test(NAME browser_pictures
+         COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/check_pictures.py $<TARGET_FILE:render_browser_scenes>)
 
 # Memory-port buffers live as long as the program, as on the board, so the
 # leak checker would report them; applied after every add_test above.

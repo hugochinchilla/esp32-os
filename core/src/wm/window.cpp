@@ -286,6 +286,33 @@ void Window::mouse(const MouseMsg &m)
     }
 }
 
+void Window::wheel(const WheelMsg &m)
+{
+    for (int i = widget_count_ - 1; i >= 0; i--) {
+        Widget *w = widgets_[i];
+        if (w->rect.w > 0 && w->rect.contains(m.x, m.y)) {
+            if (w->wheel({m.x - w->rect.x, m.y - w->rect.y, m.down, m.right})) {
+                return;
+            }
+            break; // only the topmost one there
+        }
+    }
+    // Each direction to the first bar that takes it.
+    bool down = m.down != 0, right = m.right != 0;
+    for (int i = 0; i < widget_count_ && (down || right); i++) {
+        Widget *w = widgets_[i];
+        if (!w->window_bar()) {
+            continue;
+        }
+        if (down && w->wheel({0, 0, m.down, 0})) {
+            down = false;
+        }
+        if (right && w->wheel({0, 0, 0, m.right})) {
+            right = false;
+        }
+    }
+}
+
 bool Window::key(const KeyMsg &k)
 {
     if (focus_ != nullptr && focus_->key(k)) {

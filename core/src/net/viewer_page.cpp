@@ -230,10 +230,26 @@ cv.addEventListener('pointermove', pointer);
 cv.addEventListener('pointerup', pointer);
 cv.addEventListener('pointercancel', pointer);
 cv.addEventListener('contextmenu', e => e.preventDefault());
+/* The wheel, and two fingers on a trackpad: a trackpad sends many small
+   movements, so they are added up and a notch goes out for each 100 pixels
+   (what one notch of a mouse wheel gives), 3 lines or a third of a page.
+   Turning back starts from nothing, so the first notch back is not lost. */
+let turned = [0, 0];
+function notches(axis, delta, mode, less, more, p) {
+  if (delta * turned[axis] < 0) turned[axis] = 0;
+  turned[axis] += delta * (mode === 1 ? 100 / 3 : mode === 2 ? 300 : 1);
+  let n = Math.trunc(turned[axis] / 100);
+  turned[axis] -= n * 100;
+  n = Math.max(-20, Math.min(20, n));
+  for (; n !== 0; n -= Math.sign(n)) {
+    send([5, mask | (n < 0 ? less : more)].concat(p));
+    send([5, mask].concat(p));
+  }
+}
 cv.addEventListener('wheel', e => {
-  const p = place(e), bit = e.deltaY < 0 ? 8 : 16;
-  send([5, mask | bit].concat(p));
-  send([5, mask].concat(p));
+  const p = place(e);
+  notches(0, e.deltaY, e.deltaMode, 8, 16, p);
+  notches(1, e.deltaX, e.deltaMode, 32, 64, p);
   e.preventDefault();
 }, {passive: false});
 addEventListener('click', () => { if (!live && (!ws || ws.readyState === 3)) start(); });

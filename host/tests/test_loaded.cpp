@@ -11,6 +11,7 @@
 
 #include "core/fs/memory_volume.hpp"
 #include "core/gfx/art.hpp"
+#include "core/job/job.hpp"
 #include "core/os/os.hpp"
 #include "core/prog/prog.hpp"
 #include "core/proc/table.hpp"
@@ -57,15 +58,18 @@ const char *title() { return desktop.active() != nullptr ? desktop.active()->tit
 
 int main(int argc, char **argv)
 {
-    if (argc < 4) {
-        printf("usage: test_loaded hello.app culebra.app cactus_patch.app\n");
+    setvbuf(stdout, nullptr, _IONBF, 0); // a crash must not swallow the failures before it
+    if (argc < 5) {
+        printf("usage: test_loaded hello.app culebra.app cactus_patch.app chess.app\n");
         return 2;
     }
     std::ifstream file(argv[1], std::ios::binary);
     const std::vector<char> program((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
     CHECK(!program.empty());
 
-    static fs::MemoryVolume disk(memory.allocate(1 << 20), 1 << 20, "RAM disk");
+    // Room for the largest program in its PC form (Chess, with the checkers
+    // built in, is most of a megabyte).
+    static fs::MemoryVolume disk(memory.allocate(4 << 20), 4 << 20, "RAM disk");
     storage.mount('C', disk);
     // The programs that come with the system: handed in before it starts,
     // in C:\Programs once it has.
@@ -205,22 +209,37 @@ int main(int argc, char **argv)
 
     // The two games in the form the board has them in: a file each, with
     // the name and the pictures of the built-in ones, one copy at a time.
-    for (int game = 0; game < 2; game++) {
-        const char *const name = game == 0 ? "Culebra" : "Cactus Patch";
-        const char *const path = game == 0 ? "C:\\Programs\\culebra.app" : "C:\\Programs\\cactus_patch.app";
+    static const char *const kNames[3] = {"Culebra", "Cactus Patch", "Chess"};
+    static const char *const kPaths[3] = {"C:\\Programs\\culebra.app", "C:\\Programs\\cactus_patch.app",
+                                          "C:\\Programs\\chess.app"};
+    const gfx::Bitmap *const small[3] = {&gfx::snake_icon_16(), &gfx::cactus_icon_16(), &gfx::chess_icon_16()};
+    const gfx::Bitmap *const large[3] = {&gfx::snake_icon_32(), &gfx::cactus_icon_32(), &gfx::chess_icon_32()};
+    for (int game = 0; game < 3; game++) {
+        const char *const name = kNames[game];
+        const char *const path = kPaths[game];
         std::ifstream in(argv[2 + game], std::ios::binary);
         const std::vector<char> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
         CHECK(!bytes.empty() && storage.write_file(path, bytes.data(), bytes.size()) == ports::FsError::Ok);
         CHECK(shell::program_info(path, info) && strcmp(info.title, name) == 0);
         CHECK(info.has16 == 1 && info.has32 == 1 && info.many == 0);
-        CHECK(memcmp(info.icon16, (game == 0 ? gfx::snake_icon_16() : gfx::cactus_icon_16()).pixels, 256) == 0);
-        CHECK(memcmp(info.icon32, (game == 0 ? gfx::snake_icon_32() : gfx::cactus_icon_32()).pixels, 1024) == 0);
+        CHECK(memcmp(info.icon16, small[game]->pixels, 256) == 0);
+        CHECK(memcmp(info.icon32, large[game]->pixels, 1024) == 0);
         CHECK(shell::open_file(path));
         wait(10000);
         const proc::Pid pid = t.find_by_name(name);
-        CHECK(loader.loaded == 1 && pid != proc::kNone && strcmp(title(), name) == 0);
+        CHECK(loader.loaded == 1 && pid != proc::kNone);
         CHECK(desktop.active() != nullptr && desktop.active()->owner() == pid);
+        if (game == 2) {
+            // Chess asks which game first: Play, as the dialog stands. The
+            // engine thinks in a job the program starts by an OS call.
+            CHECK(strcmp(title(), "New game") == 0 && info.stack == 6 * 1024);
+            press(wm::key::Enter);
+            wait(10000);
+            CHECK(job::jobs().running(pid) == 0);
+        }
+        CHECK(strcmp(title(), name) == 0);
         // A second time: the one that runs comes forward, nothing is loaded.
+        why[0] = 0;
         CHECK(shell::run_file(path, why, sizeof(why)));
         wait(10000);
         CHECK(loader.loaded == 1 && t.count() == processes + 1 && strcmp(title(), name) == 0);

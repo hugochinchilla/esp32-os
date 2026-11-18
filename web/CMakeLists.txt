@@ -33,6 +33,12 @@ target_compile_options(core PRIVATE -Wno-error)
 add_executable(chinchilla ../host/desktop/main.cpp)
 target_compile_options(chinchilla PRIVATE -Wall -Wextra -Werror)
 target_link_libraries(chinchilla PRIVATE core idbfs.js)
+# How the page reaches the web (host/desktop/web_dialer.hpp): the address of
+# the relay, web/relay/worker.js put on Cloudflare. Empty: programs are told
+# there is no network, unless the page is opened with "?relay=https://...".
+#   emcmake cmake -S web -B build/web -DCHINCHILLA_RELAY=https://chinchilla-relay.<you>.workers.dev/
+set(CHINCHILLA_RELAY "" CACHE STRING "Address of the relay the page fetches web pages through")
+target_compile_definitions(chinchilla PRIVATE CHINCHILLA_RELAY="${CHINCHILLA_RELAY}")
 set_target_properties(chinchilla PROPERTIES
     OUTPUT_NAME index
     SUFFIX .html

@@ -166,7 +166,8 @@ public:
     void mouse(const ports::MouseEvent &e) override
     {
         log += "m" + std::to_string(e.x) + "," + std::to_string(e.y) + "," + std::to_string(e.buttons) + "," +
-               std::to_string(e.wheel) + (e.absolute ? "a" : "r") + " ";
+               std::to_string(e.wheel) + (e.wheel_x != 0 ? "," + std::to_string(e.wheel_x) : "") +
+               (e.absolute ? "a" : "r") + " ";
         events++;
     }
     void text(const char *utf8) override
@@ -222,6 +223,22 @@ void test_switching()
     CHECK(services.round() && b.stops == 2);
     services.request_stop();
     CHECK(!services.round() && a.stops == 1 && b.stops == 2 && !services.on(a));
+
+    // The loop run a second time (inetd started again): each service is as
+    // it joined, a on and b off whatever was wanted of it last, and nothing
+    // is told. Before the loop has ended, restart() does nothing.
+    services.want(b, true);
+    services.restart();
+    CHECK(!services.stopped() && services.on(a) && !services.on(b));
+    const int a_polls = a.polls, b_polls = b.polls;
+    const std::string before = told;
+    CHECK(services.round() && a.polls == a_polls + 1 && b.polls == b_polls && told == before);
+    services.want(b, true);
+    CHECK(services.round() && b.polls == b_polls + 1 && told == before + "on ");
+    services.restart(); // running: nothing
+    CHECK(services.round() && services.on(b) && b.polls == b_polls + 2);
+    services.request_stop();
+    CHECK(!services.round() && a.stops == 2 && b.stops == 3);
 }
 
 // net::Switch: the two halves of starting and stopping a service, the UI
@@ -319,6 +336,15 @@ void test_switch()
     one.loop_ended();
     CHECK(!one.running() && procs.count() == rows);
     CHECK(!one.start(why) && strstr(why, "inetd") != nullptr && procs.count() == rows);
+    // The loop started again: the service is stopped until it is started.
+    services.restart();
+    CHECK(services.round() && telnet.polls == 4 && !one.running());
+    CHECK(one.start(why) && services.round() && telnet.polls == 5 && procs.count() == rows + 1);
+    one.stop();
+    CHECK(services.round());
+    while (inbox.deliver()) {
+    }
+    CHECK(procs.count() == rows);
     msg::set_queue(nullptr);
 }
 
@@ -334,10 +360,11 @@ void test_posted_input()
     input.mouse({true, 639, 479, 5, -1});
     input.mouse({false, -3, -200, 0, 1});
     input.key(0xE1, false);
+    input.mouse({true, 1, 2, 0, 0, -3}); // the wheel sideways
     CHECK(desktop.events == 0); // nothing reaches the desktop on the sender's task
     while (inbox.deliver()) {
     }
-    CHECK(desktop.log == "k4+ m639,479,5,-1a m-3,-200,0,1r k225- ");
+    CHECK(desktop.log == "k4+ m639,479,5,-1a m-3,-200,0,1r k225- m1,2,0,0,-3a ");
 
     // Text: short in one message, long in several, never cut inside a
     // character (ñ and € are two and three bytes).

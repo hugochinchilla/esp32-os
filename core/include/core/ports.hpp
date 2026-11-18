@@ -77,6 +77,11 @@ public:
     // Changes how a task stands against the desktop (a program that has
     // stopped answering goes to Low until it answers again).
     virtual void set_priority(TaskId, Priority) {}
+    // Any task. The calling task gives the processor away for about `ms`
+    // (at least one turn of the scheduler): what a long piece of work at
+    // low priority does now and then so that the kernel's idle tasks get
+    // their turn. Nothing where there are no tasks.
+    virtual void rest(uint32_t /*ms*/) {}
     // Takes away a task whose fn has not returned (a program that hangs).
     // True if it is gone and its stack given back: end() is then not called.
     // False where a task cannot be taken away (a thread of the PC): it is
@@ -145,7 +150,8 @@ struct MouseEvent {
     int16_t x;
     int16_t y;
     uint8_t buttons; // bit 0 left, bit 1 right, bit 2 middle
-    int8_t wheel;
+    int8_t wheel;       // notches: positive is away from the user (the view goes up)
+    int8_t wheel_x = 0; // notches sideways: positive is to the right
 };
 
 // Receives keyboard and mouse events, whatever their source.

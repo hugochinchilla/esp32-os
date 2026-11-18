@@ -270,8 +270,8 @@ void test_programs()
             CHECK(desktop.window_count() >= 1 && memory.in_use() > base);
             CHECK(processes_named(app.name) == 1);
             // Its own close button, as the user would.
-            if (strcmp(app.name, "Picture viewer") == 0) {
-                key(wm::key::Escape); // the Open dialog it starts with
+            if (strcmp(app.name, "Picture viewer") == 0 || strcmp(app.name, "Chess") == 0) {
+                key(wm::key::Escape); // the dialog it starts with: Open, or New game
             }
             key(wm::key::F4, kAlt);
             wait(10000);

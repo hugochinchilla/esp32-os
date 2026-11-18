@@ -25,7 +25,9 @@
 #include "core/shell/boot.hpp"
 #include "core/sys/log.hpp"
 #include "core/shell/shell.hpp"
+#include "core/net/posix_dialer.hpp"
 #include "core/net/posix_tcp.hpp"
+#include "core/os/tcp.hpp"
 #include "core/net/rfb.hpp"
 #include "core/net/services.hpp"
 #include "core/net/switch.hpp"
@@ -285,6 +287,9 @@ int main(int argc, char **argv)
     first.add(
         "desktop",
         [](void *) {
+            // Outgoing connections (os::tcp): the PC's own sockets.
+            static net::PosixDialer dialer;
+            os::install_dialer(&dialer);
             shell::start(screen, *parts.system, storage, memory);
             shell::open_demo_windows(); // what the debug-tool tests drive
             parts.protocol->set_counters(shell::picture_timings(), shell::kPictureTimings);
@@ -303,10 +308,21 @@ int main(int argc, char **argv)
                 // the simulator ask for no port.
                 return true;
             }
+            // Started a second time (after kill or service inetd stop): not
+            // before the thread that ran the loop has said it is done, and
+            // then the loop is made new, as on the board.
+            static proc::Pid inetd_pid = proc::kNone;
+            static bool update_joined = false;
+            if (inetd_pid != proc::kNone) {
+                fprintf(stderr, "inetd is still ending\n");
+                return false;
+            }
+            services.restart();
             if (ports[3] != 0 && !update_port.listen(ports[3], true)) {
                 fprintf(stderr, "cannot listen on port %d\n", ports[3]);
             }
-            if (update_port.listening()) {
+            if (update_port.listening() && !update_joined) {
+                update_joined = true;
                 static host::MemoryUpdater updater;
                 static host::SteadyClock update_clock;
                 static net::Update update(updater, update_clock);
@@ -334,7 +350,6 @@ int main(int argc, char **argv)
                     nullptr);
                 services.add(update);
             }
-            static proc::Pid inetd_pid;
             inetd_pid = proc::table().spawn_service("inetd");
             // Stoppable, as on the board: End Task or kill on inetd.
             services.set_longest_sleep(200000);
@@ -352,6 +367,8 @@ int main(int argc, char **argv)
                     proc::kNone,
                     [](const msg::Message &) {
                         proc::table().exit(inetd_pid);
+                        inetd_pid = proc::kNone;
+                        parts.loop = false;
                         vncd.loop_ended();
                         if (telnetd != nullptr) {
                             telnetd->loop_ended();
@@ -366,6 +383,7 @@ int main(int argc, char **argv)
             return true;
         },
         nullptr);
+    first.set_stop("inetd", [](void *) { services.request_stop(); });
     // The remote screen and telnet, as on the board: services of inetd
     // with lines of their own, which `service NAME stop` and `service NAME
     // start` switch while the machine runs. Without a port asked for there

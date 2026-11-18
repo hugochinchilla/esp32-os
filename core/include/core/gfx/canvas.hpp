@@ -111,6 +111,10 @@ public:
     // Text in Spleen 6x12, top left at (x, y). UTF-8, Latin-1 characters.
     // Bold doubles each pixel sideways. Returns the x after the text.
     int text(int x, int y, const char *s, Colour c, bool bold = false);
+    // The same font `scale` times as large (1 to 4), and leaning if
+    // `slanted` (the top of each letter pushed right): a web page's
+    // headings and its italics. Returns the x after the text.
+    int text_scaled(int x, int y, const char *s, Colour c, bool bold, bool slanted, int scale);
     // Text with its background in one pass: every pixel of each character
     // cell is written once, in `fg` or `bg` (no erase before drawing, so
     // nothing flashes). `caret_x`, if not -1, is a column drawn in the

@@ -101,6 +101,11 @@ public:
     // sleep a limit (set_longest_sleep) and pays one short wake per limit.
     void request_stop() { stop_ = true; }
     bool stopped() const { return stopped_; }
+    // After the loop has ended and its task has gone: it can run again
+    // (inetd started a second time). Every service is as it was when it
+    // joined: one that joined on gets its turns again, one that joined off
+    // waits for want(). Whoever calls has opened the ports again.
+    void restart();
     void set_longest_sleep(uint32_t us) { longest_us_ = us; }
     const Stats &stats() const { return stats_; }
 
@@ -111,6 +116,7 @@ private:
         Service *service = nullptr;
         SwitchedFn switched = nullptr;
         void *context = nullptr;
+        bool joined_on = true;
         std::atomic<bool> wanted{true};
         std::atomic<bool> on{true};
     };

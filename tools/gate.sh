@@ -12,7 +12,7 @@ fi
 out=$(timeout 550 ctest --test-dir build/host -j3 2>&1 || true)
 echo "$out" | grep -E "Failed|tests passed" || true
 echo "$out" | grep -q "100% tests passed" || { echo "gate: tests failed"; exit 1; }
-for scenes in render_scenes render_net_scenes test_cactus; do
+for scenes in render_scenes render_net_scenes test_cactus test_chess_window; do
     python3 tools/check_pictures.py "build/host/$scenes" >build/host/gate-pictures.log 2>&1 ||
         { tail -5 build/host/gate-pictures.log; echo "gate: $scenes does not match"; exit 1; }
 done

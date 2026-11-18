@@ -44,6 +44,7 @@
 #include "core/prog/prog.hpp"
 #include "core/msg/input.hpp"
 #include "core/msg/queue.hpp"
+#include "core/net/posix_dialer.hpp"
 #include "core/net/posix_tcp.hpp"
 #include "core/net/rfb.hpp"
 #include "core/net/services.hpp"
@@ -55,6 +56,7 @@
 #include "core/sys/log.hpp"
 #include "core/sys/missed_refills.hpp"
 #include "core/net/web.hpp"
+#include "core/os/tcp.hpp"
 #include "core/net/wifi.hpp"
 #include "core/proc/table.hpp"
 #include "core/shell/boot.hpp"
@@ -914,6 +916,10 @@ void ui_task(void *)
                 session_kits[i].answered = &session_events[2 * i + 1];
             }
             shell::set_session_kits(session_kits, 3);
+            // Outgoing connections (os::tcp): lwIP's sockets. The waiting
+            // (a name looked up, a site answering) is on a job's task.
+            static net::PosixDialer dialer;
+            os::install_dialer(&dialer);
             shell::start(desktop, system, storage, memory);
             protocol.set_counters(shell::picture_timings(), shell::kPictureTimings);
             desktop.start();
@@ -965,24 +971,37 @@ void ui_task(void *)
                 ESP_LOGW(TAG, "network services: no radio");
                 return false;
             }
+            // Started a second time, after End Task, kill or service inetd
+            // stop: not before the task that ran the loop has said it is
+            // done (its message takes the row away), and then the loop is
+            // made new. Its services stay stopped until each is started.
+            if (inetd_pid != proc::kNone) {
+                ESP_LOGW(TAG, "network services: still ending; try again in a moment");
+                return false;
+            }
+            services.restart();
             // Updates over the network (tools/ota.py), port 3232, no password.
             // Off unless C:\.config\network.ini says [update] enabled = true.
             if (network.get_bool("update", "enabled", false) && update_port.listen(net::Update::kPort)) {
                 static OtaUpdater updater;
                 static net::Update service(updater, clock);
-                service.set_listener(&update_port);
-                service.set_log([](const char *line, void *) { ESP_LOGW(TAG, "%s", line); }, nullptr);
-                service.on_written(
-                    [](bool restart, void *) {
-                        if (restart) {
-                            // The sender has its answer; a moment for it to
-                            // leave, then the new version starts.
-                            vTaskDelay(pdMS_TO_TICKS(300));
-                            esp_restart();
-                        }
-                    },
-                    nullptr);
-                services.add(service);
+                static bool joined = false;
+                if (!joined) {
+                    joined = true;
+                    service.set_listener(&update_port);
+                    service.set_log([](const char *line, void *) { ESP_LOGW(TAG, "%s", line); }, nullptr);
+                    service.on_written(
+                        [](bool restart, void *) {
+                            if (restart) {
+                                // The sender has its answer; a moment for it to
+                                // leave, then the new version starts.
+                                vTaskDelay(pdMS_TO_TICKS(300));
+                                esp_restart();
+                            }
+                        },
+                        nullptr);
+                    services.add(service);
+                }
                 ESP_LOGW(TAG, "updates over the network on port %d, no password", net::Update::kPort);
             }
             // By name instead of by address: chinchilla.local. vncd adds
@@ -1006,6 +1025,8 @@ void ui_task(void *)
                                                    proc::kNone,
                                                    [](const msg::Message &) {
                                                        proc::table().exit(inetd_pid);
+                                                       inetd_pid = proc::kNone;
+                                                       s_services = nullptr;
                                                        vncd.loop_ended();
                                                        if (telnetd != nullptr) {
                                                            telnetd->loop_ended();
@@ -1031,10 +1052,12 @@ void ui_task(void *)
             }
             inetd_pid = proc::table().spawn_service("inetd");
             proc::table().set_stop(
-                inetd_pid, [](proc::Pid, proc::Signal, void *) { s_services->request_stop(); }, nullptr);
+                inetd_pid, [](proc::Pid, proc::Signal, void *) { services.request_stop(); }, nullptr);
             return true;
         },
         nullptr);
+    // service inetd stop: as End Task on it, and init holds it.
+    first.set_stop("inetd", [](void *) { services.request_stop(); });
 
     // "vncd": the remote screen, for a VNC viewer on port 5900 and for a
     // browser on port 80. No password (the owner's choice). It has no row

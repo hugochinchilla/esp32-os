@@ -489,16 +489,24 @@ bool wifi_announce(const char *name, int vnc_port, int web_port)
         }
         mdns_instance_name_set("Chinchilla");
         started = true;
-    } else {
-        mdns_service_remove("_rfb", "_tcp"); // not there is fine
+    }
+    // Only what was announced is taken back: mDNS logs an error for one
+    // that is not there.
+    static bool vnc_told = false, web_told = false;
+    if (vnc_told) {
+        mdns_service_remove("_rfb", "_tcp");
+        vnc_told = false;
+    }
+    if (web_told) {
         mdns_service_remove("_http", "_tcp");
+        web_told = false;
     }
     if (vnc_port != 0) {
         // What VNC viewers look for when they list the computers around.
-        mdns_service_add("Chinchilla", "_rfb", "_tcp", static_cast<uint16_t>(vnc_port), nullptr, 0);
+        vnc_told = mdns_service_add("Chinchilla", "_rfb", "_tcp", static_cast<uint16_t>(vnc_port), nullptr, 0) == ESP_OK;
     }
     if (web_port != 0) {
-        mdns_service_add("Chinchilla", "_http", "_tcp", static_cast<uint16_t>(web_port), nullptr, 0);
+        web_told = mdns_service_add("Chinchilla", "_http", "_tcp", static_cast<uint16_t>(web_port), nullptr, 0) == ESP_OK;
     }
     return true;
 }

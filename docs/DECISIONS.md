@@ -426,8 +426,8 @@ and reasons are in `docs/journal/2026-11-17-program-lifecycle.md`.
 ### The chess game (the owner's decisions, 2026-11-18)
 
 Backlog item 50; the mock-ups are in `docs/look/chess/` and the reasoning
-in `docs/journal/2026-11-18-chess-design.md`. Designed and approved, not
-built.
+in `docs/journal/2026-11-18-chess-design.md`. Designed and approved; built
+and tested on the PC, not yet run on the board.
 
 - The engine is one written for this project in `core/src/games/`, tested
   on the PC (chosen on a card). Not micro-Max (through mcu-max), and not a
@@ -463,6 +463,22 @@ built.
   4 looks 6 half moves ahead for at most 3 s; level 5 as deep as 10 s
   allow. Not level 4 at depth 5 (half a second, too far below level 5),
   and not 5 s or 20 s for level 5.
+
+- The window as built (`docs/journal/2026-11-18-chess-window.md`), PC
+  only so far. The engine thinks in a background job a program starts by
+  an OS call (`os::start_job`, asked for by the coordinator from the
+  engine's findings), on a block of memory apart from the window, which
+  may close under it. Chosen on the recommended option and confirmed by
+  the owner as a whole when shown the result ("perfect", 2026-11-18):
+  the job runs at priority Low and rests a tick about four times a second
+  (`os::job_rest`); the level's time is told by a timer of the window's,
+  the engine having no clock; a pawn on the last rank asks in a dialog of
+  four buttons what it becomes; a piece that can be taken is marked by the
+  corners of its square instead of the dot; in a theme with a dark face
+  Black's pieces off the board are outlined in the text colour; the
+  dialog's lines say what the levels now do; Take back also undoes a
+  resignation and Resign does not ask; where there are no tasks (the PC's
+  plain desktop, the browser) the computer stops at 200,000 positions.
 
 ## Ideas kept for later
 
@@ -2702,9 +2718,77 @@ Chosen by the agent, to confirm:
 - New OS call: `os::ui::set_icon` (`app::Window::set_icon`), since a
   window's icon was fixed when it was made.
 
+### The mouse wheel (2026-11-18, the owner's request; the agent's choices, which the owner approved the same day)
+
+Journal: `docs/journal/2026-11-18-mouse-wheel.md`. Backlog item 61.
+
+- The wheel scrolls what is under the pointer, not the window in use, and
+  the window under it is not brought forward and does not get the keys.
+  Not chosen: the window in use, as Windows 95 with a wheel driver did (the
+  pointer has to be taken nowhere, but a window behind cannot be read
+  without clicking it).
+- Inside the window: the control under the pointer if it scrolls (a list,
+  the Editor's text, a folder's icons, a scroll bar); otherwise the
+  window's own scroll bars, the first upright one for up and down and the
+  first lying one for sideways. So the Terminal, the Picture viewer and any
+  program that puts a scroll bar beside its picture need no code for it.
+- One notch is three lines where a bar counts lines, an eighth of the view
+  where it counts pixels (never less than three steps, never more than a
+  view), and one row of icons in a folder.
+- Sideways: two fingers moved sideways on a trackpad, a wheel that tilts,
+  or the wheel with Shift held.
+- Nothing happens while a mouse button is held, while a menu is open, over
+  a title bar, the taskbar or the desktop, or in a window that is locked or
+  has a dialog over it. During the screensaver the wheel wakes the screen
+  and scrolls nothing.
+- A trackpad sends many small movements: the Linux window, the browser
+  build and the browser's viewer page add them up and send whole notches
+  (100 pixels of the page are one notch). A VNC viewer sends buttons 4 and
+  5 for up and down, 6 and 7 for left and right.
+- Programs are not told about the wheel (no new OS call): no program draws
+  something that scrolls without a scroll bar. If one comes, it gets an
+  event then.
+- There is no USB mouse on the board yet (the USB host is "later" in the
+  table at the top). When it comes, the report's wheel goes in
+  `ports::MouseEvent::wheel`, and `wheel_x` if the mouse has it.
+### The web browser, Vizcacha (2026-11-17)
+
+Backlog item 53, asked by the owner. Journal:
+`docs/journal/2026-11-17-web-browser.md`.
+
+The owner's:
+
+- A browser for HTML of the 1990s: no scripts, no style sheets. The
+  benchmark is FrogFind (`frogfind.com`).
+- It works in the web page too. The page reaches sites through a relay for
+  web requests, a Cloudflare Worker he runs (`web/relay/`), not a TCP
+  tunnel and not somebody else's proxy. The board and the PC use sockets.
+
+The agent's, to confirm:
+
+- It is called Vizcacha.
+- No DOM: a flat list of items in one block of memory, laid out again when
+  the width changes. One font; headings are it drawn larger.
+- HTTP/1.0 with a Host line and `Connection: close`; moved sites followed
+  five times. No TLS: an https address gets a page that says so and offers
+  a FrogFind search. Rejected for now: mbedTLS (internal RAM, certificates,
+  and a second and third implementation for the PC and the page).
+- Forms with GET only. Tables as rows, frames as links, pictures as a box
+  with their `alt` text. A page is 256 KB at most.
+- Outgoing connections are OS calls, `os::tcp`: handles the system keeps
+  per process (four in all, two each), closed when the process ends;
+  `connect` never waits, the dialling is a background job. The machine
+  gives the way out as a `net::Dialer` (`os::install_dialer`).
+- The relay answers only pages from `https://www.hugochinchilla.net` (and
+  `http://localhost:8080`), only GET, only public http sites on port 80 or
+  8080, 512 KB at most. Its address is built into the page
+  (`-DCHINCHILLA_RELAY=`) or given as `?relay=`.
+- The User-Agent is `Mozilla/4.0 (compatible; Vizcacha 1.0; Chinchilla;
+  ESP32-S3)`: FrogFind refuses one that does not look like a browser's.
+
 ### Services are lines of the start-up file (the owner's request, 2026-11-18)
 
-Backlog item 53. Journal: `docs/journal/2026-11-18-services.md`. The owner
+Backlog item 62. Journal: `docs/journal/2026-11-18-services.md`. The owner
 asked for a Services dialog under Start > Settings that "just modifies the
 init config", and for commands to stop and start telnet and VNC that do not
 fight init's respawn: what he stops stays stopped until the next start.
@@ -2737,8 +2821,14 @@ fight init's respawn: what he stops stays stopped until the next start.
   The rule is init's (`Init::stop`), for anything it starts: a part with
   a stop function (the two services), or one whose process it watches
   (`service taskbar stop` ends the taskbar and it stays away). The desktop
-  and `inetd` cannot be stopped this way; `kill` still ends `inetd` and
-  everything in it.
+  cannot be stopped this way.
+- **`inetd` can be stopped and started again** (since the board turn of
+  2026-11-18, which found a second start ending at once): `service inetd
+  stop`, End Task or `kill` end it and everything in it; `service inetd
+  start` starts the task and its loop again, with updates if the settings
+  say so. Its services stay stopped until each is started by hand
+  (`service telnetd start`): the file is read once, when the machine
+  starts.
 - **The services cannot be `respawn` today**, as `inetd` cannot: they do
   not end by themselves, and they have no process init could watch (`vncd`
   has no row at all, by the rule that only real tasks are listed;

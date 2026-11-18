@@ -510,6 +510,14 @@ public:
 
     bool wants_mouse() const override { return true; }
     bool focusable() const override { return true; }
+    // A row of icons for each notch: the rows are tall.
+    bool wheel(const wm::WheelMsg &m) override
+    {
+        if (bar_.maximum() > 0 && m.down != 0) {
+            bar_.set_value(bar_.value() + m.down);
+        }
+        return true;
+    }
     void mouse(const wm::MouseMsg &m) override
     {
         if (m.kind == wm::MouseKind::Down) {
@@ -1845,6 +1853,13 @@ int text(Drawing on, int x, int y, const char *s, gfx::Colour col, bool bold)
     const prog::InCall in_call;
     gfx::Canvas *c = g_drawings.at(on);
     return c != nullptr ? c->text(x, y, s, col, bold) : x + gfx::Canvas::text_width(s, bold);
+}
+int text_scaled(Drawing on, int x, int y, const char *s, gfx::Colour col, bool bold, bool slanted, int scale)
+{
+    const prog::InCall in_call;
+    gfx::Canvas *c = g_drawings.at(on);
+    return c != nullptr ? c->text_scaled(x, y, s, col, bold, slanted, scale)
+                        : x + gfx::Canvas::text_width(s, bold) * scale;
 }
 int text_opaque(Drawing on, int x, int y, const char *s, gfx::Colour fg, gfx::Colour bg, int caret_x)
 {

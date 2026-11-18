@@ -1,0 +1,5 @@
+# The relay of Chinchilla's web page (worker.js). See README.md.
+name = "chinchilla-relay"
+main = "worker.js"
+compatibility_date = "2026-11-01"
+workers_dev = true

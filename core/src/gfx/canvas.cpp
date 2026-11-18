@@ -489,6 +489,64 @@ int Canvas::text(int x, int y, const char *s, Colour c, bool bold)
     return x + len * advance;
 }
 
+int Canvas::text_scaled(int x, int y, const char *s, Colour c, bool bold, bool slanted, int scale)
+{
+    const Font &f = kSpleen6x12;
+    scale = scale < 1 ? 1 : scale > 4 ? 4 : scale;
+    const int glyph_w = f.width + (bold ? 1 : 0);
+    const int advance = glyph_w * scale;
+    int len = 0;
+    for (const char *p = s; next_latin1(p) != 0;) {
+        len++;
+    }
+    // A leaning letter reaches a little past its cell.
+    const int lean = slanted ? (f.height - 1) / 4 * scale : 0;
+    each({x, y, len * advance + lean, f.height * scale}, [&](const Rect &part) {
+        const char *p = s;
+        int gx = x + ox_;
+        const int gy = y + oy_;
+        for (uint8_t code; (code = next_latin1(p)) != 0; gx += advance) {
+            if (gx + advance + lean <= part.x) {
+                continue;
+            }
+            if (gx >= part.right()) {
+                break;
+            }
+            const uint8_t *g = f.glyph(code);
+            for (int row = 0; row < f.height; row++) {
+                unsigned bits = g[row];
+                if (bold) {
+                    bits |= bits >> 1;
+                }
+                if (bits == 0) {
+                    continue;
+                }
+                const int shift = slanted ? (f.height - 1 - row) / 4 * scale : 0;
+                for (int sy = 0; sy < scale; sy++) {
+                    const int py = gy + row * scale + sy;
+                    if (py < part.y || py >= part.bottom()) {
+                        continue;
+                    }
+                    uint8_t *dst = pixels_ + py * width_;
+                    for (int col = 0; col < glyph_w; col++) {
+                        if (!(bits & (0x80u >> col))) {
+                            continue;
+                        }
+                        for (int sx = 0; sx < scale; sx++) {
+                            const int px = gx + shift + col * scale + sx;
+                            if (px >= part.x && px < part.right()) {
+                                dst[px] = c;
+                                mark(px, py, 1);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
+    return x + len * advance;
+}
+
 template <typename BgFn>
 int Canvas::text_cells(int x, int y, const char *s, Colour fg, BgFn bg, int caret_x)
 {

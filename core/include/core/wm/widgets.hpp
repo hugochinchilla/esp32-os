@@ -180,6 +180,17 @@ public:
     void paint(gfx::Canvas &c) override;
     bool wants_mouse() const override { return true; }
     void mouse(const MouseMsg &m) override;
+    // A vertical bar takes the notches down, a horizontal one those to the
+    // right; false if there are none for it or it has nowhere to go.
+    bool wheel(const WheelMsg &m) override;
+    bool window_bar() const override { return parent_ == nullptr; }
+    // How far one notch of the wheel goes: three of the arrows' steps where
+    // a step is a line, an eighth of the view where it is a pixel.
+    int wheel_step() const
+    {
+        const int step = page_ / 8 < 3 ? 3 : page_ / 8;
+        return step > page_ ? page_ : step;
+    }
     // Values run from 0 to `maximum`; `page` is how much one view shows.
     void set_range(int maximum, int page);
     void set_value(int value);
@@ -237,6 +248,11 @@ public:
     void paint(gfx::Canvas &c) override;
     bool wants_mouse() const override { return true; }
     void mouse(const MouseMsg &m) override;
+    bool wheel(const WheelMsg &m) override
+    {
+        bar_.wheel(m);
+        return true; // a list that fits stays still, and so does the rest
+    }
     bool focusable() const override { return true; }
     bool key(const KeyMsg &k) override;
     int selected() const { return selected_; }

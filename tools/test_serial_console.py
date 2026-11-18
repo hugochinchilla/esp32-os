@@ -142,8 +142,23 @@ def main():
         wait_for(started, "telnetd did not start again")
         assert answers()
         # What cannot be stopped this way, and what is not there.
+        # inetd itself, by hand: everything in it stops, and it starts
+        # again, its services each by its own start.
         board.console_send(b"service inetd stop\r")
-        assert b"it cannot be stopped this way" in until(b"C:\\> ")
+        assert b"Stopped until the next start" in until(b"C:\\> ")
+        wait_for(lambda: not answers(), "the telnet port still answers after service inetd stop")
+        wait_for(lambda: "inetd" not in processes() and "telnetd" not in processes(), "the rows are still there")
+        board.console_send(b"service telnetd start\r")
+        assert b"it did not start" in until(b"C:\\> ")
+
+        def inetd_started():
+            board.console_send(b"service inetd start\r")
+            return b"service:" not in until(b"C:\\> ")
+
+        wait_for(inetd_started, "inetd did not start again")
+        assert "inetd" in processes() and not answers()
+        wait_for(started, "telnetd did not start after inetd came back")
+        assert answers()
         board.console_send(b"service nothing start\r")
         assert b"there is no such service" in until(b"C:\\> ")
         board.console_send(b"service telnetd restart\r")
@@ -179,11 +194,17 @@ def main():
             pass
         assert board.ping() < 1.0
         # With the loop gone its services count as stopped, and cannot be
-        # started.
+        # started until inetd is (what the board turn of 2026-11-18 found
+        # broken: a second inetd ended at once).
         board.console_send(b"service telnetd\r")
         assert b"telnetd: stopped" in until(b"C:\\> ")
         board.console_send(b"service telnetd start\r")
         assert b"it did not start" in until(b"C:\\> ")
+        wait_for(inetd_started, "inetd did not start after kill")
+        wait_for(started, "telnetd did not start after inetd came back from kill")
+        assert answers()
+        listing = processes()
+        assert "inetd" in listing and "telnetd" in listing, listing
 
         # exit: the next session greets.
         board.console_send(b"exit\r")
