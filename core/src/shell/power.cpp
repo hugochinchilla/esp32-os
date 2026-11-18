@@ -60,10 +60,15 @@ void big_text(gfx::Canvas &c, int x, int y, const char *text, int s, gfx::Colour
 
 int big_width(const char *text, int s) { return gfx::Canvas::text_width(text) * s; }
 
-void paint_screen(gfx::Canvas &c, void *)
+void paint_screen(gfx::Canvas &screen, void *)
 {
+    // Drawn for 640 x 480; on a larger screen it stands in the middle of
+    // the night sky's colour.
     const int w = 640, h = 480;
-    c.fill({0, 0, w, h}, kNight);
+    const gfx::Rect work = manager().work_area();
+    const int screen_w = work.w, screen_h = work.h + wm::Wm::kTaskbarHeight;
+    screen.fill({0, 0, screen_w, screen_h}, kNight);
+    gfx::Canvas c = screen.sub({(screen_w - w) / 2, (screen_h - h) / 2, w, h});
     // Stars: always the same sky.
     uint32_t seed = 96;
     for (int i = 0; i < 70; i++) {

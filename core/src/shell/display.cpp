@@ -1,7 +1,15 @@
-// The Display dialog: the theme (the look of windows, buttons and the
-// taskbar), and the desktop's colour and the pattern over it, with a
-// preview. Opened from Start > Settings > Display and by a right click on
-// the desktop. Kept in C:\.config\desktop.ini, [look] and [background].
+// The Display dialog, in two tabs. Appearance: the theme (the look of
+// windows, buttons and the taskbar), and the desktop's colour and the
+// pattern over it. Resolution: the screen's mode, 640 x 480 or 800 x 600
+// (backlog item 68). A preview stands over both. Opened from Start >
+// Settings > Display and by a right click on the desktop. Kept in
+// C:\.config\desktop.ini, [look], [background] and [screen].
+//
+// A change of mode is made at once and then asked about: "Keep this
+// setting?", with fifteen seconds to answer. Only Keep writes it to the
+// settings; no answer, Go back, or the box closed any other way puts the
+// old mode back, so a monitor that shows nothing in the new mode cannot
+// leave the machine there.
 //
 // The colour is one of a short list with names, or, through Other..., any
 // of the board's 256. All of the list but the second are colours the board
@@ -188,8 +196,9 @@ void write_settings(fs::Ini &ini, const Choice &c)
 
 // The preview: a small screen with the colour and pattern picked, and a
 // window and a taskbar in the colours of the theme picked. `size`: of the
-// picture it is painted in.
-void paint_preview(app::Canvas &c, const Rect &size, Rgb colour, int pattern, const gfx::Theme &look)
+// picture it is painted in. `fine`: the screen is one of more pixels than the
+// first mode, so everything on it is drawn smaller.
+void paint_preview(app::Canvas &c, const Rect &size, Rgb colour, int pattern, const gfx::Theme &look, bool fine)
 {
     c.fill({0, 0, size.w, size.h}, gfx::face());
     // The monitor: a case, the screen, a foot.
@@ -206,19 +215,21 @@ void paint_preview(app::Canvas &c, const Rect &size, Rgb colour, int pattern, co
     }
     // The taskbar, with its Start button.
     const bool flat = look.flat();
-    c.fill({glass.x, glass.bottom() - 7, glass.w, 7}, flat ? look.bar : look.face);
-    c.hline(glass.x, glass.bottom() - 7, glass.w, look.bar_line);
-    c.fill({glass.x + 2, glass.bottom() - 5, 14, 4}, flat ? look.start : gfx::kDarkGrey);
+    const int bar = fine ? 6 : 7;
+    c.fill({glass.x, glass.bottom() - bar, glass.w, bar}, flat ? look.bar : look.face);
+    c.hline(glass.x, glass.bottom() - bar, glass.w, look.bar_line);
+    c.fill({glass.x + 2, glass.bottom() - bar + 2, fine ? 11 : 14, bar - 3}, flat ? look.start : gfx::kDarkGrey);
     // The window: its frame, its title bar, what it holds.
-    const Rect window = {glass.x + 34, glass.y + 14, 52, 38};
+    const Rect window = fine ? Rect{glass.x + 27, glass.y + 11, 42, 30} : Rect{glass.x + 34, glass.y + 14, 52, 38};
     c.fill(window, flat ? look.frame_on : look.face);
     if (flat) {
         c.edge(window, look.rim_on, look.rim_on);
     } else {
         c.edge(window, gfx::kWhite, gfx::kBlack);
     }
-    c.fill({window.x + 2, window.y + 2, window.w - 4, 6}, look.swatch);
-    c.fill({window.x + 4, window.y + 11, window.w - 8, window.h - 15}, look.paper);
+    const int title = fine ? 5 : 6;
+    c.fill({window.x + 2, window.y + 2, window.w - 4, title}, look.swatch);
+    c.fill({window.x + 4, window.y + title + 5, window.w - 8, window.h - title - 9}, look.paper);
     c.fill({box.x + 50, box.bottom(), 32, 4}, gfx::dim());
     c.button({box.x + 30, box.bottom() + 4, 72, 8}, gfx::ButtonLook::Raised);
 }
@@ -235,25 +246,191 @@ struct ThemeNames {
     }
 };
 
-constexpr Rect kPreview = {8, 8, 148, 114};
+/* ---- The screen's mode ----------------------------------------------------------- */
+
+// A mode as the settings file names it and the list shows it: "800x600",
+// "800 x 600".
+void mode_key(const ports::VideoMode &m, char *out, size_t capacity)
+{
+    snprintf(out, capacity, "%dx%d", m.width, m.height);
+}
+void mode_name(const ports::VideoMode &m, char *out, size_t capacity)
+{
+    snprintf(out, capacity, "%d x %d", m.width, m.height);
+}
+
+app::Number g_dialog = app::kNone;   // the one there may be: a number, dead once it has closed
+app::Number g_question = app::kNone; // "Keep this setting?", while it is asked
+void screen_went_back();
+
+// "Keep this setting?" after the mode has changed. The answer has to come
+// from someone who can see the screen: with none in kSeconds the old mode
+// comes back, as it does for Go back, Escape and the close button.
+class KeepQuestion : public app::Window {
+public:
+    static constexpr int kSeconds = 15;
+    static constexpr int kWidth = 300, kHeight = 104;
+
+    KeepQuestion(int from, int to)
+        : from_(from), to_(to),
+          now_(plain({12, 10, kWidth - 24, 14})),
+          ask_(label({12, 28, kWidth - 24, 14}, "Do you want to keep this setting?")),
+          back_in_(plain({12, 46, kWidth - 24, 14})),
+          keep_(button({kWidth / 2 - 81, 72, 75, 23}, "&Keep")),
+          back_(button({kWidth / 2 + 6, 72, 75, 23}, "&Go back"))
+    {
+        // Enter on a screen that shows nothing must not keep it.
+        set_default(back_);
+        set_focus(back_);
+        char size[24], text[64];
+        mode_name(os::video_mode_at(to_), size, sizeof(size));
+        snprintf(text, sizeof(text), "The screen is now %s.", size);
+        now_.set(text);
+        count();
+        timer_ = os::start_timer(1000000, 1000000, &KeepQuestion::second, this);
+    }
+    ~KeepQuestion() override { os::stop_timer(timer_); }
+
+    void command(app::Control which) override
+    {
+        if (which == keep_) {
+            // Written only now: until here a restart came back in the old mode.
+            char key[24];
+            mode_key(os::video_mode_at(to_), key, sizeof(key));
+            load_settings("desktop", settings_);
+            settings_.set("screen", "mode", key);
+            save_settings("desktop", settings_);
+            kept_ = true;
+        }
+        close();
+    }
+    bool key(const wm::KeyMsg &k) override
+    {
+        if (k.pressed && k.usage == wm::key::Escape) {
+            close();
+            return true;
+        }
+        return false;
+    }
+    void closed() override
+    {
+        if (!kept_) {
+            os::set_video_mode(from_);
+            screen_went_back();
+        }
+    }
+
+private:
+    static void second(void *self)
+    {
+        auto *q = static_cast<KeepQuestion *>(self);
+        if (--q->left_ <= 0) {
+            q->close();
+            return;
+        }
+        q->count();
+    }
+    void count()
+    {
+        char size[24], text[80];
+        mode_name(os::video_mode_at(from_), size, sizeof(size));
+        snprintf(text, sizeof(text), "Going back to %s in %d second%s.", size, left_, left_ == 1 ? "" : "s");
+        back_in_.set(text);
+    }
+
+    int from_, to_;
+    int left_ = kSeconds;
+    bool kept_ = false;
+    int timer_ = 0;
+    fs::Ini settings_;
+    app::Plain now_;
+    app::Label ask_;
+    app::Plain back_in_;
+    app::Button keep_, back_;
+};
+
+// Changes the screen to another mode and asks whether to keep it. `over`:
+// the window the question is asked over, if it stays open.
+void change_screen(int to, app::Number over)
+{
+    if (app::bring_forward(g_question)) {
+        return; // one change at a time: the last one is still being asked about
+    }
+    const int from = os::video_mode();
+    if (to < 0 || to == from || !os::set_video_mode(to)) {
+        return;
+    }
+    app::Look look;
+    look.title = "Display";
+    look.width = KeepQuestion::kWidth;
+    look.height = KeepQuestion::kHeight;
+    look.icon = &gfx::display_icon_16();
+    look.flags = app::kDialog | app::kClientSize;
+    look.over = over;
+    g_question = app::open<KeepQuestion>(look, from, to);
+    if (g_question == app::kNone) {
+        os::set_video_mode(from); // nobody to ask: not changed
+        no_memory_for("Display");
+    }
+}
+
+/* ---- The dialog ------------------------------------------------------------------ */
+
+// The names of the modes, for the list.
+struct ModeNames {
+    char text[4][24];
+    const char *names[4];
+    int count;
+    ModeNames() : count(os::video_mode_count() < 4 ? os::video_mode_count() : 4)
+    {
+        for (int i = 0; i < count; i++) {
+            mode_name(os::video_mode_at(i), text[i], sizeof(text[i]));
+            names[i] = text[i];
+        }
+    }
+};
+
+const char *const kTabs[] = {"Appearance", "Resolution"};
+enum Page { kAppearance, kResolution };
+
+// Where everything is. The tabs' frame holds the pages; the preview is on
+// both, and the three buttons are under the frame.
+constexpr Rect kTabsPlace = {6, 6, 360, 344};
+constexpr Rect kPreview = {14, 32, 148, 114};
+constexpr Rect kNowhere = {0, 0, 0, 0}; // of a control on the page that is not shown
+// Appearance.
+constexpr Rect kThemeLabel = {174, 34, 60, 14}, kThemes = {174, 52, 188, 60};
+constexpr Rect kGroup = {14, 152, 348, 190};
+constexpr Rect kColourLabel = {24, 172, 60, 14}, kColourName = {86, 172, 180, 14};
+constexpr Rect kColourGrid = {24, 188, 328, 52}, kOther = {277, 167, 75, 21};
+constexpr Rect kPatternLabel = {24, 246, 60, 14}, kPatternName = {86, 246, 266, 14};
+constexpr Rect kPatternGrid = {24, 262, 328, 72};
+// Resolution.
+constexpr Rect kModeLabel = {174, 34, 180, 14}, kModes = {174, 52, 188, 60};
+constexpr Rect kFacts = {14, 156, 348, 62}, kNote = {14, 226, 348, 14};
 
 class DisplayDialog : public app::Window {
 public:
     DisplayDialog()
-        : preview_(picture(kPreview)),
-          theme_label_(label({168, 10, 60, 14}, "&Theme:")),
-          themes_(list({168, 28, 188, 60}, theme_names_.names, theme_names_.count)),
-          group_(group({8, 128, 348, 190}, "Desktop background")),
-          colour_label_(label({18, 148, 60, 14}, "&Colour:")),
-          colour_name_(plain({80, 148, 180, 14})),
-          colours_(grid({18, 164, 328, 52}, 8, kColourCount, 41, 26)),
-          other_(button({271, 143, 75, 21}, "&Other...")),
-          pattern_label_(label({18, 222, 60, 14}, "&Pattern:")),
-          pattern_name_(plain({80, 222, 266, 14})),
-          patterns_(grid({18, 238, 328, 72}, 5, kPatternCount, 65, 36)),
-          ok_(button({118, 328, 75, 23}, "OK")),
-          cancel_(button({199, 328, 75, 23}, "Cancel")),
-          apply_(button({280, 328, 75, 23}, "&Apply"))
+        : tabs_(tabs(kTabsPlace, kTabs, 2)), // first: the pages' controls lie over it
+          preview_(picture(kPreview)),
+          theme_label_(label(kThemeLabel, "&Theme:")),
+          themes_(list(kThemes, theme_names_.names, theme_names_.count)),
+          group_(group(kGroup, "Desktop background")),
+          colour_label_(label(kColourLabel, "&Colour:")),
+          colour_name_(plain(kColourName)),
+          colours_(grid(kColourGrid, 8, kColourCount, 41, 26)),
+          other_(button(kOther, "&Other...")),
+          pattern_label_(label(kPatternLabel, "&Pattern:")),
+          pattern_name_(plain(kPatternName)),
+          patterns_(grid(kPatternGrid, 5, kPatternCount, 65, 36)),
+          mode_label_(label(kNowhere, "&Screen area:")),
+          modes_(list(kNowhere, mode_names_.names, mode_names_.count)),
+          facts_(text_area(kNowhere, facts_text_)),
+          note_(label(kNowhere, "A change asks to be kept. With no answer it is undone.")),
+          ok_(button({129, 358, 75, 23}, "OK")),
+          cancel_(button({210, 358, 75, 23}, "Cancel")),
+          apply_(button({291, 358, 75, 23}, "&Apply"))
     {
         set_default(ok_);
         // What the desktop shows now, to start from and to go back to.
@@ -262,6 +439,7 @@ public:
         colours_.select(named(colour_)); // if it is one of the list's own, else no cell
         patterns_.select(before_.pattern);
         themes_.select(before_.theme);
+        modes_.select(os::video_mode());
         sync();
         set_focus(colours_);
     }
@@ -275,17 +453,24 @@ public:
         } else if (which == ok_) {
             before_ = picked();
             write_settings(settings_, before_);
+            const int mode = modes_.selected();
             close(); // applies
+            change_screen(mode, app::kNone);
         } else if (which == cancel_) {
             close();
         } else if (which == apply_) {
             apply(picked()); // shown on the real desktop; only OK keeps it
+            change_screen(modes_.selected(), number());
         }
     }
 
-    // A cell was picked.
+    // A cell or a row was picked, or another tab.
     void changed(app::Control which) override
     {
+        if (which == tabs_) {
+            show_page(tabs_.selected());
+            return;
+        }
         if (which == colours_) {
             colour_ = kColours[colours_.selected()].rgb;
         }
@@ -294,7 +479,9 @@ public:
 
     void paint_in(app::Control, app::Canvas &c) override
     {
-        paint_preview(c, kPreview, colour_, patterns_.selected(), gfx::theme_at(themes_.selected()));
+        const int mode = modes_.selected() < 0 ? 0 : modes_.selected();
+        paint_preview(c, kPreview, colour_, patterns_.selected(), gfx::theme_at(themes_.selected()),
+                      os::video_mode_at(mode).width > os::video_mode_at(0).width);
     }
     void paint_cell(app::Control which, int index, const Rect &cell, app::Canvas &c) override
     {
@@ -318,20 +505,25 @@ public:
         }
         if (k.pressed && (k.mods & wm::kAlt)) {
             const char letter = wm::key::letter(k.usage);
-            if (letter == 't' || letter == 'T') {
+            const bool appearance = tabs_.selected() == kAppearance;
+            if (appearance && (letter == 't' || letter == 'T')) {
                 set_focus(themes_);
                 return true;
             }
-            if (letter == 'c' || letter == 'C') {
+            if (appearance && (letter == 'c' || letter == 'C')) {
                 set_focus(colours_);
                 return true;
             }
-            if (letter == 'o' || letter == 'O') {
+            if (appearance && (letter == 'o' || letter == 'O')) {
                 other_.press();
                 return true;
             }
-            if (letter == 'p' || letter == 'P') {
+            if (appearance && (letter == 'p' || letter == 'P')) {
                 set_focus(patterns_);
+                return true;
+            }
+            if (!appearance && (letter == 's' || letter == 'S')) {
+                set_focus(modes_);
                 return true;
             }
             if (letter == 'a' || letter == 'A') {
@@ -345,6 +537,13 @@ public:
     // Closed without OK: what Apply showed is taken back.
     void closed() override { apply(before_); }
 
+    // The mode was not kept: the list shows the one the screen is in again.
+    void mode_went_back()
+    {
+        modes_.select(os::video_mode());
+        sync();
+    }
+
 private:
     static void other_picked(gfx::Colour colour, void *context)
     {
@@ -352,6 +551,26 @@ private:
         d->colour_ = gfx::shown(colour);
         d->colours_.select(named(d->colour_));
         d->sync();
+    }
+    // The controls of the page in front get their places; the others none.
+    void show_page(int page)
+    {
+        const bool a = page == kAppearance;
+        theme_label_.place(a ? kThemeLabel : kNowhere);
+        themes_.place(a ? kThemes : kNowhere);
+        group_.place(a ? kGroup : kNowhere);
+        colour_label_.place(a ? kColourLabel : kNowhere);
+        colour_name_.place(a ? kColourName : kNowhere);
+        colours_.place(a ? kColourGrid : kNowhere);
+        other_.place(a ? kOther : kNowhere);
+        pattern_label_.place(a ? kPatternLabel : kNowhere);
+        pattern_name_.place(a ? kPatternName : kNowhere);
+        patterns_.place(a ? kPatternGrid : kNowhere);
+        mode_label_.place(a ? kNowhere : kModeLabel);
+        modes_.place(a ? kNowhere : kModes);
+        facts_.place(a ? kNowhere : kFacts);
+        note_.place(a ? kNowhere : kNote);
+        set_focus(tabs_); // not left on a control that is no longer shown
     }
     void sync()
     {
@@ -365,6 +584,19 @@ private:
         colour_name_.set(text);
         pattern_name_.set(kPatterns[patterns_.selected()].name);
         patterns_.redraw(); // the patterns are shown in the colour picked
+        // What the mode picked costs, in the machine's own figures.
+        const ports::VideoMode m = os::video_mode_at(modes_.selected() < 0 ? 0 : modes_.selected());
+        int n = snprintf(facts_text_, sizeof(facts_text_), "%d x %d pixels in 256 colours\n%d KB of memory for the picture",
+                         m.width, m.height, (m.width * m.height + 512) / 1024);
+        if (m.frame_us != 0) {
+            const int tenths = static_cast<int>((10000000 + m.frame_us / 2) / m.frame_us);
+            const int ms_tenths = static_cast<int>((m.frame_us + 50) / 100);
+            snprintf(facts_text_ + n, sizeof(facts_text_) - static_cast<size_t>(n),
+                     "\n%d.%d pictures a second, a pixel clock of %d MHz\n%d.%d ms to draw each picture in",
+                     tenths / 10, tenths % 10, static_cast<int>(m.pixel_clock_hz / 1000000),
+                     ms_tenths / 10, ms_tenths % 10);
+        }
+        facts_.set_text(facts_text_);
         preview_.redraw();
     }
     Choice picked() const { return {colour_, patterns_.selected(), themes_.selected() < 0 ? 0 : themes_.selected()}; }
@@ -373,6 +605,9 @@ private:
     Choice before_; // what the settings file holds
     fs::Ini settings_;
     ThemeNames theme_names_; // before the list that shows them
+    ModeNames mode_names_;
+    char facts_text_[200] = "";
+    app::Tabs tabs_;
     app::Picture preview_;
     app::Label theme_label_;
     app::ListBox themes_;
@@ -384,23 +619,32 @@ private:
     app::Label pattern_label_;
     app::Plain pattern_name_;
     app::Grid patterns_;
+    app::Label mode_label_;
+    app::ListBox modes_;
+    app::TextArea facts_;
+    app::Label note_;
     app::Button ok_, cancel_, apply_;
 };
 
-app::Number g_dialog = app::kNone; // the one there may be: a number, dead once it has closed
+void screen_went_back()
+{
+    if (auto *dialog = app::program<DisplayDialog>(g_dialog)) {
+        dialog->mode_went_back();
+    }
+}
 
 } // namespace
 
 void display_dialog()
 {
     const AsProgram as("Display");
-    if (app::bring_forward(g_dialog)) {
+    if (app::bring_forward(g_question) || app::bring_forward(g_dialog)) {
         return;
     }
     app::Look look;
     look.title = "Display";
-    look.width = 372;
-    look.height = 388;
+    look.width = 380;
+    look.height = 416;
     look.icon = &gfx::display_icon_16();
     look.flags = app::kDialog;
     g_dialog = app::open<DisplayDialog>(look);
@@ -413,6 +657,17 @@ void install_display()
 {
     fs::Ini ini;
     apply(read_settings(ini));
+    // The screen's mode, if one was kept and this screen has it. The desktop
+    // changes to it before its first picture.
+    char want[24], key[24];
+    if (ini.get("screen", "mode", want, sizeof(want))) {
+        for (int i = 0; i < os::video_mode_count(); i++) {
+            mode_key(os::video_mode_at(i), key, sizeof(key));
+            if (strcmp(key, want) == 0) {
+                os::set_video_mode(i);
+            }
+        }
+    }
 }
 
 } // namespace shell

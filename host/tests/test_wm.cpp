@@ -276,11 +276,11 @@ struct Rig {
         move(x1, y1, 1);
         move(x1, y1, 0);
     }
-    uint8_t at(int x, int y) { return display.pixels()[y * 640 + x]; }
+    uint8_t at(int x, int y) { return display.pixels()[y * display.width() + x]; }
     // What is on the screen equals a fresh paint of the same state.
     bool no_stale_pixels()
     {
-        Bytes before(display.pixels(), display.pixels() + 640 * 480);
+        Bytes before(display.pixels(), display.pixels() + display.width() * display.height());
         wm.repaint_all();
         return memcmp(before.data(), display.pixels(), before.size()) == 0;
     }
@@ -1924,8 +1924,170 @@ static void test_panels()
     CHECK(at(300, 300) != 0x1C && at(300, 300) != 0x03);
 }
 
+/* ---- The screen's mode (backlog item 68) ------------------------------------- */
+
+static void test_video_mode()
+{
+    static_assert(gfx::Canvas::kMaxWidth == ports::Display::kMaxWidth, "the scratch band is as wide as the widest screen");
+    Rig rig;
+    TestWindow normal("Normal", {400, 250, 200, 150}, 0x1C), big("Big", {20, 20, 300, 200}, 0xE0);
+    TestWindow fixed("Fixed", {500, 300, 120, 100}, 0x03), dialog("Dialog", {220, 151, 200, 150}, 0x1F);
+    fixed.set_resizable(false);
+    dialog.set_dialog(true); // in the middle of 640 x 452, as a dialog opens
+    rig.wm.add(normal);
+    rig.wm.add(big);
+    rig.wm.add(fixed);
+    rig.wm.add(dialog);
+    rig.wm.start();
+    rig.wm.toggle_maximize(big);
+    rig.wm.update();
+    int modes_told = 0;
+    rig.wm.set_mode_listener([](void *count) { ++*static_cast<int *>(count); }, &modes_told);
+
+    // Two modes; the first is in use, with its own frame time.
+    CHECK(rig.wm.video_mode_count() == 2 && rig.wm.video_mode() == 0);
+    CHECK(rig.wm.video_mode_at(1).width == 800 && rig.wm.video_mode_at(1).height == 600);
+    CHECK(!rig.wm.set_video_mode(2) && !rig.wm.set_video_mode(-1));
+
+    // Asked for, it is the mode from then on, but the screen changes at the
+    // next tick; the loop is told not to sleep.
+    CHECK(rig.wm.set_video_mode(1));
+    CHECK(rig.wm.video_mode() == 1 && rig.display.width() == 640 && rig.wm.idle_us() == 0);
+    rig.wait(1000);
+    CHECK(rig.display.width() == 800 && rig.display.height() == 600 && modes_told == 1);
+    CHECK(rig.wm.work_area() == Rect(0, 0, 800, 572) && rig.wm.taskbar() == Rect(0, 572, 800, 28));
+    CHECK(rig.wm.frames()->totals().budget_us == 16579);
+    // The maximised window fills the new work area; the dialog is in the
+    // middle again; the others stay where they were.
+    CHECK(big.frame() == Rect(0, 0, 800, 572));
+    CHECK(dialog.frame() == Rect(300, 211, 200, 150));
+    CHECK(normal.frame() == Rect(400, 250, 200, 150) && fixed.frame() == Rect(500, 300, 120, 100));
+    // Painted to the new size: the taskbar's grey at the bottom right, and
+    // nothing stale anywhere.
+    CHECK(rig.at(790, 590) == rig.at(790, 575) && rig.no_stale_pixels());
+    // The pointer reaches the new corner.
+    rig.move(799, 599, 0);
+    CHECK(rig.wm.pointer_x() == 799 && rig.wm.pointer_y() == 599);
+
+    // Back: windows that would be off the smaller screen are brought onto
+    // it, a resizable one made smaller if it must be; the pointer too.
+    rig.wm.resize(normal, {100, 100, 690, 460});
+    rig.wm.move(fixed, 700, 500);
+    rig.wm.resize(dialog, {10, 10, 780, 560});
+    CHECK(rig.wm.set_video_mode(0));
+    rig.wait(1000);
+    CHECK(rig.display.width() == 640 && modes_told == 2);
+    CHECK(rig.wm.frames()->totals().budget_us == 16800);
+    CHECK(big.frame() == Rect(0, 0, 640, 452));
+    CHECK(normal.frame() == Rect(0, 0, 640, 452) && fixed.frame() == Rect(520, 352, 120, 100));
+    CHECK(dialog.frame() == Rect(0, 0, 780, 560)); // a dialog keeps its size: its corner is on the screen
+    CHECK(rig.wm.pointer_x() == 639 && rig.wm.pointer_y() == 479);
+    CHECK(rig.no_stale_pixels());
+    // Restored, the maximised window is its old self.
+    rig.wm.toggle_maximize(big);
+    CHECK(big.frame() == Rect(20, 20, 300, 200));
+
+    // Asked for before the desktop starts (the settings), it is the mode of
+    // the first picture.
+    Rig early;
+    CHECK(early.wm.set_video_mode(1));
+    early.wm.start();
+    CHECK(early.display.width() == 800 && early.wm.taskbar().y == 572);
+    // A screen of another size has the one mode.
+    host::MemoryDisplay small(320, 240);
+    host::MemoryPointer pointer;
+    host::FixedClock clock;
+    wm::Wm one(small, pointer, clock);
+    CHECK(one.video_mode_count() == 1 && one.set_video_mode(0) && !one.set_video_mode(1));
+}
+
+// A window with tabs: two pages, a button on each.
+class TabsWindow final : public wm::Window {
+public:
+    TabsWindow()
+        : Window("Tabs", {100, 100, 300, 200}, nullptr), tabs({4, 4, 280, 140}, kTitles, 2, &TabsWindow::turned, this),
+          first({20, 40, 60, 24}, "&First"), second({0, 0, 0, 0}, "&Second"), ok({200, 150, 60, 24}, "OK")
+    {
+        add(tabs);
+        add(first);
+        add(second);
+        add(ok);
+    }
+    static void turned(wm::Tabs &t, void *context)
+    {
+        auto *w = static_cast<TabsWindow *>(context);
+        w->turns++;
+        w->first.rect = t.selected() == 0 ? Rect(20, 40, 60, 24) : Rect(0, 0, 0, 0);
+        w->second.rect = t.selected() == 1 ? Rect(20, 40, 60, 24) : Rect(0, 0, 0, 0);
+    }
+    static constexpr const char *kTitles[2] = {"One", "Another"};
+    wm::Tabs tabs;
+    wm::Button first, second, ok;
+    int turns = 0;
+};
+
+static void test_tabs()
+{
+    Rig rig;
+    TabsWindow w;
+    rig.wm.add(w);
+    rig.wm.start();
+    const Rect c = w.client();
+    CHECK(w.tabs.selected() == 0 && w.tabs.count() == 2);
+    // The titles stand side by side in the strip; the page is inside the frame.
+    const Rect one = w.tabs.tab(0), another = w.tabs.tab(1);
+    CHECK(one.x == 2 && another.x == one.right() && another.w > one.w && one.h == wm::Tabs::kStrip - 2);
+    CHECK(w.tabs.page() == Rect(6, 4 + wm::Tabs::kStrip + 2, 276, 140 - wm::Tabs::kStrip - 4));
+
+    // A click on a title turns to its page and tells; on the one in front, nothing.
+    rig.click(c.x + 4 + another.x + 5, c.y + 4 + 8);
+    CHECK(w.tabs.selected() == 1 && w.turns == 1 && w.focus() == &w.tabs);
+    rig.click(c.x + 4 + another.x + 5, c.y + 4 + 8);
+    CHECK(w.turns == 1);
+    // A click under the strip is the page's, not a title's.
+    rig.click(c.x + 4 + one.x + 5, c.y + 4 + wm::Tabs::kStrip + 30);
+    CHECK(w.tabs.selected() == 1);
+    CHECK(rig.no_stale_pixels());
+
+    // The arrows, with the focus on the tabs; they stop at the ends.
+    rig.key(wm::key::Left);
+    CHECK(w.tabs.selected() == 0 && w.turns == 2);
+    rig.key(wm::key::Left);
+    CHECK(w.tabs.selected() == 0 && w.turns == 2);
+    rig.key(wm::key::Right);
+    rig.key(wm::key::Right);
+    CHECK(w.tabs.selected() == 1 && w.turns == 3);
+
+    // Ctrl+Tab from anywhere in the window, round and round; with Shift, back.
+    w.set_focus(&w.ok);
+    rig.key(wm::key::Tab, wm::kCtrl);
+    CHECK(w.tabs.selected() == 0 && w.turns == 4 && w.focus() == &w.ok);
+    rig.key(wm::key::Tab, wm::kCtrl);
+    CHECK(w.tabs.selected() == 1);
+    rig.key(wm::key::Tab, wm::kCtrl | wm::kShift);
+    CHECK(w.tabs.selected() == 0);
+
+    // Tab passes over the button of the page that is not shown, and its
+    // Alt+letter does nothing.
+    w.set_focus(&w.tabs);
+    rig.key(wm::key::Tab);
+    CHECK(w.focus() == &w.first);
+    rig.key(wm::key::Tab);
+    CHECK(w.focus() == &w.ok);
+    rig.key(wm::key::Tab);
+    CHECK(w.focus() == &w.tabs);
+    rig.key(0x16, wm::kAlt); // Alt+S: Second is on the other page
+    CHECK(w.focus() == &w.tabs);
+    rig.key(wm::key::Right);
+    rig.key(0x16, wm::kAlt);
+    CHECK(w.focus() == &w.second);
+    CHECK(rig.no_stale_pixels());
+}
+
 int main()
 {
+    test_video_mode();
+    test_tabs();
     test_rect_list();
     test_panels();
     test_dither();

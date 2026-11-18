@@ -901,6 +901,123 @@ void GroupFrame::paint(Canvas &c)
     c.text(8, 0, caption_, gfx::ink());
 }
 
+/* ---- Tabs --------------------------------------------------------------------- */
+
+Rect Tabs::tab(int index) const
+{
+    int x = 2;
+    for (int i = 0; i < index; i++) {
+        x += label_width(titles_[i]) + 14;
+    }
+    return {x, 2, label_width(titles_[index]) + 14, kStrip - 2};
+}
+
+void Tabs::paint(Canvas &c)
+{
+    const gfx::Theme &t = gfx::theme();
+    const bool flat = t.flat();
+    const Rect body = {0, kStrip, rect.w, rect.h - kStrip};
+    // The chosen title last: it stands in front of its neighbours and of
+    // the page's top edge, so that title and page read as one sheet.
+    for (int pass = 0; pass < 2; pass++) {
+        for (int i = 0; i < count_; i++) {
+            const bool chosen = i == selected_;
+            if (chosen != (pass == 1)) {
+                continue;
+            }
+            Rect r = tab(i);
+            if (chosen) {
+                r = {r.x - 2, 0, r.w + 4, kStrip + (flat ? 1 : 2)};
+            }
+            if (flat) {
+                c.fill(r, chosen ? gfx::face() : t.button);
+                c.edge(r, t.outline, t.outline);
+                if (chosen) {
+                    c.hline(r.x + 1, kStrip, r.w - 2, gfx::face());
+                }
+            } else {
+                // Light along the left and the top, shadow down the right,
+                // the two top corners cut. The sides stop where the page
+                // begins; the chosen one covers the page's top edge between.
+                const int lines = kStrip - r.y;
+                if (chosen) {
+                    c.fill({r.x, r.y, r.w, lines}, gfx::face());
+                    c.fill({r.x + 1, kStrip, r.w - 3, 2}, gfx::face());
+                }
+                c.hline(r.x + 2, r.y, r.w - 4, gfx::paper());
+                c.hline(r.x + 1, r.y + 1, 1, gfx::paper());
+                c.vline(r.x, r.y + 2, lines - 2, gfx::paper());
+                c.hline(r.right() - 2, r.y + 1, 1, gfx::ink());
+                c.vline(r.right() - 2, r.y + 2, lines - 2, gfx::dim());
+                c.vline(r.right() - 1, r.y + 2, lines - 2, gfx::ink());
+            }
+            const int tw = label_width(titles_[i]);
+            const int tx = r.x + (r.w - tw) / 2, ty = chosen ? 4 : 5;
+            label(c, tx, ty, titles_[i], gfx::ink());
+            if (chosen && has_focus()) {
+                c.focus_rect({tx - 2, ty - 1, tw + 4, kTextH + 2});
+            }
+        }
+        if (pass == 0) {
+            if (flat) {
+                c.edge(body, t.outline, t.outline);
+            } else {
+                c.raised(body);
+            }
+        }
+    }
+}
+
+void Tabs::mouse(const MouseMsg &m)
+{
+    if (m.kind != MouseKind::Down || m.y < 0 || m.y >= kStrip) {
+        return;
+    }
+    for (int i = 0; i < count_; i++) {
+        const Rect r = tab(i);
+        if (m.x >= r.x && m.x < r.right()) {
+            select(i);
+            return;
+        }
+    }
+}
+
+bool Tabs::key(const KeyMsg &k)
+{
+    if (k.usage != key::Left && k.usage != key::Right) {
+        return false;
+    }
+    if (k.pressed) {
+        const int to = selected_ + (k.usage == key::Left ? -1 : 1);
+        select(to < 0 ? 0 : (to >= count_ ? count_ - 1 : to));
+    }
+    return true;
+}
+
+bool Tabs::turn_page(int step)
+{
+    if (count_ < 2 || rect.empty()) {
+        return false;
+    }
+    select((selected_ + step + count_) % count_);
+    return true;
+}
+
+void Tabs::select(int index)
+{
+    if (index < 0 || index >= count_ || index == selected_) {
+        return;
+    }
+    selected_ = index;
+    // The page changes with it: the whole client area is painted again.
+    if (window() != nullptr) {
+        window()->invalidate_client({0, 0, 4000, 4000});
+    }
+    if (on_change_ != nullptr) {
+        on_change_(*this, context_);
+    }
+}
+
 /* ---- Text area -------------------------------------------------------------- */
 
 void TextArea::paint(Canvas &c)

@@ -135,6 +135,7 @@ The picture: signal, memory, painting, frame time.
 - [Decided: video](decisions/decided-video.md) (2026-11-16, owner, decided): 640x480 at 60 Hz, 256 colours, one picture in memory, the pointer mixed in at scanout, dithered colours
 - [Missed video refills are logged](decisions/missed-video-refills.md) (2026-11-17, owner, decided): Missed refills are logged; `dbg.py tasks` stays although it can cause them
 - [Chosen for the frame budget](decisions/frame-budget.md) (2026-11-18, agent, to-confirm): The budget is one video frame, 16 800 us; how drawing is measured against it (backlog 63)
+- [Screen sizes: 640x480 and 800x600](decisions/screen-sizes.md) (2026-11-18, owner, decided): Display > Resolution changes the picture at once; a box asks to keep it, back after 15 s (backlog 68). The agent's parts are to confirm
 
 ### boot
 

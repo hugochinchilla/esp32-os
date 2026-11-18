@@ -127,6 +127,9 @@ public:
     virtual void press() {}
     // The underlined letter of its caption (Alt+letter), lower case, or 0.
     virtual char access() const { return 0; }
+    // Ctrl+Tab (step 1) and Ctrl+Shift+Tab (step -1), wherever the focus is
+    // in the window: true if the widget has pages and turned to another.
+    virtual bool turn_page(int /*step*/) { return false; }
 
     bool has_focus() const;
     // Whether the widget covers all of its rect when it paints (the window

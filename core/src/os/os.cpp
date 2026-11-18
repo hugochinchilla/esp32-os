@@ -374,6 +374,30 @@ void set_theme(int index)
     g_kit.wm->set_theme(index);
 }
 
+int video_mode_count()
+{
+    const prog::InCall in_call;
+    return g_kit.wm->video_mode_count();
+}
+
+ports::VideoMode video_mode_at(int index)
+{
+    const prog::InCall in_call;
+    return g_kit.wm->video_mode_at(index);
+}
+
+int video_mode()
+{
+    const prog::InCall in_call;
+    return g_kit.wm->video_mode();
+}
+
+bool set_video_mode(int index)
+{
+    const prog::InCall in_call;
+    return g_kit.wm->set_video_mode(index);
+}
+
 void set_screen_saver(int animation, uint32_t wait_seconds)
 {
     const prog::InCall in_call;

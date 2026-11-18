@@ -78,8 +78,8 @@ bool fast_start_armed()
 
 class VgaDisplay : public ports::Display {
 public:
-    int width() const override { return VGA_WIDTH; }
-    int height() const override { return VGA_HEIGHT; }
+    int width() const override { return vga_width(); }
+    int height() const override { return vga_height(); }
     uint8_t *pixels() override { return vga_framebuffer(); }
 };
 
@@ -168,7 +168,7 @@ bool s_key; // a byte arrived on serial
 void video_task(void *done)
 {
     s_video_start_us = static_cast<uint32_t>(esp_timer_get_time());
-    vga_start();
+    vga_start(1); // the BIOS shows 640x480 only
     xSemaphoreGive(static_cast<SemaphoreHandle_t>(done));
     vTaskDelete(nullptr);
 }

@@ -144,6 +144,15 @@ Control scroll_bar(Window window, const gfx::Rect &place, bool vertical);
 Control list(Window window, const gfx::Rect &place, const char *const *items, int count);
 Control group(Window window, const gfx::Rect &place, const char *caption); // a frame with a caption
 Control text_area(Window window, const gfx::Rect &place, const char *text); // several lines, read only
+// Tabs: a row of titles (the program's texts, which must stay valid; six at
+// most) and under it the frame of the page they choose. Make it before the
+// controls of its pages, which lie over it. It draws no page: when Changed
+// tells of another title (a click, the arrows, Ctrl+Tab), the program
+// gives the controls of that page their places and the others an empty
+// one (place_control). selected() and select() are a list's; select()
+// tells of the change. The row is kTabStrip high.
+constexpr int kTabStrip = 20;
+Control tabs(Window window, const gfx::Rect &place, const char *const *titles, int count);
 
 // A rectangle the program paints (What::Paint with this control).
 enum PictureFlag : uint8_t {

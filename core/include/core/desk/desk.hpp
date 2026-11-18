@@ -115,6 +115,14 @@ public:
     void attach(proc::Pid owner = proc::kNone);
     void detach();
 
+    // The screen has another size: the icons go where they belong on it.
+    void news(wm::PanelNews what) override
+    {
+        if (what == wm::PanelNews::Screen) {
+            layout();
+        }
+    }
+
     // The icons: the array is the caller's and must stay valid.
     void set_icons(const Icon *icons, int count);
     int count() const { return count_; }

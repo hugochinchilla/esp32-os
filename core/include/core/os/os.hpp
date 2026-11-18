@@ -162,6 +162,16 @@ void set_backdrop(const wm::Wm::Backdrop &backdrop);
 // themes (core/gfx/theme.hpp, where gfx::theme() tells the one in use).
 // Everything on the screen is painted again.
 void set_theme(int index);
+// The screen's modes (backlog item 68): how many there are, each one's
+// size, and the one in use. set_video_mode() changes to another one: the
+// picture goes black while the monitor finds the new signal, every window
+// is brought onto the new screen and everything is painted again. It
+// happens once the event that asked has been answered, though video_mode()
+// says the new one at once. False: there is no such mode.
+int video_mode_count();
+ports::VideoMode video_mode_at(int index);
+int video_mode();
+bool set_video_mode(int index);
 // The screensaver: which animation (a place in core/saver's list; -1: none)
 // and after how many seconds without a key or the mouse.
 void set_screen_saver(int animation, uint32_t wait_seconds);

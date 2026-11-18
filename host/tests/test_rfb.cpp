@@ -543,6 +543,34 @@ void test_web()
 
 } // namespace
 
+// The screen changes mode (backlog item 68): the viewer is let go, and one
+// that connects afterwards is told the new size.
+void test_screen_changed()
+{
+    connect();
+    CHECK(server.stats().connected);
+    display.set_mode(1);
+    server.screen_changed();
+    CHECK(server.stats().connected); // from another task: nothing happens until the next poll
+    pipe_.waiting = false;
+    server.poll();
+    CHECK(!server.stats().connected && !pipe_.open);
+    connect();
+    const std::string &out = pipe_.from_server;
+    CHECK(server.stats().connected && out.size() == 18 + 24 + 10);
+    CHECK(static_cast<uint8_t>(out[18]) == 3 && static_cast<uint8_t>(out[19]) == 0x20); // 800
+    CHECK(static_cast<uint8_t>(out[20]) == 2 && static_cast<uint8_t>(out[21]) == 0x58); // 600
+    // The pointer reaches the new corner.
+    pointer_at(799, 599, 0);
+    CHECK(desktop.take() == "m799,599,0,0 ");
+    // And back, for whatever comes after.
+    display.set_mode(0);
+    server.screen_changed();
+    pipe_.waiting = false;
+    server.poll();
+    CHECK(!server.stats().connected);
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 1) {
@@ -554,6 +582,7 @@ int main(int argc, char **argv)
     test_bad_input();
     test_memory();
     test_web();
+    test_screen_changed();
     if (failures == 0) {
         printf("rfb: all tests passed\n");
     }

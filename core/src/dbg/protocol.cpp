@@ -455,6 +455,34 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
         break;
     }
 
+    case kVideoMode: {
+        // The modes, and with an argument a change to one of them: the
+        // desktop makes it at its next tick, after this reply has gone.
+        if (desktop_ == nullptr || desktop_->video_mode_count() == 0) {
+            reply(type, seq, kUnknownCommand, nullptr, 0);
+            break;
+        }
+        if (args_size >= 1 && !desktop_->set_video_mode(args[0])) {
+            reply(type, seq, kBadArguments, nullptr, 0);
+            break;
+        }
+        uint8_t body[2 + 8 * 12];
+        const int count = desktop_->video_mode_count() < 8 ? desktop_->video_mode_count() : 8;
+        body[0] = static_cast<uint8_t>(count);
+        body[1] = static_cast<uint8_t>(desktop_->video_mode());
+        uint16_t at = 2;
+        for (int i = 0; i < count; i++) {
+            const ports::VideoMode m = desktop_->video_mode_at(i);
+            put16(body + at, static_cast<uint16_t>(m.width));
+            put16(body + at + 2, static_cast<uint16_t>(m.height));
+            put32(body + at + 4, m.pixel_clock_hz);
+            put32(body + at + 8, m.frame_us);
+            at += 12;
+        }
+        reply(type, seq, kOk, body, at);
+        break;
+    }
+
     case kRepaint: {
         if (desktop_ == nullptr) {
             reply(type, seq, kUnknownCommand, nullptr, 0);

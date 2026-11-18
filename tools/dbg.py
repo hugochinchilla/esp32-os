@@ -43,6 +43,7 @@ FAULT = 21
 LOG_READ = 22
 FRAMES = 23
 PAINT_BENCH = 24
+VIDEO_MODE = 25
 WIFI = 0x20
 MAX_REQUEST = 1024  # largest request payload the board takes
 LOG, HELLO, SHOT_DATA, SHOT_END = 0x70, 0x71, 0x72, 0x73
@@ -625,6 +626,18 @@ class Board:
                                 "work": self.FRAME_WORK[min(work, 4)], "top": self.FRAME_TOP[min(top, 3)]})
         return out
 
+    def video_modes(self, change_to=None):
+        """The screen's modes. Returns (current, modes), each mode a dict
+        with width, height, pixel_clock_hz and frame_us. With change_to the
+        board changes to that mode just after it replies: nothing is saved
+        and nothing asks to keep it."""
+        body = self.request(VIDEO_MODE, b"" if change_to is None else bytes([change_to]))
+        modes = []
+        for i in range(body[0]):
+            width, height, clock, frame = struct.unpack_from("<HHII", body, 2 + 12 * i)
+            modes.append({"width": width, "height": height, "pixel_clock_hz": clock, "frame_us": frame})
+        return body[1], modes
+
     def repaint(self):
         """Paints the whole screen again; returns the time it took in µs."""
         return struct.unpack("<I", self.request(REPAINT))[0]
@@ -918,6 +931,9 @@ def main(argv=None):
     p = sub.add_parser("animations", help="caret blinking on or off (off for stable screenshots)")
     p.add_argument("state", choices=["on", "off"])
     sub.add_parser("repaint", help="paint the whole screen again and time it")
+    p = sub.add_parser("mode", help="the screen's modes; with a number or a size (800x600), change to that one "
+                                    "(not saved, and no question asked)")
+    p.add_argument("to", nargs="?", help="a mode's number, or its size as WIDTHxHEIGHT")
     sub.add_parser("paintbench", help="time each kind of drawing and each open window on the screen (it draws "
                                       "over the screen for about a second)")
     sub.add_parser("memory", help="where the memory goes: heaps and video timing (stacks: tasks)")
@@ -1044,6 +1060,21 @@ def main(argv=None):
             board.animations(args.state == "on")
         elif args.command == "repaint":
             print("repainted in %d us" % board.repaint())
+        elif args.command == "mode":
+            current, modes = board.video_modes()
+            if args.to is not None:
+                sizes = ["%dx%d" % (m["width"], m["height"]) for m in modes]
+                to = sizes.index(args.to.lower()) if args.to.lower() in sizes else None
+                if to is None and args.to.isdigit() and int(args.to) < len(modes):
+                    to = int(args.to)
+                if to is None:
+                    sys.exit("no such mode: %s (there are: %s)" % (args.to, ", ".join(sizes)))
+                current, modes = board.video_modes(to)
+            for i, m in enumerate(modes):
+                hz = 1e6 / m["frame_us"] if m["frame_us"] else 0
+                print("%s %d: %d x %d, %.2f frames a second (%d us a frame), pixel clock %.3f MHz" %
+                      ("*" if i == current else " ", i, m["width"], m["height"], hz, m["frame_us"],
+                       m["pixel_clock_hz"] / 1e6))
         elif args.command == "paintbench":
             print(board.paint_bench(), end="")
         elif args.command == "memory":

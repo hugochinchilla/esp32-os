@@ -133,6 +133,9 @@ public:
     // band is copied to the screen once. So text and icons over a background
     // never show half drawn (one screen buffer, no flashes).
     static constexpr int kBandRows = 12;
+    // The widest screen there is (ports::Display::kMaxWidth, which a test
+    // holds equal): the band and the fade table are sized for it.
+    static constexpr int kMaxWidth = 800;
     template <typename Fn> void layered(const Rect &r, Fn paint)
     {
         if (!counting_) {
@@ -201,7 +204,7 @@ private:
     }
     // A left-to-right fade as the four rows of pixels its dither repeats
     // in, for every column of the screen (fill_fade).
-    static constexpr int kFadeWidth = 640;
+    static constexpr int kFadeWidth = kMaxWidth;
     struct FadeRows {
         bool valid;
         int sx0, span;
@@ -211,7 +214,7 @@ private:
     };
     static const FadeRows &fade_rows(Rgb from, Rgb to, int span, int sx0);
     static uint8_t *write_counts_;
-    static uint8_t band_[kBandRows * 640];
+    static uint8_t band_[kBandRows * kMaxWidth];
     bool counting_ = true; // false for the scratch band
 
     uint8_t *pixels_;

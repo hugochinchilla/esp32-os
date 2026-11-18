@@ -1,4 +1,5 @@
-/* VGA output, 640x480 at 60 Hz, one byte per pixel (RRRGGGBB).
+/* VGA output, one byte per pixel (RRRGGGBB), in one of two modes: 640x480 at
+ * 60 Hz (the one it starts in) and 800x600 at 60 Hz.
  * Wiring and resistor values: docs/hardware/README.md */
 #pragma once
 
@@ -9,14 +10,35 @@
 extern "C" {
 #endif
 
-#define VGA_WIDTH 640
-#define VGA_HEIGHT 480
+#define VGA_MODES 2 /* all of them */
 
-/* Starts the video signal. Stops the program if it cannot. */
-void vga_start(void);
+typedef struct {
+    uint16_t width, height;
+    uint32_t pixel_clock_hz;
+    uint32_t frame_us; /* one frame with its blanking */
+} vga_mode_info_t;
 
-/* The picture being shown: VGA_WIDTH * VGA_HEIGHT bytes, rows top to bottom.
- * Writing to it changes the screen. */
+/* Starts the video signal in mode 0. `modes`: how many of the modes will
+ * be used (1: only the first, as the BIOS does); the picture's memory is
+ * sized once, for the largest of them. Stops the program if it cannot. Call
+ * it from a task tied to the core the video interrupt is to run on. */
+void vga_start(int modes);
+
+/* The modes; index 0 is 640x480. */
+int vga_mode_count(void);
+void vga_mode_info(int index, vga_mode_info_t *out);
+int vga_mode(void);
+/* Stops the signal and starts it again in another mode; the picture is
+ * black afterwards. Nothing may be drawing meanwhile. Like vga_start(), from
+ * a task tied to the video's core. Stops the program if it cannot. */
+void vga_set_mode(int index);
+/* The size of the mode in use. */
+int vga_width(void);
+int vga_height(void);
+
+/* The picture being shown: vga_width() * vga_height() bytes, rows top to
+ * bottom. Writing to it changes the screen. The address is the same in
+ * every mode. */
 uint8_t *vga_framebuffer(void);
 
 /* Number of frames sent to the monitor since start. */
