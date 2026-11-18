@@ -1726,6 +1726,32 @@ static void test_drag_several()
     CHECK(rig.desk_icons.icon_rect(0).x == one.x + 200 && rig.desk_icons.icon_rect(0).y == one.y + 100);
     CHECK(rig.desk_icons.icon_rect(2).x == three.x + 200 && rig.desk_icons.icon_rect(2).y == three.y + 100);
     CHECK(moves == 1 && rig.desk_icons.picked_count() == 3);
+    // An icon that takes files (a folder) dragged with a file to an empty
+    // place: both move, and the file does not go into the folder that has
+    // just been put down under the pointer.
+    {
+        const Rect folder = rig.desk_icons.icon_rect(3), other = rig.desk_icons.icon_rect(2);
+        g_desk_drops.clear();
+        rig.click(folder.x + 36, folder.y + 16);
+        rig.wm.key(wm::key::LeftCtrl, true);
+        rig.click(other.x + 36, other.y + 16);
+        rig.wm.key(wm::key::LeftCtrl, false);
+        rig.move(folder.x + 36, folder.y + 16, 1);
+        rig.move(folder.x + 46, folder.y + 26, 1);
+        rig.move(folder.x + 36 + 150, folder.y + 16 + 100, 1);
+        rig.move(folder.x + 36 + 150, folder.y + 16 + 100, 0);
+        CHECK(g_desk_drops.empty());
+        CHECK(rig.desk_icons.icon_rect(3).x == folder.x + 150 && rig.desk_icons.icon_rect(3).y == folder.y + 100);
+        CHECK(rig.desk_icons.icon_rect(2).x == other.x + 150 && rig.desk_icons.icon_rect(2).y == other.y + 100);
+        CHECK(moves == 2);
+        // Back as they were picked before, for what follows.
+        rig.click(600, 20);
+        rig.click(rig.desk_icons.icon_rect(0).x + 36, rig.desk_icons.icon_rect(0).y + 16);
+        rig.wm.key(wm::key::LeftCtrl, true);
+        rig.click(rig.desk_icons.icon_rect(1).x + 36, rig.desk_icons.icon_rect(1).y + 16);
+        rig.click(rig.desk_icons.icon_rect(2).x + 36, rig.desk_icons.icon_rect(2).y + 16);
+        rig.wm.key(wm::key::LeftCtrl, false);
+    }
     // Onto a window, only the one that is a file is offered (it was held).
     w.seen.clear();
     const Rect file = rig.desk_icons.icon_rect(2);
@@ -1734,7 +1760,7 @@ static void test_drag_several()
     rig.move(file.x + 46, file.y + 26, 1);
     rig.move(400, 150, 1);
     rig.move(400, 150, 0);
-    CHECK(w.seen == "C:\\Documents\\Desktop\\three.txt:2 " && moves == 1);
+    CHECK(w.seen == "C:\\Documents\\Desktop\\three.txt:2 " && moves == 2);
     // A click on one of several, not dragged, picks it alone; Ctrl+click
     // takes one away; a click on the desktop itself, all.
     rig.click(file.x + 36, file.y + 16);

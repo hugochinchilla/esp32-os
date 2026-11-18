@@ -148,3 +148,31 @@ fast the rectangle follows the pointer there is not known.
 At 18:24 UTC the same day, after the pull request was open, the owner chose
 the first answer: the File manager and the desktop, complete. Nothing in the
 code changes for it.
+
+## 9. The first board turn found a defect
+
+The board turn of 2026-11-18 (commit `1960963`) passed every check but one. On
+the desktop a folder icon and a file icon (`big` and `welcome.txt`) were picked
+with a rectangle and the folder was dragged to an empty place. Neither icon
+moved, and `welcome.txt` was moved into `big`.
+
+Why: the drops come one after the other, the one held first. The folder was
+put down under the pointer; then the file was dropped at the same point, the
+desktop asked which icon is there that takes files, and the answer was the
+folder that had just arrived. The move made the desktop read its files again,
+which put the folder back where its saved place was. Two plain files worked
+because a file's icon takes no drops.
+
+The fix (`Icons::dropped`): whether the drag went onto an icon is decided by
+the first drop alone; when it went to a place on the desktop, the others
+follow it there and no icon is asked. `test_drag_several` now drags an icon
+that takes files together with a file; without the fix it fails on the same
+two things the board showed. 50 of 50 on the PC. Not compiled for the board
+and not run there yet.
+
+Two more things were noted in that turn and not reproduced, and are not
+explained: external RAM 187,668 bytes lower at the end of the session with all
+windows closed, and once the Display dialog left open with the Sky theme saved
+after a right click on the desktop, Escape and a click. Nothing in this branch
+was found that would do either; the list of a drag (1 KB) goes back when the
+drag ends, which the PC leak check covers.

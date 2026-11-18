@@ -415,8 +415,12 @@ void Icons::dropped(const char *path, int x, int y)
 {
     const bool first = !batch_;
     batch_ = wm_.drops_to_come() > 0;
-    // Worked out again: the server has already said the drag is over.
-    const int icon = target(path, x, y);
+    // Worked out again: the server has already said the drag is over. When
+    // the first went to a place on the desktop the others follow it there
+    // and no icon is asked: the first may be a folder, which is under the
+    // pointer by now and would take the files that came along with it (seen
+    // on the board, 2026-11-18).
+    const int icon = first || batch_onto_ ? target(path, x, y) : -1;
     const int mine = own(path);
     if (first) {
         batch_onto_ = icon >= 0;
