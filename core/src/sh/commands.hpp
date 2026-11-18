@@ -60,6 +60,7 @@ int cmd_top(Session &s, int argc, char **argv);
 int cmd_open(Session &s, int argc, char **argv);
 int cmd_run(Session &s, int argc, char **argv);
 int cmd_edit(Session &s, int argc, char **argv);
+int cmd_service(Session &s, int argc, char **argv);
 
 // ted.cpp
 int cmd_ted(Session &s, int argc, char **argv);

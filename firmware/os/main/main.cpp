@@ -48,6 +48,7 @@
 #include "core/net/posix_tcp.hpp"
 #include "core/net/rfb.hpp"
 #include "core/net/services.hpp"
+#include "core/net/switch.hpp"
 #include "core/net/telnet.hpp"
 #include "core/net/update.hpp"
 #include "core/init/init.hpp"
@@ -927,138 +928,204 @@ void ui_task(void *)
         },
         nullptr, true);
 
-    // "inetd": the network services, on one task. Their ports open here, so
-    // a machine whose file leaves the line out listens to nothing.
+    // The network services. "inetd" is the one task they all run on, asleep
+    // on all their sockets (core/net/services.hpp); "vncd" (the remote
+    // screen and its web page) and "telnetd" are services of it that the
+    // start-up file starts by their own lines and `service NAME stop` and
+    // `service NAME start` switch while the machine runs
+    // (core/net/switch.hpp, docs/journal/2026-11-18-services.md). A machine
+    // whose file leaves a line out does not listen on that port.
+    static net::PosixWait sockets;
+    static net::Services services(sockets, clock);
+    static net::PosixTcpListener vnc_port, telnet_port, update_port;
+    static net::PosixTcpPool web_port;
+    static EXT_RAM_BSS_ATTR net::WebGate web;
+    // The same screen in a browser: http://<the board's address>/ gives a
+    // viewer page, which talks VNC to the board through a WebSocket.
+    web.set_port(&web_port);
+    web.set_page(net::viewer_page(), net::viewer_page_size());
+    remote.set_listener(&vnc_port);
+    remote.set_listener(&web, 1);
+    static net::Switch vncd(services, remote,
+                            {[](void *) {
+                                 const bool vnc = vnc_port.listen(rfb::kPort);
+                                 const bool page = web_port.listen(80);
+                                 ESP_LOGI(TAG, "remote screen: VNC on port %d %s, the browser's page on port 80 %s",
+                                          rfb::kPort, vnc ? "open" : "not available", page ? "open" : "not available");
+                                 return vnc || page;
+                             },
+                             [](void *) {
+                                 // The services task: the viewer has been let go.
+                                 web.hang_up();
+                                 vnc_port.stop();
+                                 web_port.stop();
+                             },
+                             nullptr});
+    static net::Switch *telnetd = nullptr; // made the first time it starts: it needs the desktop
+    static proc::Pid inetd_pid = proc::kNone;
+
     first.add(
         "inetd",
         [](void *) {
-            static net::PosixTcpListener vnc_port;
-            if (radio && vnc_port.listen(rfb::kPort)) {
-                remote.set_listener(&vnc_port);
-                ESP_LOGI(TAG, "remote screen (VNC) on port %d", rfb::kPort);
-            } else {
-                ESP_LOGW(TAG, "remote screen (VNC) not available");
+            if (!radio) {
+                ESP_LOGW(TAG, "network services: no radio");
+                return false;
             }
-            // The same screen in a browser: http://<the board's address>/
-            // gives a viewer page, which talks VNC to the board through a
-            // WebSocket.
-            static net::PosixTcpPool web_port;
-            static EXT_RAM_BSS_ATTR net::WebGate web;
-            if (radio && web_port.listen(80)) {
-                web.set_port(&web_port);
-                web.set_page(net::viewer_page(), net::viewer_page_size());
-                remote.set_listener(&web, 1);
-                ESP_LOGI(TAG, "remote screen for a browser on port 80");
-            } else {
-                ESP_LOGW(TAG, "remote screen for a browser not available");
+            // Started a second time, after End Task, kill or service inetd
+            // stop: not before the task that ran the loop has said it is
+            // done (its message takes the row away), and then the loop is
+            // made new. Its services stay stopped until each is started.
+            if (inetd_pid != proc::kNone) {
+                ESP_LOGW(TAG, "network services: still ending; try again in a moment");
+                return false;
             }
-            // By name instead of by address: chinchilla.local, and viewers
-            // that browse the network list the board.
-            if (radio && wifi_announce("chinchilla", vnc_port.listening() ? rfb::kPort : 0, web_port.listening() ? 80 : 0)) {
+            services.restart();
+            // Updates over the network (tools/ota.py), port 3232, no password.
+            // Off unless C:\.config\network.ini says [update] enabled = true.
+            if (network.get_bool("update", "enabled", false) && update_port.listen(net::Update::kPort)) {
+                static OtaUpdater updater;
+                static net::Update service(updater, clock);
+                static bool joined = false;
+                if (!joined) {
+                    joined = true;
+                    service.set_listener(&update_port);
+                    service.set_log([](const char *line, void *) { ESP_LOGW(TAG, "%s", line); }, nullptr);
+                    service.on_written(
+                        [](bool restart, void *) {
+                            if (restart) {
+                                // The sender has its answer; a moment for it to
+                                // leave, then the new version starts.
+                                vTaskDelay(pdMS_TO_TICKS(300));
+                                esp_restart();
+                            }
+                        },
+                        nullptr);
+                    services.add(service);
+                }
+                ESP_LOGW(TAG, "updates over the network on port %d, no password", net::Update::kPort);
+            }
+            // By name instead of by address: chinchilla.local. vncd adds
+            // what viewers that browse the network look for.
+            if (wifi_announce("chinchilla", 0, 0)) {
                 ESP_LOGI(TAG, "answers to chinchilla.local (mDNS)");
             }
 
-            // Telnet: the command shell on port 23, with no password. On
-            // unless C:\.config\network.ini says [telnet] enabled = false (the
-            // owner's choice, docs/DECISIONS.md). One session at a time, on
-            // a task of its own that exists while someone is connected.
-            static net::PosixTcpListener telnet_port;
-            net::Telnet *telnet = nullptr;
-            // Its commands work with what the desktop sets up, so it needs
-            // the desktop started first.
-            const bool telnet_wanted = radio && network.get_bool("telnet", "enabled", true);
-            if (telnet_wanted && !first.started("desktop")) {
-                ESP_LOGW(TAG, "telnet not offered: the start-up file starts inetd before the desktop");
-            } else if (telnet_wanted && telnet_port.listen(net::Telnet::kPort)) {
-                static RtosMutex telnet_lock;
-                static RtosEvent telnet_typed, telnet_room, telnet_answered;
-                static RtosTasks telnet_tasks; // its own: start() is called from the services task
-                static sh::QueueCall telnet_ui(*s_queue, telnet_answered);
-                static net::TelnetKit telnet_kit;
-                telnet_kit.lock = &telnet_lock;
-                telnet_kit.typed = &telnet_typed;
-                telnet_kit.room = &telnet_room;
-                telnet_kit.tasks = &telnet_tasks;
-                const proc::Pid telnetd = proc::table().spawn_service("telnetd");
-                static EXT_RAM_BSS_ATTR net::Telnet service(shell::session_environment(&telnet_ui, telnetd), telnet_kit);
-                service.set_listener(&telnet_port);
-                telnet = &service;
-                ESP_LOGW(TAG, "telnet on port %d, no password", net::Telnet::kPort);
+            // One task for all of them, started even when nothing listens
+            // yet: a service may be started later by hand. Its stack is in
+            // internal RAM, like every task's here; the Normal class, just
+            // under this task, so a viewer that asks for a lot never holds
+            // the desktop back.
+            static ServicesTask context = {&services, &remote, [] {
+                                               web.hang_up();
+                                               vnc_port.stop();
+                                               web_port.stop();
+                                               telnet_port.stop();
+                                               update_port.stop();
+                                               msg::post(
+                                                   proc::kNone,
+                                                   [](const msg::Message &) {
+                                                       proc::table().exit(inetd_pid);
+                                                       inetd_pid = proc::kNone;
+                                                       s_services = nullptr;
+                                                       vncd.loop_ended();
+                                                       if (telnetd != nullptr) {
+                                                           telnetd->loop_ended();
+                                                       }
+                                                       first.down("inetd");
+                                                       first.down("vncd");
+                                                       first.down("telnetd");
+                                                       wifi_announce("chinchilla", 0, 0);
+                                                       ESP_LOGW(TAG, "network services (inetd) ended: the ports are closed");
+                                                   },
+                                                   nullptr, 0, 0, 1000);
+                                           }};
+            // Stoppable (backlog 5b), and its services switched one by one:
+            // the loop looks once a second whether it has been told to.
+            services.set_longest_sleep(1000000);
+            s_remote_input = &remote_input;
+            s_services = &services;
+            if (xTaskCreate(services_task, "inetd", kServicesStack, &context, rtos_priority(ports::Priority::Normal), nullptr) !=
+                pdPASS) {
+                s_services = nullptr;
+                ESP_LOGE(TAG, "network services: no memory for the task");
+                return false;
             }
-
-            // Updates over the network (tools/ota.py), port 3232, no password.
-            // Off unless C:\.config\network.ini says [update] enabled = true.
-            static net::PosixTcpListener update_port;
-            net::Update *update = nullptr;
-            if (radio && network.get_bool("update", "enabled", false) && update_port.listen(net::Update::kPort)) {
-                static OtaUpdater updater;
-                static net::Update service(updater, clock);
-                service.set_listener(&update_port);
-                service.set_log([](const char *line, void *) { ESP_LOGW(TAG, "%s", line); }, nullptr);
-                service.on_written(
-                    [](bool restart, void *) {
-                        if (restart) {
-                            // The sender has its answer; a moment for it to
-                            // leave, then the new version starts.
-                            vTaskDelay(pdMS_TO_TICKS(300));
-                            esp_restart();
-                        }
-                    },
-                    nullptr);
-                update = &service;
-                ESP_LOGW(TAG, "updates over the network on port %d, no password", net::Update::kPort);
-            }
-
-            // One task for all of them. Not started when there is nothing to
-            // listen on. Its stack is in internal RAM, like every task's
-            // here; the Normal class, just under this task, so a viewer that
-            // asks for a lot never holds the desktop back.
-            bool started = false;
-            if (vnc_port.listening() || web_port.listening() || telnet != nullptr || update != nullptr) {
-                static net::PosixWait sockets;
-                static net::Services services(sockets, clock);
-                static proc::Pid inetd_pid = proc::kNone, telnetd_pid = proc::kNone;
-                static ServicesTask context = {&services, &remote, [] {
-                                                   vnc_port.stop();
-                                                   web_port.stop();
-                                                   telnet_port.stop();
-                                                   update_port.stop();
-                                                   msg::post(
-                                                       proc::kNone,
-                                                       [](const msg::Message &) {
-                                                           proc::table().exit(inetd_pid);
-                                                           proc::table().exit(telnetd_pid);
-                                                           ESP_LOGW(TAG, "network services (inetd) ended: the ports are closed");
-                                                       },
-                                                       nullptr, 0, 0, 1000);
-                                               }};
-                telnetd_pid = proc::table().find_by_name("telnetd");
-                // Stoppable (backlog 5b): the loop looks once a second
-                // whether it has been told to end.
-                services.set_longest_sleep(1000000);
-                services.add(remote);
-                if (telnet != nullptr) {
-                    services.add(*telnet);
-                }
-                if (update != nullptr) {
-                    services.add(*update);
-                }
-                s_remote_input = &remote_input;
-                s_services = &services;
-                if (xTaskCreate(services_task, "inetd", kServicesStack, &context, rtos_priority(ports::Priority::Normal), nullptr) ==
-                    pdPASS) {
-                    inetd_pid = proc::table().spawn_service("inetd");
-                    proc::table().set_stop(
-                        inetd_pid, [](proc::Pid, proc::Signal, void *) { s_services->request_stop(); }, nullptr);
-                    started = true;
-                } else {
-                    s_services = nullptr;
-                    ESP_LOGE(TAG, "network services: no memory for the task");
-                }
-            }
-            return started;
+            inetd_pid = proc::table().spawn_service("inetd");
+            proc::table().set_stop(
+                inetd_pid, [](proc::Pid, proc::Signal, void *) { services.request_stop(); }, nullptr);
+            return true;
         },
         nullptr);
+    // service inetd stop: as End Task on it, and init holds it.
+    first.set_stop("inetd", [](void *) { services.request_stop(); });
+
+    // "vncd": the remote screen, for a VNC viewer on port 5900 and for a
+    // browser on port 80. No password (the owner's choice). It has no row
+    // of its own: it is not a task, only a service of inetd's.
+    first.add(
+        "vncd",
+        [](void *) {
+            if (!first.started("inetd")) {
+                ESP_LOGW(TAG, "vncd: inetd is not running (in the start-up file its line goes first)");
+                return false;
+            }
+            const char *why = "";
+            if (!vncd.start(why)) {
+                ESP_LOGW(TAG, "vncd not started: %s", why);
+                return false;
+            }
+            wifi_announce("chinchilla", vnc_port.listening() ? rfb::kPort : 0, web_port.listening() ? 80 : 0);
+            return true;
+        },
+        nullptr);
+    first.set_stop("vncd", [](void *) {
+        vncd.stop();
+        wifi_announce("chinchilla", 0, 0); // viewers that browse the network stop listing the board
+    });
+
+    // "telnetd": the command shell on port 23, with no password (the
+    // owner's choice, docs/DECISIONS.md). One session at a time, on a task
+    // of its own that exists while someone is connected. Its commands work
+    // with what the desktop sets up, so it needs the desktop started first.
+    first.add(
+        "telnetd",
+        [](void *) {
+            if (!first.started("inetd") || !first.started("desktop")) {
+                ESP_LOGW(TAG, "telnetd: the desktop and inetd are not both running (in the start-up file their "
+                              "lines go first)");
+                return false;
+            }
+            static RtosMutex telnet_lock;
+            static RtosEvent telnet_typed, telnet_room, telnet_answered;
+            static RtosTasks telnet_tasks; // its own: start() is called from the services task
+            static sh::QueueCall telnet_ui(*s_queue, telnet_answered);
+            static net::TelnetKit telnet_kit = {&telnet_lock, &telnet_typed, &telnet_room, &telnet_tasks};
+            // Whose memory a session's is: the row telnetd has this time.
+            static const sh::Env env = shell::session_environment(&telnet_ui, proc::kNone);
+            static EXT_RAM_BSS_ATTR net::Telnet service(env, telnet_kit);
+            static net::Switch one(services, service,
+                                   {[](void *) { return telnet_port.listen(net::Telnet::kPort); },
+                                    [](void *) { telnet_port.stop(); }, nullptr},
+                                   "telnetd");
+            if (telnetd == nullptr) {
+                service.set_listener(&telnet_port);
+                one.on_row([](proc::Pid pid, void *) { shell::set_session_owner(env, pid); }, nullptr);
+                telnetd = &one;
+            }
+            const char *why = "";
+            if (!one.start(why)) {
+                ESP_LOGW(TAG, "telnetd not started: %s", why);
+                return false;
+            }
+            ESP_LOGW(TAG, "telnet on port %d, no password", net::Telnet::kPort);
+            return true;
+        },
+        nullptr);
+    first.set_stop("telnetd", [](void *) {
+        if (telnetd != nullptr) {
+            telnetd->stop();
+        }
+    });
 
     // "console": the command shell on the serial port, on the same wire as
     // the debug link (core/sh/console.hpp). What arrives outside a frame is

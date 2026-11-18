@@ -63,6 +63,7 @@ to flash back, since a mistake there cuts the link used to diagnose it.
 
 Items 1, 2, 6, 9, 12 and 13 touch different files and can be separate branches
 at the same time.
+| 62 | Services (the owner's request, 2026-11-18): `telnetd` and `vncd` are lines of the start-up file; Start > Settings > Services ticks them on and off for the next start; `service NAME stop` and `service NAME start` in a terminal switch one now, and what is stopped by hand is not started again by init until the next start | M | 17, 39 | Yes | built on a branch (`claude/project-thread-wi1e1l`): PC tests pass, the firmware compiles; waiting for the board. [Journal](journal/2026-11-18-services.md) |
 | | **The look** | | | | |
 | 28 | Taskbar without the dead quick-launch icons; Back and Up with their own icons in the File manager | S | | | done (checked on the board 2026-11-16). [Journal](journal/2026-11-16-icons.md) |
 | 29 | Refined icons for every program, at 32x32 and 16x16. The owner picks from drawn proposals | M | | | done (checked on the board 2026-11-17). [Journal](journal/2026-11-16-icon-proposals.md) |

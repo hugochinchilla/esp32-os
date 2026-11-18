@@ -475,21 +475,38 @@ bool wifi_begin()
 
 bool wifi_announce(const char *name, int vnc_port, int web_port)
 {
-    esp_err_t err = mdns_init();
-    if (err == ESP_OK) {
-        err = mdns_hostname_set(name);
+    // Called again whenever what is offered changes (vncd started or
+    // stopped): the name stays, the services are announced afresh.
+    static bool started = false;
+    if (!started) {
+        esp_err_t err = mdns_init();
+        if (err == ESP_OK) {
+            err = mdns_hostname_set(name);
+        }
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "mDNS did not start: %s", esp_err_to_name(err));
+            return false;
+        }
+        mdns_instance_name_set("Chinchilla");
+        started = true;
     }
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "mDNS did not start: %s", esp_err_to_name(err));
-        return false;
+    // Only what was announced is taken back: mDNS logs an error for one
+    // that is not there.
+    static bool vnc_told = false, web_told = false;
+    if (vnc_told) {
+        mdns_service_remove("_rfb", "_tcp");
+        vnc_told = false;
     }
-    mdns_instance_name_set("Chinchilla");
+    if (web_told) {
+        mdns_service_remove("_http", "_tcp");
+        web_told = false;
+    }
     if (vnc_port != 0) {
         // What VNC viewers look for when they list the computers around.
-        mdns_service_add("Chinchilla", "_rfb", "_tcp", static_cast<uint16_t>(vnc_port), nullptr, 0);
+        vnc_told = mdns_service_add("Chinchilla", "_rfb", "_tcp", static_cast<uint16_t>(vnc_port), nullptr, 0) == ESP_OK;
     }
     if (web_port != 0) {
-        mdns_service_add("Chinchilla", "_http", "_tcp", static_cast<uint16_t>(web_port), nullptr, 0);
+        web_told = mdns_service_add("Chinchilla", "_http", "_tcp", static_cast<uint16_t>(web_port), nullptr, 0) == ESP_OK;
     }
     return true;
 }

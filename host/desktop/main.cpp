@@ -591,6 +591,13 @@ void Machine::start()
             return true;
         },
         nullptr);
+    // Its two services, which the file names too: nothing behind them
+    // here, so their lines succeed and Start > Settings > Services has
+    // lines to change.
+    for (const char *name : {"telnetd", "vncd"}) {
+        init_process.add(name, [](void *) { return true; }, nullptr);
+        init_process.set_stop(name, [](void *) {});
+    }
     shell::startup_trouble(init_process.boot(storage_));
     screen_.set_damage_listener([](const gfx::Rect &, void *self) { static_cast<Machine *>(self)->dirty_ = true; },
                                 this);

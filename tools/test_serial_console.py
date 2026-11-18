@@ -16,7 +16,7 @@ import dbg  # noqa: E402
 
 
 def main():
-    env = dict(os.environ, CHINCHILLA_STARTUP="desktop:once;inetd:once;console:once",
+    env = dict(os.environ, CHINCHILLA_STARTUP="desktop:once;inetd:once;telnetd:once;console:once",
                ASAN_OPTIONS="detect_leaks=0")
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
@@ -78,6 +78,98 @@ def main():
         # The desktop took none of it as keys: its windows are as they were.
         assert [w["title"] for w in board.windows()] == ["Welcome to Chinchilla", "About Chinchilla"]
 
+        # One service stopped and started by hand (the `service` command):
+        # telnetd stopped, its port refuses and its row goes while inetd
+        # stays; started, it answers again with a new row.
+        def answers():
+            try:
+                socket.create_connection(("127.0.0.1", telnet_port), timeout=2).close()
+                return True
+            except OSError:
+                return False
+
+        def wait_for(what, why):
+            end = time.monotonic() + 5
+            while not what():
+                assert time.monotonic() < end, why
+                time.sleep(0.05)
+
+        def processes():
+            board.console_send(b"ps\r")
+            return until(b"C:\\> ").decode()
+
+        assert answers()
+        board.console_send(b"service\r")
+        listing = until(b"C:\\> ").decode()
+        assert "telnetd    running" in listing and "inetd      running" in listing, listing
+        assert "taskbar    running, comes back if it ends" in listing and "vncd       stopped" in listing, listing
+        board.console_send(b"service telnet stop\r")
+        assert b"Stopped until the next start" in until(b"C:\\> ")
+        wait_for(lambda: not answers(), "the telnet port still answers after service telnet stop")
+        wait_for(lambda: "telnetd" not in processes(), "the telnetd row is still there")
+        assert "inetd" in processes()
+        board.console_send(b"service telnetd\r")
+        assert b"telnetd: stopped by hand, until the next start" in until(b"C:\\> ")
+        board.console_send(b"service telnetd stop\r")
+        assert b"it is not running" in until(b"C:\\> ")
+        board.console_send(b"service telnetd start\r")
+        reply = until(b"C:\\> ")
+        assert b"service:" not in reply, reply
+        assert answers()
+        assert "telnetd" in processes()
+        # A session that is connected is hung up on by the stop.
+        caller = socket.create_connection(("127.0.0.1", telnet_port), timeout=2)
+        caller.settimeout(5)
+        got = b""
+        while b"C:\\> " not in got:
+            got += caller.recv(4096)
+        board.console_send(b"service telnetd stop\r")
+        until(b"C:\\> ")
+        while True:
+            try:
+                if caller.recv(4096) == b"":
+                    break
+            except ConnectionError:
+                break
+        caller.close()
+        wait_for(lambda: not answers(), "the telnet port still answers")
+        # The port closes a moment before the loop says it has stopped:
+        # until then a start is refused.
+        def started():
+            board.console_send(b"service telnetd start\r")
+            return b"service:" not in until(b"C:\\> ")
+
+        wait_for(started, "telnetd did not start again")
+        assert answers()
+        # What cannot be stopped this way, and what is not there.
+        # inetd itself, by hand: everything in it stops, and it starts
+        # again, its services each by its own start.
+        board.console_send(b"service inetd stop\r")
+        assert b"Stopped until the next start" in until(b"C:\\> ")
+        wait_for(lambda: not answers(), "the telnet port still answers after service inetd stop")
+        wait_for(lambda: "inetd" not in processes() and "telnetd" not in processes(), "the rows are still there")
+        board.console_send(b"service telnetd start\r")
+        assert b"it did not start" in until(b"C:\\> ")
+
+        def inetd_started():
+            board.console_send(b"service inetd start\r")
+            return b"service:" not in until(b"C:\\> ")
+
+        wait_for(inetd_started, "inetd did not start again")
+        assert "inetd" in processes() and not answers()
+        wait_for(started, "telnetd did not start after inetd came back")
+        assert answers()
+        board.console_send(b"service nothing start\r")
+        assert b"there is no such service" in until(b"C:\\> ")
+        board.console_send(b"service telnetd restart\r")
+        assert b"it is start, stop or status" in until(b"C:\\> ")
+        rows = {}
+        for line in processes().splitlines():
+            fields = line.split()
+            if len(fields) >= 6 and fields[0].isdigit():
+                rows[fields[5]] = fields
+        assert "telnetd" in rows and "inetd" in rows, rows
+
         # The network services are a process that can be ended (backlog 5b):
         # kill it and its ports close and its rows go. The console, which is
         # protected, cannot be.
@@ -101,6 +193,18 @@ def main():
         except OSError:
             pass
         assert board.ping() < 1.0
+        # With the loop gone its services count as stopped, and cannot be
+        # started until inetd is (what the board turn of 2026-11-18 found
+        # broken: a second inetd ended at once).
+        board.console_send(b"service telnetd\r")
+        assert b"telnetd: stopped" in until(b"C:\\> ")
+        board.console_send(b"service telnetd start\r")
+        assert b"it did not start" in until(b"C:\\> ")
+        wait_for(inetd_started, "inetd did not start after kill")
+        wait_for(started, "telnetd did not start after inetd came back from kill")
+        assert answers()
+        listing = processes()
+        assert "inetd" in listing and "telnetd" in listing, listing
 
         # exit: the next session greets.
         board.console_send(b"exit\r")

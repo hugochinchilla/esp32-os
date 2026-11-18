@@ -17,6 +17,7 @@
 #include "core/net/wifi.hpp"
 #include "core/proc/table.hpp"
 #include "core/tty/screen.hpp"
+#include "core/init/init.hpp"
 #include "core/sh/sh.hpp"
 #include "core/shell/boot.hpp"
 #include "core/tty/tty.hpp"
@@ -404,6 +405,52 @@ void test_desktop_commands()
     CHECK_TEXT(run(m, d, "edit"), "");
     CHECK_TEXT(run(m, d, "edit notes.txt D:\\x.txt"), "");
     CHECK(desktop.log == "edit <new>\nedit C:\\docs\\notes.txt\nedit D:\\x.txt\n");
+}
+
+// service: what init has, and one of them stopped and started by hand.
+void test_service()
+{
+    Machine m;
+    sh::Session s(m.terminal, m.env);
+    CHECK_TEXT(run(m, s, "service", 1), "service: there is no init here to ask\n");
+    struct Part {
+        int starts = 0, stops = 0;
+        static bool start(void *self)
+        {
+            static_cast<Part *>(self)->starts++;
+            return true;
+        }
+    };
+    static Part desk, telnet, vnc;
+    desk = telnet = vnc = {};
+    init::Init first(m.procs);
+    first.add("desktop", &Part::start, &desk, true);
+    first.add("telnetd", &Part::start, &telnet);
+    first.add("vncd", &Part::start, &vnc);
+    first.set_stop("telnetd", [](void *self) { static_cast<Part *>(self)->stops++; });
+    first.set_stop("vncd", [](void *self) { static_cast<Part *>(self)->stops++; });
+    const char file[] = "desktop:once\ntelnetd:once\nvncd:off\n";
+    CHECK(first.run_text(file, sizeof(file) - 1) == 0);
+    CHECK_TEXT(run(m, s, "service"),
+               "  NAME       STATE\n  desktop    running\n  telnetd    running\n  vncd       stopped\n");
+    CHECK_TEXT(run(m, s, "service telnetd"), "telnetd: running\n");
+    CHECK_TEXT(run(m, s, "service vnc status"), "vncd: stopped\n");
+    // Stopped by hand, by either name; it says until when.
+    CHECK_TEXT(run(m, s, "service telnet stop"),
+               "Stopped until the next start of the machine, or service NAME start.\n");
+    CHECK(telnet.stops == 1 && !first.started("telnetd"));
+    CHECK_TEXT(run(m, s, "service telnetd status"), "telnetd: stopped by hand, until the next start\n");
+    CHECK_TEXT(run(m, s, "service telnetd stop", 1), "service: telnetd: it is not running\n");
+    CHECK_TEXT(run(m, s, "service TELNETD start"), "");
+    CHECK(telnet.starts == 2 && first.started("telnetd"));
+    CHECK_TEXT(run(m, s, "service telnetd start", 1), "service: telnetd: it is running already\n");
+    // One the file left off is started by hand too.
+    CHECK_TEXT(run(m, s, "service vncd start"), "");
+    CHECK(vnc.starts == 1 && first.started("vncd"));
+    CHECK_TEXT(run(m, s, "service desktop stop", 1), "service: desktop: it cannot be stopped this way\n");
+    CHECK_TEXT(run(m, s, "service nothing stop", 1), "service: nothing: there is no such service (service lists them)\n");
+    CHECK_TEXT(run(m, s, "service vncd restart", 1), "service: restart: it is start, stop or status\n");
+    CHECK(run(m, s, "help service").find("service [NAME [start | stop | status]]") == 0);
 }
 
 /* ---- Folders: cd, pwd, ls, dir, mkdir, rmdir ---------------------------------------- */
@@ -1187,6 +1234,7 @@ int main()
     test_files();
     test_pipes();
     test_desktop_commands();
+    test_service();
     test_dates();
     test_log();
     test_processes();

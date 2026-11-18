@@ -147,4 +147,10 @@ sh::Env session_environment(sh::UiCall *ui, proc::Pid owner)
     return env;
 }
 
+void set_session_owner(const sh::Env &env, proc::Pid owner)
+{
+    // The memory of a session_environment() is always one of these.
+    static_cast<SessionMemory *>(env.memory)->owner = owner;
+}
+
 } // namespace shell
