@@ -236,3 +236,26 @@ confirm", the owner wrote:
 
 Taken as his yes to all of them, as built. `docs/DECISIONS.md` says so now.
 The board check is still to come.
+
+## On the board (2026-11-18, 5a4be63)
+
+App-flashed on the BIOS layout; `chess.app` (50,624 bytes) installed in
+`C:\Programs` by the firmware. Start > Programs shows Chess with the knight;
+opening it shows the board and the New game dialog. At level 1 as White,
+three moves (one by drag, two by click-click) were answered at once, with the
+yellow squares and the captured row (+1) showing. Thinking times of the
+computer, from the second click to "Your move.", including the polling of the
+screen: level 4 1.5, 1.5 and 1.2 s; level 5 10.3, 10.3 and 10.3 s. During a
+think the hourglass is over the window, and the window could be dragged and
+the Game menu opened. The job task `chess` runs at priority 3 and takes 98 %
+of a core while thinking; the UI task stays at 0.9 % and the Chess task at
+0 %; `dbg.py misses` and the log show no missed refills (apart from the debug
+link's own) and no watchdog lines. Take back (Ctrl+Z) during a think, then F2
+and a new game as Black during the same think: no hang, the computer opened
+as White and the board turned. Board Brown and Pieces Symbols were kept in
+`C:\.config\chess.ini` across a close and a reopen. Closing during a level 5
+think ended the process within 0.4 s; three rounds of open, play and close
+left internal and external memory identical. Stacks never used: the Chess
+task 3,040 bytes of 6 KB, the `chess` job 5,468 of 8 KB. The Editor's save of
+a 300 KB file (now through `start_job`) ended unlocked and unmodified;
+Culebra and Cactus Patch still open.
