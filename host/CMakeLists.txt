@@ -148,6 +148,9 @@ target_link_libraries(test_os PRIVATE core Threads::Threads)
 add_test(NAME os COMMAND test_os)
 add_test(NAME os_calls
          COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/check_os_calls.py ${CMAKE_CURRENT_SOURCE_DIR}/..)
+# The list in docs/DECISIONS.md is written from the files in docs/decisions/.
+add_test(NAME decisions_index
+         COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/decisions_index.py --check ${CMAKE_CURRENT_SOURCE_DIR}/..)
 # Programs loaded from files (backlog 27). The sample program is built as a
 # shared library of the PC and loaded by the PC's own loader; the test
 # program lets it find the OS calls by name, as the firmware does.
