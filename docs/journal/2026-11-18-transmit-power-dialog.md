@@ -1,7 +1,7 @@
 # Transmit power in the Network program
 
-2026-11-18. Backlog item 57. Built and tested on the PC; the firmware part
-has not run.
+2026-11-18. Backlog item 57. Built and tested on the PC; the firmware
+compiled and linked in the cloud container, and has not run.
 
 ## What was asked
 
@@ -98,7 +98,9 @@ Tested on the PC:
   closes alone or with the panel.
 - The whole PC suite and `tools/check_os_calls.py` pass.
 
-Not tested: nothing here has run on the board. See "What is left".
+The firmware compiled and linked with ESP-IDF v5.5 in the cloud container
+(`idf.py build`, no warnings). Not tested: nothing here has run on the
+board. See "What is left".
 
 ## What was learned
 
