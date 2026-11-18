@@ -439,6 +439,7 @@ private:
     void paint_desktop(const gfx::RectList &clip);
     void paint_window(Window &w, const gfx::RectList &clip);
     void paint_frame(gfx::Canvas &c, Window &w);
+    template <typename Fn> void paint_border(gfx::Canvas &c, const Rect &f, const gfx::RectList &parts, Fn paint);
     void paint_flat_title(gfx::Canvas &c, Window &w, const gfx::Rect &title, bool active);
     void paint_menu_bar(gfx::Canvas &c, Window &w);
     void paint_popup(int level, const gfx::RectList &clip);
