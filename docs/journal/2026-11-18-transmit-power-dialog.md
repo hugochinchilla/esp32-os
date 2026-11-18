@@ -118,3 +118,17 @@ board. See "What is left".
   `tools/dbg.py misses` stays clean.
 - Whether the driver takes a new top power on a link that is already up,
   or only from the next join, is to be seen there.
+
+## On the board (2026-11-18, be00424)
+
+App-flashed on the BIOS layout. The boot log says `wifi: transmit power 20 dBm
+(ESP_OK)` with no setting in the file, and Wi-Fi joins as before. Network >
+Advanced... (Alt+A) opens "Advanced" with the slider on 20 dBm. Home and OK
+log `transmit power 2 dBm (ESP_OK)` at once, with no restart, and write
+`tx_power_dbm = 2` under `[wifi]` in `C:\.config\network.ini` (the file held
+nothing else, so the other sections could not be compared). At 2 dBm the panel
+kept "Connected" (signal -56 dBm), no rejoin showed in the log, a ping of
+three packets lost none and the web page answered. After a restart the log says
+2 dBm and the dialog opens on 2. End and OK log and write 20 again; End then
+Escape writes and logs nothing. The saved network was untouched; `dbg.py
+misses`: none. `tx_power_dbm` was left at 20.
