@@ -238,9 +238,28 @@ void open_trash();
 void open_about();   // about.cpp
 void open_welcome(); // welcome.cpp
 void open_gallery(); // gallery.cpp
-// After files moved or went away: the desktop, the File manager windows
-// and the Trash window read their folders again.
-void files_changed();
-void refresh_folder_windows(); // file_manager.cpp
+// The folders that changed, as fs::Storage's notices told (desktop.cpp):
+// their keys (fs::path::key), or `all` when there were more than fit.
+struct FolderKeys {
+    uint32_t key[8] = {};
+    int count = 0;
+    bool all = false;
+    // True if `folder` may be one of them.
+    bool has(const char *folder) const
+    {
+        uint32_t k = fs::path::key(folder);
+        k = k != 0 ? k : 1;
+        for (int i = 0; i < count; i++) {
+            if (key[i] == k) {
+                return true;
+            }
+        }
+        return all;
+    }
+};
+// The File manager's windows on those folders, or inside them, read their
+// folders again (file_manager.cpp). Nobody calls this after moving or
+// deleting a file: the notice does.
+void refresh_folder_windows(const FolderKeys &changed);
 
 } // namespace shell

@@ -185,7 +185,6 @@ void finish(Paste *p, bool stopped)
         os::clipboard::clear();
     }
     os::release(p);
-    files_changed();
     if (failed) {
         message_box("Paste", text);
     }
