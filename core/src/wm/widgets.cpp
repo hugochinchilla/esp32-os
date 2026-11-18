@@ -660,6 +660,16 @@ void ScrollBar::step()
     }
 }
 
+bool ScrollBar::wheel(const WheelMsg &m)
+{
+    const int notches = vertical_ ? m.down : m.right;
+    if (notches == 0 || maximum_ == 0 || held_ != 0) {
+        return false;
+    }
+    set_value(value_ + notches * wheel_step());
+    return true;
+}
+
 void ScrollBar::repeat(void *self)
 {
     static_cast<ScrollBar *>(self)->step();

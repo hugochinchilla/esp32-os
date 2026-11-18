@@ -71,7 +71,7 @@ and the same sequence number. Every reply payload starts with a status byte:
 | 0x02 | Info | None | Protocol version (1 byte), width (2), height (2), pixel format (1), firmware name (text) |
 | 0x03 | Screenshot | None, or flags (1): bit 0 leaves out the mouse pointer, bit 1 says the computer understands encoding 2 | Width (2), height (2), pixel format (1), encoding (1), picture size in bytes (4). Followed by picture frames, see below |
 | 0x04 | Key | Key code (2), pressed (1: 1 down, 0 up) | None |
-| 0x05 | Mouse | Mode (1: 0 movement, 1 position), x (2, signed), y (2, signed), buttons (1), wheel (1, signed) | None |
+| 0x05 | Mouse | Mode (1: 0 movement, 1 position), x (2, signed), y (2, signed), buttons (1), wheel (1, signed: notches, positive is up), and optionally the wheel sideways (1, signed: positive is right) | None |
 | 0x06 | Stats | None | 4-byte numbers: uptime in ms, free internal RAM, free external RAM, frames shown, frames received, receive errors, key events, mouse events, time spent filling video lines in µs (wraps; the first firmware sent only the first eight) |
 | 0x07 | Reboot | None, or one byte of flags: bit 0 makes the next start a fast one (no start-up screens), once | None. The board restarts after replying |
 | 0x08 | Windows | None | The windows as JSON text, see below |

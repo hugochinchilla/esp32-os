@@ -510,6 +510,14 @@ public:
 
     bool wants_mouse() const override { return true; }
     bool focusable() const override { return true; }
+    // A row of icons for each notch: the rows are tall.
+    bool wheel(const wm::WheelMsg &m) override
+    {
+        if (bar_.maximum() > 0 && m.down != 0) {
+            bar_.set_value(bar_.value() + m.down);
+        }
+        return true;
+    }
     void mouse(const wm::MouseMsg &m) override
     {
         if (m.kind == wm::MouseKind::Down) {

@@ -25,6 +25,16 @@ struct MouseMsg {
     bool double_click = false; // a Down that completes a double click
 };
 
+// The wheel turned (or two fingers moved on a trackpad) with the pointer at
+// (x, y), in the coordinates of who is told. Notches: `down` is positive
+// towards the end of what is shown, `right` towards its right side.
+struct WheelMsg {
+    int x;
+    int y;
+    int down;
+    int right;
+};
+
 // Modifier keys held, as bits.
 enum Modifier : uint8_t { kShift = 1, kCtrl = 2, kAlt = 4, kGui = 8 };
 
@@ -102,6 +112,12 @@ public:
     virtual void paint(gfx::Canvas &c) = 0;
     virtual bool wants_mouse() const { return false; }
     virtual void mouse(const MouseMsg &) {}
+    // The wheel, with the pointer over the widget. Returns true if the
+    // widget is one that scrolls (even when it is at its end).
+    virtual bool wheel(const WheelMsg &) { return false; }
+    // A scroll bar that stands for the window's contents: the wheel goes to
+    // it when what is under the pointer does not scroll by itself.
+    virtual bool window_bar() const { return false; }
     // Keyboard: widgets that can take the focus get keys and text.
     virtual bool focusable() const { return false; }
     // Returns true if the key was used.
@@ -257,6 +273,11 @@ public:
     // Mouse messages for the client area. The default routes them to the
     // widget under the pointer, which keeps them until the button is let go.
     virtual void mouse(const MouseMsg &m);
+    // The wheel with the pointer over the client area (client coordinates),
+    // whether or not the window is the one in use. The default gives it to
+    // the widget under the pointer; if that does not scroll, to the window's
+    // scroll bars (a picture with a bar beside it scrolls this way).
+    virtual void wheel(const WheelMsg &m);
     // The right button went down in the client area (client coordinates).
     // Not captured: there is no matching release.
     virtual void right_click(int /*x*/, int /*y*/) {}

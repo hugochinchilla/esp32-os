@@ -230,6 +230,12 @@ struct Rig {
     {
         wm.mouse({true, static_cast<int16_t>(x), static_cast<int16_t>(y), buttons, 0});
     }
+    // The wheel turned with the pointer there: up is positive, right is.
+    void wheel(int x, int y, int up, int right = 0, uint8_t buttons = 0)
+    {
+        wm.mouse({true, static_cast<int16_t>(x), static_cast<int16_t>(y), buttons, static_cast<int8_t>(up),
+                  static_cast<int8_t>(right)});
+    }
     void double_click(int x, int y)
     {
         move(x, y, 0);
@@ -1100,6 +1106,98 @@ private:
 };
 constexpr const char *WidgetWindow::kItems[20];
 
+// The wheel scrolls what is under the pointer (backlog item 53).
+class BarsWindow final : public wm::Window {
+public:
+    BarsWindow() : Window("Bars", {300, 250, 300, 200}, nullptr), down({250, 0, 16, 150}, true), across({0, 150, 250, 16}, false)
+    {
+        add(down);
+        add(across);
+        down.set_range(1000, 400); // a picture, in pixels
+        across.set_range(40, 10);
+    }
+    wm::ScrollBar down, across;
+};
+
+static void test_wheel()
+{
+    Rig rig;
+    WidgetWindow w;
+    BarsWindow bars;
+    rig.wm.add(w);
+    rig.wm.add(bars);
+    rig.wm.start();
+    CHECK(rig.wm.active() == &bars);
+    const Rect c = w.client();
+    auto over = [&](const wm::Widget &wd) { return std::pair<int, int>(c.x + wd.rect.x + 5, c.y + wd.rect.y + 5); };
+
+    // Over the list: the list, three rows a notch, and the window stays
+    // behind, not the one in use.
+    auto [lx, ly] = over(w.list);
+    rig.wheel(lx, ly, -1);
+    CHECK(w.list.top() == 3 && w.bar.value() == 0);
+    CHECK(rig.wm.active() == &bars);
+    rig.wheel(lx, ly, -2);
+    CHECK(w.list.top() == 9);
+    rig.wheel(lx, ly, -100); // to the end and no further
+    CHECK(w.list.top() == 20 - w.list.visible_rows());
+    rig.wheel(lx, ly, 1);
+    CHECK(w.list.top() == 20 - w.list.visible_rows() - 3);
+    CHECK(w.list.selected() == -1); // scrolling picks nothing
+    rig.wheel(lx, ly, 100);
+    CHECK(w.list.top() == 0 && w.bar.value() == 0); // at its end the list keeps the wheel
+
+    // Over the scroll bar itself, over a control that does not scroll and
+    // over the bare window: the window's bar.
+    auto [bx, by] = over(w.bar);
+    rig.wheel(bx, by, -1);
+    CHECK(w.bar.value() == 3);
+    auto [kx, ky] = over(w.check);
+    rig.wheel(kx, ky, -1);
+    CHECK(w.bar.value() == 6 && !w.check.checked());
+    rig.wheel(c.x + 150, c.y + 300, 1);
+    CHECK(w.bar.value() == 3);
+    CHECK(rig.no_stale_pixels());
+
+    // Not on the title bar, and not with a button held.
+    rig.wheel(c.x + 150, w.frame().y + 8, -1);
+    rig.wheel(c.x + 150, c.y + 300, -1, 0, 1);
+    rig.wheel(c.x + 150, c.y + 300, 0, 0, 0);
+    CHECK(w.bar.value() == 3);
+
+    // A bar counted in pixels goes an eighth of the view a notch. Sideways:
+    // two fingers, or the wheel with Shift held.
+    const Rect bc = bars.client();
+    rig.wheel(bc.x + 230, bc.y + 50, -1);
+    CHECK(bars.down.value() == 50 && bars.across.value() == 0);
+    rig.wheel(bc.x + 230, bc.y + 50, 0, 1);
+    CHECK(bars.down.value() == 50 && bars.across.value() == 3);
+    rig.wheel(bc.x + 230, bc.y + 50, 1, -1); // both at once
+    CHECK(bars.down.value() == 0 && bars.across.value() == 0);
+    rig.wm.key(wm::key::LeftShift, true);
+    rig.wheel(bc.x + 230, bc.y + 50, -2);
+    rig.wm.key(wm::key::LeftShift, false);
+    CHECK(bars.down.value() == 0 && bars.across.value() == 6);
+    // While the thumb is held the wheel does nothing.
+    const Rect thumb = bars.down.thumb();
+    rig.move(bc.x + 250 + 8, bc.y + thumb.y + 3, 1);
+    rig.wheel(bc.x + 250 + 8, bc.y + thumb.y + 3, -1, 0, 1);
+    CHECK(bars.down.value() == 0);
+    rig.move(bc.x + 250 + 8, bc.y + thumb.y + 3, 0);
+
+    // A window with a dialog over it is not scrolled.
+    TestWindow dialog("Dialog", {40, 300, 150, 100}, 0x03);
+    dialog.set_dialog(true);
+    dialog.set_modal(&w);
+    rig.wm.add(dialog);
+    rig.wheel(bx, by, -1);
+    CHECK(w.bar.value() == 3);
+    rig.wm.close(dialog);
+    rig.wheel(bx, by, -1);
+    CHECK(w.bar.value() == 6);
+    CHECK(rig.no_stale_pixels());
+}
+
 // Desktop icons stay where they are dragged to (backlog item 41).
 static int g_moves = 0;
 static char g_dropped[64] = "";
@@ -1682,6 +1780,7 @@ int main()
     test_widgets();
     test_timers_and_clock();
     test_modal();
+    test_wheel();
     if (failures == 0) {
         printf("all tests passed\n");
     }

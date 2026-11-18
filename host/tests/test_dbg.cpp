@@ -224,6 +224,13 @@ static void test_input()
     CHECK(rig.input.mice == 1 && !rig.input.last_mouse.absolute);
     CHECK(rig.input.last_mouse.x == -3 && rig.input.last_mouse.y == 300);
     CHECK(rig.input.last_mouse.buttons == 1 && rig.input.last_mouse.wheel == -1);
+    CHECK(rig.input.last_mouse.wheel_x == 0);
+    // The same with the wheel sideways, 2 to the right: an eighth byte.
+    got = rig.request(dbg::kMouse, 4, {1, 10, 0, 20, 0, 0, 0, 2});
+    CHECK(got.size() == 1 && got[0].payload == Bytes({dbg::kOk}));
+    CHECK(rig.input.mice == 2 && rig.input.last_mouse.wheel == 0 && rig.input.last_mouse.wheel_x == 2);
+    got = rig.request(dbg::kMouse, 5, {1, 10, 0, 20, 0, 0, 0, 2, 0});
+    CHECK(got.size() == 1 && got[0].payload == Bytes({dbg::kBadArguments}));
 }
 
 static uint64_t get64(const Bytes &p, size_t at)

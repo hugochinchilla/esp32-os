@@ -376,6 +376,14 @@ void test_size_and_scroll_bar()
     click(bar_x, c.bottom() - 6);
     wait(20000);
     CHECK(s->scrolled() == 0);
+    // The wheel over the grid goes back an eighth of the screen a notch
+    // (three lines at least), and returns.
+    desktop.mouse({true, static_cast<int16_t>(c.x + 100), static_cast<int16_t>(c.y + 100), 0, 1});
+    wait(20000);
+    CHECK(s->scrolled() == (rows / 8 < 3 ? 3 : rows / 8));
+    desktop.mouse({true, static_cast<int16_t>(c.x + 100), static_cast<int16_t>(c.y + 100), 0, -5});
+    wait(20000);
+    CHECK(s->scrolled() == 0);
     // The keys are still the grid's after a click on the bar.
     enter("echo after");
     CHECK(row(s->cursor_row() - 1) == "after");

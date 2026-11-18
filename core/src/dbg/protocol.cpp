@@ -181,7 +181,7 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
         break;
 
     case kMouse: {
-        if (args_size != 7) {
+        if (args_size != 7 && args_size != 8) { // the eighth, the wheel sideways, may be left out
             reply(type, seq, kBadArguments, nullptr, 0);
             break;
         }
@@ -191,6 +191,7 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
         event.y = static_cast<int16_t>(get16(args + 3));
         event.buttons = args[5];
         event.wheel = static_cast<int8_t>(args[6]);
+        event.wheel_x = args_size == 8 ? static_cast<int8_t>(args[7]) : 0;
         mouse_events_++;
         reply(type, seq, kOk, nullptr, 0); // first: the event may restart the board
         input_.mouse(event);

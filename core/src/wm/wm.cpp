@@ -1079,7 +1079,7 @@ void Wm::mouse(const ports::MouseEvent &event)
         pointer_y_ = y;
         pointer_.set_position(x, y);
         if (buttons != 0 || dx <= -kSaverWakeMove || dx >= kSaverWakeMove || dy <= -kSaverWakeMove ||
-            dy >= kSaverWakeMove) {
+            dy >= kSaverWakeMove || event.wheel != 0 || event.wheel_x != 0) {
             swallow_button_ = buttons & 1;
             // A right button held now is not a new press later either.
             buttons_ = static_cast<uint8_t>((buttons_ & ~2) | (buttons & 2));
@@ -1095,7 +1095,7 @@ void Wm::mouse(const ports::MouseEvent &event)
             swallow_button_ = false;
         }
     }
-    if (x != pointer_x_ || y != pointer_y_ || buttons != buttons_) {
+    if (x != pointer_x_ || y != pointer_y_ || buttons != buttons_ || event.wheel != 0 || event.wheel_x != 0) {
         last_input_us_ = now_us();
     }
     if (x != pointer_x_ || y != pointer_y_) {
@@ -1120,6 +1120,12 @@ void Wm::mouse(const ports::MouseEvent &event)
         on_press();
     } else if (was && !now) {
         on_release();
+    }
+    if (event.wheel != 0 || event.wheel_x != 0) {
+        // The wheel's own way is up and down; with Shift held it goes
+        // sideways, as two fingers moved sideways on a trackpad do.
+        const bool sideways = (mods_ & kShift) != 0 && event.wheel_x == 0;
+        on_wheel(sideways ? 0 : -event.wheel, sideways ? -event.wheel : event.wheel_x);
     }
     update_pointer_shape();
     update();
@@ -1352,6 +1358,25 @@ void Wm::on_right_press()
         const proc::Scope as(procs_, w->owner_);
         w->right_click(pointer_x_ - c.x, pointer_y_ - c.y);
     }
+}
+
+void Wm::on_wheel(int down, int right)
+{
+    // To the window under the pointer, in use or not, and it stays as it
+    // is: not brought to the front, the keys not moved to it. Nothing while
+    // a button is held (a drag, a scroll bar's thumb) or a menu is open.
+    if (capture_ != Capture::None || menu_open() || taskbar().contains(pointer_x_, pointer_y_)) {
+        return;
+    }
+    Window *w = window_under(pointer_x_, pointer_y_);
+    Window *sys = system_modal();
+    if (w == nullptr || (sys != nullptr && sys != w) || blocker(*w) != nullptr || w->locked_ ||
+        part_at(*w, pointer_x_, pointer_y_) != Part::Client) {
+        return;
+    }
+    const Rect c = w->client();
+    const proc::Scope as(procs_, w->owner_);
+    w->wheel({pointer_x_ - c.x, pointer_y_ - c.y, down, right});
 }
 
 void Wm::on_move()

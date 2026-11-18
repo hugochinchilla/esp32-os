@@ -73,6 +73,20 @@ int main()
     for (int i = 0; i < w * h; i++) {
         CHECK(out[i] == 0xFF00FF00u);
     }
+    // The wheel: whole notches at once, a trackpad's small parts added up,
+    // each direction kept apart from the other.
+    WheelNotches turned;
+    CHECK(turned.take(1.0f) == 1 && turned.take(-2.0f) == -2);
+    int total = 0;
+    for (int i = 0; i < 10; i++) {
+        const int n = turned.take(0.25f);
+        CHECK(n == 0 || n == 1);
+        total += n;
+    }
+    CHECK(total == 2 && turned.take(0.5f) == 1);
+    CHECK(turned.take(-0.75f) == 0 && turned.take(-0.25f) == -1);
+    CHECK(turned.take(0.9f) == 0 && turned.take(-1.0f) == -1); // back: the part kept is dropped
+    CHECK(turned.take(1000.0f) == 127);
     printf("desktop: ok\n");
     return 0;
 }
