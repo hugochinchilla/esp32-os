@@ -429,7 +429,7 @@ void test_dialogs()
     const Tool tools[] = {
         {"Display", "Display", &shell::display_dialog, 15}, // the window and fourteen controls
         {"Screen Saver", "Screen Saver", &shell::screen_saver_dialog, 11}, // by number: the window and ten controls
-        {"Network", "Network", &shell::open_network, 13},
+        {"Network", "Network", &shell::open_network, 14},
         {"Services", "Services", &shell::services_dialog, 8}, // the window and seven controls
         {"Shut Down", "Shut Down Chinchilla", &shell::shut_down_dialog, 6}, // by number (os::ui): the window and five controls
         {"Task Manager", "Task Manager", &shell::open_task_manager, 20},
@@ -526,6 +526,20 @@ void test_dialogs()
     letter('v', kAlt);
     letter('o');
     close_all(); // the viewer and its dialog together
+    CHECK(memory.in_use() == base && t.count() == 2);
+
+    // The Network panel's Advanced dialog too: no process of its own (it
+    // is the Network program's), and nothing kept once it has closed.
+    shell::open_network();
+    const int panel = memory.in_use();
+    letter('a', kAlt);
+    CHECK(strcmp(title(), "Advanced") == 0 && memory.in_use() == panel + 9); // the dialog and its eight controls
+    CHECK(processes_named("Network") == 1 && desktop.active()->owner() == t.find_by_name("Network"));
+    key(wm::key::Escape);
+    CHECK(strcmp(title(), "Network") == 0 && memory.in_use() == panel);
+    letter('a', kAlt);
+    close_all(); // the panel and its dialog together
+    wait(10000);
     CHECK(memory.in_use() == base && t.count() == 2);
 }
 

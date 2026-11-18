@@ -135,6 +135,14 @@ public:
         return true;
     }
 
+    void set_tx_power(int dbm) override
+    {
+        // In quarters of a dBm. Before the radio has started the driver
+        // refuses, and the log says so.
+        const esp_err_t err = esp_wifi_set_max_tx_power(static_cast<int8_t>(dbm * 4));
+        ESP_LOGI(TAG, "transmit power %d dBm (%s)", dbm, esp_err_to_name(err));
+    }
+
     void start_scan() override
     {
         if (mutex_ == nullptr) {

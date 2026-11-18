@@ -866,12 +866,10 @@ void ui_task(void *)
     // the analogue picture, and 2 dBm removes them (docs/DECISIONS.md).
     static EXT_RAM_BSS_ATTR fs::Ini network;
     network.load(storage, "C:\\.config\\network.ini");
-    const int tx_dbm = network.get_int("wifi", "tx_power_dbm", 20);
-    const int8_t tx = static_cast<int8_t>((tx_dbm < 2 ? 2 : (tx_dbm > 20 ? 20 : tx_dbm)) * 4); // quarter dBm
+    const int tx_dbm = net::clamp_tx_power(network.get_int("wifi", "tx_power_dbm", net::kTxPowerDefault));
     static const bool radio = network.get_bool("wifi", "enabled", true) && wifi_begin();
     if (radio) {
-        const esp_err_t err = esp_wifi_set_max_tx_power(tx);
-        ESP_LOGI(TAG, "wifi transmit power %d dBm (%s)", tx / 4, esp_err_to_name(err));
+        wifi_port().set_tx_power(tx_dbm); // the Network program's Advanced dialog changes it later
     }
     static EXT_RAM_BSS_ATTR net::Manager wifi(wifi_port(), settings_store());
     shell::set_network(&wifi);
