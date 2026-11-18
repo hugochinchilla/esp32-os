@@ -78,6 +78,12 @@ public:
     {
         vTaskPrioritySet(static_cast<TaskHandle_t>(task), rtos_priority(priority));
     }
+    // At least one tick, so that tasks below the caller get the processor.
+    void rest(uint32_t ms) override
+    {
+        const TickType_t ticks = pdMS_TO_TICKS(ms);
+        vTaskDelay(ticks > 0 ? ticks : 1);
+    }
     // A program that hangs: the caller has made sure it is not inside an OS
     // call, so it holds no lock.
     bool kill(ports::TaskId task) override

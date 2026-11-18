@@ -176,6 +176,16 @@ void stop_timer(int id)
     g_kit.wm->stop_timer(id);
 }
 
+/* ---- Background jobs ---------------------------------------------------------- */
+
+bool start_job(const job::Spec &spec)
+{
+    const prog::InCall in_call;
+    return job::jobs().start(spec);
+}
+
+void job_rest(uint32_t ms) { job::jobs().rest(ms); }
+
 /* ---- Memory ------------------------------------------------------------------- */
 
 void *allocate(size_t bytes)

@@ -27,6 +27,8 @@ const Bitmap &terminal_icon_16(); // the Terminal
 const Bitmap &snake_icon_32();
 const Bitmap &cactus_icon_16(); // Cactus Patch
 const Bitmap &cactus_icon_32();
+const Bitmap &chess_icon_16(); // Chess
+const Bitmap &chess_icon_32();
 const Bitmap &network_icon_16();
 const Bitmap &network_icon_32();
 const Bitmap &saver_icon_16(); // Screen Saver settings

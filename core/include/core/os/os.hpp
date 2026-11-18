@@ -73,6 +73,24 @@ uint64_t now_us(); // since start-up; does not wrap
 int start_timer(uint32_t delay_us, uint32_t period_us, wm::Wm::TimerFn fn, void *context);
 void stop_timer(int id);
 
+/* ---- Background jobs ---------------------------------------------------------- */
+
+// Work on a task of its own, for the process asking, while the desktop and
+// the program's own window go on (core/job/job.hpp has the whole promise:
+// what `work` may touch, and that the process is not ended before its jobs
+// have). `work` runs on the new task; `done` runs afterwards where the
+// program's events run. The program's object is destroyed when its window
+// closes, job or no job: what the work reads must be memory that outlives
+// the window (a block of its own, given back by `done`). False: the job
+// could not be started, and nothing was called. Where there are no tasks
+// the work is done before this returns (job::Job::own_task()).
+bool start_job(const job::Spec &spec);
+// From a job's own task only: gives the processor away for about `ms`.
+// Work that computes for seconds calls it a few times a second, or the
+// tasks below it never run. A job cannot ask the time (now_us() is the UI
+// task's): the program sets a timer and tells its job when time is up.
+void job_rest(uint32_t ms);
+
 /* ---- Memory ------------------------------------------------------------------- */
 
 // Zeroed memory, counted as the asking process's (what Task Manager and top

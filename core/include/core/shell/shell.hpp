@@ -9,6 +9,7 @@
 #include "core/fs/fs.hpp"
 #include "core/fs/ini.hpp"
 #include "core/games/cactus.hpp"
+#include "core/games/chess.hpp"
 #include "core/games/snake.hpp"
 #include "core/gfx/canvas.hpp"
 #include "core/ports.hpp"
@@ -172,6 +173,17 @@ void open_network();
 games::CactusField &cactus_patch_field();
 void cactus_patch_refresh();
 int cactus_patch_seconds();
+
+// Chess (backlog item 50): its Start menu entry. Tests and reference
+// pictures, while it is open: the game in its window, whether the computer
+// is thinking, the side the user plays, the status line, and whose turn it
+// is worked out again after the game was changed directly.
+void open_chess();
+games::chess::Game &chess_game();
+bool chess_thinking();
+games::chess::Color chess_user();
+const char *chess_status();
+void chess_refresh();
 
 // The taskbar and the icons on the desktop (core/desk/desk.hpp), while the
 // `taskbar` process runs; nullptr while it does not. For the tests and the

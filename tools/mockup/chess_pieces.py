@@ -8,6 +8,9 @@ drawings serve both sides.
 
     python3 tools/mockup/chess_pieces.py header out.inc   the rows, for C++
     python3 tools/mockup/chess_pieces.py sheet out.png    a sheet to look at
+    python3 tools/mockup/chess_pieces.py packed core/src/shell/chess_pieces.hpp
+                                                          the game's own copy
+    python3 tools/mockup/chess_pieces.py icon out.txt     the program's icon
 
 There are three sets, which the game will offer as themes: Contour (the
 detail is all in the outline), Symbols (plain signs) and Classic (the first
@@ -302,6 +305,50 @@ def header(path):
             f.write("};\n")
 
 
+def packed(path):
+    """The game's copy (core/src/shell/chess.cpp): two bits a pixel, four
+    pixels a byte, the leftmost in the low bits. 0 clear, 1 outline, 2 body,
+    3 detail."""
+    code = {" ": 0, "X": 1, "o": 2, "-": 3}
+    with open(path, "w") as f:
+        f.write("// The chess pieces, two bits a pixel: 0 clear, 1 outline, 2 body, 3 detail;\n")
+        f.write("// four pixels a byte, the leftmost in the low bits. Original art.\n")
+        f.write("// Made by tools/mockup/chess_pieces.py (packed): do not edit.\n")
+        f.write("#pragma once\n\n#include <cstdint>\n\n")
+        f.write("namespace chess_art {\n\n")
+        f.write("constexpr int kSets = %d;\n" % len(SETS))
+        f.write("constexpr const char *kSetNames[kSets] = {%s};\n" % ", ".join('"%s"' % n for n, _ in SETS))
+        for size, tag in ((BIG, "Big"), (SMALL, "Small")):
+            per_row = size // 4
+            f.write("constexpr int k%sSize = %d;\n" % (tag, size))
+            f.write("// [set][pawn, knight, bishop, rook, queen, king]\n")
+            f.write("constexpr uint8_t k%s[kSets][6][%d] = {\n" % (tag, size * per_row))
+            for set_name, pieces in SETS:
+                f.write("    { // %s\n" % set_name)
+                for name, draw in pieces:
+                    data = []
+                    for row in rows(draw, size):
+                        for i in range(per_row):
+                            data.append(sum(code[row[i * 4 + k]] << (2 * k) for k in range(4)))
+                    f.write("        { // %s\n" % name)
+                    for i in range(0, len(data), 20):
+                        f.write("            %s,\n" % ", ".join("0x%02X" % v for v in data[i:i + 20]))
+                    f.write("        },\n")
+                f.write("    },\n")
+            f.write("};\n")
+        f.write("\n} // namespace chess_art\n")
+
+
+def icon(path):
+    """The Contour knight at 16 and 32, as the rows of
+    core/include/core/gfx/game_art.hpp: K outline, W body, '.' clear."""
+    with open(path, "w") as f:
+        for size in (16, 32):
+            f.write("%d:\n" % size)
+            for row in rows(c_knight, size):
+                f.write('"%s",\n' % row.replace(" ", ".").replace("X", "K").replace("o", "W").replace("-", "K"))
+
+
 def sheet(path):
     # Both sides on both squares of both boards, at twice the size, and the
     # small ones on the window's face.
@@ -331,6 +378,7 @@ def sheet(path):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3 or sys.argv[1] not in ("header", "sheet"):
+    modes = {"header": header, "sheet": sheet, "packed": packed, "icon": icon}
+    if len(sys.argv) != 3 or sys.argv[1] not in modes:
         sys.exit(__doc__)
-    (header if sys.argv[1] == "header" else sheet)(sys.argv[2])
+    modes[sys.argv[1]](sys.argv[2])

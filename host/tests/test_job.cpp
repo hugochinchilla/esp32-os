@@ -16,6 +16,7 @@
 #include "core/fs/memory_volume.hpp"
 #include "core/job/job.hpp"
 #include "core/msg/queue.hpp"
+#include "core/os/os.hpp"
 #include "core/proc/table.hpp"
 #include "core/prog/prog.hpp"
 #include "core/shell/shell.hpp"
@@ -659,6 +660,51 @@ void test_editor_save()
     CHECK(editors() == 0 && memory.in_use() == blocks);
 }
 
+// The OS call a program starts a job with (os::start_job), and the rest a
+// long job takes (os::job_rest): on a task of its own, and where there are
+// no tasks.
+void test_os_call()
+{
+    msg::Inbox inbox(queue);
+    struct Seen {
+        std::atomic<int> worked{0};
+        int done = 0;
+        bool own_task = false;
+        proc::Pid owner = proc::kNone;
+    };
+    static Seen seen;
+    const os::As as_desktop(os::find("desktop")); // whose jobs these are
+    job::Spec spec;
+    spec.name = "sum";
+    spec.work = [](const job::Job &job, void *) -> uint32_t {
+        seen.own_task = job.own_task();
+        seen.owner = job.owner();
+        os::job_rest(1);
+        seen.worked++;
+        return 7;
+    };
+    spec.done = [](void *, uint32_t result, bool) { seen.done += static_cast<int>(result); };
+    spec.priority = ports::Priority::Low;
+    const int rests = tasks.rests;
+    const int started = tasks.started;
+    CHECK(os::start_job(spec));
+    CHECK(seen.done == 0 && job::jobs().running(os::self()) == 1);
+    let_jobs_finish(inbox);
+    CHECK(seen.worked == 1 && seen.done == 7 && seen.own_task && seen.owner == os::self());
+    CHECK(tasks.started == started + 1 && tasks.last_priority == ports::Priority::Low && tasks.rests == rests + 1);
+    CHECK(job::jobs().running(os::self()) == 0);
+
+    // Without tasks the work is done inside the call, and says so.
+    job::jobs().set_tasks(nullptr);
+    CHECK(os::start_job(spec));
+    CHECK(seen.worked == 2 && seen.done == 14 && !seen.own_task && tasks.rests == rests + 1);
+    job::jobs().set_tasks(&tasks);
+
+    // Nothing to do is not a job.
+    spec.work = nullptr;
+    CHECK(!os::start_job(spec));
+}
+
 } // namespace
 
 int main()
@@ -681,6 +727,7 @@ int main()
     msg::set_queue(&queue);
     job::jobs().set_tasks(&tasks);
     test_editor_save();
+    test_os_call();
     job::jobs().set_tasks(nullptr);
     msg::set_queue(nullptr);
 

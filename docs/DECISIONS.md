@@ -426,8 +426,8 @@ and reasons are in `docs/journal/2026-11-17-program-lifecycle.md`.
 ### The chess game (the owner's decisions, 2026-11-18)
 
 Backlog item 50; the mock-ups are in `docs/look/chess/` and the reasoning
-in `docs/journal/2026-11-18-chess-design.md`. Designed and approved, not
-built.
+in `docs/journal/2026-11-18-chess-design.md`. Designed and approved; built
+and tested on the PC, not yet run on the board.
 
 - The engine is one written for this project in `core/src/games/`, tested
   on the PC (chosen on a card). Not micro-Max (through mcu-max), and not a
@@ -463,6 +463,21 @@ built.
   4 looks 6 half moves ahead for at most 3 s; level 5 as deep as 10 s
   allow. Not level 4 at depth 5 (half a second, too far below level 5),
   and not 5 s or 20 s for level 5.
+
+- The window as built (`docs/journal/2026-11-18-chess-window.md`), PC
+  only so far. The engine thinks in a background job a program starts by
+  an OS call (`os::start_job`, asked for by the coordinator from the
+  engine's findings), on a block of memory apart from the window, which
+  may close under it. **To confirm**, chosen on the recommended option:
+  the job runs at priority Low and rests a tick about four times a second
+  (`os::job_rest`); the level's time is told by a timer of the window's,
+  the engine having no clock; a pawn on the last rank asks in a dialog of
+  four buttons what it becomes; a piece that can be taken is marked by the
+  corners of its square instead of the dot; in a theme with a dark face
+  Black's pieces off the board are outlined in the text colour; the
+  dialog's lines say what the levels now do; Take back also undoes a
+  resignation and Resign does not ask; where there are no tasks (the PC's
+  plain desktop, the browser) the computer stops at 200,000 positions.
 
 ## Ideas kept for later
 
