@@ -14,6 +14,7 @@ Output (default /mnt/project-files/look/sounds/beeper/):
   chime/<name>.wav    candidates for the beeper's chime when the desktop loads
   chime2/<name>.wav   round two: slower, calmer, with notes that fade
   chime3/<name>.wav   round three: longer, with a bell that echoes away
+  chime4/<name>.wav   round four: the reference's length and shape, our notes
   manifest.tsv        name, seconds and the steps of each
 
 Needs only numpy.  Run:  python3 tools/sounds/make_beeps.py [out_dir]
@@ -209,9 +210,35 @@ CHIME3 = {
 }
 
 
+def rising(notes, ms, tau=330):
+    """Bells that climb and grow quieter: (name, loudness) pairs."""
+    out = []
+    for name, top in notes:
+        out += bell(name, ms, tau=tau, top=top)
+    return out
+
+
+# Round four (the owner: "make it different but not so different"). The
+# reference's length and shape, measured, with notes of our own that were
+# not taken from it: about 5.5 s, a quiet held note, a fuller one at 0.85 s
+# where the reference swells, a small figure, then bells that climb and
+# fade, as the reference grows brighter while it dies away.
+CHIME4 = {
+    "n-first-light": ("First light: D major. A quiet held note, a full one, a small figure, four bells climbing away.",
+                      [(note("D5"), 850, 0.35)] + phrase([("A5", 520), ("F#5", 260), ("A5", 260), ("D6", 620)], tau=300) +
+                      rising([("F#6", 0.8), ("A6", 0.55), ("D7", 0.38), ("F#7", 0.22)], 720) + [(0, 300)]),
+    "o-glass-morning": ("Glass morning: the same shape on the jack's boot chord (F, C, G, A, E).",
+                        [(note("F5"), 850, 0.35)] + phrase([("C6", 520), ("G5", 260), ("A5", 260), ("C6", 620)], tau=300) +
+                        rising([("E6", 0.8), ("G6", 0.55), ("A6", 0.38), ("E7", 0.22)], 720) + [(0, 300)]),
+    "p-first-light-slow": ("First light, slower and sparser: three bells, further apart.",
+                           [(note("D5"), 850, 0.35)] + phrase([("A5", 700), ("F#5", 350), ("D6", 800)], tau=380) +
+                           rising([("A6", 0.75), ("D7", 0.45), ("A6", 0.22)], 950, tau=420) + [(0, 300)]),
+}
+
+
 def main():
     made = []
-    for folder, sounds in (("post", POST), ("chime", CHIME), ("chime2", CHIME2), ("chime3", CHIME3)):
+    for folder, sounds in (("post", POST), ("chime", CHIME), ("chime2", CHIME2), ("chime3", CHIME3), ("chime4", CHIME4)):
         for name, (text, steps) in sounds.items():
             x, path = write(os.path.join(OUT, folder, name + ".wav"), steps)
             made.append((folder, name, text, steps, x, path))
