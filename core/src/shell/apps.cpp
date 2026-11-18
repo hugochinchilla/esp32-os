@@ -38,6 +38,10 @@ const Entry kApps[] = {
     {{"Picture viewer", nullptr, &open_viewer, false, true, kRoomy}, &gfx::viewer_icon_16},
     {{"Task Manager", nullptr, &open_task_manager, false, true, kRoomy}, &gfx::tasks_icon_16},
     {{"Terminal", nullptr, &open_terminal, true}, &gfx::terminal_icon_16},
+    // A page is read, laid out and fetched on its task, with addresses of
+    // 600 bytes on the stack at several depths. ponytail: a first figure,
+    // to be trimmed with what the board measures.
+    {{"Vizcacha", nullptr, &open_browser_home, false, true, 12 * 1024}, &gfx::browser_icon_16},
     {{"Welcome", nullptr, &open_welcome, false, true}, &gfx::welcome_icon_16},
     {{"Widget gallery", nullptr, &open_gallery, false, true}, &gfx::gallery_icon_16},
 };

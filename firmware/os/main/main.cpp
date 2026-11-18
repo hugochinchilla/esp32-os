@@ -44,6 +44,7 @@
 #include "core/prog/prog.hpp"
 #include "core/msg/input.hpp"
 #include "core/msg/queue.hpp"
+#include "core/net/posix_dialer.hpp"
 #include "core/net/posix_tcp.hpp"
 #include "core/net/rfb.hpp"
 #include "core/net/services.hpp"
@@ -54,6 +55,7 @@
 #include "core/sys/log.hpp"
 #include "core/sys/missed_refills.hpp"
 #include "core/net/web.hpp"
+#include "core/os/tcp.hpp"
 #include "core/net/wifi.hpp"
 #include "core/proc/table.hpp"
 #include "core/shell/boot.hpp"
@@ -913,6 +915,10 @@ void ui_task(void *)
                 session_kits[i].answered = &session_events[2 * i + 1];
             }
             shell::set_session_kits(session_kits, 3);
+            // Outgoing connections (os::tcp): lwIP's sockets. The waiting
+            // (a name looked up, a site answering) is on a job's task.
+            static net::PosixDialer dialer;
+            os::install_dialer(&dialer);
             shell::start(desktop, system, storage, memory);
             protocol.set_counters(shell::picture_timings(), shell::kPictureTimings);
             desktop.start();
