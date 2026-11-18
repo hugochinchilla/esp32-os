@@ -1,9 +1,15 @@
 # Adapter board: VGA, audio and beeper
 
+This is the hand-built board. The manufactured board (the "hat", in
+`hardware/hat/` once pull request 2 is merged) is a separate design on the same pin map, so one firmware
+serves both. What is soldered on the hand-built board today, what is still
+to add and the supply test to run while adding it are in
+[perfboard-build.md](perfboard-build.md).
+
 A carrier board on 5x7 cm perfboard (18 x 24 holes). The dev board plugs into
 two 1x22 socket strips, and each resistor sits in the row of its own GPIO pin,
-so the video part needs no wires. The board also carries the audio output filter and a
-beeper.
+so the video part needs no wires. The board also carries the audio output filter, a
+beeper and a supply capacitor.
 
 ![Board layout](vga-adapter-256.png)
 
@@ -43,7 +49,15 @@ greys.
 | 3 | Blue |
 | 13 | HSYNC |
 | 14 | VSYNC |
-| 5, 6, 7, 8, 10 | Ground |
+| 6, 7, 8 | Ground: the returns of red, green and blue. In a cable these are the shields of the three thin coaxial wires |
+| 10 | Ground: the return of the two sync signals |
+| 5 | Ground. The hat uses this pin to sense a monitor instead (pulled up, read on GPIO47); whether the hand-built board follows is open, see [perfboard-build.md](perfboard-build.md) |
+| Shell | Ground: the cable's outer braid |
+
+Ground every one the cable has. The cut cable in use has no wires for pins
+6, 7 and 8, so on this build they stay open. With the colour returns left
+open the picture still shows, but each colour's current then comes back through whatever
+ground it finds, which is the path the radio's current also uses.
 
 ### Wire colours of the cut VGA cable in use
 
@@ -108,8 +122,50 @@ silent. This direct connection is only for a piezo beeper. A magnetic buzzer or
 a 5 V buzzer with built-in oscillator draws too much current for a pin and
 needs a transistor.
 
+## Supply capacitor
+
+An electrolytic capacitor of 100 to 470 µF, rated 10 V or more, between 3V3
+and ground. It stands in the two empty rows of GPIO3 and GPIO46, in the
+middle of the video resistors and away from the antenna: + leg in the GPIO3
+row, − leg in the GPIO46 row. One insulated wire under the board takes + up
+to the second 3V3 pin, another takes − down to the ground rail. A wide
+capacitor stands a little above the neighbouring resistors, or lies on its
+side. A 100 nF ceramic capacitor across the same two legs is optional.
+
+It keeps the 3.3 V supply from dipping when the radio transmits. The video
+voltage is the 3.3 V supply divided by the resistors, so a dip in the supply
+is a dip in brightness: without the capacitor, lines showed on the picture
+at high Wi-Fi transmit power (`docs/DECISIONS.md`, "Found on the bench");
+with it the owner sees none at 20 dBm. It began as a test, described in
+[perfboard-build.md](perfboard-build.md), and is a permanent part of the
+board since 2026-11-18.
+
+## USB socket for a keyboard or mouse (optional, no firmware yet)
+
+A USB-C breakout board can be wired to the chip's USB pins on the right
+socket strip. Nothing in the firmware drives a USB device yet.
+
+| Breakout pin | Goes to |
+| --- | --- |
+| D− | GPIO19 |
+| D+ | GPIO20 |
+| VBUS | 5V |
+| GND | GND |
+| CC1, CC2 | 56 k each to VBUS. Needed only for a device with its own USB-C plug; a USB-C to USB-A adapter works without |
+
+- Keep the two data wires short, the same length and twisted together.
+- GPIO19 and GPIO20 are also the data pins of the dev board's socket marked
+  USB. Use one or the other, never both at once.
+- One device only: the chip has a single port. Two devices need a hub or one
+  receiver shared by keyboard and mouse.
+- The 5V pin has no current limit of its own here (the hat has a switch for
+  that). A 500 mA resettable fuse in the VBUS wire is a cheap precaution.
+
 ## Ground
 
 A bare wire runs along the GND row at the bottom left and is soldered at every
-hole it passes. The audio ground pin sits on it, and one insulated wire takes
-ground from it up to the VGA ground pin.
+hole it passes. The audio ground pin sits on it, the supply capacitor's − leg
+is wired to it, and one insulated wire takes ground from it up to the VGA
+ground pin. The VGA cable brings five ground wires (three colour returns, the
+sync ground and the braid) and the header has one ground pin: twist them
+together into that pin, or solder some of them straight onto the bare wire.

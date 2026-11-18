@@ -15,6 +15,8 @@ Last updated: 2026-11-16.
 | Resolution | 640x480 at 60 Hz | Basic VGA mode; fits the PSRAM bandwidth with room to spare |
 | Colour depth | 256 colours (red 3 bits, green 3, blue 2), with 64 colours (2 bits each) as a fallback | Enough for the look; one byte per pixel sent straight to the pins, no palette step |
 | Adapter board | One 5x7 cm perfboard carrier holds the VGA resistors, the audio output filter and the beeper |  It all fits beside the dev board |
+| Two boards, one pin map | The hand-built perfboard board and the manufactured hat are separate designs with separate documents (the owner, 2026-11-18): `docs/hardware/` is the perfboard, `hardware/hat/` the hat. Both keep the same pin map so that one firmware serves both. What is tried on the perfboard feeds the hat (`docs/hardware/perfboard-build.md`) | Owner's choice |
+| Supply capacitor | An electrolytic capacitor across 3.3 V next to the dev board is a permanent part of both boards (the owner, 2026-11-18): 100 to 470 µF on the hand-built board (470 µF fitted), and one on the hat's 3.3 V, whose value is recorded with the hat in `hardware/hat/` | On the hand-built board it removed the lines seen at high Wi-Fi transmit power, with the colour returns still open: the radio's bursts were dipping the 3.3 V supply that the video voltage is divided from. One look by eye on one board (`docs/hardware/perfboard-build.md`) |
 | VGA wiring | Resistor DAC on a 5x7 cm perfboard carrier: 510, 1k, 2k ohm per colour, 100 ohm on each sync line, 1/4 W | Simple to build; every signal is on the left header next to its resistor |
 | Blue's third pin | GPIO8 repeats blue's top bit | Keeps white and four greys neutral with only two blue bits in the byte |
 | Video pins | Red 4, 5, 6. Green 7, 15, 16. Blue 17, 18, 8. HSYNC 9. VSYNC 10 | See `docs/hardware/README.md` |
@@ -121,10 +123,13 @@ manager and from the desktop; the Trash window's File menu has Empty Trash.
 
 ### Wi-Fi transmit power (2026-11-16)
 
-Decided by the owner: the radio's transmit power defaults to the minimum,
-2 dBm, adjustable as `tx_power_dbm` in C:\.config\network.ini (2 to 20),
-because at full power its transmit bursts put lines on the picture while it
-connects (see Found on the bench). Joining goes straight to the remembered
+Decided by the owner, 2026-11-18: the radio's transmit power defaults to
+the maximum, 20 dBm, adjustable as `tx_power_dbm` in C:\.config\network.ini
+(2 to 20). From 2026-11-16 until then the default was the minimum, 2 dBm,
+because at full power the transmit bursts put lines on the picture while it
+connected (see Found on the bench). A capacitor across 3.3 V cured the
+lines (Decided, "Supply capacitor"), and both boards carry it. A board
+without the capacitor sets `tx_power_dbm = 2`. Joining goes straight to the remembered
 network's channel and access point (kept in NVS with the networks) instead
 of scanning every channel first, so the radio transmits less; a full scan
 follows only if it is not found there.
@@ -416,6 +421,7 @@ and reasons are in `docs/journal/2026-11-17-program-lifecycle.md`.
 | A PC build of the desktop for testing | Yes, no | Decided: yes. See Decided |
 | How the PC build shows the screen | SDL window, image files only | Open |
 | Clock chip | DS3231 module, another I2C chip | DS3231 |
+| VGA pin 5 on the hand-built board, once the firmware reads the hat's monitor sense on GPIO47 | Wire pin 5 to GPIO47 with a pull-up as the hat; tie GPIO47 to ground; leave the board and have the firmware treat it as unknown | Wire it as the hat, when the firmware reads it (`docs/hardware/perfboard-build.md`) |
 
 ### The chess game (the owner's decisions, 2026-11-18)
 

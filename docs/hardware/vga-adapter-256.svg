@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1258" height="1232" viewBox="0 0 1258 1232" font-family="Helvetica,Arial,sans-serif">
-<rect width="1258" height="1232" fill="#fff"/>
-<text x="629.0" y="44" text-anchor="middle" font-size="25" font-weight="bold">Adapter board: VGA in 256 colours, audio out and beeper</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1258" height="1302" viewBox="0 0 1258 1302" font-family="Helvetica,Arial,sans-serif">
+<rect width="1258" height="1302" fill="#fff"/>
+<text x="629.0" y="44" text-anchor="middle" font-size="25" font-weight="bold">Adapter board: VGA in 256 colours, audio out, beeper and supply capacitor</text>
 <text x="629.0" y="74" text-anchor="middle" font-size="17" fill="#444">5x7 cm perfboard (18 x 24 holes). Top view, component side, antenna end at the top.</text>
 <rect x="326.2" y="96.2" width="625.6" height="829.6" rx="10" fill="#e9d9a6" stroke="#8a7332" stroke-width="2"/>
 <circle cx="350" cy="120" r="4" fill="#fff" stroke="#b09a55"/>
@@ -354,6 +354,8 @@
 <text x="894" y="908" text-anchor="middle" font-size="13">socket strip 1x22</text>
 <polyline points="452,868 452,698 384,698" fill="none" stroke="#111" stroke-width="5" stroke-linejoin="round"/>
 <polyline points="418,188 486,188 486,800 520,800" fill="none" stroke="#7d3c98" stroke-width="5" stroke-linejoin="round"/>
+<polyline points="418,562 503.0,562 503.0,188 520,188" fill="none" stroke="#c0392b" stroke-width="5" stroke-linejoin="round"/>
+<polyline points="418,596 418,868" fill="none" stroke="#111" stroke-width="5" stroke-linejoin="round"/>
 <text x="502" y="582" font-size="12" fill="#7d3c98" transform="rotate(-90 502 582)">beeper wire</text>
 <line x1="384" y1="256" x2="520" y2="256" stroke="#888" stroke-width="3"/>
 <rect x="410" y="245" width="84" height="22" rx="9" fill="#f3e3c0" stroke="#c0392b" stroke-width="3"/>
@@ -487,6 +489,14 @@
 <text x="302" y="839" text-anchor="end" font-size="15" font-weight="bold" fill="#b9770e">AUDIO OUT  →  jack tip and ring</text>
 <line x1="330" y1="868" x2="308" y2="868" stroke="#b9770e" stroke-width="2"/>
 <text x="302" y="873" text-anchor="end" font-size="15" font-weight="bold" fill="#b9770e">AUDIO GND  →  jack sleeve</text>
+<circle cx="418" cy="579.0" r="42.5" fill="#34495e" fill-opacity="0.88" stroke="#111" stroke-width="2"/>
+<text x="436.7" y="566" text-anchor="middle" font-size="15" font-weight="bold" fill="#fff">+</text>
+<text x="436.7" y="602" text-anchor="middle" font-size="15" font-weight="bold" fill="#fff">−</text>
+<circle cx="418" cy="562" r="5" fill="#c0392b"/>
+<circle cx="418" cy="596" r="5" fill="#111"/>
+<circle cx="418" cy="868" r="5" fill="#111"/>
+<text x="330" y="576.0" text-anchor="end" font-size="13" fill="#c0392b" font-weight="bold">100 to 470 µF, + up</text>
+<text x="330" y="592.0" text-anchor="end" font-size="12" fill="#444">3V3 to GND</text>
 <line x1="520" y1="154" x2="554" y2="154" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
 <line x1="418" y1="154" x2="418" y2="188" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
 <circle cx="469.0" cy="154" r="68.0" fill="#222" fill-opacity="0.82" stroke="#000" stroke-width="2"/>
@@ -496,14 +506,18 @@
 <circle cx="520" cy="154" r="5" fill="#ddd"/>
 <circle cx="418" cy="188" r="5" fill="#7d3c98"/>
 <circle cx="520" cy="800" r="5" fill="#7d3c98"/>
+<line x1="520" y1="188" x2="554" y2="188" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
+<circle cx="520" cy="188" r="5" fill="#c0392b"/>
 <line x1="520" y1="800" x2="554" y2="800" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
 <circle cx="520" cy="800" r="5" fill="#7d3c98"/>
 <line x1="60" y1="972" x2="100" y2="972" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/><text x="112" y="977" font-size="15">solder bridge between neighbouring holes, on the underside</text>
-<line x1="60" y1="996" x2="100" y2="996" stroke="#111" stroke-width="5"/><line x1="60" y1="1008" x2="100" y2="1008" stroke="#7d3c98" stroke-width="5"/><text x="112" y="1007" font-size="15">insulated wires on the underside: VGA ground (black) and beeper to GPIO14 (purple)</text>
-<line x1="60" y1="1032" x2="100" y2="1032" stroke="#111" stroke-width="7" stroke-dasharray="2 5"/><text x="112" y="1037" font-size="15">bare wire along the GND row, soldered at every hole it passes (the ground rail)</text>
-<text x="60" y="1076" font-size="15">Video: each colour has 510 Ω, 1 kΩ and 2 kΩ joined at their left ends. The rows of GPIO3 and GPIO46 stay empty.</text>
-<text x="60" y="1102" font-size="15">Audio: GPIO13 through 1 kΩ. The 100 nF capacitor goes from that point to ground, the 1 to 10 µF capacitor (+ towards the resistor) to AUDIO OUT.</text>
-<text x="60" y="1128" font-size="15">Beeper: between 3V3 and GPIO14, for a piezo beeper of about 10 mm; a 12 mm one overhangs the edge a little. A magnetic or 5 V buzzer needs a transistor instead.</text>
-<text x="60" y="1154" font-size="15">The right socket strip is drawn 10 holes from the left one; if your board is 9 apart, use column 16.</text>
-<text x="60" y="1180" font-size="15">Pin names follow the ESP32-S3-DevKitC-1 layout. Compare them with the labels printed on your board before soldering.</text>
+<line x1="60" y1="996" x2="100" y2="996" stroke="#111" stroke-width="5"/><line x1="60" y1="1008" x2="100" y2="1008" stroke="#7d3c98" stroke-width="5"/><line x1="60" y1="1020" x2="100" y2="1020" stroke="#c0392b" stroke-width="5"/><text x="112" y="1013" font-size="15">insulated wires on the underside: grounds (black), beeper to GPIO14 (purple), capacitor to 3V3 (red)</text>
+<line x1="60" y1="1046" x2="100" y2="1046" stroke="#111" stroke-width="7" stroke-dasharray="2 5"/><text x="112" y="1051" font-size="15">bare wire along the GND row, soldered at every hole it passes (the ground rail)</text>
+<text x="60" y="1090" font-size="15">Video: each colour has 510 Ω, 1 kΩ and 2 kΩ joined at their left ends. The rows of GPIO3 and GPIO46 stay empty.</text>
+<text x="60" y="1116" font-size="15">Audio: GPIO13 through 1 kΩ. The 100 nF capacitor goes from that point to ground, the 1 to 10 µF capacitor (+ towards the resistor) to AUDIO OUT.</text>
+<text x="60" y="1142" font-size="15">Beeper: between 3V3 and GPIO14, for a piezo beeper of about 10 mm; a 12 mm one overhangs the edge a little. A magnetic or 5 V buzzer needs a transistor instead.</text>
+<text x="60" y="1168" font-size="15">Supply capacitor: 100 to 470 µF, 10 V or more, + to the second 3V3 pin, − to the ground rail. Stand it a little above the resistors if it is wide.</text>
+<text x="60" y="1194" font-size="15">VGA ground: the three colour returns (pins 6, 7, 8), the sync ground (pin 10) and the cable's shield all go to the GND pin or the ground rail, as far as the cable has them.</text>
+<text x="60" y="1220" font-size="15">The right socket strip is drawn 10 holes from the left one; if your board is 9 apart, use column 16.</text>
+<text x="60" y="1246" font-size="15">Pin names follow the ESP32-S3-DevKitC-1 layout. Compare them with the labels printed on your board before soldering.</text>
 </svg>
