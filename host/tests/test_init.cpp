@@ -71,6 +71,18 @@ struct Machine {
         static_cast<Machine *>(context)->order += "console ";
         return true;
     }
+    // The two services of inetd's that have lines of their own.
+    static bool start_telnetd(void *context)
+    {
+        static_cast<Machine *>(context)->order += "telnetd ";
+        return true;
+    }
+    static bool start_vncd(void *context)
+    {
+        static_cast<Machine *>(context)->order += "vncd ";
+        return true;
+    }
+    int service_stops = 0;
     static bool run(const char *what, char *why, size_t capacity, void *context)
     {
         auto *m = static_cast<Machine *>(context);
@@ -92,6 +104,10 @@ struct Machine {
         i.add("inetd", &start_inetd, this);
         i.add("taskbar", &start_taskbar, this, false, init::Again::Does);
         i.add("console", &start_console, this);
+        i.add("telnetd", &start_telnetd, this);
+        i.add("vncd", &start_vncd, this);
+        i.set_stop("telnetd", [](void *context) { static_cast<Machine *>(context)->service_stops++; });
+        i.set_stop("vncd", [](void *context) { static_cast<Machine *>(context)->service_stops++; });
         i.set_run(&run, this);
         i.set_log(&keep, nullptr);
         said.clear();
@@ -213,7 +229,8 @@ void test_lines()
     {
         proc::Table procs;
         init::Init i(procs);
-        static const char *const names[init::Init::kMaxUnits] = {"a", "b", "c", "d", "e", "f", "g", "h"};
+        static const char *const names[init::Init::kMaxUnits] = {"a", "b", "c", "d", "e", "f",
+                                                                          "g", "h", "i", "j", "k", "l"};
         for (int n = 0; n < init::Init::kMaxUnits; n++) {
             CHECK(i.add(names[n], &Machine::start_console, nullptr));
             CHECK(!i.add(names[n], &Machine::start_console, nullptr)); // the name is taken
@@ -237,7 +254,7 @@ void test_file()
         init::Init i(m.procs);
         m.set_up(i);
         CHECK(i.boot(storage) == 0 && !i.had_file() && i.wrote_file());
-        CHECK(m.order == "desktop inetd " && m.ran.empty());
+        CHECK(m.order == "desktop inetd telnetd vncd " && m.ran.empty());
         char text[init::Init::kMaxFile];
         size_t size = 0;
         CHECK(storage.read_file(init::kPath, text, sizeof(text), size) == ports::FsError::Ok);
@@ -249,7 +266,8 @@ void test_file()
         Machine m;
         init::Init i(m.procs);
         m.set_up(i);
-        CHECK(i.boot(storage) == 0 && i.had_file() && !i.wrote_file() && m.order == "desktop inetd ");
+        CHECK(i.boot(storage) == 0 && i.had_file() && !i.wrote_file() &&
+              m.order == "desktop inetd telnetd vncd ");
     }
     // The owner's file: no network services, a Terminal open from the start.
     {
@@ -281,7 +299,8 @@ void test_file()
         Machine m;
         init::Init i(m.procs);
         m.set_up(i);
-        CHECK(i.boot(none) == 0 && !i.had_file() && !i.wrote_file() && m.order == "desktop inetd ");
+        CHECK(i.boot(none) == 0 && !i.had_file() && !i.wrote_file() &&
+              m.order == "desktop inetd telnetd vncd ");
     }
 }
 
@@ -471,10 +490,12 @@ void test_fields()
         init::Init i(m.procs);
         m.set_up(i);
         const char *usual = init::Init::default_text();
-        CHECK(strstr(usual, "\r\ndesktop:once\r\ntaskbar:respawn\r\ninetd:once\r\n") != nullptr);
-        CHECK(strstr(usual, "\r\nconsole:off\r\n") != nullptr && strstr(usual, "start ") == nullptr);
+        CHECK(strstr(usual, "\r\ndesktop:once\r\ntaskbar:respawn\r\n") != nullptr);
+        CHECK(strstr(usual, "\r\ninetd:once\r\ntelnetd:once\r\nvncd:once\r\n") != nullptr);
+        CHECK(strstr(usual, "\r\nconsole:off\r\n") != nullptr && strstr(usual, "\nstart ") == nullptr);
+        CHECK(strlen(usual) < init::Init::kMaxFile);
         run(i, usual, 0);
-        CHECK(m.order == "desktop inetd " && i.started("taskbar") && !i.started("console"));
+        CHECK(m.order == "desktop inetd telnetd vncd " && i.started("taskbar") && !i.started("console"));
         CHECK(m.procs.find(m.procs.find_by_name("taskbar"))->is(proc::kRespawn));
     }
 }
@@ -650,10 +671,144 @@ void test_desktop()
     wait(10000);
 }
 
+// Stopped by hand (the `service` command): init does not bring it back,
+// whatever its line says, until it is started by hand or the machine starts
+// again (the owner's request, docs/journal/2026-11-18-services.md).
+void test_stop_by_hand()
+{
+    Machine m;
+    init::Init i(m.procs);
+    m.set_up(i);
+    Comes bar{&m.procs, "bar"};
+    i.add("bar", &Comes::start, &bar, false, init::Again::Does);
+    run(i, "desktop:once\ninetd:once\ntelnetd:once\nvncd:off\nbar:respawn\n", 0);
+    CHECK(i.started("telnetd") && !i.started("vncd") && bar.starts == 1);
+
+    // A service with a stop function: stopped at once, as far as init
+    // knows, and held. Its line said once; nothing is due.
+    CHECK(i.stop("telnetd") == init::Stopped::Ok && m.service_stops == 1 && !i.started("telnetd"));
+    CHECK(i.info("telnetd").held && i.info("telnetd").can_stop && !i.info("telnetd").started);
+    CHECK(has("init: telnetd stopped by hand; not started again until the next start"));
+    CHECK(i.stop("telnetd") == init::Stopped::NotStarted && m.service_stops == 1);
+    CHECK(i.stop("vncd") == init::Stopped::NotStarted && i.stop("nothing") == init::Stopped::NoSuchThing);
+    CHECK(!m.procs.restarts_waiting());
+    // The desktop and inetd have no way to be stopped like this.
+    CHECK(i.stop("desktop") == init::Stopped::CannotBe && i.started("desktop"));
+    CHECK(i.stop("inetd") == init::Stopped::CannotBe && i.started("inetd"));
+    CHECK(!i.info("desktop").can_stop && i.info("bar").can_stop && i.info("nothing").name == nullptr);
+    // Started by hand: it is as it was, and can be stopped again. One the
+    // file left off can be started by hand too.
+    CHECK(i.start_again("telnetd") && i.started("telnetd") && !i.info("telnetd").held);
+    CHECK(m.order == "desktop inetd telnetd telnetd ");
+    CHECK(i.start_again("vncd") && i.started("vncd") && i.stop("vncd") == init::Stopped::Ok && m.service_stops == 2);
+
+    // One that comes back, and has no stop function of its own: its
+    // process is asked to end, as kill would ask. When it has ended init
+    // is told, and does not put it on its list.
+    m.procs.set_stop(
+        bar.pid, [](Pid pid, proc::Signal, void *context) { static_cast<proc::Table *>(context)->exit(pid); },
+        &m.procs);
+    CHECK(i.stop("bar") == init::Stopped::Ok && i.started("bar") && i.info("bar").held);
+    CHECK(m.procs.take_signals(bar.pid) == static_cast<uint8_t>(proc::Signal::Term));
+    CHECK(m.procs.stop_service(bar.pid, proc::Signal::Term) && !m.procs.alive(bar.pid));
+    CHECK(!i.started("bar") && !m.procs.restarts_waiting() && m.procs.restart_due() == 0 && bar.starts == 1);
+    // By hand it starts, comes back again when it ends by itself, and is
+    // held again by the next stop.
+    CHECK(i.start_again("bar") && bar.starts == 2 && !i.info("bar").held);
+    m.procs.exit(bar.pid);
+    CHECK(m.procs.restarts_waiting() && m.procs.restart_due() == 1 && bar.starts == 3);
+    // Ended while already on the list, then stopped by hand before the
+    // safe point: not started.
+    m.procs.set_stop(
+        bar.pid, [](Pid pid, proc::Signal, void *context) { static_cast<proc::Table *>(context)->exit(pid); },
+        &m.procs);
+    CHECK(i.stop("bar") == init::Stopped::Ok);
+    m.procs.take_signals(bar.pid);
+    m.procs.stop_service(bar.pid, proc::Signal::Term);
+    CHECK(m.procs.restart_due() == 0 && bar.starts == 3 && !i.started("bar"));
+    // One with no stop function and a process that cannot be signalled.
+    CHECK(i.start_again("bar") && bar.starts == 4);
+    CHECK(i.stop("bar") == init::Stopped::CannotBe && !i.info("bar").held && i.started("bar"));
+
+    // The machine says a thing has gone with the loop it lived in: it can
+    // be started by hand, and is not held.
+    i.down("inetd");
+    i.down("telnetd");
+    CHECK(!i.started("inetd") && !i.started("telnetd") && !i.info("telnetd").held);
+
+    // The next start of the machine: a new init goes by the file alone.
+    Machine next;
+    init::Init again(next.procs);
+    next.set_up(again);
+    run(again, "desktop:once\ninetd:once\ntelnetd:once\n", 0);
+    CHECK(again.started("telnetd") && !again.info("telnetd").held);
+}
+
+// The file's lines as text, for the Services dialog: one line is changed
+// and the rest of the file is as it was.
+void test_edit_lines()
+{
+    char action[16] = "";
+    const char *usual = init::Init::default_text();
+    char text[init::Init::kMaxFile + 64];
+    size_t size = strlen(usual);
+    memcpy(text, usual, size);
+    CHECK(init::line_action(text, size, "telnetd", action, sizeof(action)) && strcmp(action, "once") == 0);
+    CHECK(init::line_action(text, size, "TaskBar", action, sizeof(action)) && strcmp(action, "respawn") == 0);
+    CHECK(init::line_action(text, size, "console", action, sizeof(action)) && strcmp(action, "off") == 0);
+    // A comment that names it is not its line, nor is a longer name.
+    CHECK(!init::line_action(text, size, "terminal", action, sizeof(action)));
+    CHECK(!init::line_action(text, size, "telnet", action, sizeof(action)));
+    CHECK(!init::line_action(text, size, "nothing", action, sizeof(action)));
+
+    // Off and on again: only that line changes, and the text ends up as it
+    // began.
+    const size_t off = init::set_line_action(text, size, sizeof(text), "telnetd", "off");
+    CHECK(off == size - 1);
+    const std::string changed(text, off);
+    CHECK(changed.find("\r\ninetd:once\r\ntelnetd:off\r\nvncd:once\r\n") != std::string::npos);
+    CHECK(changed.substr(0, changed.find("telnetd:off")) == std::string(usual).substr(0, changed.find("telnetd:off")));
+    CHECK(changed.substr(changed.find("vncd:once")) == std::string(usual).substr(std::string(usual).find("vncd:once")));
+    const size_t on = init::set_line_action(text, off, sizeof(text), "telnetd", "once");
+    CHECK(on == size && std::string(text, on) == usual);
+    // init does what the changed file says.
+    {
+        Machine m;
+        init::Init i(m.procs);
+        m.set_up(i);
+        CHECK(i.run_text(changed.data(), changed.size()) == 0);
+        CHECK(m.order == "desktop inetd vncd " && !i.started("telnetd") && has("init: telnetd is off"));
+    }
+
+    // Spaces, any case, a last line without an end, a path with a colon of
+    // its own, and a second line for the same thing, which goes.
+    const auto edit = [](const char *before, const char *what, const char *to) {
+        char room[200];
+        const size_t n = strlen(before);
+        memcpy(room, before, n);
+        const size_t now = init::set_line_action(room, n, sizeof(room), what, to);
+        return std::string(room, now);
+    };
+    CHECK(edit("  VNCD : once  \r\n# vncd:once\r\n", "vncd", "off") == "  VNCD : off\r\n# vncd:once\r\n");
+    CHECK(edit("desktop:once\nvncd:off", "vncd", "once") == "desktop:once\nvncd:once");
+    CHECK(edit("C:\\a.txt:once\nvncd:off\n", "C:\\a.txt", "off") == "C:\\a.txt:off\nvncd:off\n");
+    CHECK(edit("vncd:once\r\ninetd:once\r\nvncd:respawn\r\n", "vncd", "off") == "vncd:off\r\ninetd:once\r\n");
+    // No line: one is added at the end, after a line end if the text had none.
+    CHECK(edit("desktop:once\r\n", "vncd", "off") == "desktop:once\r\nvncd:off\r\n");
+    CHECK(edit("desktop:once", "vncd", "once") == "desktop:once\r\nvncd:once\r\n");
+    CHECK(edit("", "vncd", "once") == "vncd:once\r\n");
+    // What does not fit changes nothing.
+    char small[16] = "vncd:off\r\n";
+    CHECK(init::set_line_action(small, 10, 10, "vncd", "respawn") == 0 && memcmp(small, "vncd:off\r\n", 10) == 0);
+    CHECK(init::set_line_action(small, 10, 12, "telnetd", "off") == 0 && memcmp(small, "vncd:off\r\n", 10) == 0);
+}
+
 } // namespace
 
 int main()
 {
+    test_stop_by_hand();
+    test_edit_lines();
     test_lines();
     test_file();
     test_respawn();

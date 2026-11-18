@@ -199,6 +199,8 @@ const Command kCommands[] = {
     {"top", &cmd_top, "top [-n N]", "Show the busiest processes, every two seconds; q leaves"},
     {"kill", &cmd_kill, "kill [-TERM | -KILL | -9] PID...", "Ask a process to end; -9 ends it without asking"},
     {"taskkill", &cmd_kill, nullptr, ""},
+    {"service", &cmd_service, "service [NAME [start | stop | status]]",
+     "List the services; stop or start one until the restart"},
     {"free", &cmd_free, "free", "Show the free memory"},
     {"mem", &cmd_free, nullptr, ""},
     {"uptime", &cmd_uptime, "uptime", "Show how long the machine has been on"},

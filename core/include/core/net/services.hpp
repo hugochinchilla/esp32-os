@@ -33,9 +33,10 @@ public:
     // may sleep, in µs, if none of that happens. kNever: as long as it takes.
     // 0: there is work left, come straight back.
     virtual uint32_t watch(Watch &watch) = 0;
-    // The loop is ending (backlog item 5b): whoever is connected is let go
-    // and what was borrowed is given back. Called once, on the services
-    // task; poll() is not called again.
+    // The loop is ending (backlog item 5b), or this service is being
+    // switched off (Services::want): whoever is connected is let go and
+    // what was borrowed is given back. On the services task; poll() is not
+    // called again unless the service is switched back on.
     virtual void stop() {}
 
 protected:
@@ -75,7 +76,22 @@ public:
 
     Services(Wait &wait, ports::Clock &clock) : wait_(wait), clock_(clock) {}
 
-    bool add(Service &service);
+    // Told, on the services task, that a service has just been switched on
+    // or off (after its stop(), for off): where its ports are closed.
+    using SwitchedFn = void (*)(bool on, void *context);
+
+    // `on` false: it is in the loop but gets no turn until want() says so.
+    // One task at a time, and that task may add while the loop runs.
+    bool add(Service &service, bool on = true, SwitchedFn switched = nullptr, void *context = nullptr);
+    // Any task. Switches one service off or on while the others go on: the
+    // loop does it at its next round (so within the longest sleep), on its
+    // own task, as it does everything else with a service. Whoever
+    // switches one on has opened its ports first; they are closed in
+    // `switched`. False: the service is not one of the loop's.
+    bool want(const Service &service, bool on);
+    // What the loop has done so far: true from the round that switched it
+    // on until the round that has stopped it.
+    bool on(const Service &service) const;
     // One round: every service's turn, then the sleep. The task is this in a
     // loop, while it answers true. False once a stop has been asked for:
     // every service has been stopped and the task should end.
@@ -85,14 +101,29 @@ public:
     // sleep a limit (set_longest_sleep) and pays one short wake per limit.
     void request_stop() { stop_ = true; }
     bool stopped() const { return stopped_; }
+    // After the loop has ended and its task has gone: it can run again
+    // (inetd started a second time). Every service is as it was when it
+    // joined: one that joined on gets its turns again, one that joined off
+    // waits for want(). Whoever calls has opened the ports again.
+    void restart();
     void set_longest_sleep(uint32_t us) { longest_us_ = us; }
     const Stats &stats() const { return stats_; }
 
 private:
     Wait &wait_;
     ports::Clock &clock_;
-    Service *services_[kMax] = {};
-    int count_ = 0;
+    struct Slot {
+        Service *service = nullptr;
+        SwitchedFn switched = nullptr;
+        void *context = nullptr;
+        bool joined_on = true;
+        std::atomic<bool> wanted{true};
+        std::atomic<bool> on{true};
+    };
+    const Slot *slot(const Service &service) const;
+
+    Slot slots_[kMax];
+    std::atomic<int> count_{0}; // a slot is whole before it is counted
     uint32_t working_since_ = 0;
     bool working_ = false;
     Stats stats_ = {};

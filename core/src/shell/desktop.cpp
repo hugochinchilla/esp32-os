@@ -292,6 +292,7 @@ void find_programs(void *)
 void open_screen_saver(void *) { screen_saver_dialog(); }
 void network_panel(void *) { open_network(); }
 void open_display(void *) { display_dialog(); }
+void open_services(void *) { services_dialog(); }
 void open_run(void *) { run_dialog(); }
 // A right click on the desktop: a menu with what can be done to it.
 void toggle_snap(void *);
@@ -313,8 +314,9 @@ wm::MenuItem g_settings_items[] = {
     {"&Network", &network_panel, nullptr, nullptr, nullptr, wm::kMenuDisabled},
     {"&Screen Saver...", &open_screen_saver, nullptr, nullptr, &gfx::saver_icon_16(), 0},
     {"&Display...", &open_display, nullptr, nullptr, &gfx::display_icon_16(), 0},
+    {"Ser&vices...", &open_services, nullptr, nullptr, &gfx::services_icon_16(), 0},
 };
-wm::Menu g_settings = {g_settings_items, 5};
+wm::Menu g_settings = {g_settings_items, 6};
 wm::MenuItem g_start_items[5];
 wm::Menu g_start = {g_start_items, 5};
 

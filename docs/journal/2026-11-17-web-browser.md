@@ -298,3 +298,13 @@ the lowest (while a Wikipedia page was loaded and scrolled), the File manager
 task 5,184. Closing everything returns internal memory exactly and external
 memory to 3.9 KB below the figure before (the taskbar's Start menu).
 `dbg.py misses`: none.
+
+## On the board, third round (2026-11-18, 6e19abb)
+
+The Vizcacha task's stack was found nearly full (1,424 bytes never used while
+a Wikipedia page was loaded and scrolled). With the larger stack of 6e19abb,
+the same run (FrogFind "chinchilla", the Wikipedia result, Page Down to the
+end of the page, then an https address and a host that does not exist) leaves
+6,900 bytes never used. Closing the window returns internal memory exactly and
+external memory to 3.9 KB below the figure before (the taskbar's Start
+menu); `dbg.py misses`: none.

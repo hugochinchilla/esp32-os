@@ -210,6 +210,14 @@ void WebGate::take_new()
     }
 }
 
+void WebGate::hang_up()
+{
+    for (Request &r : requests_) {
+        end(r);
+    }
+    close();
+}
+
 void WebGate::end(Request &r)
 {
     if (r.stream != nullptr) {

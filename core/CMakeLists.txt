@@ -35,6 +35,7 @@ set(CORE_SRCS
     src/net/deflate.cpp
     src/net/rfb.cpp
     src/net/services.cpp
+    src/net/switch.cpp
     src/net/telnet.cpp
     src/net/update.cpp
     src/net/viewer_page.cpp
@@ -86,6 +87,7 @@ set(CORE_SRCS
     src/shell/listing.cpp
     src/shell/loaded.cpp
     src/shell/screensaver.cpp
+    src/shell/services.cpp
     src/shell/network.cpp
     src/shell/network_service.cpp
     src/shell/power.cpp

@@ -579,29 +579,42 @@ private:
     void trouble(const char *url, const char *why, bool secure)
     {
         snprintf(error_, sizeof(error_), "%s", why);
+        wanted_top_ = 0;
+        // The page is written in borrowed memory: it is some 3 KB, and the
+        // reading of it follows on the same stack.
+        constexpr size_t kPage = 1400, kQuery = www::kMaxUrl, kLink = www::kMaxUrl + 100;
+        char *page = static_cast<char *>(os::allocate(kPage));
+        char *query = static_cast<char *>(os::allocate(kQuery + kLink));
+        if (page == nullptr || query == nullptr) {
+            os::release(page);
+            os::release(query);
+            show(url, "<h2>The page could not be opened</h2>", 37, false);
+            set_status("The page could not be opened.");
+            return;
+        }
+        char *link = query + kQuery;
         char shown[200];
         escape(url, shown, sizeof(shown));
-        char page[1400];
-        int n = snprintf(page, sizeof(page),
+        int n = snprintf(page, kPage,
                          "<html><head><title>Page not opened</title></head><body><h2>The page could not be opened</h2>"
                          "<p>%s</p><p><tt>%s</tt></p>",
                          error_, shown);
-        if (secure && n < static_cast<int>(sizeof(page))) {
+        if (secure && n < static_cast<int>(kPage)) {
             // FrogFind reads secure pages for browsers like this one.
-            char query[www::kMaxUrl] = "http://frogfind.com/?q=";
-            www::append_escaped(query, strlen(query), sizeof(query), url);
-            char link[www::kMaxUrl + 100];
-            escape(query, link, sizeof(link));
-            n += snprintf(page + n, sizeof(page) - static_cast<size_t>(n),
+            snprintf(query, kQuery, "http://frogfind.com/?q=");
+            www::append_escaped(query, strlen(query), kQuery, url);
+            escape(query, link, kLink);
+            n += snprintf(page + n, kPage - static_cast<size_t>(n),
                           "<p>Most of today's web is secure only. <a href=\"%s\">Look for this page with FrogFind</a>, "
                           "which reads such pages and hands them on in a form this browser can show.</p>",
                           link);
         }
-        if (n < static_cast<int>(sizeof(page))) {
-            snprintf(page + n, sizeof(page) - static_cast<size_t>(n), "</body></html>");
+        if (n < static_cast<int>(kPage)) {
+            snprintf(page + n, kPage - static_cast<size_t>(n), "</body></html>");
         }
-        wanted_top_ = 0;
+        os::release(query);
         show(url, page, strlen(page), false);
+        os::release(page);
         set_status("The page could not be opened.");
     }
     // Text for inside a page: no tags, no entities.

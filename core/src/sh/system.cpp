@@ -4,6 +4,7 @@
 #include <cstring>
 
 #include "commands.hpp"
+#include "core/init/init.hpp"
 #include "core/sys/log.hpp"
 #include "core/net/wifi.hpp"
 #include "core/shell/boot.hpp"
@@ -459,6 +460,109 @@ int cmd_run(Session &s, int argc, char **argv)
         }
     }
     return asked(s, argv[0], 1, name, name);
+}
+
+/* ---- service ---------------------------------------------------------------------- */
+
+namespace {
+
+// init is the UI task's. What is asked of it is done there, and the answer
+// comes back as text or as a number.
+struct ServiceJob {
+    const char *name; // nullptr: the list
+    int what;         // 0 status, 1 start, 2 stop
+    char *out;
+    int capacity;
+    int result;       // 0 done; otherwise why not, below
+};
+enum { kNoInit = 1, kNoSuchService, kRunsAlready, kDidNotStart, kNotRunning, kCannotStop };
+
+const char *state_text(const init::Init::Info &u)
+{
+    if (u.started) {
+        return u.held ? "stopping" : u.respawn ? "running, comes back if it ends" : "running";
+    }
+    return u.held ? "stopped by hand, until the next start" : "stopped";
+}
+
+void ask_init(void *context)
+{
+    ServiceJob &job = *static_cast<ServiceJob *>(context);
+    init::Init *first = init::the();
+    job.result = 0;
+    if (first == nullptr) {
+        job.result = kNoInit;
+        return;
+    }
+    if (job.name == nullptr) {
+        int at = snprintf(job.out, static_cast<size_t>(job.capacity), "  %-10s STATE\n", "NAME");
+        for (int i = 0; i < first->units() && at < job.capacity - 1; i++) {
+            const init::Init::Info u = first->info(i);
+            at += snprintf(job.out + at, static_cast<size_t>(job.capacity - at), "  %-10s %s\n", u.name, state_text(u));
+        }
+        return;
+    }
+    // "telnet" and "vnc" are telnetd and vncd.
+    char full[32];
+    snprintf(full, sizeof full, "%s", job.name);
+    if (!first->has(full)) {
+        snprintf(full, sizeof full, "%.30sd", job.name);
+    }
+    const init::Init::Info u = first->info(full);
+    if (u.name == nullptr) {
+        job.result = kNoSuchService;
+        return;
+    }
+    switch (job.what) {
+    case 1:
+        job.result = u.started ? kRunsAlready : first->start_again(u.name) ? 0 : kDidNotStart;
+        break;
+    case 2:
+        switch (first->stop(u.name)) {
+        case init::Stopped::Ok: break;
+        case init::Stopped::NotStarted: job.result = kNotRunning; break;
+        case init::Stopped::CannotBe: job.result = kCannotStop; break;
+        default: job.result = kNoSuchService; break;
+        }
+        break;
+    default:
+        snprintf(job.out, static_cast<size_t>(job.capacity), "%s: %s\n", u.name, state_text(u));
+        break;
+    }
+}
+
+} // namespace
+
+int cmd_service(Session &s, int argc, char **argv)
+{
+    ServiceJob job = {nullptr, 0, s.buffer(), Session::kBufferSize, 0};
+    s.buffer()[0] = 0;
+    if (argc >= 2) {
+        job.name = argv[1];
+        const char *verb = argc >= 3 ? argv[2] : "status";
+        if (strcmp(verb, "start") == 0) {
+            job.what = 1;
+        } else if (strcmp(verb, "stop") == 0) {
+            job.what = 2;
+        } else if (strcmp(verb, "status") != 0) {
+            return s.fail(argv[0], verb, "it is start, stop or status");
+        }
+    }
+    s.on_ui(&ask_init, &job);
+    switch (job.result) {
+    case 0: break;
+    case kNoInit: return s.fail(argv[0], nullptr, "there is no init here to ask");
+    case kNoSuchService: return s.fail(argv[0], argv[1], "there is no such service (service lists them)");
+    case kRunsAlready: return s.fail(argv[0], argv[1], "it is running already");
+    case kDidNotStart: return s.fail(argv[0], argv[1], "it did not start (dmesg says why)");
+    case kNotRunning: return s.fail(argv[0], argv[1], "it is not running");
+    default: return s.fail(argv[0], argv[1], "it cannot be stopped this way");
+    }
+    s.print(s.buffer());
+    if (job.what == 2) {
+        s.print("Stopped until the next start of the machine, or service NAME start.\n");
+    }
+    return 0;
 }
 
 int cmd_edit(Session &s, int argc, char **argv)

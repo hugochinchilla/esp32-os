@@ -28,6 +28,12 @@
 // its process, which has the thing's name. Without a file, default_text()
 // is used, and written where the file belongs so there is one to edit.
 //
+// A thing can also be stopped and started by hand while the machine runs
+// (stop(), start_again(); the `service` command). What is stopped by hand
+// stays stopped: init does not start it again, whatever its line says,
+// until it is started by hand or the machine starts the next time
+// (docs/journal/2026-11-18-services.md).
+//
 // The UI task only. No heap.
 #pragma once
 
@@ -42,6 +48,9 @@ constexpr char kPath[] = "C:\\.config\\startup.txt";
 
 // Starts a thing; false if it could not.
 using StartFn = bool (*)(void *context);
+// Stops a thing that was started (set_stop). It may finish a little later,
+// on another task.
+using StopFn = void (*)(void *context);
 // Opens a program or a file by what was written; false, with the reason in
 // `why`, if nothing was opened.
 using RunFn = bool (*)(const char *what, char *why, size_t capacity, void *context);
@@ -54,6 +63,27 @@ enum class Again : uint8_t {
     Does, // unless the file says NAME:once (and when no line names it)
 };
 
+// What stop() answers.
+enum class Stopped : uint8_t {
+    Ok,
+    NoSuchThing,
+    NotStarted,
+    CannotBe, // it has no way to be stopped (the desktop, inetd: kill ends that one)
+};
+
+// The lines of the start-up file as text, for a tool that edits them (the
+// Services dialog). `what` is compared as init compares it; the action is
+// what is after the last colon.
+//
+// The action of the first line that names `what` ("once", "respawn",
+// "off"), copied to `action`; false if no line does.
+bool line_action(const char *text, size_t length, const char *what, char *action, size_t capacity);
+// Gives `what` that action: its first line is changed where it stands,
+// later lines for it are taken out, and with no line one is added at the
+// end. Every other line stays as it is, comments too. Returns the new
+// length; 0 if it does not fit in `capacity`, the text then being as it was.
+size_t set_line_action(char *text, size_t length, size_t capacity, const char *what, const char *action);
+
 class Init;
 // The init of this machine: the one made last. nullptr: there is none (a
 // test that starts the desktop by itself).
@@ -61,7 +91,7 @@ Init *the();
 
 class Init : public proc::Supervisor {
 public:
-    static constexpr int kMaxUnits = 8;
+    static constexpr int kMaxUnits = 12;
     // The brake. Something that ends less than kQuickUs after it was
     // started, kQuickLimit times one after the other, is not started again:
     // something is wrong with it, and starting it for ever would take the
@@ -93,6 +123,10 @@ public:
     // False: no room, or the name is taken.
     bool add(const char *name, StartFn start, void *context, bool needed = false, Again again = Again::No);
     bool has(const char *name) const;
+    // How a thing is stopped by hand, with the context it was added with.
+    // Without one, a thing whose process init watches is stopped by asking
+    // that process to end (TERM), and anything else cannot be stopped.
+    bool set_stop(const char *name, StopFn stop);
     void set_run(RunFn run, void *context)
     {
         run_ = run;
@@ -118,6 +152,25 @@ public:
     // tries again. False: there is no such thing, it is running, or it did
     // not start.
     bool start_again(const char *name);
+    // Stops a thing by hand. It is not started again when it ends, even if
+    // its line says respawn, until start_again() or the next start of the
+    // machine.
+    Stopped stop(const char *name);
+    // The machine says a thing is not running any more (its service ended
+    // with the loop it lived in): it counts as not started, and can be
+    // started by hand.
+    void down(const char *name);
+    // What there is, in the order it was added, for a list.
+    struct Info {
+        const char *name;
+        bool started;
+        bool respawn;  // its line says it comes back
+        bool held;     // stopped by hand
+        bool can_stop; // stop() has a way to
+    };
+    int units() const { return count_; }
+    Info info(int index) const;
+    Info info(const char *name) const; // its name nullptr: there is none
     // How many things init has stopped starting again, since the start.
     int given_up() const { return given_up_; }
 
@@ -136,6 +189,7 @@ private:
     struct Unit {
         const char *name = nullptr;
         StartFn start = nullptr;
+        StopFn stop = nullptr;
         void *context = nullptr;
         bool needed = false;
         bool started = false;
@@ -145,6 +199,7 @@ private:
         proc::Pid pid = proc::kNone; // its process, while it is watched
         int quick = 0;             // quick endings, one after the other
         bool off = false;          // the file says it is not to be started
+        bool held = false;         // stopped by hand: not started again by init
     };
 
     void take(const char *text, size_t length);

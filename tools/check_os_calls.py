@@ -30,6 +30,7 @@ MOVED = [
     "network.cpp",
     "run.cpp",
     "screensaver.cpp",
+    "services.cpp",
     "settings.cpp",
     "shutdown.cpp",
     "task_manager.cpp",
