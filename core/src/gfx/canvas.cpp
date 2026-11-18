@@ -247,18 +247,23 @@ void Canvas::fill_fade(const Rect &r, Rgb from, Rgb to, bool vertical, const Rec
 
 void Canvas::focus_rect(const Rect &r)
 {
+    const Colour c = ink();
     for (int x = r.x; x < r.right(); x += 2) {
-        put(x, r.y, kBlack);
-        put(x + ((r.h - 1) & 1), r.bottom() - 1, kBlack);
+        put(x, r.y, c);
+        put(x + ((r.h - 1) & 1), r.bottom() - 1, c);
     }
     for (int y = r.y + 2; y < r.bottom() - 1; y += 2) {
-        put(r.x, y, kBlack);
-        put(r.right() - 1, y - ((r.w - 1) & 1), kBlack);
+        put(r.x, y, c);
+        put(r.right() - 1, y - ((r.w - 1) & 1), c);
     }
 }
 
 void Canvas::checker(const Rect &r)
 {
+    if (theme().flat()) {
+        fill(r, theme().track);
+        return;
+    }
     each(r, [&](const Rect &s) {
         for (int y = s.y; y < s.bottom(); y++) {
             uint8_t *row = pixels_ + y * width_;
@@ -279,20 +284,60 @@ void Canvas::edge(const Rect &r, Colour tl, Colour br)
     vline(r.right() - 1, r.y, r.h - 1, br);
 }
 
+// In a flat theme every edge is the outline with a ring of `inside` in it.
+// Two pixels, as the bevels are, so nothing that is laid out moves.
+
 void Canvas::raised(const Rect &r)
 {
+    const Theme &t = theme();
+    if (t.flat()) {
+        edge(r, t.outline, t.outline);
+        edge(r.inset(1), t.face, t.face);
+        return;
+    }
     edge(r, kGrey, kBlack);
     edge(r.inset(1), kWhite, kDarkGrey);
 }
 
 void Canvas::sunken(const Rect &r)
 {
+    const Theme &t = theme();
+    if (t.flat()) {
+        edge(r, t.outline, t.outline);
+        edge(r.inset(1), t.paper, t.paper);
+        return;
+    }
     edge(r, kDarkGrey, kWhite);
     edge(r.inset(1), kBlack, kGrey);
 }
 
+void Canvas::dent(const Rect &r)
+{
+    const Theme &t = theme();
+    if (t.flat()) {
+        edge(r, t.outline, t.outline);
+        return;
+    }
+    edge(r, kDarkGrey, kWhite);
+}
+
 void Canvas::button_frame(const Rect &r, ButtonLook look)
 {
+    const Theme &t = theme();
+    if (t.flat()) {
+        // The outline with its four corners left to the face colour.
+        const Colour in = look == ButtonLook::Raised ? t.button : t.button_down;
+        hline(r.x + 1, r.y, r.w - 2, t.outline);
+        hline(r.x + 1, r.bottom() - 1, r.w - 2, t.outline);
+        vline(r.x, r.y + 1, r.h - 2, t.outline);
+        vline(r.right() - 1, r.y + 1, r.h - 2, t.outline);
+        put(r.x, r.y, t.face);
+        put(r.right() - 1, r.y, t.face);
+        put(r.x, r.bottom() - 1, t.face);
+        put(r.right() - 1, r.bottom() - 1, t.face);
+        edge(r.inset(1), in, in);
+        return;
+    }
     if (look == ButtonLook::Raised) {
         edge(r, kWhite, kBlack);
         edge(r.inset(1), kGrey, kDarkGrey);
@@ -304,6 +349,11 @@ void Canvas::button_frame(const Rect &r, ButtonLook look)
 
 void Canvas::button(const Rect &r, ButtonLook look)
 {
+    if (theme().flat()) {
+        fill(r.inset(2), button_face(look != ButtonLook::Raised));
+        button_frame(r, look);
+        return;
+    }
     if (look == ButtonLook::Raised) {
         fill(r.inset(2), kGrey);
         edge(r, kWhite, kBlack);
@@ -507,6 +557,7 @@ int Canvas::text_cells(int x, int y, const char *s, Colour fg, BgFn bg, int care
     }
     const int sx0 = x + ox_, sy0 = y + oy_;
     const int scaret = caret_x >= 0 ? caret_x + ox_ : -1;
+    const Colour caret = ink();
     each({x, y, len * f.width, f.height}, [&](const Rect &part) {
         for (int py = part.y; py < part.bottom(); py++) {
             const int row = py - sy0;
@@ -524,8 +575,8 @@ int Canvas::text_cells(int x, int y, const char *s, Colour fg, BgFn bg, int care
                     index++;
                 }
                 const int col = px - cell_x;
-                // The caret is always black, even on a selection.
-                dst[px] = px == scaret ? kBlack : ((f.glyph(code)[row] & (0x80u >> col)) ? fg : bg(px, py));
+                // The caret is always the text colour, even on a selection.
+                dst[px] = px == scaret ? caret : ((f.glyph(code)[row] & (0x80u >> col)) ? fg : bg(px, py));
             }
             mark(part.x, py, part.w);
         }

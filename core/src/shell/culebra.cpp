@@ -7,6 +7,7 @@
 #include "core/fs/ini.hpp"
 #include "core/games/snake.hpp"
 #include "core/gfx/art.hpp"
+#include "core/gfx/game_art.hpp"
 #include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
 #include "core/app/app.hpp"
@@ -321,10 +322,10 @@ private:
         const gfx::Rect line2 = {inside.x + (inside.w - hw) / 2, inside.y + 24, hw, th};
         const gfx::Rect top = {inside.x, inside.y, inside.w, line2.y - inside.y};
         const gfx::Rect bottom = {inside.x, line2.y, inside.w, inside.bottom() - line2.y};
-        c.fill_around(top, line1, gfx::kGrey);
-        c.fill_around(bottom, line2, gfx::kGrey);
-        c.text_opaque(line1.x, line1.y, title, gfx::kBlack, gfx::kGrey);
-        c.text_opaque(line2.x, line2.y, hint, gfx::kBlack, gfx::kGrey);
+        c.fill_around(top, line1, gfx::face());
+        c.fill_around(bottom, line2, gfx::face());
+        c.text_opaque(line1.x, line1.y, title, gfx::ink(), gfx::face());
+        c.text_opaque(line2.x, line2.y, hint, gfx::ink(), gfx::face());
     }
 
     // Time between steps, and points for a berry, at each speed.
@@ -455,25 +456,54 @@ private:
     const wm::MenuBar bar_ = {entries_, 2};
 };
 
-app::Number g_window = app::kNone; // the one there may be: a number, dead once it has closed
-
-} // namespace
-
-void open_culebra()
+app::Number open_window(const gfx::Bitmap *icon)
 {
-    const AsProgram as("Culebra");
-    if (app::bring_forward(g_window)) {
-        return;
-    }
     app::Look look;
     look.title = "Culebra";
     look.x = 150;
     look.y = 60;
     look.width = CulebraWindow::kClientW;
     look.height = CulebraWindow::kClientH;
-    look.icon = &gfx::snake_icon_16();
+    look.icon = icon;
     look.flags = app::kClientSize | app::kFixedSize | app::kMenuBar;
-    g_window = app::open<CulebraWindow>(look);
+    return app::open<CulebraWindow>(look);
+}
+
+#ifndef APP_FILE
+app::Number g_window = app::kNone; // the one there may be: a number, dead once it has closed
+#endif
+
+} // namespace
+
+#ifdef APP_FILE
+} // namespace shell
+
+// Culebra kept in a file (backlog item 27; programs/culebra): on the board
+// it is not part of the firmware. The system loads it, runs it as its own
+// process on its own task and brings its window forward if it is opened
+// again.
+APP_INFO(app::file_info("Culebra", 0, gfx::game_art::kSnake16, gfx::game_art::kSnake16Inks, gfx::game_art::kSnake32,
+                        gfx::game_art::kSnake32Inks));
+
+namespace {
+// The window's icon: the header's own pixels are not in memory with the
+// program, so they are made again here from the same rows.
+constexpr app::Icon16 kWindowIcon = app::icon16(gfx::game_art::kSnake16, gfx::game_art::kSnake16Inks);
+} // namespace
+
+APP_MAIN(int, char **)
+{
+    static const gfx::Bitmap icon = {16, 16, kWindowIcon.pixels, app::kClearInk};
+    return shell::open_window(&icon) != app::kNone ? 0 : 1;
+}
+#else
+void open_culebra()
+{
+    const AsProgram as("Culebra");
+    if (app::bring_forward(g_window)) {
+        return;
+    }
+    g_window = open_window(&gfx::snake_icon_16());
     if (g_window == app::kNone) {
         no_memory_for("Culebra");
     }
@@ -483,3 +513,4 @@ void open_culebra()
 const games::Snake &culebra_game() { return app::program<CulebraWindow>(g_window)->game(); }
 
 } // namespace shell
+#endif

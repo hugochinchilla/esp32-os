@@ -108,7 +108,7 @@ public:
         for (int i = 0; i < kSamples; i++) {
             int bar = (values_[i] * h + 50) / 100;
             bar = bar == 0 && values_[i] != 0 ? 1 : bar;
-            c.fill({2 + i * kColumn, 2, kColumn, h - bar}, gfx::kWhite);
+            c.fill({2 + i * kColumn, 2, kColumn, h - bar}, gfx::paper());
             c.fill({2 + i * kColumn, 2 + h - bar, kColumn, bar}, kNavy);
         }
     }
@@ -405,24 +405,25 @@ app::Number g_window = app::kNone; // the one there may be: a number, dead once 
 
 void open_task_manager()
 {
-    const AsProgram as("Task Manager");
-    if (!app::bring_forward(g_window)) {
-        app::Look look;
-        look.title = "Task Manager";
-        look.width = TaskManager::kClientW;
-        look.height = TaskManager::kClientH;
-        look.icon = &gfx::tasks_icon_16();
-        look.flags = app::kDialog | app::kClientSize; // fixed size, only the close button
-        g_window = app::open<TaskManager>(look);
-        if (g_window == app::kNone) {
-            no_memory_for("Task Manager");
-            return;
+    in_program("Task Manager", [] {
+        if (!app::bring_forward(g_window)) {
+            app::Look look;
+            look.title = "Task Manager";
+            look.width = TaskManager::kClientW;
+            look.height = TaskManager::kClientH;
+            look.icon = &gfx::tasks_icon_16();
+            look.flags = app::kDialog | app::kClientSize; // fixed size, only the close button
+            g_window = app::open<TaskManager>(look);
+            if (g_window == app::kNone) {
+                no_memory_for("Task Manager");
+                return;
+            }
         }
-    }
-    // Ctrl+Alt+Del again while it is open does this too.
-    if (TaskManager *w = app::program<TaskManager>(g_window)) {
-        w->brought_forward();
-    }
+        // Ctrl+Alt+Del again while it is open does this too.
+        if (TaskManager *w = app::program<TaskManager>(g_window)) {
+            w->brought_forward();
+        }
+    });
 }
 
 } // namespace shell

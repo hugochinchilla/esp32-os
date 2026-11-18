@@ -55,6 +55,8 @@ const Bitmap &text_icon_32();
 const Bitmap &picture_icon_16(); // a picture file
 const Bitmap &picture_icon_32();
 const Bitmap &file_icon_32(); // any other kind of file
+const Bitmap &program_icon_16(); // a program kept in a file with no picture of its own
+const Bitmap &program_icon_32();
 const Bitmap &drive_icon_16();
 const Bitmap &drive_icon_32();
 const Bitmap &board_icon_32(); // the ESP32 board: My Board

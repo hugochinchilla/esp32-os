@@ -8,3 +8,6 @@ dependencies:
   # mDNS: the board answers to chinchilla.local and announces the remote
   # screen (docs/DECISIONS.md).
   espressif/mdns: "==1.15.1"
+  # Loads programs kept in files into external RAM and runs them (backlog
+  # item 27, docs/DECISIONS.md).
+  espressif/elf_loader: "==2.1.0"

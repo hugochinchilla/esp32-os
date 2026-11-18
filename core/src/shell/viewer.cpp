@@ -174,10 +174,10 @@ public:
     {
         if (which == status_) {
             const gfx::Rect r = {0, 0, width_, kStatusH};
-            c.edge(r, gfx::kDarkGrey, gfx::kWhite);
+            c.dent(r);
             const int ty = (kStatusH - 12) / 2;
-            c.fill_around(r.inset(1), {4, ty, app::Canvas::text_width(status_text_), 12}, gfx::kGrey);
-            c.text_opaque(4, ty, status_text_, gfx::kBlack, gfx::kGrey);
+            c.fill_around(r.inset(1), {4, ty, app::Canvas::text_width(status_text_), 12}, gfx::face());
+            c.text_opaque(4, ty, status_text_, gfx::ink(), gfx::face());
             return;
         }
         // The ready rows of the picture, and the background around them,
@@ -498,25 +498,27 @@ void set_dither(image::Dither d)
 
 void open_picture(const char *path)
 {
-    const AsProgram as("Picture viewer");
-    if (!app::bring_forward(g_window)) {
-        app::Look look;
-        look.title = "Picture viewer";
-        look.x = 110;
-        look.y = 40;
-        look.width = 420;
-        look.height = 360;
-        look.icon = &gfx::viewer_icon_16();
-        look.flags = app::kMenuBar;
-        g_window = app::open<ViewerWindow>(look);
-        if (g_window == app::kNone) {
-            no_memory_for("Picture viewer");
-            return;
+    const PathArg p(path);
+    in_program("Picture viewer", [p] {
+        if (!app::bring_forward(g_window)) {
+            app::Look look;
+            look.title = "Picture viewer";
+            look.x = 110;
+            look.y = 40;
+            look.width = 420;
+            look.height = 360;
+            look.icon = &gfx::viewer_icon_16();
+            look.flags = app::kMenuBar;
+            g_window = app::open<ViewerWindow>(look);
+            if (g_window == app::kNone) {
+                no_memory_for("Picture viewer");
+                return;
+            }
         }
-    }
-    if (ViewerWindow *viewer = app::program<ViewerWindow>(g_window)) {
-        viewer->open_path(path);
-    }
+        if (ViewerWindow *viewer = app::program<ViewerWindow>(g_window)) {
+            viewer->open_path(p.get());
+        }
+    });
 }
 
 void finish_picture()

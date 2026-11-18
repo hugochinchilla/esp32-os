@@ -7,12 +7,14 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <ctime>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 
+#include "bootloader_common.h"
 #include "driver/uart.h"
 #include "driver/uart_select.h"
 #include "esp_ota_ops.h"
@@ -36,6 +38,7 @@
 #include "core/fs/ini.hpp"
 #include "littlefs_volume.hpp"
 #include "rtos_queue.hpp"
+#include "elf_programs.hpp"
 #include "rtos_tasks.hpp"
 #include "core/job/job.hpp"
 #include "core/prog/prog.hpp"
@@ -60,6 +63,7 @@
 #include "core/wm/wm.hpp"
 #include "core/ports.hpp"
 #include "core/video/pointer.hpp"
+#include "boot_flag.h"
 #include "crash.hpp"
 #include "vga.h"
 #include "wifi.hpp"
@@ -69,8 +73,29 @@
 // this board; NVS survives that, and flashing does not erase it).
 constexpr const char *kFastNextKey = "fast_next";
 
+// The word the BIOS, the bootloader and this firmware pass across a restart
+// (firmware/common/boot_flag.h), in RTC memory the bootloader reserves.
+void set_boot_word(uint32_t word)
+{
+    memcpy(bootloader_common_get_rtc_retain_mem()->custom, &word, sizeof(word));
+}
+
+// True once if the bootloader came here from the BIOS, or from a restart
+// that asked for no BIOS: the start-up screens are not shown again.
+bool take_from_bios()
+{
+    uint32_t word;
+    memcpy(&word, bootloader_common_get_rtc_retain_mem()->custom, sizeof(word));
+    set_boot_word(0);
+    return word == CHINCHILLA_FROM_BIOS;
+}
+
 void arm_fast_next()
 {
+    // The restart that follows goes straight to this firmware, not through
+    // the BIOS. (After a flashing the RTC memory is gone; the BIOS then
+    // reads the word in NVS below and hands over at once.)
+    set_boot_word(CHINCHILLA_START_OS);
     nvs_handle_t h;
     if (nvs_flash_init() == ESP_OK && nvs_open("chinchilla", NVS_READWRITE, &h) == ESP_OK) {
         nvs_set_u32(h, kFastNextKey, shell::kFastBootMagic);
@@ -788,9 +813,16 @@ void ui_task(void *)
     // Start-up screens: the real self-test, then the splash.
     static shell::BootIo boot_io{display, system, memory, clock, &storage, &boot_idle, &protocol, &boot_log};
     shell::BootSettings boot = shell::boot_settings(storage);
+    // Both are read, so both are cleared.
+    const bool from_bios = take_from_bios();
     if (take_fast_next()) {
         boot.fastboot = true;
         ESP_LOGI(TAG, "one-shot fast boot (armed by tools/dbg.py; boot.ini unchanged)");
+    } else if (from_bios) {
+        // The BIOS has shown the self-test and counted down: this start
+        // goes on like a fast one (the cheap checks, no screens).
+        boot.fastboot = true;
+        ESP_LOGI(TAG, "started by the BIOS: its self-test is not repeated");
     }
     boot_io.video_start_us = s_video_start_us;
     boot_io.monitor_wait_ms = boot.monitor_wait_ms;
@@ -828,12 +860,12 @@ void ui_task(void *)
     // were. If the radio does not start, the Network panel says so.
     const int64_t wifi_start = esp_timer_get_time();
     // C:\.config\network.ini [wifi]: enabled (false: the radio is not
-    // started) and tx_power_dbm, 2 to 20, default 2: the radio's transmit
-    // bursts put lines on the analogue picture, and at 2 dBm they are gone
-    // (docs/DECISIONS.md).
+    // started) and tx_power_dbm, 2 to 20, default 20. On a board without
+    // a capacitor across 3.3 V the radio's transmit bursts put lines on
+    // the analogue picture, and 2 dBm removes them (docs/DECISIONS.md).
     static EXT_RAM_BSS_ATTR fs::Ini network;
     network.load(storage, "C:\\.config\\network.ini");
-    const int tx_dbm = network.get_int("wifi", "tx_power_dbm", 2);
+    const int tx_dbm = network.get_int("wifi", "tx_power_dbm", 20);
     const int8_t tx = static_cast<int8_t>((tx_dbm < 2 ? 2 : (tx_dbm > 20 ? 20 : tx_dbm)) * 4); // quarter dBm
     static const bool radio = network.get_bool("wifi", "enabled", true) && wifi_begin();
     if (radio) {
@@ -1177,6 +1209,15 @@ extern "C" void app_main(void)
     }
     prog::runner().set_tasks(&tasks, program_kits, prog::Runner::kMaxTasks);
     prog::runner().set_limit(prog::Runner::kLimitMs);
+    // Programs kept in files, loaded into external RAM (backlog item 27).
+    static ElfLoader programs;
+    if (programs.begin()) {
+        shell::set_loader(&programs);
+        // Those that come with the system go to C:\Programs when it starts.
+        static_assert(sizeof(chinchilla_bundled) == sizeof(shell::BundledProgram), "one layout, two names");
+        shell::set_bundled_programs(reinterpret_cast<const shell::BundledProgram *>(chinchilla_bundle),
+                                    static_cast<int>(chinchilla_bundle_count), chinchilla_bundle_stamp);
+    }
 
     ESP_LOGI(TAG, "starting video on core 1");
     static StaticSemaphore_t done_buffer;

@@ -17,7 +17,6 @@ namespace {
 // Layout (tools/mockup/desktop.py).
 constexpr int kIconX = 6, kIconY = 8, kIconStep = 70, kIconColumn = 76;
 constexpr int kIconW = 72, kIconH = 50;
-constexpr gfx::Rgb kHighlight = {0, 0, 128};
 
 } // namespace
 
@@ -351,8 +350,8 @@ void Icons::paint(const RectList &clip)
         const int tw = Canvas::text_width(icon.label);
         const int tx = x + 32 - tw / 2;
         if (selected) {
-            c.fill_rgb({tx - 1, y + 33, tw + 2, 14}, kHighlight);
-            c.text(tx, y + 34, icon.label, gfx::kWhite);
+            c.fill_rgb({tx - 1, y + 33, tw + 2, 14}, gfx::theme().select);
+            c.text(tx, y + 34, icon.label, gfx::theme().select_ink);
         } else {
             c.text(tx + 1, y + 35, icon.label, gfx::kBlack);
             c.text(tx, y + 34, icon.label, gfx::kWhite);

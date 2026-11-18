@@ -1,0 +1,33 @@
+# ESP32-S3-N16R8: 16 MB quad flash, 8 MB octal PSRAM. The hardware lines are
+# the OS's (firmware/os/sdkconfig.defaults); keep them the same.
+CONFIG_IDF_TARGET="esp32s3"
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+CONFIG_ESP32S3_DATA_CACHE_LINE_64B=y
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+CONFIG_LCD_RGB_RESTART_IN_VSYNC=y
+# The serial port, at the OS's speed. The BIOS writes plain text on it.
+CONFIG_ESP_CONSOLE_UART_CUSTOM=y
+CONFIG_ESP_CONSOLE_UART_BAUDRATE=921600
+# Only warnings and errors from ESP-IDF, so the serial port shows the BIOS's
+# own lines and not the start-up chatter.
+CONFIG_LOG_DEFAULT_LEVEL_WARN=y
+# The same partition table as the OS.
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="../os/partitions.csv"
+# So the BIOS reads the update record the way the bootloader does.
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+# The word passed across a restart (firmware/common/boot_flag.h): the same
+# lines as in the OS's file.
+CONFIG_BOOTLOADER_CUSTOM_RESERVE_RTC=y
+CONFIG_BOOTLOADER_CUSTOM_RESERVE_RTC_SIZE=0x8
+# Static objects may live in external RAM (core/linker.lf puts the core's there).
+CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY=y
+# The video as the OS has it (the same vga.c): code and constants run from
+# PSRAM and the video interrupt from internal RAM, so reading the flash does
+# not hold the picture up. Delete the sdkconfig file after changing this.
+CONFIG_SPIRAM_XIP_FROM_PSRAM=y
+CONFIG_LCD_RGB_ISR_IRAM_SAFE=y

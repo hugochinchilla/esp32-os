@@ -349,15 +349,32 @@ void test_editors()
     shell::open_in_editor("C:\\Documents\\notes.txt");
     CHECK(processes_named("Editor") == 3 && desktop.active() == notes);
 
-    // Four at most; the fifth says so and starts nothing.
+    // No limit of the Editor's own (the owner's decision): a fifth opens,
+    // as long as there is memory, and gives it all back when it closes.
     shell::launch(app);
     CHECK(processes_named("Editor") == 4);
     const int four = memory.in_use();
     shell::launch(app);
-    CHECK(processes_named("Editor") == 4 && strcmp(title(), "Editor") == 0); // the message
+    CHECK(processes_named("Editor") == 5 && strcmp(title(), "Untitled - Editor") == 0);
+    key(wm::key::F4, kAlt);
+    wait(10000);
+    wait(10000);
+    CHECK(processes_named("Editor") == 4 && memory.in_use() == four);
+    // The one that finds no memory says so, and the message stays when
+    // whoever started it has gone: asked for from the Run dialog, which
+    // closes at once, as the board did it (the message went with the dialog).
+    memory.limit = 64 * 1024;
+    shell::run_dialog();
+    desktop.text("editor");
     key(wm::key::Enter);
     wait(10000);
-    CHECK(memory.in_use() == four);
+    wait(10000);
+    CHECK(find("Run") == nullptr && strcmp(title(), "Editor") == 0 && processes_named("Editor") == 5);
+    key(wm::key::Enter);
+    wait(10000);
+    wait(10000);
+    CHECK(processes_named("Editor") == 4 && memory.in_use() == four);
+    memory.limit = 0;
 
     // Each has its own dialogs at the same time: Open in one, Save As in
     // another, the question about unsaved text in a third.
@@ -410,7 +427,7 @@ void test_dialogs()
         int blocks; // while open
     };
     const Tool tools[] = {
-        {"Display", "Display", &shell::display_dialog, 13},
+        {"Display", "Display", &shell::display_dialog, 15}, // the window and fourteen controls
         {"Screen Saver", "Screen Saver", &shell::screen_saver_dialog, 11}, // by number: the window and ten controls
         {"Network", "Network", &shell::open_network, 13},
         {"Shut Down", "Shut Down Chinchilla", &shell::shut_down_dialog, 6}, // by number (os::ui): the window and five controls
@@ -483,10 +500,16 @@ void test_dialogs()
     // The Task Manager's question about a program that will not close goes
     // with the Task Manager if that is closed first.
     shell::open_task_manager();
-    shell::ask("Question", "Still there?", yes_no, 2, [](int, void *) { answers = 100; }, nullptr);
+    {
+        // Asked by the Task Manager itself, as it is: a message another
+        // program put over its window would stay.
+        const proc::Scope as(&t, t.find_by_name("Task Manager"));
+        shell::ask("Question", "Still there?", yes_no, 2, [](int, void *) { answers = 100; }, nullptr);
+    }
     CHECK(desktop.window_count() == 2);
     desktop.close(*find("Task Manager"));
     wait(10000);
+    wait(10000); // the question goes at the first safe point, its process's row at the next
     CHECK(desktop.window_count() == 0 && answers == 100 && memory.in_use() == base && t.count() == 2);
 
     // The Picture viewer's Options and the Network panel's password dialog
@@ -544,8 +567,9 @@ void test_no_memory()
     CHECK(desktop.window_count() == 0 && t.count() == 2 && memory.in_use() == base);
     memory.limit = 0;
 
-    // The window manager full (16 windows): a program that finds no room is
-    // not left behind either.
+    // More windows than the lists of them begin with (16). There is no
+    // limit of the system's (the owner's decision): the lists grow, and
+    // go back when the windows have gone.
     static const char *const folders[] = {"C:\\", "C:\\Documents", "C:\\pictures"};
     for (const char *folder : folders) {
         shell::open_folder(folder);
@@ -559,15 +583,15 @@ void test_no_memory()
     shell::display_dialog();
     shell::screen_saver_dialog();
     shell::open_network();
-    CHECK(desktop.window_count() == wm::Wm::kMaxWindows);
+    const int many = desktop.window_count();
+    CHECK(many > wm::Wm::kFirstWindows);
     wait(10000);
-    const int full = memory.in_use();
     const int rows = t.count();
-    shell::open_task_manager();
     shell::launch(*shell::find_app("Editor"));
-    shell::message_box("Note", "No room for this.");
+    shell::open_folder("C:\\Documents\\Desktop"); // a fourth folder window
+    shell::message_box("Note", "There is room for this.");
     wait(10000);
-    CHECK(desktop.window_count() == wm::Wm::kMaxWindows && memory.in_use() == full && t.count() == rows);
+    CHECK(desktop.window_count() == many + 3 && t.count() == rows + 1);
     close_all();
     for (int i = 0; i < 4 && desktop.window_count() != 0; i++) {
         key(wm::key::Enter); // anything that asked

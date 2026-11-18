@@ -177,6 +177,16 @@ void Window::set_locked(bool on)
     }
 }
 
+void Window::set_hourglass(bool on)
+{
+    if (hourglass_ != on) {
+        hourglass_ = on;
+        if (wm_ != nullptr) {
+            wm_->hourglass_changed();
+        }
+    }
+}
+
 void Window::close()
 {
     if (wm_ != nullptr) {
@@ -224,7 +234,7 @@ void Window::paint(gfx::Canvas &c)
         background.set({0, 0, c_rect.w, c_rect.h}); // too many pieces: the plain way
     }
     for (int i = 0; i < background.size(); i++) {
-        c.fill(background[i], gfx::kGrey);
+        c.fill(background[i], gfx::face());
     }
     for (int i = 0; i < widget_count_; i++) {
         Widget &w = *widgets_[i];

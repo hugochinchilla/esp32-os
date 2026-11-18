@@ -1,6 +1,7 @@
 // Drawing on the 8-bit framebuffer (RRRGGGBB), clipped to a rectangle list.
-// The look (colours, bevels, dither) follows tools/mockup/desktop.py, which
-// drew docs/look/target-98.png.
+// The edges, buttons and scroll tracks are drawn as the theme in use says
+// (core/gfx/theme.hpp); the classic one follows tools/mockup/desktop.py,
+// which drew docs/look/target-98.png.
 #pragma once
 
 #include <cstdint>
@@ -20,8 +21,10 @@ constexpr Colour rgb(unsigned r, unsigned g, unsigned b)
 
 constexpr Colour kBlack = rgb(0, 0, 0);
 constexpr Colour kWhite = rgb(7, 7, 3);
-constexpr Colour kGrey = rgb(5, 5, 2);     // face of windows and buttons
-constexpr Colour kDarkGrey = rgb(2, 2, 1); // shadow
+// Fixed colours, for drawings. What is part of the user interface asks the
+// theme instead: gfx::face(), ink(), paper(), dim().
+constexpr Colour kGrey = rgb(5, 5, 2);     // the classic face of windows and buttons
+constexpr Colour kDarkGrey = rgb(2, 2, 1); // and their shadow
 
 // A colour in full 8-bit-per-channel RGB, shown with the 4x4 ordered dither
 // where the board has no exact match.
@@ -81,13 +84,16 @@ public:
     void fill_fade(const Rect &r, Rgb from, Rgb to, bool vertical = false, const Rect *span = nullptr);
     // A dotted rectangle (every other pixel), as round focused widgets.
     void focus_rect(const Rect &r);
-    // The white and grey weave (pressed-in taskbar buttons, scroll tracks).
+    // A scroll bar's track, and the inside of a button that is switched on:
+    // the white and grey weave of the classic look, one colour in a flat one.
     void checker(const Rect &r);
 
     // One-pixel frame: top and left in `tl`, bottom and right in `br`.
     void edge(const Rect &r, Colour tl, Colour br);
     void raised(const Rect &r); // window edge, two pixels
     void sunken(const Rect &r); // text fields, lists
+    // A thin edge pressed in, one pixel: an open menu-bar entry, the tray.
+    void dent(const Rect &r);
     void button(const Rect &r, ButtonLook look);
     // Only the edges of a button: for buttons that fill their own inside.
     void button_frame(const Rect &r, ButtonLook look);
@@ -111,8 +117,8 @@ public:
     int text_scaled(int x, int y, const char *s, Colour c, bool bold, bool slanted, int scale);
     // Text with its background in one pass: every pixel of each character
     // cell is written once, in `fg` or `bg` (no erase before drawing, so
-    // nothing flashes). `caret_x`, if not -1, is a column drawn in black (a
-    // text caret, black). Returns the x after the text.
+    // nothing flashes). `caret_x`, if not -1, is a column drawn in the
+    // theme's text colour (a text caret). Returns the x after the text.
     int text_opaque(int x, int y, const char *s, Colour fg, Colour bg, int caret_x = -1);
     // The same over a dithered background colour (a selection).
     int text_opaque(int x, int y, const char *s, Colour fg, Rgb bg, int caret_x = -1);
@@ -199,3 +205,5 @@ private:
 };
 
 } // namespace gfx
+
+#include "core/gfx/theme.hpp"

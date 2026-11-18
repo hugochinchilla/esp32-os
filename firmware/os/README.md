@@ -4,7 +4,7 @@ The start of the real firmware. It brings up the screen, shows a quick
 real self-test (processor, RAM, a memory test, flash, drives, video, input,
 sound) and a splash screen, and runs the desktop: window manager, taskbar and Start menu, desktop icons, and the
 built-in programs (About Chinchilla, Editor, File manager, Picture viewer, Welcome, Widget
-gallery). Drive C: is LittleFS on the flash (12 MB, `partitions.csv`); files
+gallery). Drive C: is LittleFS on the flash (11 MB, `partitions.csv`); files
 stay across restarts. A new drive is formatted and gets the sample files and
 pictures. Programs keep their settings in C:\.config\<program>.ini. It answers the debug protocol on the serial port. Input is injected over the debug link until there is a USB keyboard and
 mouse.
@@ -28,6 +28,13 @@ them with `tools/dbg.py monitor`.
 
 The speed comes from `sdkconfig.defaults`. After changing that file, delete
 `sdkconfig` and rebuild, or the old value is kept.
+
+Since the BIOS (2026-11-17) the bootloader built here is partly ours
+(`bootloader_components/main/bootloader_start.c`): after a reset it starts
+the BIOS in the `bios` partition, which restarts into this firmware
+(`../bios/README.md`). `idf.py flash` here writes the bootloader, the table
+and the OS; `tools/flash-bios.sh` adds the BIOS. Without a BIOS in the flash
+this firmware starts directly and shows its own self-test.
 
 Since 2026-11-17 the flash has two app slots (`ota_0`, `ota_1`) for updates
 over the network. A cable `idf.py flash` writes the app into `ota_0` and

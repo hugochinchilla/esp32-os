@@ -70,6 +70,7 @@ void install(const Kit &kit)
             }
         },
         nullptr);
+    prog::runner().set_memory(g_kit.memory);
     prog::runner().set_wake(
         [](void *) {
             if (msg::queue() != nullptr) {
@@ -346,6 +347,12 @@ void set_backdrop(const wm::Wm::Backdrop &backdrop)
     g_kit.wm->set_backdrop(backdrop);
 }
 
+void set_theme(int index)
+{
+    const prog::InCall in_call;
+    g_kit.wm->set_theme(index);
+}
+
 void set_screen_saver(int animation, uint32_t wait_seconds)
 {
     const prog::InCall in_call;
@@ -381,6 +388,12 @@ bool shut_down()
 {
     const prog::InCall in_call;
     return g_kit.shut_down != nullptr && g_kit.shut_down();
+}
+
+bool launch(const char *program)
+{
+    const prog::InCall in_call;
+    return g_kit.launch != nullptr && g_kit.launch(program);
 }
 
 /* ---- The network ---------------------------------------------------------------- */
@@ -431,6 +444,11 @@ Error entry(const char *folder, int index, fs::DirEntry &out)
 {
     const prog::InCall in_call;
     return g_kit.storage->entry(folder, index, out);
+}
+Error entries(const char *folder, int first, fs::DirEntry *out, int capacity, int &count)
+{
+    const prog::InCall in_call;
+    return g_kit.storage->entries(folder, first, out, capacity, count);
 }
 Error make_folder(const char *path)
 {

@@ -11,7 +11,8 @@ namespace bios {
 
 // Where things are on the 80 by 30 screen.
 constexpr int kTitleRow = 1, kProcessorRow = 4, kMemoryRow = 5, kVideoRow = 8, kDriveRow = 9, kInputRow = 10,
-              kSoundRow = 11, kSummaryRow = 13, kKeyRow = 15, kCountdownRow = 16, kSetupRow = 28, kIdRow = 29;
+              kSoundRow = 11, kBootRow = 13, kSummaryRow = 15, kKeyRow = 17, kCountdownRow = 18, kSetupRow = 28,
+              kIdRow = 29;
 constexpr int kLeftColumn = 2;
 // The mascot: 16 squares of 5 pixels, over ten columns and five rows that
 // the text leaves empty.
@@ -22,16 +23,45 @@ constexpr gfx::Colour kText = gfx::rgb(5, 5, 2);
 constexpr gfx::Colour kDim = gfx::rgb(2, 2, 1);
 constexpr gfx::Colour kYellow = gfx::rgb(7, 7, 0);
 constexpr gfx::Colour kRed = gfx::rgb(7, 1, 0);
+constexpr gfx::Colour kLeaf = gfx::rgb(1, 6, 1);
+constexpr gfx::Colour kLeafDark = gfx::rgb(1, 3, 0);
+
+// The first screen: how long it stays, counted from the start of the video.
+// The bench monitor shows a steady picture 5.5 s after the video starts,
+// whatever is on it (measured, docs/journal/2026-11-17-bios-first-screen.md):
+// this leaves it seen for about a second.
+constexpr uint32_t kSplashMs = 6500;
 
 struct Post {
     shell::BootIo &io;
     TextScreen &screen;
     // The bottom line, e.g. the build's date and the board (may be nullptr).
     const char *id = nullptr;
+    // Drive C: when io.storage is not given: the BIOS does not mount the
+    // drive, it reads its size from the partition table (may be nullptr:
+    // "none", a failed check).
+    const char *drive = nullptr;
+    // The system the BIOS is about to start: fills `text` (e.g. "ota_0,
+    // 1.4 MB, image OK") and returns whether it can be started. nullptr: no
+    // "Boot device" line (a BIOS that starts nothing, as on the PC).
+    bool (*boot_device)(char *text, size_t capacity, void *context) = nullptr;
+    void *boot_context = nullptr;
+    // Set by run_post: there is a system to start. When false the screen
+    // says so and does not count down; the caller must not hand over.
+    bool bootable = true;
 };
 
 // Black, the mascot, and every cell of the screen.
 void paint_frame(gfx::Canvas &c, TextScreen &screen);
+
+// The first screen, as old BIOSes opened with their maker's logo and an
+// energy badge: the mascot, a badge of our own, the version. It stays until
+// `ms` after the video started (a key ends it), which is when a monitor is
+// still waking, so nothing that matters is on it. Nothing goes to serial.
+// The self-test's own wait for the monitor, if any, then counts from its end.
+void run_splash(Post &post, uint32_t ms = kSplashMs);
+// The same picture with given words (for the PC test against the drawing).
+void draw_splash(gfx::Canvas &c, TextScreen &screen, const char *version, const char *id);
 
 // Runs the self-test; returns the number of failed checks. Every check runs
 // to the end. With hold it paces the lines, waits for the monitor first and
@@ -44,6 +74,7 @@ struct PostValues {
     const char *version, *processor;
     uint32_t external_kb, internal_kb;
     const char *video, *drive, *input, *sound;
+    const char *boot; // nullptr: no "Boot device" line
     uint32_t countdown; // 0: no "Press any key" lines
     const char *id;
 };

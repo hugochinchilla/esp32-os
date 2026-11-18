@@ -5,6 +5,7 @@
 // same way.
 #pragma once
 
+#include "core/app/file.hpp"
 #include "core/fs/fs.hpp"
 #include "core/fs/ini.hpp"
 #include "core/games/cactus.hpp"
@@ -43,6 +44,9 @@ struct App {
     // Its code runs on a task of its own where the machine has tasks
     // (core/prog, backlog item 26): the first one is Culebra.
     bool own_task = false;
+    // What that task's stack is, in bytes; 0 is the least there is
+    // (prog::Runner::kStackBytes).
+    uint32_t stack = 0;
 };
 
 int app_count();
@@ -187,5 +191,34 @@ void startup_trouble(int lines);
 // `storage` holds the drives; `memory` gives the large buffers (editor,
 // clipboard, folder lists), once.
 void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memory &memory);
+
+// Programs loaded from files (backlog item 27). The machine gives its
+// loader once, before or after start(); without one no file is a program.
+void set_loader(ports::Loader *loader);
+// A file that is a program by its name: "*.app".
+bool is_program_file(const char *path);
+constexpr uint32_t kMaxProgramBytes = 1024 * 1024;
+// What the file says of itself at its front (core/app/file.hpp): its name,
+// its pictures, its stack. False if it is not a program file.
+bool program_info(const char *path, app::FileInfo &info);
+// Loads the file and runs it as a new process with the name the program
+// gives itself, on a task of its own where the machine has tasks. False, with
+// `why` in plain words, if it could not be loaded or did not start.
+bool run_file(const char *path, char *why, size_t capacity);
+
+// Programs that come with the system (the owner's choice, 2026-11-17): the
+// firmware carries their files as data and puts them in C:\Programs, where
+// the Start menu finds them. `stamp` names this set of files: it changes
+// when any of them does. Hand them in before start().
+struct BundledProgram {
+    const char *file; // "hello.app"
+    const uint8_t *data;
+    uint32_t size;
+};
+void set_bundled_programs(const BundledProgram *list, int count, const char *stamp);
+// Writes those that are not in C:\Programs, or are there from another set;
+// start() does it. Returns how many files it wrote, -1 if one could not be.
+int install_programs();
+constexpr char kProgramsFolder[] = "C:\\Programs";
 
 } // namespace shell

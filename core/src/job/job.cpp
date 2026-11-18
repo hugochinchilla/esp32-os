@@ -124,7 +124,12 @@ void Jobs::finish(Slot &slot)
     procs_.job_finished(owner);
     procs_.add_memory(owner, -static_cast<int32_t>(slot.stack));
     if (spec.done != nullptr && procs_.alive(owner)) {
-        proc::call_as(&procs_, owner, [spec, result, stopped] { spec.done(spec.context, result, stopped); });
+        // The result waits for an owner that is not responding and is
+        // handed over when it answers again: the one thing kept for a late
+        // program (the owner's choice, 2026-11-17), since a save nobody
+        // heard the end of would leave its window locked for good.
+        proc::call_as(
+            &procs_, owner, [spec, result, stopped] { spec.done(spec.context, result, stopped); }, proc::kKept);
     }
 }
 

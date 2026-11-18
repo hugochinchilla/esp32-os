@@ -132,6 +132,10 @@ public:
 
 // The desktop's background: a colour and an 8x8 pattern over it.
 void set_backdrop(const wm::Wm::Backdrop &backdrop);
+// The look of windows, buttons and the taskbar: a place in the table of
+// themes (core/gfx/theme.hpp, where gfx::theme() tells the one in use).
+// Everything on the screen is painted again.
+void set_theme(int index);
 // The screensaver: which animation (a place in core/saver's list; -1: none)
 // and after how many seconds without a key or the mouse.
 void set_screen_saver(int animation, uint32_t wait_seconds);
@@ -149,6 +153,9 @@ SaverRun last_saver_run();
 // the power can go. False: one of them has a question open, and it is
 // brought forward.
 bool shut_down();
+// Starts one of the system's own programs by its name ("About Chinchilla"),
+// or brings it forward if it runs. False: there is none of that name.
+bool launch(const char *program);
 
 /* ---- The network ---------------------------------------------------------------- */
 
@@ -181,6 +188,9 @@ int drives(char *letters, int capacity);
 Error drive_info(char letter, fs::VolumeInfo &out);
 Error stat(const char *path, fs::DirEntry &out);
 Error entry(const char *folder, int index, fs::DirEntry &out);
+// A run of entries from the first-th on, in one pass over the folder: what
+// a listing asks. `count` fewer than `capacity`: the folder ends there.
+Error entries(const char *folder, int first, fs::DirEntry *out, int capacity, int &count);
 Error make_folder(const char *path);
 Error remove(const char *path);
 Error rename(const char *from, const char *to); // same drive only
@@ -245,6 +255,7 @@ struct Kit {
     fs::Storage *storage = nullptr;
     ports::Memory *memory = nullptr;
     bool (*shut_down)() = nullptr; // closes every program and takes the screen
+    bool (*launch)(const char *program) = nullptr; // a row of the program table, by name
     sh::TerminalSession *(*open_session)(ports::ByteSink &device, const char *&why) = nullptr;
 };
 // What the calls work with. The desktop hands it in when it starts.

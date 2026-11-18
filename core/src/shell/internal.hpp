@@ -1,7 +1,9 @@
 // Shared between the shell's source files.
 #pragma once
 
+#include <cstdio>
 #include <new>
+#include <type_traits>
 #include <utility>
 
 #include "core/fs/fs.hpp"
@@ -29,6 +31,39 @@ public:
 
 private:
     os::As as_;
+};
+
+// A program's way in when someone else may be the one calling (the desktop
+// opening a folder, the File manager opening a file in the Editor, the
+// answer to a question coming back): the code runs as the program and, if
+// the program has a task of its own, on that task (backlog item 26). The
+// callable is handed over by copy, so it holds what it needs by value: a
+// path goes in as a PathArg, not as a pointer into the caller. False if the
+// program did not come back in time.
+//   in_program("Picture viewer", [p] { ... p.get() ... });
+// `program` names the row of the program table that says whether there is
+// a task and how much stack; nullptr for a process that is not a program's
+// own (it runs where its process runs).
+bool enter_program(proc::Pid pid, const char *program, proc::CallFn fn, void *context, size_t size);
+template <class F> bool in_process(proc::Pid pid, const char *program, F f)
+{
+    static_assert(std::is_trivially_copyable<F>::value && sizeof(F) <= proc::kCallRoom, "handed over by copy");
+    return enter_program(
+        pid, program, [](void *context) { (*static_cast<F *>(context))(); }, &f, sizeof(F));
+}
+template <class F> bool in_program(const char *program, F f)
+{
+    return in_process(process_for(program), program, f);
+}
+// A path, or none, held by value.
+struct PathArg {
+    explicit PathArg(const char *path) : given(path != nullptr)
+    {
+        snprintf(text, sizeof(text), "%s", given ? path : "");
+    }
+    const char *get() const { return given ? text : nullptr; }
+    char text[fs::kMaxPath];
+    bool given;
 };
 
 // The open window with this number, nullptr if it has closed. Only for the
@@ -181,6 +216,9 @@ void delete_asking(const char *path);
 // Dragged to the Trash: moved without asking on C:, asks elsewhere.
 void drop_in_trash(const char *path);
 void open_trash();
+void open_about();   // about.cpp
+void open_welcome(); // welcome.cpp
+void open_gallery(); // gallery.cpp
 // After files moved or went away: the desktop, the File manager windows
 // and the Trash window read their folders again.
 void files_changed();

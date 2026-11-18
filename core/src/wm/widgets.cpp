@@ -7,14 +7,9 @@
 namespace wm {
 
 using gfx::Canvas;
-using gfx::kBlack;
-using gfx::kDarkGrey;
-using gfx::kGrey;
-using gfx::kWhite;
 
 namespace {
 
-constexpr gfx::Rgb kHighlight = {0, 0, 128};
 constexpr int kTextH = 12;
 
 const char *const kCheckGlyph[] = {"      X", "     XX", "X   XXX", "XX XXX ",
@@ -52,24 +47,28 @@ void to_utf8(const uint8_t *chars, int count, char *out, int capacity)
 
 void draw_radio(Canvas &c, int x, int y, bool selected)
 {
+    // Bevelled: a ring of shadow above and left, light below and right.
+    // Flat: the outer ring in the outline colour, the rest paper.
+    const gfx::Theme &t = gfx::theme();
+    const bool flat = t.flat();
     for (int r = 0; r < 12; r++) {
         for (int q = 0; q < 12; q++) {
             gfx::Colour col;
             switch (kRadio[r][q]) {
             case 'D':
-                col = kDarkGrey;
+                col = flat ? t.outline : gfx::kDarkGrey;
                 break;
             case 'W':
-                col = kWhite;
+                col = flat ? t.outline : gfx::kWhite;
                 break;
             case 'K':
-                col = kBlack;
+                col = flat ? t.paper : gfx::kBlack;
                 break;
             case 'G':
-                col = kGrey;
+                col = flat ? t.paper : gfx::kGrey;
                 break;
             case 'F':
-                col = kWhite;
+                col = t.paper;
                 break;
             default:
                 continue;
@@ -78,7 +77,7 @@ void draw_radio(Canvas &c, int x, int y, bool selected)
         }
     }
     if (selected) {
-        c.pattern(x + 4, y + 4, kRadioDot, 4, kBlack);
+        c.pattern(x + 4, y + 4, kRadioDot, 4, gfx::ink());
     }
 }
 
@@ -139,7 +138,7 @@ template <typename Fn> void around(const Rect &area, const Rect &hole, Fn fn)
 void caption(Canvas &c, int x, int h, const char *text, bool focus)
 {
     const int y = (h - kTextH) / 2;
-    const int w = label(c, x, y, text, kBlack);
+    const int w = label(c, x, y, text, gfx::ink());
     if (focus) {
         c.focus_rect({x - 2, y - 1, w + 4, kTextH + 2});
     }
@@ -158,12 +157,12 @@ void Label::paint(Canvas &c)
 {
     const int y = (rect.h - kTextH) / 2;
     if (bold_) {
-        c.fill({0, 0, rect.w, rect.h}, kGrey); // ponytail: opaque text has no bold yet
-        label(c, 0, y, text_, kBlack, true);
+        c.fill({0, 0, rect.w, rect.h}, gfx::face()); // ponytail: opaque text has no bold yet
+        label(c, 0, y, text_, gfx::ink(), true);
         return;
     }
-    around({0, 0, rect.w, rect.h}, {0, y, label_width(text_), kTextH}, [&](const Rect &r) { c.fill(r, kGrey); });
-    label_opaque(c, 0, y, text_, kBlack, kGrey);
+    around({0, 0, rect.w, rect.h}, {0, y, label_width(text_), kTextH}, [&](const Rect &r) { c.fill(r, gfx::face()); });
+    label_opaque(c, 0, y, text_, gfx::ink(), gfx::face());
 }
 
 /* ---- Button ----------------------------------------------------------------- */
@@ -172,24 +171,25 @@ void Button::paint(Canvas &c)
 {
     Rect r = {0, 0, rect.w, rect.h};
     if (default_) {
-        c.edge(r, kBlack, kBlack);
+        c.edge(r, gfx::ink(), gfx::ink());
         r = r.inset(1);
     }
     c.button_frame(r, pressed_ ? gfx::ButtonLook::Pressed : gfx::ButtonLook::Raised);
     const int d = pressed_ ? 1 : 0;
+    const gfx::Colour face = gfx::button_face(pressed_);
     Canvas inner = c.sub(r.inset(2));
     const int tw = label_width(text_);
     const int tx = (r.w - 4 - tw) / 2 + d, ty = (r.h - 4 - kTextH) / 2 + d;
-    around({0, 0, r.w - 4, r.h - 4}, {tx, ty, tw, kTextH}, [&](const Rect &a) { inner.fill(a, kGrey); });
+    around({0, 0, r.w - 4, r.h - 4}, {tx, ty, tw, kTextH}, [&](const Rect &a) { inner.fill(a, face); });
     if (!enabled_) {
         // Etched, as greyed-out menu items are: dark grey over a white copy
         // one pixel down and right.
-        inner.fill({tx, ty, tw + 1, kTextH + 1}, kGrey);
-        label(inner, tx + 1, ty + 1, text_, gfx::kWhite);
-        label(inner, tx, ty, text_, gfx::kDarkGrey);
+        inner.fill({tx, ty, tw + 1, kTextH + 1}, face);
+        label(inner, tx + 1, ty + 1, text_, gfx::paper());
+        label(inner, tx, ty, text_, gfx::dim());
         return;
     }
-    label_opaque(inner, tx, ty, text_, kBlack, kGrey);
+    label_opaque(inner, tx, ty, text_, gfx::ink(), face);
     if (has_focus()) {
         c.focus_rect(r.inset(4).offset(d, d));
     }
@@ -258,12 +258,12 @@ void Button::click()
 
 void CheckBox::paint(Canvas &c)
 {
-    c.fill({0, 0, rect.w, rect.h}, kGrey);
+    c.fill({0, 0, rect.w, rect.h}, gfx::face());
     const int y = (rect.h - 13) / 2;
     c.sunken({0, y, 13, 13});
-    c.fill({2, y + 2, 9, 9}, held_ ? kGrey : kWhite);
+    c.fill({2, y + 2, 9, 9}, held_ ? gfx::face() : gfx::paper());
     if (checked_) {
-        c.pattern(3, y + 3, kCheckGlyph, 7, kBlack);
+        c.pattern(3, y + 3, kCheckGlyph, 7, gfx::ink());
     }
     caption(c, 19, rect.h, text_, has_focus());
 }
@@ -307,7 +307,7 @@ void CheckBox::set_checked(bool on)
 
 void RadioButton::paint(Canvas &c)
 {
-    c.fill({0, 0, rect.w, rect.h}, kGrey);
+    c.fill({0, 0, rect.w, rect.h}, gfx::face());
     draw_radio(c, 0, (rect.h - 12) / 2, selected());
     caption(c, 19, rect.h, text_, has_focus());
 }
@@ -379,11 +379,11 @@ void TextField::paint(Canvas &c)
     const int caret_x = focus && caret_shown() ? 1 + (caret_ - scroll_) * 6 : -1;
     // Above and below the text, and the two pixels left of it (the caret may
     // be in the second).
-    inner.fill({0, 0, area.w, y}, kWhite);
-    inner.fill({0, y + kTextH, area.w, area.h - y - kTextH}, kWhite);
-    inner.fill({0, y, caret_x == 1 ? 1 : 2, kTextH}, kWhite);
+    inner.fill({0, 0, area.w, y}, gfx::paper());
+    inner.fill({0, y + kTextH, area.w, area.h - y - kTextH}, gfx::paper());
+    inner.fill({0, y, caret_x == 1 ? 1 : 2, kTextH}, gfx::paper());
     if (caret_x == 1) {
-        inner.fill({1, y, 1, kTextH}, kBlack);
+        inner.fill({1, y, 1, kTextH}, gfx::ink());
     }
     // The characters, in runs of the same look, each pixel once.
     int x = 2;
@@ -405,15 +405,15 @@ void TextField::paint(Canvas &c)
         run[n] = 0;
         const int cx = caret_x > x && caret_x < x + count * 6 ? caret_x : -1;
         if (chosen) {
-            inner.text_opaque(x, y, run, kWhite, kHighlight, cx);
+            inner.text_opaque(x, y, run, gfx::theme().select_ink, gfx::theme().select, cx);
         } else {
-            inner.text_opaque(x, y, run, kBlack, kWhite, cx);
+            inner.text_opaque(x, y, run, gfx::ink(), gfx::paper(), cx);
         }
         x += count * 6;
     }
     // The caret just after the last character sits in that character's
     // cell (drawn above); right of the text is white.
-    inner.fill({x, y, area.w - x, kTextH}, kWhite);
+    inner.fill({x, y, area.w - x, kTextH}, gfx::paper());
 }
 
 int TextField::index_at(int x) const
@@ -604,7 +604,12 @@ void ScrollBar::paint(Canvas &c)
                                  : Rect(kThickness, 0, rect.w - 2 * kThickness, rect.h);
     if (maximum_ > 0) {
         around(track, thumb(), [&](const Rect &r) { c.checker(r); });
-        c.button(thumb(), gfx::ButtonLook::Raised);
+        if (gfx::theme().flat()) { // a block of one colour
+            c.edge(thumb(), gfx::theme().outline, gfx::theme().outline);
+            c.fill(thumb().inset(1), gfx::theme().thumb);
+        } else {
+            c.button(thumb(), gfx::ButtonLook::Raised);
+        }
     } else {
         c.checker(track);
     }
@@ -614,8 +619,9 @@ void ScrollBar::paint(Canvas &c)
         c.button_frame(b, held ? gfx::ButtonLook::Pressed : gfx::ButtonLook::Raised);
         const int d = held ? 1 : 0;
         const Rect g = {b.x + gx + d, b.y + gy + d, static_cast<int>(strlen(glyph[0])), rows};
-        around(b.inset(2), g, [&](const Rect &a) { c.fill(a, kGrey); });
-        c.pattern_opaque(g.x, g.y, glyph, rows, kBlack, kGrey);
+        const gfx::Colour face = gfx::button_face(held);
+        around(b.inset(2), g, [&](const Rect &a) { c.fill(a, face); });
+        c.pattern_opaque(g.x, g.y, glyph, rows, gfx::ink(), face);
     };
     if (vertical_) {
         arrow(first, held_ == -1, kUp, 4, 4, 6);
@@ -767,29 +773,29 @@ void ListBox::paint(Canvas &c)
             const gfx::Bitmap *b = icon_(index, context_);
             if (b != nullptr) {
                 const Rect at = {2, y + 1, b->width, b->height};
-                around(cell, at, [&](const Rect &a) { inner.fill(a, kWhite); });
-                inner.blit_opaque(*b, 2, y + 1, kWhite);
+                around(cell, at, [&](const Rect &a) { inner.fill(a, gfx::paper()); });
+                inner.blit_opaque(*b, 2, y + 1, gfx::paper());
             } else {
-                inner.fill(cell, kWhite);
+                inner.fill(cell, gfx::paper());
             }
             tx = 22;
             hl = {20, y, tw + 4, rh};
-            inner.fill({hl.right(), y, rows.w - hl.right(), rh}, kWhite);
+            inner.fill({hl.right(), y, rows.w - hl.right(), rh}, gfx::paper());
         }
         const int ty = y + (rh - kTextH) / 2;
         const Rect cells = {tx, ty, tw, kTextH};
         if (chosen) {
-            around(hl, cells, [&](const Rect &a) { inner.fill_rgb(a, kHighlight); });
-            inner.text_opaque(tx, ty, items_[index], kWhite, kHighlight);
+            around(hl, cells, [&](const Rect &a) { inner.fill_rgb(a, gfx::theme().select); });
+            inner.text_opaque(tx, ty, items_[index], gfx::theme().select_ink, gfx::theme().select);
             if (has_focus()) {
                 inner.focus_rect(hl);
             }
         } else {
-            around(hl, cells, [&](const Rect &a) { inner.fill(a, kWhite); });
-            inner.text_opaque(tx, ty, items_[index], kBlack, kWhite);
+            around(hl, cells, [&](const Rect &a) { inner.fill(a, gfx::paper()); });
+            inner.text_opaque(tx, ty, items_[index], gfx::ink(), gfx::paper());
         }
     }
-    inner.fill({0, y, rows.w, rows.h - y}, kWhite);
+    inner.fill({0, y, rows.w, rows.h - y}, gfx::paper());
     if (bar) {
         Canvas bc = c.sub(bar_.rect);
         bar_.paint(bc);
@@ -877,12 +883,12 @@ bool ListBox::key(const KeyMsg &k)
 void GroupFrame::paint(Canvas &c)
 {
     const int top = kTextH / 2;
-    c.edge({0, top, rect.w - 1, rect.h - top - 1}, kDarkGrey, kDarkGrey);
-    c.edge({1, top + 1, rect.w - 1, rect.h - top - 1}, kWhite, kWhite);
+    c.edge({0, top, rect.w - 1, rect.h - top - 1}, gfx::dim(), gfx::dim());
+    c.edge({1, top + 1, rect.w - 1, rect.h - top - 1}, gfx::paper(), gfx::paper());
     // The caption sits on the top line, with a little face colour around it.
     const int tw = Canvas::text_width(caption_);
-    c.fill({6, 0, tw + 4, kTextH}, kGrey);
-    c.text(8, 0, caption_, kBlack);
+    c.fill({6, 0, tw + 4, kTextH}, gfx::face());
+    c.text(8, 0, caption_, gfx::ink());
 }
 
 /* ---- Text area -------------------------------------------------------------- */
@@ -898,7 +904,7 @@ void TextArea::paint(Canvas &c)
     char line[128];
     const char *p = text_;
     int y = 3;
-    inner.fill({0, 0, area.w, y}, kWhite);
+    inner.fill({0, 0, area.w, y}, gfx::paper());
     while (*p != 0 && y < area.h) {
         int n = 0;
         while (p[n] != 0 && p[n] != '\n' && n < static_cast<int>(sizeof(line)) - 1) {
@@ -907,8 +913,8 @@ void TextArea::paint(Canvas &c)
         }
         line[n] = 0;
         const Rect band = {0, y, area.w, 13};
-        around(band, {4, y, Canvas::text_width(line), kTextH}, [&](const Rect &a) { inner.fill(a, kWhite); });
-        inner.text_opaque(4, y, line, kBlack, kWhite);
+        around(band, {4, y, Canvas::text_width(line), kTextH}, [&](const Rect &a) { inner.fill(a, gfx::paper()); });
+        inner.text_opaque(4, y, line, gfx::ink(), gfx::paper());
         p += n;
         while (*p != 0 && *p != '\n') {
             p++; // the rest of an over-long line
@@ -918,7 +924,7 @@ void TextArea::paint(Canvas &c)
         }
         y += 13;
     }
-    inner.fill({0, y, area.w, area.h - y}, kWhite);
+    inner.fill({0, y, area.w, area.h - y}, gfx::paper());
 }
 
 } // namespace wm

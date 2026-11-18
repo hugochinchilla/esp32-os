@@ -1,6 +1,7 @@
-// The Display dialog: the desktop's colour and the pattern over it, with a
+// The Display dialog: the theme (the look of windows, buttons and the
+// taskbar), and the desktop's colour and the pattern over it, with a
 // preview. Opened from Start > Settings > Display and by a right click on
-// the desktop. Kept in C:\.config\desktop.ini, [background].
+// the desktop. Kept in C:\.config\desktop.ini, [look] and [background].
 //
 // The colour is one of a short list with names, or, through Other..., any
 // of the board's 256. All of the list but the second are colours the board
@@ -92,12 +93,13 @@ int named(Rgb c)
     return -1;
 }
 
-// What the desktop shows: a colour, and a place in the table of patterns.
-// Nothing is kept in memory while the dialog is closed; the settings file
-// has it.
+// What the desktop shows: a colour, a place in the table of patterns, and a
+// place in the table of themes. Nothing is kept in memory while the dialog
+// is closed; the settings file has it.
 struct Choice {
     Rgb colour = kColours[0].rgb;
     int pattern = 0;
+    int theme = 0;
 };
 
 // The pattern's ink: the colour a good deal darker, or lighter when the
@@ -126,7 +128,11 @@ wm::Wm::Backdrop backdrop_for(Rgb colour, int pattern)
     return b;
 }
 
-void apply(const Choice &c) { os::set_backdrop(backdrop_for(c.colour, c.pattern)); }
+void apply(const Choice &c)
+{
+    os::set_theme(c.theme);
+    os::set_backdrop(backdrop_for(c.colour, c.pattern));
+}
 
 // "#RRGGBB", as a colour that has no name is kept.
 bool from_hex(const char *text, Rgb &out)
@@ -162,6 +168,9 @@ Choice read_settings(fs::Ini &ini)
             }
         }
     }
+    if (ini.get("look", "theme", value, sizeof(value)) && gfx::theme_named(value) >= 0) {
+        c.theme = gfx::theme_named(value);
+    }
     return c;
 }
 
@@ -173,19 +182,21 @@ void write_settings(fs::Ini &ini, const Choice &c)
     snprintf(hex, sizeof(hex), "#%02X%02X%02X", c.colour.r, c.colour.g, c.colour.b);
     ini.set("background", "colour", named(c.colour) >= 0 ? kColours[named(c.colour)].key : hex);
     ini.set("background", "pattern", kPatterns[c.pattern].key);
+    ini.set("look", "theme", gfx::theme_at(c.theme).key);
     save_settings("desktop", ini);
 }
 
-// The preview: a small screen with the colour and pattern picked, a window
-// and a taskbar on it. `size`: of the picture it is painted in.
-void paint_preview(app::Canvas &c, const Rect &size, Rgb colour, int pattern)
+// The preview: a small screen with the colour and pattern picked, and a
+// window and a taskbar in the colours of the theme picked. `size`: of the
+// picture it is painted in.
+void paint_preview(app::Canvas &c, const Rect &size, Rgb colour, int pattern, const gfx::Theme &look)
 {
-    c.fill({0, 0, size.w, size.h}, gfx::kGrey);
+    c.fill({0, 0, size.w, size.h}, gfx::face());
     // The monitor: a case, the screen, a foot.
     const Rect box = {(size.w - 132) / 2, 0, 132, 100};
     c.button(box, gfx::ButtonLook::Raised);
     const Rect screen = box.inset(8);
-    c.edge(screen, gfx::kDarkGrey, gfx::kWhite);
+    c.dent(screen);
     const Rect glass = screen.inset(1);
     const wm::Wm::Backdrop b = backdrop_for(colour, pattern);
     if (pattern == 0) {
@@ -193,24 +204,45 @@ void paint_preview(app::Canvas &c, const Rect &size, Rgb colour, int pattern)
     } else {
         c.fill_pattern(glass, b.colour, b.ink, b.pattern);
     }
-    c.fill({glass.x, glass.bottom() - 7, glass.w, 7}, gfx::kGrey);
-    c.hline(glass.x, glass.bottom() - 7, glass.w, gfx::kWhite);
-    c.fill({glass.x + 2, glass.bottom() - 5, 14, 4}, gfx::kDarkGrey);
+    // The taskbar, with its Start button.
+    const bool flat = look.flat();
+    c.fill({glass.x, glass.bottom() - 7, glass.w, 7}, flat ? look.bar : look.face);
+    c.hline(glass.x, glass.bottom() - 7, glass.w, look.bar_line);
+    c.fill({glass.x + 2, glass.bottom() - 5, 14, 4}, flat ? look.start : gfx::kDarkGrey);
+    // The window: its frame, its title bar, what it holds.
     const Rect window = {glass.x + 34, glass.y + 14, 52, 38};
-    c.fill(window, gfx::kGrey);
-    c.edge(window, gfx::kWhite, gfx::kBlack);
-    c.fill({window.x + 2, window.y + 2, window.w - 4, 6}, gfx::rgb(0, 0, 2));
-    c.fill({window.x + 4, window.y + 11, window.w - 8, window.h - 15}, gfx::kWhite);
-    c.fill({box.x + 50, box.bottom(), 32, 4}, gfx::kDarkGrey);
+    c.fill(window, flat ? look.frame_on : look.face);
+    if (flat) {
+        c.edge(window, look.rim_on, look.rim_on);
+    } else {
+        c.edge(window, gfx::kWhite, gfx::kBlack);
+    }
+    c.fill({window.x + 2, window.y + 2, window.w - 4, 6}, look.swatch);
+    c.fill({window.x + 4, window.y + 11, window.w - 8, window.h - 15}, look.paper);
+    c.fill({box.x + 50, box.bottom(), 32, 4}, gfx::dim());
     c.button({box.x + 30, box.bottom() + 4, 72, 8}, gfx::ButtonLook::Raised);
 }
 
-constexpr Rect kPreview = {8, 8, 348, 114};
+// The names of the themes, for the list.
+struct ThemeNames {
+    const char *names[8];
+    int count;
+    ThemeNames() : count(gfx::theme_count() < 8 ? gfx::theme_count() : 8)
+    {
+        for (int i = 0; i < count; i++) {
+            names[i] = gfx::theme_at(i).name;
+        }
+    }
+};
+
+constexpr Rect kPreview = {8, 8, 148, 114};
 
 class DisplayDialog : public app::Window {
 public:
     DisplayDialog()
         : preview_(picture(kPreview)),
+          theme_label_(label({168, 10, 60, 14}, "&Theme:")),
+          themes_(list({168, 28, 188, 60}, theme_names_.names, theme_names_.count)),
           group_(group({8, 128, 348, 190}, "Desktop background")),
           colour_label_(label({18, 148, 60, 14}, "&Colour:")),
           colour_name_(plain({80, 148, 180, 14})),
@@ -229,6 +261,7 @@ public:
         colour_ = before_.colour;
         colours_.select(named(colour_)); // if it is one of the list's own, else no cell
         patterns_.select(before_.pattern);
+        themes_.select(before_.theme);
         sync();
         set_focus(colours_);
     }
@@ -261,7 +294,7 @@ public:
 
     void paint_in(app::Control, app::Canvas &c) override
     {
-        paint_preview(c, kPreview, colour_, patterns_.selected());
+        paint_preview(c, kPreview, colour_, patterns_.selected(), gfx::theme_at(themes_.selected()));
     }
     void paint_cell(app::Control which, int index, const Rect &cell, app::Canvas &c) override
     {
@@ -285,6 +318,10 @@ public:
         }
         if (k.pressed && (k.mods & wm::kAlt)) {
             const char letter = wm::key::letter(k.usage);
+            if (letter == 't' || letter == 'T') {
+                set_focus(themes_);
+                return true;
+            }
             if (letter == 'c' || letter == 'C') {
                 set_focus(colours_);
                 return true;
@@ -330,12 +367,15 @@ private:
         patterns_.redraw(); // the patterns are shown in the colour picked
         preview_.redraw();
     }
-    Choice picked() const { return {colour_, patterns_.selected()}; }
+    Choice picked() const { return {colour_, patterns_.selected(), themes_.selected() < 0 ? 0 : themes_.selected()}; }
 
     Rgb colour_ = kColours[0].rgb;
     Choice before_; // what the settings file holds
     fs::Ini settings_;
+    ThemeNames theme_names_; // before the list that shows them
     app::Picture preview_;
+    app::Label theme_label_;
+    app::ListBox themes_;
     app::GroupFrame group_;
     app::Label colour_label_;
     app::Plain colour_name_;

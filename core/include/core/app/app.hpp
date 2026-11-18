@@ -33,6 +33,7 @@
 #include <new>
 #include <utility>
 
+#include "core/app/file.hpp"
 #include "core/os/ui.hpp"
 
 namespace app {
@@ -63,6 +64,7 @@ public:
     void focus_rect(const gfx::Rect &r) { os::ui::draw::focus_rect(number_, r); }
     void checker(const gfx::Rect &r) { os::ui::draw::checker(number_, r); }
     void edge(const gfx::Rect &r, gfx::Colour tl, gfx::Colour br) { os::ui::draw::edge(number_, r, tl, br); }
+    void dent(const gfx::Rect &r) { os::ui::draw::dent(number_, r); }
     void raised(const gfx::Rect &r) { os::ui::draw::raised(number_, r); }
     void sunken(const gfx::Rect &r) { os::ui::draw::sunken(number_, r); }
     void button(const gfx::Rect &r, gfx::ButtonLook look) { os::ui::draw::button(number_, r, look); }
@@ -320,6 +322,10 @@ public:
     // Locked: it takes no keys, no clicks and no request to close.
     void set_locked(bool on) { os::ui::set_locked(number_, on); }
     bool locked() const { return os::ui::locked(number_); }
+    // The hourglass over the client area while the program works something
+    // out; the window answers as before.
+    void set_hourglass(bool on) { os::ui::set_hourglass(number_, on); }
+    bool hourglass() const { return os::ui::hourglass(number_); }
     bool caret_lit() const { return os::ui::caret_lit(number_); } // the lit half of the text cursor's blink
     // Asks for a part of the client area to be painted again.
     void redraw(const gfx::Rect &part) { os::ui::redraw(number_, part); }
@@ -557,3 +563,20 @@ template <class T> T *program(Number number) { return static_cast<T *>(os::ui::s
 inline bool bring_forward(Number number) { return os::ui::alive(number) && os::ui::show(number); }
 
 } // namespace app
+
+// The way into a program that is built by itself and loaded from a file
+// (backlog item 27): `APP_MAIN(int argc, char **argv) { ... }`. The system
+// calls it once, as the program's own process; 0 says it started. A
+// built-in program has a row in the program table instead.
+#define APP_MAIN extern "C" __attribute__((visibility("default"), used)) int app_main
+
+// What the program says of itself, kept at the front of its file
+// (core/app/file.hpp): its name, the stack its task asks for in bytes (0:
+// the least) and, if it has them, its pictures. Once in a program:
+//   APP_INFO(app::file_info("Hello", 0, kSmall, kInks));
+// A file without it is not a program.
+#define APP_INFO(...)                                                                          \
+    extern "C" {                                                                               \
+    extern const app::FileInfo app_info __attribute__((visibility("default")));               \
+    __attribute__((used, section(".appinfo"))) constexpr app::FileInfo app_info = __VA_ARGS__; \
+    }

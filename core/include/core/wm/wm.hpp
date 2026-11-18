@@ -89,7 +89,12 @@ protected:
 
 class Wm : public ports::InputSink, public ports::Desktop {
 public:
-    static constexpr int kMaxWindows = 16;
+    // No limit on the windows open at once (the owner's decision,
+    // 2026-11-17: the machine may run out of memory instead). The lists
+    // start with room for this many and grow out of the Memory port
+    // (set_memory); with no port, or no memory left, the next window does
+    // not open.
+    static constexpr int kFirstWindows = 16;
     static constexpr int kMaxPopups = 4;  // a menu and its open submenus
     static constexpr int kTaskbarHeight = 28;
     static constexpr int kOutline = 3;        // width of the outline while dragging
@@ -102,6 +107,9 @@ public:
     using TimerFn = void (*)(void *context);
 
     Wm(ports::Display &display, ports::Pointer &pointer, ports::Clock &clock);
+    // Where the lists of windows grow from once more than kFirstWindows are
+    // open. Not counted as any program's.
+    void set_memory(ports::Memory *memory) { memory_ = memory; }
 
     // Sets the pointer up and paints the whole screen.
     void start();
@@ -210,6 +218,9 @@ public:
     // For Window::set_locked(): a menu of the window goes, and the pointer
     // takes the shape that fits where it is now.
     void lock_changed(Window &w);
+    // For Window::set_hourglass(): the pointer takes the shape that fits
+    // where it is now, without waiting for the mouse to move.
+    void hourglass_changed() { update_pointer_shape(); }
 
     // The Start menu, supplied by the shell: what the Start key opens, at
     // the bottom left, with `banner` down its side. nullptr: none.
@@ -224,9 +235,19 @@ public:
         uint8_t pattern[8];
     };
     void set_backdrop(const Backdrop &backdrop);
+    // The look of everything (a row of gfx's table of themes); all of the
+    // screen is painted again if it changes.
+    void set_theme(int index);
     const Backdrop &backdrop() const { return backdrop_; }
     // Pop-up menus. open_menu() opens a free-standing one at (x, y).
     void open_menu(Menu &menu, int x, int y);
+    // Called as the Start menu is about to open, so that whoever owns it
+    // can bring it up to date (the programs found in a folder).
+    void set_start_menu_opening(void (*opening)(void *context), void *context)
+    {
+        start_opening_ = opening;
+        start_opening_context_ = context;
+    }
     void open_start_menu();
     void open_menu_bar(Window &w, int entry);
     void close_menus();
@@ -389,6 +410,7 @@ private:
     void paint_desktop(const gfx::RectList &clip);
     void paint_window(Window &w, const gfx::RectList &clip);
     void paint_frame(gfx::Canvas &c, Window &w);
+    void paint_flat_title(gfx::Canvas &c, Window &w, const gfx::Rect &title, bool active);
     void paint_menu_bar(gfx::Canvas &c, Window &w);
     void paint_popup(int level, const gfx::RectList &clip);
     bool visible(const Window &w) const { return w.state_ != WindowState::Minimized; }
@@ -398,8 +420,13 @@ private:
     ports::Clock &clock_;
     int width_, height_;
 
-    Window *stack_[kMaxWindows] = {}; // stacking order, 0 at the bottom
-    Window *order_[kMaxWindows] = {}; // order of opening, for the taskbar
+    bool room_for_one_more();
+    Window *first_stack_[kFirstWindows] = {};
+    Window *first_order_[kFirstWindows] = {};
+    Window **stack_ = first_stack_; // stacking order, 0 at the bottom
+    Window **order_ = first_order_; // order of opening, for the taskbar
+    int room_ = kFirstWindows;      // how many the two lists hold
+    ports::Memory *memory_ = nullptr;
     int count_ = 0;
     int next_id_ = 1;
     Window *active_ = nullptr;
@@ -414,6 +441,8 @@ private:
     void tell_panels(PanelNews what);
 
     Menu *start_menu_ = nullptr;
+    void (*start_opening_)(void *context) = nullptr;
+    void *start_opening_context_ = nullptr;
     const char *start_banner_ = "";
     Popup popups_[kMaxPopups] = {};
     int popup_count_ = 0;

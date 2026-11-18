@@ -37,18 +37,18 @@ struct ToolButton {
     void paint(app::Canvas &c) const
     {
         const gfx::Rect r = {0, 0, place.w, place.h};
-        c.fill(r, gfx::kGrey);
+        c.fill(r, gfx::face());
         if (held && inside) {
-            c.edge(r, gfx::kDarkGrey, gfx::kWhite);
+            c.dent(r);
         }
         const int d = held && inside ? 1 : 0;
         c.blit(*icon, (place.w - 16) / 2 + d, 2 + d);
         const int tx = (place.w - app::Canvas::text_width(text)) / 2 + d;
         if (enabled) {
-            c.text(tx, 20 + d, text, gfx::kBlack);
+            c.text(tx, 20 + d, text, gfx::ink());
         } else {
-            c.text(tx + 1, 21, text, gfx::kWhite);
-            c.text(tx, 20, text, gfx::kDarkGrey);
+            c.text(tx + 1, 21, text, gfx::paper());
+            c.text(tx, 20, text, gfx::dim());
         }
     }
     // True: it was pressed and let go inside.
@@ -99,10 +99,10 @@ struct Panel {
         const gfx::Rect r = {0, 0, place.w, place.h};
         if (white) {
             c.sunken(r);
-            c.fill(r.inset(2), gfx::kWhite);
+            c.fill(r.inset(2), gfx::paper());
         } else {
-            c.fill(r, gfx::kGrey);
-            c.edge(r, gfx::kDarkGrey, gfx::kWhite);
+            c.fill(r, gfx::face());
+            c.dent(r);
         }
         app::Canvas inner = c.sub(r.inset(2));
         int x = 4;
@@ -110,7 +110,7 @@ struct Panel {
             inner.blit(*icon, 2, (place.h - 4 - 16) / 2);
             x = 22;
         }
-        inner.text(x, (place.h - 4 - 12) / 2, text, gfx::kBlack);
+        inner.text(x, (place.h - 4 - 12) / 2, text, gfx::ink());
     }
 };
 
@@ -118,8 +118,8 @@ struct Panel {
 // the window's grey is not painted under it first.
 void paint_groove(app::Canvas &c, int width)
 {
-    c.hline(0, 0, width, gfx::kDarkGrey);
-    c.hline(0, 1, width, gfx::kWhite);
+    c.hline(0, 0, width, gfx::dim());
+    c.hline(0, 1, width, gfx::paper());
 }
 
 // The pictures of a folder's entries, as the icon view takes them.
@@ -130,13 +130,25 @@ void large_icons(const Listing &listing, const gfx::Bitmap **icons)
     }
 }
 
-// The folder windows there can be at once; nullptr where there is none now.
-// Each is made when it opens and gone once it has closed.
-constexpr int kWindows = 3;
-app::Number g_windows[kWindows] = {}; // their numbers: dead once closed
+// The folder windows that exist: as many as there is memory for (the
+// owner's decision, 2026-11-17). Each is made when it opens and gone once it
+// has closed; they are a chain through the windows themselves, which each
+// joins when it is made and leaves when it is destroyed.
+class FolderWindow;
+FolderWindow *g_windows = nullptr;
 
 class FolderWindow : public app::Window {
 public:
+    FolderWindow *next_ = nullptr;
+    ~FolderWindow() override
+    {
+        for (FolderWindow **at = &g_windows; *at != nullptr; at = &(*at)->next_) {
+            if (*at == this) {
+                *at = next_;
+                break;
+            }
+        }
+    }
     static constexpr int kHistory = 8;
     static constexpr int kViewTop = 64;
 
@@ -784,11 +796,9 @@ app::Number g_trash = app::kNone; // the Trash window's number: dead once closed
 
 void refresh_folder_windows()
 {
-    for (const app::Number number : g_windows) {
-        if (FolderWindow *w = app::program<FolderWindow>(number)) {
-            if (w->on_screen()) {
-                w->refresh();
-            }
+    for (FolderWindow *w = g_windows; w != nullptr; w = w->next_) {
+        if (w->on_screen()) {
+            w->refresh();
         }
     }
     if (TrashWindow *trash = app::program<TrashWindow>(g_trash)) {
@@ -800,51 +810,47 @@ void refresh_folder_windows()
 
 void open_trash()
 {
-    const AsProgram as("File manager");
-    if (TrashWindow *w = app::program<TrashWindow>(g_trash)) {
-        w->refresh();
-        app::bring_forward(g_trash);
-        return;
-    }
-    app::Look look;
-    look.title = "Trash";
-    look.x = 120;
-    look.y = 60;
-    look.width = 400;
-    look.height = 280;
-    look.icon = &gfx::bin_icon_16();
-    look.flags = app::kMenuBar;
-    g_trash = app::make<TrashWindow>(look);
-    if (g_trash == app::kNone) {
-        no_memory_for("Trash");
-        return;
-    }
-    app::program<TrashWindow>(g_trash)->refresh();
-    app::show(g_trash);
+    in_program("File manager", [] {
+        if (TrashWindow *w = app::program<TrashWindow>(g_trash)) {
+            w->refresh();
+            app::bring_forward(g_trash);
+            return;
+        }
+        app::Look look;
+        look.title = "Trash";
+        look.x = 120;
+        look.y = 60;
+        look.width = 400;
+        look.height = 280;
+        look.icon = &gfx::bin_icon_16();
+        look.flags = app::kMenuBar;
+        g_trash = app::make<TrashWindow>(look);
+        if (g_trash == app::kNone) {
+            no_memory_for("Trash");
+            return;
+        }
+        app::program<TrashWindow>(g_trash)->refresh();
+        app::show(g_trash);
+    });
 }
 
 void open_folder(const char *path)
 {
-    const AsProgram as("File manager");
-    const char *want = path != nullptr ? path : "";
-    // Already shown: bring that window forward.
-    for (const app::Number number : g_windows) {
-        FolderWindow *w = app::program<FolderWindow>(number);
-        if (w != nullptr && w->on_screen() && strcmp(w->folder(), want) == 0) {
-            w->refresh();
-            app::bring_forward(number);
-            return;
+    const PathArg p(path);
+    in_program("File manager", [p] {
+        const char *want = p.text;
+        // Already shown: bring that window forward.
+        int n = 0; // how many there are: each new one a step down and to the right
+        for (FolderWindow *w = g_windows; w != nullptr; w = w->next_) {
+            if (w->on_screen() && strcmp(w->folder(), want) == 0) {
+                w->refresh();
+                app::bring_forward(w->number());
+                return;
+            }
+            n++;
         }
-    }
-    // A place with no open window, else the first window is reused.
-    int n = 0;
-    for (int i = 0; i < kWindows; i++) {
-        if (!os::ui::alive(g_windows[i])) {
-            n = i;
-            break;
-        }
-    }
-    if (!os::ui::alive(g_windows[n])) {
+        n %= 8;
+        // Every other folder gets a window of its own.
         app::Look look;
         look.title = "My Board";
         look.x = 96 + n * 24;
@@ -853,24 +859,27 @@ void open_folder(const char *path)
         look.height = 300;
         look.icon = &gfx::folder_icon_16();
         look.flags = app::kMenuBar;
-        g_windows[n] = app::make<FolderWindow>(look);
-        if (g_windows[n] == app::kNone) {
+        const app::Number number = app::make<FolderWindow>(look);
+        if (number == app::kNone) {
             no_memory_for("File manager");
             return;
         }
-    }
-    FolderWindow *use = app::program<FolderWindow>(g_windows[n]);
-    use->forget_history();
-    use->go_to(want, false);
-    app::show(g_windows[n]);
+        FolderWindow *use = app::program<FolderWindow>(number);
+        use->forget_history();
+        use->go_to(want, false);
+        app::show(number);
+    });
 }
 
-// What opens what, by extension: 1 the Editor, 2 the Picture viewer, 3 the
-// web browser, 0 nothing.
+// What opens what, by extension: 1 the Editor, 2 the Picture viewer, 3 a
+// program that is loaded and run, 4 the web browser, 0 nothing.
 static int program_kind(const char *path)
 {
     static const char *const kText[] = {"txt", "log", "ini", "md"};
     static const char *const kPictures[] = {"bmp", "png", "jpg", "jpeg"};
+    if (is_program_file(path)) {
+        return 3;
+    }
     char ext[8];
     fs::path::extension(path, ext, sizeof(ext));
     for (const char *e : kText) {
@@ -884,7 +893,7 @@ static int program_kind(const char *path)
         }
     }
     if (strcmp(ext, "htm") == 0 || strcmp(ext, "html") == 0) {
-        return 3;
+        return 4;
     }
     return 0;
 }
@@ -900,7 +909,17 @@ bool open_file(const char *path)
     case 2:
         open_picture(path);
         return true;
-    case 3:
+    case 3: {
+        // A program in a file: loaded and run.
+        static char text[200];
+        char why[120];
+        if (!run_file(path, why, sizeof(why))) {
+            snprintf(text, sizeof(text), "'%s' could not be run:\n%s.", fs::path::name(path), why);
+            message_box("Run", text);
+        }
+        return true;
+    }
+    case 4:
         open_browser(path);
         return true;
     default:

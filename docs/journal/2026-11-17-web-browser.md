@@ -1,6 +1,6 @@
 # Vizcacha, a web browser
 
-Backlog item 47. Branch `claude/project-thread-w6qa7m`. PC only: the firmware
+Backlog item 52 (it was 47 on the branch until main took that number). Branch `claude/project-thread-w6qa7m`. PC only: the firmware
 side has not run on the board.
 
 ## What was asked
@@ -229,4 +229,20 @@ board thread. Reported, not merged. Every check passed:
 - `tools/dbg.py misses`: none, during and after the page loads.
 - The "dial" job never appeared in a reading of the tasks, because it is
   over too soon: there is no figure for its stack yet.
+
+## Brought up to date with main (2026-11-18)
+
+The owner asked for the pull request to be merged as it is, without waiting
+for the relay. By then `main` had moved and the branch no longer merged:
+
+- The File manager's kind 3, which the browser used for `.htm`, had become
+  "a program in a file" on `main`. Pages are kind 4 now.
+- The program table's rows had gained two fields (a task of its own, its
+  stack). Vizcacha stays on the UI task, as it was checked on the board; a
+  task of its own wants its stack measured first.
+- The backlog number 47 had been taken on `main`: the browser is item 52.
+- The three themed Start-menu pictures gained the Vizcacha row.
+
+The PC tests pass (47) and the firmware compiles and links. This merge has
+not run on the board.
 

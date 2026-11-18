@@ -11,6 +11,7 @@
 #include "core/image/image.hpp"
 #include "../folder_volume.hpp"
 #include "../host_adapters.hpp"
+#include "../../firmware/common/boot_flag.h"
 
 namespace {
 
@@ -145,7 +146,7 @@ struct Rows : image::RowSink {
 // The finished screen is the reference drawing (docs/look/bios-text/
 // bios-post.png, drawn by tools/mockup/bios_text.py from the font's BDF
 // file), pixel for pixel.
-void test_matches_reference(const char *look_folder)
+template <typename Draw> void matches(const char *look_folder, const char *file, Draw draw)
 {
     static uint8_t reference[640 * 480];
     host::FolderVolume volume(look_folder);
@@ -154,7 +155,9 @@ void test_matches_reference(const char *look_folder)
     host::HostMemory memory;
     image::Decoder d;
     image::Info info;
-    CHECK(d.open(storage, "L:\\bios-post.png", memory, info) == image::Error::None);
+    char path[64];
+    snprintf(path, sizeof(path), "L:\\%s", file);
+    CHECK(d.open(storage, path, memory, info) == image::Error::None);
     CHECK(info.width == 640 && info.height == 480);
     Rows rows;
     rows.out = reference;
@@ -169,9 +172,7 @@ void test_matches_reference(const char *look_folder)
     Screen screen;
     gfx::Canvas c = screen.canvas();
     static bios::TextScreen s;
-    bios::draw_post(c, s,
-                    {"v0.3", "ESP32-S3 dual core, 240 MHz", 8192, 376, "VGA 640x480, 256 colours", "12 MB flash disk",
-                     "serial debug link", "none", 5, "17/11/2026-ESP32S3-N16R8-CHINCHILLA"});
+    draw(c, s);
     int differ = 0, x0 = 640, y0 = 480, x1 = -1, y1 = -1;
     for (int i = 0; i < 640 * 480; i++) {
         if (screen.display.pixels()[i] != reference[i]) {
@@ -181,14 +182,30 @@ void test_matches_reference(const char *look_folder)
         }
     }
     if (differ != 0) {
-        printf("the BIOS screen differs from the reference in %d pixels (x %d-%d, y %d-%d)\n", differ, x0, x1, y0,
-               y1);
+        printf("%s differs from the reference in %d pixels (x %d-%d, y %d-%d)\n", file, differ, x0, x1, y0, y1);
     }
     CHECK(differ == 0);
-    // No text under the mascot.
-    for (int r = bios::kLogoRow; r < bios::kLogoRow + bios::kLogoRows; r++) {
-        CHECK(row(s, r).size() <= static_cast<size_t>(bios::kLogoColumn));
-    }
+}
+
+void test_matches_reference(const char *look_folder)
+{
+    matches(look_folder, "bios-post.png", [](gfx::Canvas &c, bios::TextScreen &s) {
+        // After the first screen, as on the board: what that screen kept
+        // free for its pictures must be text again. (On the board every
+        // line had a hole where the big mascot had been.)
+        bios::draw_splash(c, s, "v0.3", "");
+        bios::draw_post(c, s,
+                        {"v0.3", "ESP32-S3 dual core, 240 MHz", 8192, 376, "VGA 640x480, 256 colours",
+                         "11 MB flash disk", "serial debug link", "none", "ota_0, 1.4 MB, image OK", 5,
+                         "17/11/2026-ESP32S3-N16R8-CHINCHILLA"});
+        // No text under the mascot.
+        for (int r = bios::kLogoRow; r < bios::kLogoRow + bios::kLogoRows; r++) {
+            CHECK(row(s, r).size() <= static_cast<size_t>(bios::kLogoColumn));
+        }
+    });
+    matches(look_folder, "bios-splash.png", [](gfx::Canvas &c, bios::TextScreen &s) {
+        bios::draw_splash(c, s, "v0.3", "17/11/2026-ESP32S3-N16R8-CHINCHILLA");
+    });
 }
 
 // A clock that moves on 1 ms each time it is read.
@@ -211,6 +228,48 @@ public:
     }
 };
 
+// The first screen: stays until its time after the video started, sends
+// nothing to serial, a key ends it, and the self-test's wait counts from its
+// end.
+void test_splash()
+{
+    Screen screen;
+    host::HostSystem system;
+    host::HostMemory memory;
+    SteppingClock clock;
+    shell::BootIo io{screen.display, system, memory, clock, nullptr, nullptr, nullptr, nullptr};
+    io.video_start_us = 500000;
+    clock.now = 600000;
+    static bios::TextScreen s;
+    std::string sent;
+    s.set_out(collect, &sent);
+    bios::Post post{io, s, "TEST-ID"};
+    bios::run_splash(post, 3000);
+    CHECK(clock.now >= 3500000 && clock.now < 3600000);
+    CHECK(io.video_start_us >= 3500000);
+    CHECK(sent.empty());
+    CHECK(row(s, 12) == std::string("    Rodent BIOS ") + shell::kVersion);
+    CHECK(row(s, 7).find("Energy Nibbler") == 58 && s.colour_at(58, 7) == bios::kLeaf);
+    CHECK(row(s, bios::kIdRow) == "  TEST-ID");
+    // The self-test that follows starts from a clean screen.
+    io.monitor_wait_ms = 0;
+    io.hold_s = 0;
+    bios::run_post(post, false);
+    CHECK(row(s, 12).empty() && row(s, 7).find("Energy Nibbler") == std::string::npos);
+    CHECK(row(s, bios::kTitleRow + 1) == "  Copyleft 2026, built on nine resistors");
+    CHECK(row(s, bios::kProcessorRow) == "  Main Processor : ESP32-S3 dual core, 240 MHz (simulated)");
+
+    // A key during it: over at once.
+    SteppingClock clock2;
+    static bool key = false;
+    key = true;
+    shell::BootIo io2{screen.display, system, memory, clock2, nullptr, nullptr, nullptr, nullptr};
+    io2.skip = [](void *) { return key; };
+    bios::Post post2{io2, s, nullptr};
+    bios::run_splash(post2, 3000);
+    CHECK(clock2.now < 100000);
+}
+
 // A whole run: the screen, the serial copy, the log.
 void test_run()
 {
@@ -231,7 +290,7 @@ void test_run()
     // No drive is given, so that one check fails.
     CHECK(bios::run_post(post, true) == 1);
     CHECK(logged == 10); // processor, two memory tests, three sizes, video, drive, keyboard, sound
-    CHECK(row(s, bios::kTitleRow) == std::string("  Chinchilla BIOS ") + shell::kVersion);
+    CHECK(row(s, bios::kTitleRow) == std::string("  Rodent BIOS ") + shell::kVersion);
     CHECK(row(s, bios::kProcessorRow) == "  Main Processor : ESP32-S3 dual core, 240 MHz (simulated)");
     CHECK(row(s, bios::kMemoryRow) == "  Memory Test    :   4096K OK   (external)");
     CHECK(row(s, bios::kMemoryRow + 1).find("K OK   (internal)") != std::string::npos);
@@ -314,13 +373,97 @@ void test_waiting_and_skipping()
     CHECK(row(s, bios::kKeyRow).empty());                                                 // no countdown after a key
 }
 
+// What only the BIOS knows: the drive from the partition table, and the
+// system it is about to start. With no system it stops and says so.
+void test_boot_device()
+{
+    Screen screen;
+    host::HostSystem system;
+    host::HostMemory memory;
+    SteppingClock clock;
+    shell::BootIo io{screen.display, system, memory, clock, nullptr, nullptr, nullptr, nullptr};
+    io.monitor_wait_ms = 0;
+    io.hold_s = 2;
+    static bios::TextScreen s;
+    std::string sent;
+    s.set_out(collect, &sent);
+    bios::Post post{io, s};
+    post.drive = "11 MB flash disk";
+    static const char *found = "ota_0, 1.4 MB, image OK";
+    post.boot_context = &found;
+    post.boot_device = [](char *text, size_t capacity, void *context) {
+        snprintf(text, capacity, "%s", *static_cast<const char **>(context));
+        return true;
+    };
+    CHECK(bios::run_post(post, true) == 0 && post.bootable);
+    CHECK(row(s, bios::kDriveRow) == "  Detecting drive C: .... 11 MB flash disk");
+    CHECK(row(s, bios::kBootRow) == "  Boot device ........... ota_0, 1.4 MB, image OK");
+    CHECK(row(s, bios::kSummaryRow) == "  Starting Chinchilla..." && row(s, bios::kCountdownRow) == "  Booting in 1");
+    const std::vector<std::string> lines = terminal(sent);
+    CHECK(lines.size() > static_cast<size_t>(bios::kCountdownRow) && lines[bios::kBootRow] == row(s, bios::kBootRow));
+
+    host::HostMemory fresh;
+    SteppingClock clock2;
+    shell::BootIo io2{screen.display, system, fresh, clock2, nullptr, nullptr, nullptr, nullptr};
+    io2.monitor_wait_ms = 0;
+    io2.hold_s = 5;
+    bios::Post none{io2, s};
+    none.drive = "11 MB flash disk";
+    none.boot_device = [](char *text, size_t capacity, void *) {
+        snprintf(text, capacity, "ota_0, not a system");
+        return false;
+    };
+    const uint32_t before = clock2.now;
+    CHECK(bios::run_post(none, true) == 1 && !none.bootable);
+    CHECK(s.colour_at(2, bios::kBootRow) == bios::kRed);
+    CHECK(row(s, bios::kSummaryRow) == "  No operating system found." && s.colour_at(2, bios::kSummaryRow) == bios::kRed);
+    CHECK(row(s, bios::kKeyRow) == "  Flash one with the cable, then restart." && row(s, bios::kCountdownRow).empty());
+    CHECK(clock2.now - before < 5000000); // no countdown
+}
+
+// The bootloader's choice between the BIOS and the OS, over the restarts
+// of a normal start, a fast restart and a flash with no BIOS in it.
+void test_boot_word()
+{
+    // Power-on: the memory holds anything. The BIOS starts.
+    uint32_t word = 0xDEADBEEF;
+    CHECK(chinchilla_start_bios(&word, true) && word == 0);
+    // The BIOS is done and restarts: the OS starts and is told so, once.
+    word = CHINCHILLA_START_OS;
+    CHECK(!chinchilla_start_bios(&word, true) && word == CHINCHILLA_FROM_BIOS);
+    // The OS did not clear the word (it crashed at once): the next restart
+    // still goes through the BIOS.
+    CHECK(chinchilla_start_bios(&word, true) && word == 0);
+    // No BIOS in the flash: the OS starts, and is not told a BIOS ran.
+    word = 0;
+    CHECK(!chinchilla_start_bios(&word, false) && word == 0);
+    word = CHINCHILLA_FROM_BIOS;
+    CHECK(!chinchilla_start_bios(&word, false) && word == 0);
+    // The OS stopped on an error: straight back to the OS, which starts as
+    // with no BIOS; the restart after that goes through the BIOS again.
+    word = CHINCHILLA_SKIP_BIOS;
+    CHECK(!chinchilla_start_bios(&word, true) && word == 0);
+    CHECK(chinchilla_start_bios(&word, true) && word == 0);
+    // Watchdogs and a brownout are failures; power-on, a restart by
+    // software and the USB port are not.
+    for (int reason : {7, 8, 9, 11, 13, 15, 16, 17, 18}) {
+        CHECK(chinchilla_reset_is_failure(reason));
+    }
+    for (int reason : {1, 3, 5, 12, 21, 22}) {
+        CHECK(!chinchilla_reset_is_failure(reason));
+    }
+}
+
 } // namespace
 
 int main(int argc, char **argv)
 {
+    test_boot_word();
     test_text_screen();
+    test_splash();
     test_run();
     test_waiting_and_skipping();
+    test_boot_device();
     if (argc > 1) {
         test_matches_reference(argv[1]);
     } else {
