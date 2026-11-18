@@ -117,6 +117,52 @@ std::string page(const std::string &html)
            "\r\n\r\n" + html;
 }
 
+std::string answer(const std::string &type, const std::string &body)
+{
+    return "HTTP/1.1 200 OK\r\nContent-Type: " + type + "\r\nContent-Length: " + std::to_string(body.size()) +
+           "\r\n\r\n" + body;
+}
+
+// A picture made here: a BMP of 24 bits, hills under a sky with a sun.
+std::string bmp(int width, int height)
+{
+    const int row = (width * 3 + 3) / 4 * 4;
+    std::string out(54 + static_cast<size_t>(row) * height, '\0');
+    const auto put = [&out](size_t at, uint32_t value, int bytes) {
+        for (int i = 0; i < bytes; i++) {
+            out[at + i] = static_cast<char>(value >> (8 * i));
+        }
+    };
+    out[0] = 'B';
+    out[1] = 'M';
+    put(2, static_cast<uint32_t>(out.size()), 4);
+    put(10, 54, 4);
+    put(14, 40, 4);
+    put(18, static_cast<uint32_t>(width), 4);
+    put(22, static_cast<uint32_t>(height), 4);
+    put(26, 1, 2);
+    put(28, 24, 2);
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            const int from_top = height - 1 - y; // a BMP's rows run upwards
+            int r = 120 + 100 * from_top / height, g = 170 + 60 * from_top / height, b = 240;
+            const int dx = x - width * 3 / 4, dy = from_top - height / 4, sun = height / 6;
+            if (dx * dx + dy * dy < sun * sun) {
+                r = 250, g = 210, b = 60;
+            }
+            const int hill = height * 2 / 3 + ((x * 7 / width) % 2 == 0 ? x % (width / 7 + 1) : width / 7 - x % (width / 7 + 1)) / 3;
+            if (from_top > hill) {
+                r = 60 + 40 * x / width, g = 140, b = 70;
+            }
+            const size_t at = 54 + static_cast<size_t>(y) * row + static_cast<size_t>(x) * 3;
+            out[at] = static_cast<char>(b);
+            out[at + 1] = static_cast<char>(g);
+            out[at + 2] = static_cast<char>(r);
+        }
+    }
+    return out;
+}
+
 void save(const char *name)
 {
     desktop.update();
@@ -244,7 +290,9 @@ void scenes()
     key(wm::key::Enter);
     wait(300);
     CHECK(strcmp(title(), "FrogFind! - Vizcacha") == 0);
-    CHECK(web.asked.size() == 2 && web.asked[0] == "frogfind.com/" && web.asked[1] == "www.frogfind.com/");
+    // The page, and then its picture: a GIF, which stays a box.
+    CHECK(web.asked.size() == 3 && web.asked[0] == "frogfind.com/" && web.asked[1] == "www.frogfind.com/" &&
+          web.asked[2] == "www.frogfind.com/img/frogfind.gif");
     CHECK(web.agent.find("Mozilla/4.0 (compatible;") == 0);
     CHECK(web.in_use() == 0 && os::tcp::open_connections() == 0);
     save("61-browser-frogfind");
@@ -300,6 +348,37 @@ void scenes()
     CHECK(strcmp(title(), "A page on the drive - Vizcacha") == 0);
     save("69-browser-file");
 
+    // Pictures: one at the size the page gives, inside a link; one wider
+    // than the page, made to fit; one that is not there; one from a folder
+    // beside the page.
+    key(wm::key::A + ('d' - 'a'), true);
+    desktop.text("andes.example/album.html");
+    key(wm::key::Enter);
+    wait(3000);
+    CHECK(strcmp(title(), "An album - Vizcacha") == 0);
+    CHECK(web.asked[web.asked.size() - 4] == "andes.example/small.bmp" &&
+          web.asked[web.asked.size() - 3] == "andes.example/wide.bmp" &&
+          web.asked[web.asked.size() - 2] == "andes.example/gone.bmp" &&
+          web.asked.back() == "andes.example/more/hills.bmp");
+    CHECK(web.in_use() == 0 && os::tcp::open_connections() == 0);
+    save("70-browser-pictures");
+    key(wm::key::End);
+    save("71-browser-pictures-end");
+
+    // A picture opened by itself: the link around the first one.
+    key(wm::key::Home);
+    click(190, 180);
+    wait(2000);
+    CHECK(web.asked.back() == "andes.example/wide.bmp");
+    save("72-browser-picture-alone");
+
+    // A page on the drive with a picture beside it.
+    key(wm::key::A + ('d' - 'a'), true);
+    desktop.text("C:\\Documents\\album.htm");
+    key(wm::key::Enter);
+    wait(100);
+    save("73-browser-file-picture");
+
     // Closed: nothing of it stays.
     key(wm::key::F4, true);
     wait(100);
@@ -325,6 +404,16 @@ int main(int argc, char **argv)
     web.pages["www.frogfind.com/"] = page(kFrogHome);
     web.pages["www.frogfind.com/?q=chinchilla"] = page(frog_results());
     web.pages["www.frogfind.com/read?a=x&k=Q9FS"] = page(kArticle);
+    web.pages["andes.example/album.html"] = page(
+        "<html><head><title>An album</title></head><body><h2>An album</h2>"
+        "<p>The valley, small: <a href=\"wide.bmp\"><img src=\"small.bmp\" width=96 height=60 alt=\"The valley\"></a> "
+        "and the text goes on beside it.</p>"
+        "<p><img src=\"/wide.bmp\" alt=\"The valley, wide\"></p>"
+        "<p>One that is gone: <img src=\"gone.bmp\" alt=\"A lost picture\"> and the hills, half as wide as they are: "
+        "<img src=\"more/hills.bmp\" width=120></p><p>The end of the album.</p></body></html>");
+    web.pages["andes.example/small.bmp"] = answer("image/bmp", bmp(192, 120));
+    web.pages["andes.example/wide.bmp"] = answer("image/bmp", bmp(660, 100));
+    web.pages["andes.example/more/hills.bmp"] = answer("image/bmp", bmp(240, 160));
     os::install_dialer(&web);
 
     static init::Init first(proc::table()); // PID 1, as on the board; the desktop is its child
@@ -339,6 +428,10 @@ int main(int argc, char **argv)
     const char *file = "<title>A page on the drive</title><h2>Saved pages open too</h2>"
                        "<p>This one is <tt>C:\\Documents\\page.htm</tt>. <a href=\"other.htm\">Its neighbour</a>.";
     CHECK(storage.write_file("C:\\Documents\\page.htm", file, strlen(file)) == ports::FsError::Ok);
+    const char *album = "<title>An album on the drive</title><p>A picture beside this page: <img src=\"hills.bmp\"></p>";
+    CHECK(storage.write_file("C:\\Documents\\album.htm", album, strlen(album)) == ports::FsError::Ok);
+    const std::string hills = bmp(160, 100);
+    CHECK(storage.write_file("C:\\Documents\\hills.bmp", hills.data(), hills.size()) == ports::FsError::Ok);
     const size_t before = memory.bytes_in_use();
     scenes();
     CHECK(memory.bytes_in_use() == before); // the browser gave back all it took
