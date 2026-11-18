@@ -136,3 +136,20 @@ Trash still holding its file. The constructor now joins the list.
 PC tests: 44 of 44. The two Task Manager pictures were redrawn (the File
 manager's memory figure). PC only; the merge has not been compiled for the
 board nor run on it.
+
+## On the board (2026-11-18, bfcd740)
+
+App-flashed on the BIOS layout, no wipe. Passed: the desktop's Trash icon
+opens a window titled "Trash" with the bin icon, a toolbar with only Empty
+Trash and the free space in MB, and a second double-click brings the same
+window forward. With the Trash open, deleting `del9.txt` in `C:\Documents`
+shows it in the Trash at once, without F5; File > Restore takes it out of the
+Trash and puts it back in Documents at once in both windows; Empty Trash with
+Yes empties the Trash at once and greys the button, and the desktop icon
+shows the empty bin. `C:\Documents` opened twice gives one window brought
+forward; `pictures` opens a second. Folders of 80 and 200 files open in 1.2 s
+and 2.5 s. The Task Manager shows one File manager process (62K) with a folder
+window, the Trash and a third window open; closing them all returns internal
+memory to the figure before (203,731 bytes) and external memory to within
+0.2 KB. In Midnight the Trash's toolbar and status bar read well (the greyed
+Empty Trash stays dim but legible). `dbg.py misses`: none.
