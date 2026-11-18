@@ -18,9 +18,21 @@ namespace clipboard {
 // The clipboard's memory, given once (64 KB is plenty). Without it, copying
 // does nothing.
 void init(uint8_t *buffer, size_t capacity);
+// It holds one thing at a time: text, or the names of files that were
+// copied or cut (backlog item 54). Putting either there takes the other away.
+enum class Kind : uint8_t { Text, Files, CutFiles };
+Kind kind();
+void clear();
+// Text. data() and size() are of the text: nothing while it holds files.
 void set(const uint8_t *latin1, size_t size);
 const uint8_t *data();
 size_t size();
+// Files: begin_files() empties it, add_file() adds a full path (false: no
+// room, and it is left out). file() gives them back by index.
+void begin_files(bool cut);
+bool add_file(const char *path);
+int file_count();
+bool file(int index, char *out, size_t capacity);
 } // namespace clipboard
 
 class TextEdit : public Widget {

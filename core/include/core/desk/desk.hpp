@@ -117,9 +117,10 @@ public:
 
     // The icons: the array is the caller's and must stay valid.
     void set_icons(const Icon *icons, int count);
-    // A right click on the desktop away from the icons calls `menu` with
-    // the pointer's place (the shell opens a menu there).
-    void set_menu(void (*menu)(int x, int y, void *context), void *context)
+    // A right click on the desktop calls `menu` with the icon under the
+    // pointer, which is selected first (-1: away from the icons), and the
+    // pointer's place (the shell opens a menu there).
+    void set_menu(void (*menu)(int icon, int x, int y, void *context), void *context)
     {
         menu_ = menu;
         menu_context_ = context;
@@ -201,7 +202,7 @@ private:
     int press_x_ = 0, press_y_ = 0;
     int last_hit_ = -1; // what the last press hit, for a double click
     int drop_icon_ = -1;
-    void (*menu_)(int x, int y, void *context) = nullptr;
+    void (*menu_)(int icon, int x, int y, void *context) = nullptr;
     void *menu_context_ = nullptr;
     void (*drop_)(const char *path, int x, int y, void *context) = nullptr;
     void *drop_context_ = nullptr;

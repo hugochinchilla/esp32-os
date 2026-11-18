@@ -39,11 +39,12 @@ The journal entry with the reasons is
 | | `os::work_area()`, `os::centred(w, h)` | The screen without the taskbar; a frame in the middle of it |
 | | `os::menu_open()` | A menu is open (a game pauses) |
 | | `os::open_menu(menu, x, y)` | A free-standing menu |
+| | `os::ui::menu_at(window, control, x, y, menu)` | The program's menu at a point of one of its controls: where the right button went down (the File manager) |
 | | `os::blocker(window)`, `os::in_front(window)` | The dialog in a window's way; whether it is the one in use |
 | | `os::main_window(pid)`, `os::window_title(id)`, `os::window_icon(id)`, `os::bring_forward(id)` | Another process's window, as a number (`os::WindowId`) and never as its object: its title and icon, and bringing it or its dialog to the front. A closed window's number answers nothing |
 | | `os::caret_moved()` | The text cursor of the window in use has moved: shown at once (the Terminal) |
 | Windows by number | `os::ui` (`core/os/ui.hpp`): windows, controls and their events | A program asks for a window and controls and gets numbers; written through the thin classes of `core/app/app.hpp` (item 37) |
-| | `os::ui::icon_view`, `set_items`, `item_at`, `reset_view`; events Drag, DragOver, Dropped | The view of icons with names (File manager), and files dragged out of it and dropped on a window |
+| | `os::ui::icon_view`, `set_items`, `item_at`, `reset_view`; events Drag, DragOver, Dropped, RightClick | The view of icons with names (File manager), and files dragged out of it and dropped on a window |
 | | `os::ui::selected_count`, `is_selected`, `highlight` | Several entries of an icon view picked at once (item 55): how many, whether this one is, and one more shown as picked without being it (the folder a dragged file would go into). `selected()` is the one picked last |
 | | `os::ui::draw::fill`, `text`, `text_scaled`, `blit`, `part`, `dent`, ... | Drawing while a Paint event is answered, on a number good only until it returns (`app::Canvas`) |
 | | `os::begin_drag(path)` | A file starts being dragged |
@@ -66,6 +67,8 @@ The journal entry with the reasons is
 | | `os::file::has_drive`, `drives`, `drive_info` | The drives |
 | Connections | `os::tcp::connect(host, port)`, `state`, `failure`, `read`, `write`, `close` (`core/os/tcp.hpp`) | An outgoing connection as a handle the system keeps and closes when the process ends. No call waits: the dialling is a background job |
 | | `os::tcp::available()`, `open_connections(pid)` | Whether the machine has a way out; how many a process holds |
+| Clipboard | `os::clipboard::set_files(folder, names, count, cut)` | Copy and Cut for files (item 54): their full paths go on the clipboard, which is the one the text uses and holds text or files, never both |
+| | `os::clipboard::file_count()`, `file(index, out, capacity)`, `files_cut()`, `clear()` | What Paste asks: which files, and whether they were cut. `os::ui::clipboard_size()` is of the text, 0 while files are there |
 | Settings | `os::load_settings(program, ini)`, `os::save_settings(program, ini)` | `C:\.config\<program>.ini` |
 | Machine | `os::restart()` | |
 | | `os::stats(out)`, `os::fact(which, ...)`, `os::busy_us()` | Figures and facts for the tools that show them |

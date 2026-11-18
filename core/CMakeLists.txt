@@ -81,6 +81,7 @@ set(CORE_SRCS
     src/shell/dialogs.cpp
     src/shell/editor.cpp
     src/shell/file_manager.cpp
+    src/shell/file_ops.cpp
     src/shell/trash.cpp
     src/shell/listing.cpp
     src/shell/loaded.cpp

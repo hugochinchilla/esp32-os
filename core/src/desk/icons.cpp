@@ -363,9 +363,18 @@ void Icons::mouse(const wm::MouseMsg &m)
 
 void Icons::right_click(int x, int y)
 {
-    // The desktop itself, away from the icons.
-    if (menu_ != nullptr && icon_at(x, y) < 0) {
-        menu_(x, y, menu_context_);
+    // The icon under the pointer is picked alone, as a left press would,
+    // unless it is one of several picked already: those stay. Then the menu
+    // for it, or for the desktop itself away from the icons.
+    const int hit = icon_at(x, y);
+    if (hit >= 0 && picked(hit)) {
+        selected_ = hit;
+    } else {
+        pick(hit >= 0 ? 1u << hit : 0, hit);
+    }
+    last_hit_ = -1;
+    if (menu_ != nullptr) {
+        menu_(hit, x, y, menu_context_);
     }
 }
 

@@ -21,6 +21,7 @@ namespace shell {
 namespace {
 
 constexpr uint16_t kF2 = 0x3B, kF5 = 0x3E;
+constexpr uint16_t kKeyC = wm::key::A + 2, kKeyV = wm::key::A + 21, kKeyX = wm::key::A + 23;
 
 // A flat toolbar button with an icon over its caption (target picture): a
 // picture of the window's that takes the mouse, and what it shows.
@@ -187,6 +188,9 @@ public:
         trash_items_[7] = file_items_[6];
         trash_items_[8] = file_items_[1];
         trash_items_[9] = file_items_[8];
+        edit_items_[0] = {"Cu&t", &FolderWindow::cut, this, nullptr, nullptr, 0};
+        edit_items_[1] = {"&Copy", &FolderWindow::copy, this, nullptr, nullptr, 0};
+        edit_items_[2] = {"&Paste", &FolderWindow::paste_here, this, nullptr, nullptr, 0};
         view_items_[0] = {"Show &hidden files", &FolderWindow::toggle_hidden, this, nullptr, nullptr, 0};
         // Joins the list its destructor leaves: without it no folder window
         // was found again, to be refreshed or brought forward.
@@ -260,6 +264,67 @@ public:
             empty(this);
         }
     }
+    // The right button in the icon view: a menu for the entry under it,
+    // which is picked first, or for the folder shown when it is on none.
+    // On one of several that are picked they stay picked, and the menu has
+    // what goes for all of them: no Open, and no Paste into one of them.
+    void right_click(app::Control which, int x, int y) override
+    {
+        if (!(which == view_)) {
+            return;
+        }
+        const int i = view_.item_at(x, y);
+        if (i < 0 || !view_.is_selected(i)) {
+            view_.select(i);
+        }
+        const bool several = view_.selected_count() > 1;
+        const bool board = folder_[0] == 0, trash = in_trash(folder_);
+        int n = 0;
+        const auto add = [&](const char *label, void (*action)(void *), bool enabled = true) {
+            menu_items_[n++] = {label, action, this, nullptr, nullptr,
+                                static_cast<uint8_t>(enabled ? 0 : wm::kMenuDisabled)};
+        };
+        const auto line = [&] { menu_items_[n++] = {nullptr, nullptr, nullptr, nullptr, nullptr, wm::kMenuSeparator}; };
+        if (i >= 0) {
+            if (!several) {
+                add("&Open", &FolderWindow::open_selected);
+            }
+            if (at_trash()) {
+                add("&Restore", &FolderWindow::restore);
+            }
+            if (!board && !trash) {
+                if (n > 0) {
+                    line();
+                }
+                add("Cu&t", &FolderWindow::cut);
+                add("&Copy", &FolderWindow::copy);
+                // On a folder: Paste puts things into it.
+                if (!several && listing_.item(i).folder &&
+                    fs::path::join(folder_, listing_.item(i).name, paste_target_, sizeof(paste_target_))) {
+                    add("&Paste", &FolderWindow::paste_there, can_paste(paste_target_));
+                }
+            }
+            if (!board) {
+                if (n > 0) {
+                    line();
+                }
+                add("&Delete", &FolderWindow::remove);
+            }
+        } else {
+            if (at_trash()) {
+                add("&Empty Trash", &FolderWindow::empty, listing_.count() > 0);
+                line();
+            } else if (!board && !trash) {
+                snprintf(paste_target_, sizeof(paste_target_), "%s", folder_);
+                add("&Paste", &FolderWindow::paste_there, can_paste(paste_target_));
+                line();
+                add("New &Folder...", &FolderWindow::new_folder);
+            }
+            add("Re&fresh", &FolderWindow::refresh_action);
+        }
+        menu_.count = n;
+        view_.menu_at(x, y, menu_);
+    }
     // The icon view: an entry picked, opened, dragged.
     void changed(app::Control) override { status(); }
     bool chosen(app::Control) override
@@ -301,6 +366,17 @@ public:
             if (k.usage == wm::key::Delete) {
                 remove(this);
                 return true;
+            }
+            // Ctrl+X, Ctrl+C, Ctrl+V, as in the Editor.
+            if ((k.mods & wm::kCtrl) && !(k.mods & wm::kAlt)) {
+                if (k.usage == kKeyX || k.usage == kKeyC) {
+                    k.usage == kKeyX ? cut(this) : copy(this);
+                    return true;
+                }
+                if (k.usage == kKeyV) {
+                    paste_here(this);
+                    return true;
+                }
             }
         }
         return false;
@@ -359,8 +435,13 @@ public:
         view_items_[0].flags = trash ? wm::kMenuChecked | wm::kMenuDisabled
                                      : (Listing::show_hidden ? wm::kMenuChecked : 0);
         const bool at_board = folder_[0] == 0;
-        const uint8_t open = view_.selected() >= 0 ? 0 : wm::kMenuDisabled;
+        // Open and Rename are for one; the others for all that is picked.
+        const bool one = view_.selected_count() == 1;
+        const uint8_t open = one ? 0 : wm::kMenuDisabled;
         const uint8_t chosen = view_.selected() >= 0 && !at_board ? 0 : wm::kMenuDisabled;
+        // Nothing is copied out of the Trash or pasted into it: Restore is its way out.
+        edit_items_[0].flags = edit_items_[1].flags = trash ? static_cast<uint8_t>(wm::kMenuDisabled) : chosen;
+        edit_items_[2].flags = can_paste(folder_) ? 0 : wm::kMenuDisabled;
         if (at_trash()) {
             trash_items_[0].flags = open;
             trash_items_[2].flags = chosen;
@@ -371,7 +452,7 @@ public:
         // Nothing is made or renamed inside something thrown away.
         file_items_[0].flags = open;
         file_items_[2].flags = at_board || trash ? wm::kMenuDisabled : 0;
-        file_items_[3].flags = trash ? static_cast<uint8_t>(wm::kMenuDisabled) : chosen;
+        file_items_[3].flags = trash || !one ? static_cast<uint8_t>(wm::kMenuDisabled) : chosen;
         file_items_[4].flags = chosen;
     }
 
@@ -472,6 +553,30 @@ private:
         char to[fs::kMaxPath];
         snprintf(to, sizeof(to), "%s", history_[--history_count_]);
         go_to(to, false);
+    }
+
+    // What is selected (backlog item 55: several at once): calls fn(index) for each selected entry of the
+    // listing and returns how many there were. Cut, Copy, Delete and
+    // Restore all come through here; Open and Rename are for one.
+    template <typename F> int for_selected(F fn)
+    {
+        int n = 0;
+        for (int i = 0; i < listing_.count(); i++) {
+            if (view_.is_selected(i)) {
+                fn(i);
+                n++;
+            }
+        }
+        return n;
+    }
+
+    // The same as what the file commands take. Good until the folder is
+    // read again.
+    Selection selection()
+    {
+        int n = 0;
+        for_selected([&](int i) { chosen_[n++] = listing_.item(i).name; });
+        return {folder_, chosen_, n};
     }
 
     bool selected_path(char *out, int capacity)
@@ -643,8 +748,8 @@ private:
     static void rename(void *context)
     {
         auto *w = static_cast<FolderWindow *>(context);
-        if (w->folder_[0] == 0 || in_trash(w->folder_) || w->view_.selected() < 0) {
-            return;
+        if (w->folder_[0] == 0 || in_trash(w->folder_) || w->view_.selected_count() != 1) {
+            return; // one at a time
         }
         input_dialog(w->number(), "Rename", "New name:", w->listing_.item(w->view_.selected()).name,
                      &FolderWindow::renamed, w);
@@ -667,23 +772,54 @@ private:
     static void remove(void *context)
     {
         auto *w = static_cast<FolderWindow *>(context);
-        char p[fs::kMaxPath];
-        if (w->folder_[0] != 0 && w->selected_path(p, sizeof(p))) {
-            delete_asking(p);
+        if (w->folder_[0] != 0) {
+            delete_asking(w->selection());
         }
+    }
+
+    // Onto the clipboard (file_ops.cpp). Not from My Board, whose entries
+    // are drives, and not from the Trash.
+    static void cut(void *context) { static_cast<FolderWindow *>(context)->to_clipboard(true); }
+    static void copy(void *context) { static_cast<FolderWindow *>(context)->to_clipboard(false); }
+    void to_clipboard(bool cut)
+    {
+        if (folder_[0] != 0 && !in_trash(folder_)) {
+            copy_files(selection(), cut);
+        }
+    }
+    // Into the folder shown; from the right-click menu, into the folder it
+    // was opened on.
+    static void paste_here(void *context)
+    {
+        auto *w = static_cast<FolderWindow *>(context);
+        paste_files(w->folder_, w->number());
+    }
+    static void paste_there(void *context)
+    {
+        auto *w = static_cast<FolderWindow *>(context);
+        paste_files(w->paste_target_, w->number());
     }
 
     // Back where it came from (the Trash only).
     static void restore(void *context)
     {
         auto *w = static_cast<FolderWindow *>(context);
-        const int i = w->view_.selected();
-        if (!w->at_trash() || i < 0) {
+        if (!w->at_trash()) {
             return;
         }
-        char name[fs::kMaxPath];
-        snprintf(name, sizeof(name), "%s", w->listing_.item(i).name);
-        const ports::FsError e = restore_from_trash(name);
+        // Each one; it says which was the first that could not be put back.
+        ports::FsError e = ports::FsError::Ok;
+        char name[fs::kMaxPath] = "";
+        const int n = w->for_selected([&](int i) {
+            const ports::FsError one = restore_from_trash(w->listing_.item(i).name);
+            if (one != ports::FsError::Ok && e == ports::FsError::Ok) {
+                e = one;
+                snprintf(name, sizeof(name), "%s", w->listing_.item(i).name);
+            }
+        });
+        if (n == 0) {
+            return;
+        }
         files_changed();
         if (e != ports::FsError::Ok) {
             snprintf(w->message_, sizeof(w->message_), "Cannot put back '%s':\n%s.", name,
@@ -762,10 +898,18 @@ private:
     wm::MenuItem file_items_[9];
     wm::MenuItem trash_items_[10];
     wm::Menu file_ = {file_items_, 9};
+    wm::MenuItem edit_items_[3];
+    wm::Menu edit_ = {edit_items_, 3};
     wm::MenuItem view_items_[1];
     wm::Menu view_menu_ = {view_items_, 1};
-    const wm::MenuBarEntry entries_[2] = {{"&File", &file_}, {"&View", &view_menu_}};
-    const wm::MenuBar bar_ = {entries_, 2};
+    const wm::MenuBarEntry entries_[3] = {{"&File", &file_}, {"&Edit", &edit_}, {"&View", &view_menu_}};
+    const wm::MenuBar bar_ = {entries_, 3};
+    // The right-click menu, filled in each time it opens, and the folder
+    // its Paste puts things into.
+    wm::MenuItem menu_items_[8];
+    wm::Menu menu_ = {menu_items_, 0};
+    char paste_target_[fs::kMaxPath] = "";
+    const char *chosen_[Listing::kMax] = {}; // selection(): the names of what is selected
 };
 
 } // namespace

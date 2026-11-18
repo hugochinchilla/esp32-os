@@ -705,6 +705,45 @@ void test_os_call()
     CHECK(!os::start_job(spec));
 }
 
+// Paste in the File manager (backlog item 54) is a job: the copy is made
+// on a task of its own while the desktop goes on, the window shows the
+// hourglass and can still be used, and closing it does not stop the copy.
+void test_paste()
+{
+    msg::Inbox inbox(queue);
+    const int blocks = memory.in_use();
+    const std::string text(5000, 'p');
+    storage.make_folder("C:\\p");
+    storage.write_file("C:\\p\\f.txt", text.data(), text.size());
+    shell::open_folder("C:\\p");
+    wm::Window *w = desktop.active();
+    CHECK(w != nullptr && strcmp(title(), "p") == 0);
+    const Pid pid = w->owner();
+    const gfx::Rect c = w->client();
+    desktop.mouse({true, static_cast<int16_t>(c.x + c.w / 2), static_cast<int16_t>(c.y + c.h / 2), 0, 0});
+    key(wm::key::End);
+    letter('c', 2); // Ctrl+C
+    tasks.hold();
+    letter('v', 2); // Ctrl+V
+    CHECK(job::jobs().running(pid) == 1 && !w->locked() && !desktop.waiting());
+    CHECK(shape_is(pointer, video::busy_pointer()) && file("C:\\p\\f (2).txt") == "<missing>");
+    let_jobs_finish(inbox);
+    CHECK(job::jobs().running(pid) == 0 && shape_is(pointer, video::arrow_pointer()));
+    CHECK(file("C:\\p\\f (2).txt") == text && file("C:\\p\\f.txt") == text);
+
+    // Closed while a paste runs: the copy is finished whole, and then the
+    // File manager goes, with everything it had.
+    tasks.hold();
+    letter('v', 2);
+    key(wm::key::F4, 4);
+    wait(1000);
+    CHECK(proc::table().alive(pid) && file("C:\\p\\f (3).txt") == "<missing>");
+    let_jobs_finish(inbox);
+    wait(1000);
+    CHECK(!proc::table().alive(pid) && file("C:\\p\\f (3).txt") == text);
+    CHECK(memory.in_use() == blocks);
+}
+
 } // namespace
 
 int main()
@@ -728,6 +767,7 @@ int main()
     job::jobs().set_tasks(&tasks);
     test_editor_save();
     test_os_call();
+    test_paste();
     job::jobs().set_tasks(nullptr);
     msg::set_queue(nullptr);
 

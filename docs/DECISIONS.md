@@ -2782,6 +2782,52 @@ The agent's, to confirm:
 - The User-Agent is `Mozilla/4.0 (compatible; Vizcacha 1.0; Chinchilla;
   ESP32-S3)`: FrogFind refuses one that does not look like a browser's.
 
+### Chosen for Copy, Cut and Paste of files (2026-11-18, to confirm)
+
+Backlog item 54. The owner asked for the commands and where they show; the
+rest is the agent's, each easy to change. The reasons and what was not taken
+are in `docs/journal/2026-11-18-file-commands.md`.
+
+- **One clipboard.** The clipboard the Editor uses holds text or files,
+  never both: copying files takes the text away, and copying text takes the
+  files away. Files are kept there as their full paths, with whether they
+  were cut. No new memory: it is the 64 KB the system already holds.
+- **Paste never replaces.** A name taken in the folder is numbered,
+  "notes (2).txt", as the Trash and the old `C:\docs` move do. A copy pasted
+  into the folder it came from is such a numbered copy. Not taken: asking
+  whether to replace.
+- **Cut is a move at Paste.** Until then nothing changes on the disk, and
+  the cut files are not shown any differently. On the same drive it is a
+  rename; to another drive the files are copied whole and then removed.
+  Pasting what was cut into the folder it is in does nothing. After a Paste
+  of cut files the clipboard is empty; copied files can be pasted again.
+- **Paste is a background job** of the program that asked (the File
+  manager, or the taskbar for the desktop): the desktop goes on, the File
+  manager's window shows the hourglass on demand and stays in use, and
+  closing it does not stop the copy. It stops at the first thing that goes
+  wrong and says which file and why. A folder is not put inside itself.
+- **The menus.** In the File manager: Edit, between File and View, with
+  Cut, Copy and Paste, and File keeps Delete (the owner was asked on
+  2026-11-18 whether he would rather have them all in File; built this way
+  meanwhile); Ctrl+X, Ctrl+C, Ctrl+V. A right click picks the entry under the
+  pointer first. On a file: Open, Cut, Copy, Delete. On a folder the same
+  with Paste, which pastes into that folder. On the blank part: Paste, New
+  Folder, Refresh. On the desktop: the same for the icons of files and
+  folders; Open and Paste on Documents; Open alone on the other system
+  icons; Paste, into `C:\Documents\Desktop`, at the top of the desktop's own
+  menu. A right click away from the icons takes the selection off, as a left
+  click does.
+- **The Trash and My Board.** Nothing is cut or copied out of the Trash or
+  pasted into it (Restore is its way out; its right-click menu has Open,
+  Restore and Delete, and Empty Trash on the blank part). My Board's entries
+  are drives: Open only.
+- **Delete takes a list** and asks once: by name for one, "these 3 items"
+  for several. The index of the Trash is written once however many go.
+- **Selections are lists.** The commands take a folder and a list of names
+  (`shell::Selection`); the File manager fills it through one function,
+  `FolderWindow::for_selected`, which gives one entry today and is the only
+  thing item 55 (several at once) has to change.
+
 ### Chosen for selecting several files (2026-11-18, to confirm)
 
 Backlog item 55, `docs/journal/2026-11-18-selecting-several.md`. The owner
@@ -2817,6 +2863,11 @@ ahead on it while the answer was pending. To confirm or overrule:
 - When a folder is read again and holds as many entries as before, what was
   picked stays; otherwise only the one picked last stays. The entries are
   known by their place in the list, and the places have changed.
+- A right click on one of several picked entries keeps them, and its menu has
+  what goes for all of them: Cut, Copy and Delete (Restore in the Trash). No
+  Open and no Paste into one of them. A right click on an entry that is not
+  picked picks it alone. File > Open and Rename are greyed while more than
+  one is picked. On the desktop the same, for the files among the icons.
 - The status bar says "3 objects selected, 30 bytes" (the files among them
   added up; folders are not looked into).
 - The window manager asks the Memory port for the list of the other paths

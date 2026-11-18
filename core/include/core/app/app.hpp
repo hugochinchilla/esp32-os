@@ -265,6 +265,8 @@ public:
     bool is_selected(int index) const { return os::ui::is_selected(window_, number_, index); }
     // Shown as picked without being picked (where a dragged file would go); -1: none.
     void highlight(int index) const { os::ui::highlight(window_, number_, index); }
+    // The program's menu at a point of it (Window::right_click).
+    void menu_at(int x, int y, wm::Menu &menu) const { os::ui::menu_at(window_, number_, x, y, menu); }
 };
 
 // The text editor: a whole text file, with its own memory for the text
@@ -360,7 +362,8 @@ public:
     // The left button in a picture made with kMouse, in its coordinates;
     // from Down to Up they all go to the picture that was pressed.
     virtual void mouse(Control /*which*/, const wm::MouseMsg &) {}
-    // The right button went down in a picture made with kMouse.
+    // The right button went down in a picture made with kMouse, or in an
+    // icon view, at this point of it.
     virtual void right_click(Control /*which*/, int /*x*/, int /*y*/) {}
     // The client area has another size: the controls go where they belong now.
     virtual void resized(int /*width*/, int /*height*/) {}

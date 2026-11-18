@@ -98,12 +98,22 @@ the picture and the name as what a click hits, and the dotted line.
   file stays on the desktop when the files it was picked with go into a
   window, a folder or the Trash.
 
+- Item 54's branch was merged in here once its commands worked (commit
+  `a769b00`). Its Cut, Copy, Delete and Restore go through one function of
+  the folder window, `for_selected`, which now walks all that is picked;
+  Delete asks once ("these 2 items"). A right click on one of several picked
+  entries keeps them and gives a menu of what goes for all (Cut, Copy,
+  Delete; no Open, no Paste into one of them); a right click anywhere else
+  picks that entry alone, as before. The same on the desktop, where the
+  commands act on the files among the picked icons. File > Open and Rename
+  are greyed while more than one is picked.
+
 Tested on the PC: `test_wm` (`test_drag_several`: the order of the drops, the
 count still to come, Escape, the desktop's own icons moving together, files
 from elsewhere not landing on one another, the rectangle growing and
-shrinking, no stale pixels) and nine scenes in `render_scenes`
-(`host/tests/pictures/70a` to `70i`), each of which checks on the drive which
-files moved. One older picture changed, `37l-dragging-to-folder`: the file
+shrinking, no stale pixels) and eleven scenes in `render_scenes`
+(`host/tests/pictures/77a` to `77k`), each of which checks on the drive which
+files moved or went to the Trash. One older picture changed, `37l-dragging-to-folder`: the file
 being dragged stays picked and the folder under it is lit as well. 50 of 50
 tests pass.
 
@@ -123,9 +133,12 @@ fast the rectangle follows the pointer there is not known.
 
 ## 7. What is left
 
-- Copy, Cut, Delete and Restore on all that is picked: item 54's commands go
-  through one function of the folder window, `for_selected`, which this branch
-  fills in once that branch is in.
+- This branch holds item 54's commit as well, so it goes into `main` after
+  that one, or with it.
+- The scenes cover the right-click menu and Delete of several. Cut, Copy and
+  Paste of several are covered by item 54's own test (`test_copy_cut_paste`,
+  lists of 2 and 3), not by the mouse. The menu for several picked icons on
+  the desktop has no test of its own.
 - The view does not scroll by itself while a rectangle is pulled past its
   edge.
 - A board turn: the rectangle's speed, and `tools/dbg.py misses` after it.
