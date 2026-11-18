@@ -484,6 +484,16 @@ and tested on the PC, not yet run on the board.
   resignation and Resign does not ask; where there are no tasks (the PC's
   plain desktop, the browser) the computer stops at 200,000 positions.
 
+- The computer's piece lands (the owner, on a card, 2026-11-18; backlog
+  item 64, `docs/journal/2026-11-18-chess-landing.md`): it falls the last
+  4 pixels onto its square and bounces once, 233 ms in all, so that a move
+  is seen. Chosen from four drawn (`docs/look/chess-landing/`): not a
+  sideways shake, not a rocking piece (the recommendation), not a fall
+  followed by rocking; and not a slide from the old square, ruled out in
+  the request. As built, to confirm or overrule: only the computer's piece,
+  not the user's; the piece stays inside its square (a king's top two rows
+  are cut for two frames); no setting to turn it off. PC only so far.
+
 ## Ideas kept for later
 
 Not scheduled. To be revisited once a basic OS boots.

@@ -79,7 +79,9 @@ constexpr Colour kInks[2][3] = {
 constexpr int kClear = rgb(7, 0, 3); // magenta: no piece uses it
 
 // One piece at (x, y), below. `scratch` holds kBig * kBig bytes and is the
-// caller's: the pieces are kept two bits a pixel and coloured here.
+// caller's: the pieces are kept two bits a pixel and coloured here. `lift`
+// draws it that many pixels higher inside the same kBig by kBig: what would
+// go over the top is left out, so a square's piece stays in its square.
 
 // A colour's brightness, roughly: RRRGGGBB with green counting most.
 constexpr int brightness(Colour c) { return 3 * (c >> 5) + 6 * ((c >> 2) & 7) + 2 * (c & 3); }
@@ -92,7 +94,7 @@ Colour outline_on_face(Color side)
 }
 
 void draw_piece(app::Canvas &c, uint8_t *scratch, int set, Color side, Type type, bool big, int x, int y,
-                Colour outline)
+                Colour outline, int lift = 0)
 {
     if (type == chess::NoType) {
         return;
@@ -100,12 +102,22 @@ void draw_piece(app::Canvas &c, uint8_t *scratch, int set, Color side, Type type
     const int size = big ? kBig : kSmall;
     const uint8_t *packed = big ? chess_art::kBig[set][type - 1] : chess_art::kSmall[set][type - 1];
     const Colour inks[3] = {outline, kInks[side][1], kInks[side][2]};
-    for (int i = 0; i < size * size; i++) {
+    const int skipped = lift * size; // the rows that would go over the top
+    for (int i = skipped; i < size * size; i++) {
         const int v = (packed[i >> 2] >> ((i & 3) * 2)) & 3;
-        scratch[i] = v == 0 ? static_cast<uint8_t>(kClear) : inks[v - 1];
+        scratch[i - skipped] = v == 0 ? static_cast<uint8_t>(kClear) : inks[v - 1];
     }
+    memset(scratch + size * size - skipped, kClear, static_cast<size_t>(skipped));
     c.blit({size, size, scratch, kClear}, x, y);
 }
+
+// The computer's piece lands (backlog item 64, the owner's pick of four
+// drawn): it falls the last four pixels onto its square and bounces once,
+// so that a move played while the user looked away is seen. How high the
+// piece is above its place, a step every 60th of a second; then it rests.
+constexpr uint8_t kLanding[] = {4, 4, 3, 3, 2, 1, 1, 1, 2, 2, 2, 1, 1, 1};
+constexpr int kLandingSteps = static_cast<int>(sizeof(kLanding));
+constexpr uint32_t kLandingStepUs = 1000000 / 60;
 
 constexpr uint16_t kF2 = 0x3B;
 
@@ -331,6 +343,7 @@ public:
     ~ChessWindow() override
     {
         stop_clock();
+        stop_landing();
         if (brain_ != nullptr && brain_->running) {
             // The job still reads the block: it is told to stop, and the
             // block goes back when it has (thought()).
@@ -580,7 +593,8 @@ private:
         c.fill(r, (shown & 0x20) != 0 ? (dark ? k.moved_dark : k.moved_light) : dark ? k.dark : k.light);
         const chess::Piece p = game_.position().at(sq);
         if (p != chess::kEmpty && (shown & 0x80) == 0) {
-            draw_piece(c, scratch_, set_, chess::color_of(p), chess::type_of(p), true, r.x, r.y, gfx::rgb(0, 0, 0));
+            draw_piece(c, scratch_, set_, chess::color_of(p), chess::type_of(p), true, r.x, r.y, gfx::rgb(0, 0, 0),
+                       sq == landing_ ? lift_ : 0);
         }
         if ((shown & 0x40) != 0) {
             const Colour dot = dark ? k.dot_dark : k.dot_light;
@@ -652,6 +666,7 @@ private:
     // painted again.
     void sync()
     {
+        settle_if_moved_on();
         for (int sq = 0; sq < 64; sq++) {
             const uint8_t now = look(sq);
             if (now != shown_[sq]) {
@@ -670,6 +685,7 @@ private:
     // The board turned, or another look chosen: all of it again.
     void redraw_all()
     {
+        settle_if_moved_on();
         for (int sq = 0; sq < 64; sq++) {
             shown_[sq] = look(sq);
         }
@@ -681,6 +697,64 @@ private:
     {
         snprintf(text_, sizeof(text_), "%s", text);
         status_.set(text_);
+    }
+
+    /* ---- The computer's piece landing ---- */
+
+    // The piece the computer has just played to `sq` starts above its place.
+    // A timer brings it down; only that square is painted again, and only
+    // when the height changes.
+    void start_landing(int sq)
+    {
+        stop_landing();
+        landing_ = sq;
+        landed_ply_ = game_.plies();
+        landing_since_ = os::now_us();
+        lift_ = kLanding[0];
+        shown_[sq] = 0xFF; // painted again by the sync() that shows the move
+        landing_timer_ = os::start_timer(kLandingStepUs, kLandingStepUs, &ChessWindow::landing_tick, this);
+        if (landing_timer_ == 0) {
+            stop_landing(); // no timer to be had: the piece is simply there
+        }
+    }
+
+    static void landing_tick(void *context)
+    {
+        auto *w = static_cast<ChessWindow *>(context);
+        // By the clock, not by counting: a late tick skips steps and the
+        // landing takes as long as it should.
+        const uint64_t step = (os::now_us() - w->landing_since_) / kLandingStepUs;
+        if (step >= static_cast<uint64_t>(kLandingSteps)) {
+            w->stop_landing();
+            return;
+        }
+        if (kLanding[step] != w->lift_) {
+            w->lift_ = kLanding[step];
+            w->all_.redraw(w->square_rect(w->landing_));
+        }
+    }
+
+    // The piece is at rest, now.
+    void stop_landing()
+    {
+        if (landing_timer_ != 0) {
+            os::stop_timer(landing_timer_);
+            landing_timer_ = 0;
+        }
+        if (landing_ >= 0 && lift_ != 0) {
+            all_.redraw(square_rect(landing_));
+        }
+        landing_ = -1;
+        lift_ = 0;
+    }
+
+    // The game went on, or back, while the piece was landing: a move, Take
+    // back, another game.
+    void settle_if_moved_on()
+    {
+        if (landing_ >= 0 && game_.plies() != landed_ply_) {
+            stop_landing();
+        }
     }
 
     /* ---- The user's moves ---- */
@@ -893,6 +967,7 @@ private:
         thinking_ = false;
         if (brain_->result.best != chess::kNoMove && game_.play(brain_->result.best)) {
             pick(-1);
+            start_landing(chess::to_of(brain_->result.best));
         }
         turn();
     }
@@ -1051,6 +1126,12 @@ private:
     bool thinking_ = false;     // the game waits for the computer's move
     bool fresh_ = true;         // the engine has not been told of this game yet
     int clock_ = 0;             // the timer that says the level's time is up
+
+    int landing_ = -1;           // the square the computer's piece is landing on, or -1
+    int lift_ = 0;               // how many pixels above its place it is painted
+    int landing_timer_ = 0;
+    int landed_ply_ = 0;         // the game's length when it was played
+    uint64_t landing_since_ = 0;
 
     int picked_ = -1;      // the square of the piece picked, or -1
     uint64_t targets_ = 0; // the squares it may go to, a bit each
