@@ -115,6 +115,24 @@ size_t Wm::paint_bench(char *out, size_t capacity)
     report.line("fill %u\n", static_cast<unsigned>(time([&] { c.fill(all, paper); })));
     report.line("fill_rgb %u\n", static_cast<unsigned>(time([&] { c.fill_rgb(all, {0, 110, 120}); })));
     report.line("fill_fade %u\n", static_cast<unsigned>(time([&] { c.fill_fade(all, {0, 0, 128}, {16, 132, 208}); })));
+    // A fade nobody asked for before: its rows are worked out each time (a
+    // title bar of another width), then one line of it is painted.
+    int width = kArea.w;
+    report.line("fade worked out %u\n", static_cast<unsigned>(time([&] {
+                    width -= 7;
+                    c.fill_fade({0, 0, width, 1}, {0, 0, 128}, {16, 132, 208});
+                })));
+    // Lines from top to bottom, each pixel in another line of the screen's
+    // memory: four side by side, 1,200 pixels, drawn one after the other
+    // and then through the band, where each row is written in one piece.
+    const auto lines_down = [&](Canvas &on) {
+        for (int i = 0; i < 4; i++) {
+            on.vline(i, 0, kArea.h, i % 2 != 0 ? ink : paper);
+        }
+    };
+    report.line("4 lines down %u\n", static_cast<unsigned>(time([&] { lines_down(c); })));
+    report.line("4 lines down in the band %u\n",
+                static_cast<unsigned>(time([&] { c.layered({0, 0, 4, kArea.h}, lines_down); })));
     report.line("fill in the band %u\n",
                 static_cast<unsigned>(time([&] { c.layered(all, [&](Canvas &l) { l.fill(all, paper); }); })));
     report.line("text_opaque %u\n", static_cast<unsigned>(time([&] {
@@ -166,10 +184,12 @@ size_t Wm::paint_bench(char *out, size_t capacity)
         uint32_t start = clock_.micros();
         Canvas frame(pixels, width_, height_, clip, w.frame_);
         paint_frame(frame, w);
+        const uint32_t frame_us = clock_.micros() - start;
+        start = clock_.micros();
         if (w.menu_bar_ != nullptr) {
             paint_menu_bar(frame, w);
         }
-        const uint32_t frame_us = clock_.micros() - start;
+        const uint32_t menu_us = clock_.micros() - start;
         const Rect in = w.client();
         Canvas client(pixels, width_, height_, clip, in, in.x, in.y);
         const proc::Scope as(procs_, w.owner_);
@@ -179,8 +199,9 @@ size_t Wm::paint_bench(char *out, size_t capacity)
         } else {
             w.paint(client);
         }
-        report.line("window %.20s: %dx%d frame %u inside %u\n", w.title_, w.frame_.w, w.frame_.h,
-                    static_cast<unsigned>(frame_us), static_cast<unsigned>(clock_.micros() - start));
+        report.line("window %.20s: %dx%d frame %u menu %u inside %u\n", w.title_, w.frame_.w, w.frame_.h,
+                    static_cast<unsigned>(frame_us), static_cast<unsigned>(menu_us),
+                    static_cast<unsigned>(clock_.micros() - start));
     }
     report.line("everything again %u\n", static_cast<unsigned>(repaint_all()));
     return report.used;
