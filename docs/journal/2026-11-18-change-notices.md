@@ -26,7 +26,7 @@ before the other finding of the benchmark (painting large windows).
   timer on the desktop's task, whatever else was going on. It was chosen on
   2026-11-16 so that a file put on the desktop any way (the File manager, a
   save, `tools/dbg.py put`) would show "without hooks in every program that
-  writes files" (`DECISIONS.md`, "Chosen for the files on the desktop").
+  writes files" (`docs/decisions/desktop-files-details.md`).
 - **It walked the folder once for every file in it.** It asked for the
   files one at a time by index (`Storage::entry(folder, i)`), and on the
   board's drive (`fs::PosixVolume`) each such call opens the folder, steps

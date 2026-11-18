@@ -55,7 +55,8 @@ resistor values and build notes.
 
 | Path | Contents |
 | --- | --- |
-| `docs/DECISIONS.md` | What has been decided, what was rejected, and what is still open |
+| `docs/DECISIONS.md` | The index of what has been decided, what was rejected, and what is still open: what always applies, and one line per decision |
+| `docs/decisions/` | One file per decision, listed in the index by `tools/decisions_index.py` |
 | `docs/hardware/` | VGA adapter pin map, resistor values and board diagram |
 | `docs/debug-protocol.md` | The serial protocol for screenshots and injected input |
 | `docs/benchmark.md` | How to run the 60 fps benchmark again and read its results |
