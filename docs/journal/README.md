@@ -7,8 +7,9 @@ why the others were not.
 
 It complements two other files:
 
-- [`docs/DECISIONS.md`](../DECISIONS.md) is the reference: the current state of
-  every decision, short, kept up to date.
+- [`docs/DECISIONS.md`](../DECISIONS.md) is the reference: the index of every
+  decision, each in a short file of its own in `docs/decisions/` that holds
+  its current state.
 - [`docs/BACKLOG.md`](../BACKLOG.md) is the list of work, with its status.
 
 The journal is the story. Entries are not rewritten later; a correction is a new
@@ -141,3 +142,4 @@ Plain words, real numbers, no summaries of summaries.
 | 2026-11-18 | [Services: a dialog, a command, and a stop that sticks](2026-11-18-services.md) | Backlog item 62: telnet and the remote screen become lines of the start-up file that a Services dialog ticks on and off; `service NAME stop` and `start` switch one while the others run; what the owner stops, init leaves stopped until the next start. What was found on the way: neither was in the init config, and nothing of the network could be started twice |
 | 2026-11-18 | [Does the desktop keep up with the monitor?](2026-11-18-frame-budget.md) | Backlog item 63: every piece of the desktop's work measured against one video frame (16.8 ms: the board shows 59.52 frames a second), slow ones logged with where the time went, `dbg.py frames`, and a scripted benchmark with windows dragged while Culebra runs and Chess thinks |
 | 2026-11-18 | [Where a slow repaint's time goes](2026-11-18-slow-repaints.md) | The 30 to 59 ms of a large window's repaint, profiled on the PC: the text loop in the Terminal and the Editor, Chess painted once for each 12 lines; a paint bench for the board |
+| 2026-11-18 | [The decisions log, cut into files](2026-11-18-decisions-in-files.md) | The owner's idea: `docs/DECISIONS.md` (193 KB, read by every thread) becomes an index of 26 KB and one file per decision in `docs/decisions/`, the list written by a tool |
