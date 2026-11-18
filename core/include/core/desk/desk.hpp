@@ -117,6 +117,7 @@ public:
 
     // The icons: the array is the caller's and must stay valid.
     void set_icons(const Icon *icons, int count);
+    int count() const { return count_; }
     // A right click on the desktop calls `menu` with the icon under the
     // pointer, which is selected first (-1: away from the icons), and the
     // pointer's place (the shell opens a menu there).

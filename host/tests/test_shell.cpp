@@ -8,7 +8,11 @@
 #include "core/gfx/art.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/wm.hpp"
+#include "core/desk/desk.hpp"
+#include "core/job/job.hpp"
+#include "core/msg/queue.hpp"
 #include "../host_adapters.hpp"
+#include "../thread_queue.hpp"
 
 #include "core/os/os.hpp"
 #include "core/os/ui.hpp"
@@ -43,7 +47,17 @@ public:
     int fail_after = -1; // writes that still succeed; -1: all of them
 
     ports::FsError info(ports::VolumeInfo &o) override { return v_->info(o); }
-    ports::FsError entry(const char *f, int i, ports::DirEntry &o) override { return v_->entry(f, i, o); }
+    int listings = 0; // times a folder was walked, to find one entry or a run of them
+    ports::FsError entry(const char *f, int i, ports::DirEntry &o) override
+    {
+        listings++;
+        return v_->entry(f, i, o);
+    }
+    ports::FsError entries(const char *f, int first, ports::DirEntry *o, int capacity, int &count) override
+    {
+        listings++;
+        return v_->entries(f, first, o, capacity, count);
+    }
     ports::FsError stat(const char *p, ports::DirEntry &o) override { return v_->stat(p, o); }
     ports::FsError make_folder(const char *p) override { return v_->make_folder(p); }
     ports::FsError remove(const char *p) override { return v_->remove(p); }
@@ -93,6 +107,7 @@ void key(uint16_t usage, uint8_t mods = 0)
             desktop.key(mod_keys[i], false);
         }
     }
+    desktop.tick(); // as the UI loop does after every event: change notices settle there
     clock_.now += 100000;
 }
 
@@ -326,6 +341,7 @@ void mouse(int x, int y, uint8_t buttons)
 {
     clock_.now += 300000;
     desktop.mouse({true, static_cast<int16_t>(x), static_cast<int16_t>(y), buttons, 0});
+    desktop.tick(); // as the UI loop does after every event: change notices settle there
 }
 
 // A right click on a point of the icon view of the window in use.
@@ -545,6 +561,136 @@ void test_copy_cut_paste()
     CHECK(os::blocks_out() == blocks);
 }
 
+// The desktop's icons follow C:\\Documents\\Desktop by change notices
+// (fs::Storage::set_changed), not by reading the folder every 2 s: an idle
+// desktop reads nothing, a file put there any way shows at the next round of
+// the loop, and a change somewhere else costs the desktop nothing.
+void idle(int seconds)
+{
+    for (int i = 0; i < seconds * 10; i++) {
+        clock_.now += 100000;
+        desktop.tick();
+    }
+}
+
+void test_change_notices()
+{
+    while (desktop.active() != nullptr) {
+        desktop.close(*desktop.active());
+    }
+    desktop.tick();
+    desk::Icons &icons = *shell::desktop_icons();
+    const int before = icons.count();
+
+    // Twenty seconds of nothing: not one walk of a folder.
+    int walks = spy.listings;
+    idle(20);
+    CHECK(spy.listings == walks);
+
+    // A file written straight to the drive (as tools/dbg.py put does):
+    // its icon is there after one round, with one walk of the desktop's
+    // folder and one look into the Trash.
+    storage.make_folder("C:\\Documents\\Desktop");
+    desktop.tick();
+    walks = spy.listings;
+    storage.write_file("C:\\Documents\\Desktop\\nota.txt", "n", 1);
+    CHECK(icons.count() == before); // not in the middle of the write
+    desktop.tick();
+    CHECK(icons.count() == before + 1 && spy.listings == walks + 2);
+
+    // Changes elsewhere are not the desktop's business.
+    walks = spy.listings;
+    storage.write_file("C:\\Documents\\other.txt", "o", 1);
+    storage.make_folder("C:\\elsewhere");
+    idle(5);
+    CHECK(icons.count() == before + 1 && spy.listings == walks);
+
+    // Several changes in one round are one reading.
+    walks = spy.listings;
+    storage.write_file("C:\\Documents\\Desktop\\a.txt", "a", 1);
+    storage.write_file("C:\\Documents\\Desktop\\b.txt", "b", 1);
+    storage.remove("C:\\Documents\\Desktop\\nota.txt");
+    desktop.tick();
+    CHECK(icons.count() == before + 2 && spy.listings == walks + 2);
+
+    // A File manager window on a folder follows it too, and one on another
+    // folder is left alone.
+    shell::open_folder("C:\\elsewhere");
+    desktop.tick();
+    walks = spy.listings;
+    storage.write_file("C:\\Documents\\other2.txt", "o", 1);
+    desktop.tick();
+    CHECK(spy.listings == walks);
+    storage.write_file("C:\\elsewhere\\new.txt", "n", 1);
+    desktop.tick();
+    CHECK(spy.listings > walks);
+    // The folder it shows is removed (its parent is what changed): it sees that.
+    storage.remove("C:\\elsewhere\\new.txt");
+    storage.remove("C:\\elsewhere");
+    desktop.tick();
+    CHECK(strcmp(title(), "My Board") == 0);
+    desktop.close(*desktop.active());
+    desktop.tick();
+
+    // With a queue and tasks, as on the board: the notice is a message, the
+    // folder is read by a job on another task, and the icons are set when
+    // the job's result comes back.
+    static host::ThreadQueue queue;
+    static host::ThreadTasks tasks;
+    msg::Inbox inbox(queue);
+    msg::set_queue(&queue);
+    job::jobs().set_tasks(&tasks);
+    const int started = tasks.started;
+    tasks.hold();
+    storage.write_file("C:\\Documents\\Desktop\\c.txt", "c", 1);
+    CHECK(tasks.started == started); // nothing until the UI task takes the message
+    inbox.deliver();
+    desktop.tick();
+    CHECK(tasks.started == started + 1 && icons.count() == before + 2); // being read; the desktop goes on
+    // A change while the job reads: it reads once more when it is back.
+    storage.write_file("C:\\Documents\\Desktop\\d.txt", "d", 1);
+    clock_.now += 300000; // past the pause between two settlings
+    desktop.tick();
+    inbox.deliver();
+    CHECK(tasks.started == started + 1);
+    tasks.finish();
+    inbox.deliver(); // the first job is back: starts the second
+    tasks.finish();
+    inbox.deliver();
+    CHECK(tasks.started == started + 2 && icons.count() == before + 4);
+    // No task to be had: tried again by the 2 s tick, which otherwise reads nothing.
+    tasks.refuse = true;
+    storage.remove("C:\\Documents\\Desktop\\d.txt");
+    clock_.now += 300000;
+    desktop.tick();
+    inbox.deliver();
+    CHECK(icons.count() == before + 4);
+    tasks.refuse = false;
+    for (int i = 0; i < 30 && icons.count() != before + 3; i++) {
+        clock_.now += 100000;
+        desktop.tick();
+        tasks.finish();
+        inbox.deliver();
+    }
+    CHECK(icons.count() == before + 3);
+    walks = spy.listings;
+    for (int i = 0; i < 200; i++) {
+        clock_.now += 100000;
+        desktop.tick();
+        inbox.deliver();
+    }
+    CHECK(spy.listings == walks && tasks.started == started + 3);
+    job::jobs().set_tasks(nullptr);
+    msg::set_queue(nullptr);
+    for (const char *name : {"a.txt", "b.txt", "c.txt"}) {
+        char path[fs::kMaxPath];
+        fs::path::join("C:\\Documents\\Desktop", name, path, sizeof(path));
+        storage.remove(path);
+    }
+    desktop.tick();
+    CHECK(icons.count() == before);
+}
+
 } // namespace
 
 int main()
@@ -572,6 +718,7 @@ int main()
     test_file_manager();
     test_trash_view();
     test_copy_cut_paste();
+    test_change_notices();
     if (failures == 0) {
         printf("all tests passed\n");
     }

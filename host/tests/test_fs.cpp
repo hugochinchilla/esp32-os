@@ -710,8 +710,76 @@ static void test_the_watch_sees_two_tasks()
     CHECK(watched.met > 0);
 }
 
+// Change notices: Storage says which folder's list of files changed, once
+// the change is made, and says nothing for what only reads or fails.
+static void test_change_notices()
+{
+    static uint8_t arena[64 * 1024];
+    fs::MemoryVolume ram(arena, sizeof(arena), "RAM");
+    fs::Storage storage;
+    storage.mount('C', ram);
+    static std::vector<std::string> told;
+    told.clear();
+    storage.set_changed([](const char *folder, void *) { told.push_back(folder); }, nullptr);
+    const auto took = [&](std::initializer_list<const char *> want) {
+        const std::vector<std::string> expect(want.begin(), want.end());
+        const bool same = told == expect;
+        if (!same) {
+            for (const std::string &t : told) {
+                printf("  told: %s\n", t.c_str());
+            }
+        }
+        told.clear();
+        return same;
+    };
+
+    CHECK(storage.make_folder("C:\\a") == FsError::Ok && took({"C:\\"}));
+    CHECK(storage.make_folder("C:\\a") == FsError::Exists && took({})); // nothing changed
+    CHECK(storage.make_folder("C:\\a\\b") == FsError::Ok && took({"C:\\a"}));
+    CHECK(storage.write_file("C:\\a\\one.txt", "1", 1) == FsError::Ok && took({"C:\\a"})); // not its temporary file
+    // Reading tells nothing.
+    char buf[8];
+    size_t n = 0;
+    ports::DirEntry e;
+    int count = 0;
+    CHECK(storage.read_file("C:\\a\\one.txt", buf, sizeof(buf), n) == FsError::Ok);
+    CHECK(storage.stat("C:\\a\\one.txt", e) == FsError::Ok && storage.entry("C:\\a", 0, e) == FsError::Ok);
+    CHECK(storage.entries("C:\\a", 0, &e, 1, count) == FsError::Ok);
+    fs::File f;
+    CHECK(storage.open("C:\\a\\one.txt", OpenMode::Read, f) == FsError::Ok && storage.close(f) == FsError::Ok);
+    CHECK(took({}));
+    // A file written piece by piece: when its name appears, and when it is closed.
+    CHECK(storage.open("C:\\a\\two.txt", OpenMode::Write, f) == FsError::Ok && took({"C:\\a"}));
+    CHECK(storage.write(f, "22", 2) == FsError::Ok && took({}));
+    CHECK(storage.close(f) == FsError::Ok && took({"C:\\a"}));
+    CHECK(storage.open("C:\\a\\two.txt", OpenMode::Update, f) == FsError::Ok && took({}));
+    CHECK(storage.close(f) == FsError::Ok && took({"C:\\a"}));
+    // A safe save tells once, when the new file takes the name; never when given up.
+    fs::Save save;
+    CHECK(storage.begin_save("C:\\a\\b\\s.txt", save) == FsError::Ok && storage.write(save.file, "s", 1) == FsError::Ok);
+    CHECK(took({}));
+    CHECK(storage.finish_save(save) == FsError::Ok && took({"C:\\a\\b"}));
+    CHECK(storage.begin_save("C:\\a\\b\\s.txt", save) == FsError::Ok && storage.finish_save(save, false) == FsError::Ok);
+    CHECK(took({}));
+    // A rename tells the folder it left and the one it went to; one folder once.
+    CHECK(storage.rename("C:\\a\\one.txt", "C:\\a\\b\\one.txt") == FsError::Ok && took({"C:\\a", "C:\\a\\b"}));
+    CHECK(storage.rename("C:\\a\\b\\one.txt", "C:\\a\\b\\uno.txt") == FsError::Ok && took({"C:\\a\\b"}));
+    CHECK(storage.rename("C:\\a\\b\\uno.txt", "a\\uno.txt") == FsError::Ok && took({"C:\\a\\b", "C:\\a"})); // no drive: the same one
+    CHECK(storage.rename("C:\\a\\nothing", "C:\\a\\b\\x") != FsError::Ok && took({}));
+    CHECK(storage.replace("C:\\a\\uno.txt", "C:\\a\\b\\s.txt") == FsError::Ok && took({"C:\\a", "C:\\a\\b"}));
+    CHECK(storage.remove("C:\\a\\b\\s.txt") == FsError::Ok && took({"C:\\a\\b"}));
+    CHECK(storage.remove("C:\\a\\b\\s.txt") == FsError::NotFound && took({}));
+    CHECK(storage.remove("C:\\a\\b") == FsError::Ok && took({"C:\\a"}));
+
+    // The key a folder is matched by: the same however the path is written.
+    CHECK(fs::path::key("C:\\Documents\\Desktop") == fs::path::key("c:/documents/DESKTOP\\"));
+    CHECK(fs::path::key("C:\\") == fs::path::key("C:") && fs::path::key("C:\\a") != fs::path::key("C:\\b"));
+    CHECK(fs::path::key("C:\\a") != fs::path::key("D:\\a") && fs::path::key("C:\\a") != fs::path::key("C:\\a\\a"));
+}
+
 int main()
 {
+    test_change_notices();
     test_two_tasks();
     test_the_watch_sees_two_tasks();
     test_save_on_a_full_disk();
