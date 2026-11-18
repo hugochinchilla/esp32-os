@@ -180,7 +180,7 @@ size_t Wm::paint_bench(char *out, size_t capacity)
             w.paint(client);
         }
         report.line("window %.20s: %dx%d frame %u inside %u\n", w.title_, w.frame_.w, w.frame_.h,
-                    static_cast<unsigned>(frame_us), static_cast<unsigned>(clock_.micros() - start),
+                    static_cast<unsigned>(frame_us), static_cast<unsigned>(clock_.micros() - start));
     }
     report.line("everything again %u\n", static_cast<unsigned>(repaint_all()));
     return report.used;
