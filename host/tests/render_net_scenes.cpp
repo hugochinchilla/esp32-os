@@ -7,7 +7,9 @@
 #include <string>
 
 #include "core/init/init.hpp"
+#include "core/fs/ini.hpp"
 #include "core/fs/memory_volume.hpp"
+#include "core/gfx/theme.hpp"
 #include "core/net/wifi.hpp"
 #include "core/desk/desk.hpp"
 #include "core/shell/shell.hpp"
@@ -219,6 +221,61 @@ int main(int argc, char **argv)
     wait(5);
     CHECK(wifi.last_failure() == net::Failure::NotFound);
     key(wm::key::Enter);
+
+    // Advanced: the transmit power, 20 dBm until the file says otherwise.
+    // The arrows move it, Cancel and Escape change nothing.
+    const auto kept_power = [] {
+        fs::Ini ini;
+        return shell::load_settings("network", ini) ? ini.get_int("wifi", "tx_power_dbm", -1) : -1;
+    };
+    alt('a');
+    CHECK(title() == "Advanced");
+    save("net-15-advanced");
+    for (int i = 0; i < 6; i++) {
+        key(wm::key::Left);
+    }
+    save("net-16-advanced-lower");
+    key(wm::key::Escape);
+    CHECK(title() == "Network" && radio.tx_power == 0 && kept_power() == -1);
+    // OK writes network.ini, beside what was in it, and tells the radio.
+    {
+        fs::Ini ini;
+        ini.set_bool("wifi", "enabled", true);
+        CHECK(shell::save_settings("network", ini));
+    }
+    alt('a');
+    key(wm::key::Home);
+    key(wm::key::Left); // no further than 2 dBm
+    for (int i = 0; i < 9; i++) {
+        key(wm::key::Right);
+    }
+    key(wm::key::Enter);
+    CHECK(title() == "Network" && radio.tx_power == 11 && kept_power() == 11);
+    {
+        fs::Ini ini;
+        CHECK(shell::load_settings("network", ini) && ini.get_bool("wifi", "enabled", false));
+    }
+    // It opens on what was kept; the mouse moves it too: the right arrow, then End.
+    alt('a');
+    {
+        const gfx::Rect c = desktop.active()->client();
+        click(c.x + 12 + 296 - 8, c.y + 32 + 8);
+    }
+    key(wm::key::Enter);
+    CHECK(radio.tx_power == 12 && kept_power() == 12);
+    alt('a');
+    key(wm::key::End);
+    key(wm::key::Enter);
+    CHECK(radio.tx_power == 20 && kept_power() == 20);
+    // In every theme.
+    for (int theme = 1; theme < gfx::theme_count(); theme++) {
+        desktop.set_theme(theme);
+        alt('a');
+        save((std::string("net-17-advanced-") + gfx::theme_at(theme).key).c_str());
+        key(wm::key::Escape);
+    }
+    desktop.set_theme(0);
+    CHECK(title() == "Network");
 
     // Closed with Escape; Start > Settings > Network opens it again.
     key(wm::key::Escape);

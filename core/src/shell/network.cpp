@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstring>
 
+#include "core/fs/ini.hpp"
 #include "core/gfx/art.hpp"
 #include "core/net/wifi.hpp"
 #include "core/os/os.hpp"
@@ -137,6 +138,113 @@ private:
     app::Button ok_, cancel_;
 };
 
+/* ---- The Advanced dialog ------------------------------------------------------- */
+
+// The radio's top transmit power, 2 to 20 dBm: `tx_power_dbm` in
+// C:\.config\network.ini (docs/settings.md). OK writes the file, which the
+// board reads at the next start, and tells the radio, so it holds from then
+// on. Made when it is asked for, over the panel, and gone when it closes.
+class AdvancedDialog : public app::Window {
+public:
+    AdvancedDialog()
+        : value_(plain({12, 12, 296, 14})),
+          bar_(scroll_bar({12, 32, 296, os::ui::kScrollBarThickness}, false)),
+          low_(plain({12, 52, 60, 14})),
+          high_(plain({284, 52, 28, 14})),
+          hint1_(plain({12, 78, 296, 14})),
+          hint2_(plain({12, 93, 296, 14})),
+          ok_(button({312 - 2 * 75 - 6 - 10, 118, 75, 23}, "OK")),
+          cancel_(button({312 - 75 - 10, 118, 75, 23}, "Cancel"))
+    {
+        load_settings("network", settings_); // no file yet: the default
+        const int dbm = net::clamp_tx_power(settings_.get_int("wifi", "tx_power_dbm", net::kTxPowerDefault));
+        low_.set("Low");
+        high_.set("High");
+        hint1_.set("Less power reaches less far. Lower it if lines");
+        hint2_.set("cross the picture while Wi-Fi is busy.");
+        bar_.set_range(net::kTxPowerMax - net::kTxPowerMin, 1); // a step is 1 dBm
+        bar_.set_value(dbm - net::kTxPowerMin);
+        show();
+        set_default(ok_);
+        set_focus(ok_);
+    }
+
+    // Over the panel, which cannot be used meanwhile.
+    static void ask(app::Number panel)
+    {
+        app::Look look;
+        look.title = "Advanced";
+        look.width = 320;
+        look.height = 184;
+        look.icon = &gfx::network_icon_16();
+        look.flags = app::kDialog;
+        look.over = panel;
+        if (app::open<AdvancedDialog>(look) == app::kNone) {
+            no_memory_for(look.title);
+        }
+    }
+
+    // The arrows move the bar wherever the keys are.
+    bool key(const wm::KeyMsg &k) override
+    {
+        if (!k.pressed) {
+            return false;
+        }
+        switch (k.usage) {
+        case wm::key::Escape: close(); return true;
+        case wm::key::Left: move_to(bar_.value() - 1); return true;
+        case wm::key::Right: move_to(bar_.value() + 1); return true;
+        case wm::key::Home: move_to(0); return true;
+        case wm::key::End: move_to(net::kTxPowerMax - net::kTxPowerMin); return true;
+        default: return false;
+        }
+    }
+
+    void changed(app::Control which) override
+    {
+        if (which == bar_) {
+            show();
+        }
+    }
+
+    void command(app::Control which) override
+    {
+        if (which == cancel_) {
+            close();
+        } else if (which == ok_) {
+            const int dbm = chosen_dbm();
+            settings_.set_int("wifi", "tx_power_dbm", dbm);
+            if (!save_settings("network", settings_)) {
+                message_box("Advanced", "The setting could not be saved.");
+                return;
+            }
+            close();
+            wifi().set_tx_power(dbm);
+        }
+    }
+
+private:
+    int chosen_dbm() const { return net::clamp_tx_power(net::kTxPowerMin + bar_.value()); }
+    void move_to(int value)
+    {
+        bar_.set_value(value);
+        show();
+    }
+    void show()
+    {
+        snprintf(text_, sizeof(text_), "Transmit power: %d dBm", chosen_dbm());
+        value_.set(text_);
+    }
+
+    fs::Ini settings_; // network.ini as it is, so the other keys in it stay
+    char text_[40] = "";
+    app::Plain value_;
+    app::ScrollBar bar_;
+    app::Plain low_, high_;
+    app::Plain hint1_, hint2_;
+    app::Button ok_, cancel_;
+};
+
 /* ---- The panel ----------------------------------------------------------------- */
 
 class NetworkWindow : public app::Window {
@@ -152,6 +260,7 @@ public:
           forget_(button({300, 125, 80, 23}, "&Forget")),
           refresh_(button({300, 154, 80, 23}, "&Refresh")),
           other_(button({300, 183, 80, 23}, "&Other...")),
+          advanced_(button({300, 212, 80, 23}, "&Advanced...")),
           hint_(plain({8, 252, 284, 14})),
           close_(button({300, 255, 80, 23}, "Close"))
     {
@@ -193,6 +302,8 @@ public:
             wifi().scan();
         } else if (which == other_) {
             JoinDialog::ask(number(), true, "");
+        } else if (which == advanced_) {
+            AdvancedDialog::ask(number());
         } else if (which == close_) {
             close();
         }
@@ -356,7 +467,7 @@ private:
     app::Plain line1_, line2_, line3_;
     app::Label list_label_;
     app::ListBox list_;
-    app::Button connect_, forget_, refresh_, other_;
+    app::Button connect_, forget_, refresh_, other_, advanced_;
     app::Plain hint_;
     app::Button close_;
 
