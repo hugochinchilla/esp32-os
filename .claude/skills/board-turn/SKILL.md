@@ -7,7 +7,8 @@ description: How to run a board turn for the ESP32-S3 OS on the owner's laptop. 
 
 A board turn tests one or more branches on the one real board, connected to the
 laptop at `/dev/ttyACM0`. Source of truth for state and history:
-`docs/handoff/board.md`, `CLAUDE.md`, `docs/DECISIONS.md`. Everything written in
+`docs/handoff/board.md`, `CLAUDE.md`, `docs/DECISIONS.md` (an index: open only
+the files in `docs/decisions/` that the branches under test touch). Everything written in
 the repo is in English; reply to the owner in the language he writes.
 
 ## Ground rules

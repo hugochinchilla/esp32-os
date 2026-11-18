@@ -152,6 +152,6 @@ Story: `docs/journal/2026-11-17-loaded-programs.md`.
   passed" before committing and pushing.
 - A message to the board thread is at most 2000 characters; the rule given
   to it: measurably worse or anything hangs, do not merge, send figures.
-- Every piece of work: a journal entry, the DECISIONS section, the BACKLOG
+- Every piece of work: a journal entry, the decision's file in `docs/decisions/`, the BACKLOG
   row, `docs/os-calls.md` if a call changed. Say that firmware has not run
   on the board until it has.
