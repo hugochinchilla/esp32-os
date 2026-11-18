@@ -51,7 +51,8 @@ enum class What : uint8_t {
     Cell,    // a cell of a grid is to be painted: `control`, `index`, `part` (the cell), `drawing`
     Mouse,   // the left button in a picture that asked for it (kMouse): `control`, `mouse`, in the
              // picture's coordinates. From Down to Up they all go to the picture pressed
-    RightClick, // the right button went down in a picture that asked for the mouse: `control`, `x`, `y`
+    RightClick, // the right button went down in a picture that asked for the mouse, or in an icon
+                // view: `control`, `x`, `y` in its coordinates
     Resized, // the client area has another size (the user pulled an edge, or maximised): `x`, `y` are
              // its width and height. The program puts its controls where they go now
     Drag,    // an entry of an icon view was held and moved a little: `control`. The program starts
@@ -178,6 +179,8 @@ Control drop_down(Window window, const gfx::Bitmap *icon, const gfx::Rect &place
 // A menu of the program's just under a control. The menu and its items
 // are the program's and must stay valid while it is open.
 void menu_under(Window window, Control control, wm::Menu &menu);
+// The same at a point of a control (where the right button went down).
+void menu_at(Window window, Control control, int x, int y, wm::Menu &menu);
 
 /* ---- The text editor: a control that holds a whole text file ----
  *
@@ -228,7 +231,8 @@ bool hourglass(Window window);
 // valid; set_items() is a list's, and keeps what is picked. One entry is
 // picked: selected() and select() are a list's, and select() tells of it
 // (Changed), as a click or an arrow key does. Chosen: Enter or a double
-// click. Drag: an entry held and moved.
+// click. Drag: an entry held and moved. RightClick: the right button went
+// down in it; the program asks item_at() what is there and picks it.
 Control icon_view(Window window, const gfx::Rect &place);
 void reset_view(Window window, Control icon_view); // nothing picked, back at the top
 int item_at(Window window, Control icon_view, int x, int y); // the entry at a point of it, or -1

@@ -257,9 +257,21 @@ void Icons::mouse(const wm::MouseMsg &m)
 
 void Icons::right_click(int x, int y)
 {
-    // The desktop itself, away from the icons.
-    if (menu_ != nullptr && icon_at(x, y) < 0) {
-        menu_(x, y, menu_context_);
+    // The icon under the pointer is selected, as a left press would; then
+    // the menu for it, or for the desktop itself away from the icons.
+    const int hit = icon_at(x, y);
+    if (hit != selected_) {
+        if (selected_ >= 0) {
+            wm_.invalidate(icon_rect(selected_));
+        }
+        selected_ = hit;
+        if (hit >= 0) {
+            wm_.invalidate(icon_rect(hit));
+        }
+    }
+    last_hit_ = -1;
+    if (menu_ != nullptr) {
+        menu_(hit, x, y, menu_context_);
     }
 }
 

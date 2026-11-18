@@ -10,9 +10,10 @@
 #include "core/wm/wm.hpp"
 #include "../host_adapters.hpp"
 
-namespace shell {
-void open_trash(); // the Trash icon's action (core/src/shell/internal.hpp)
-}
+#include "core/os/os.hpp"
+#include "core/os/ui.hpp"
+#include "core/wm/text_edit.hpp"
+#include "../../core/src/shell/internal.hpp" // the Trash icon's action, the file commands
 
 static int failures = 0;
 #define CHECK(condition)                                                   \
@@ -318,6 +319,232 @@ void test_trash_view()
     key(wm::key::F4, 4);
 }
 
+// Backlog item 54: Copy, Cut, Paste and Delete for files. First the
+// commands themselves on lists of several (what item 55 will hand them),
+// then the File manager's keys, its Edit menu and its right-click menus.
+void mouse(int x, int y, uint8_t buttons)
+{
+    clock_.now += 300000;
+    desktop.mouse({true, static_cast<int16_t>(x), static_cast<int16_t>(y), buttons, 0});
+}
+
+// A right click on a point of the icon view of the window in use.
+void right_click_view(int x, int y)
+{
+    const gfx::Rect c = desktop.active()->client();
+    mouse(c.x + x, c.y + 64 + y, 0);
+    mouse(c.x + x, c.y + 64 + y, 2);
+    mouse(c.x + x, c.y + 64 + y, 0);
+}
+
+std::string menu_labels()
+{
+    std::string all;
+    const wm::Menu *menu = desktop.menu_open() ? desktop.popup_menu(0) : nullptr;
+    for (int i = 0; menu != nullptr && i < menu->count; i++) {
+        const wm::MenuItem &it = menu->items[i];
+        all += it.label == nullptr ? "-" : it.label;
+        all += (it.flags & wm::kMenuDisabled) ? "(off) " : " ";
+    }
+    return all;
+}
+
+void test_copy_cut_paste()
+{
+    while (desktop.active() != nullptr) {
+        desktop.close(*desktop.active());
+    }
+    const uint32_t blocks = os::blocks_out();
+    // The commands called here directly are asked for as the taskbar, as a
+    // right click on the desktop would: a job needs a process to belong to.
+    const proc::Pid taskbar = os::find("taskbar");
+    CHECK(taskbar != proc::kNone);
+    os::As *as = new os::As(taskbar);
+    storage.make_folder("C:\\cp");
+    storage.make_folder("C:\\cp\\to");
+    storage.make_folder("C:\\cp\\box");
+    storage.make_folder("C:\\cp\\box\\deep");
+    storage.write_file("C:\\cp\\box\\in.txt", "in", 2);
+    storage.write_file("C:\\cp\\box\\deep\\d.txt", "deep", 4);
+    const std::string big(3000, 'b'); // more than one piece of the copy
+    storage.write_file("C:\\cp\\one.txt", big.data(), big.size());
+
+    // Copy two, a file and a folder: Paste copies them, the folder whole.
+    const char *two[] = {"one.txt", "box"};
+    CHECK(!shell::can_paste("C:\\cp\\to"));
+    shell::copy_files({"C:\\cp", two, 2}, false);
+    CHECK(os::clipboard::file_count() == 2 && !os::clipboard::files_cut());
+    CHECK(shell::can_paste("C:\\cp\\to") && !shell::can_paste("") && !shell::can_paste("C:\\.trash"));
+    CHECK(os::ui::clipboard_size() == 0); // files are not text: the Editor's Paste has nothing
+    shell::paste_files("C:\\cp\\to", os::kNoWindow);
+    CHECK(file("C:\\cp\\to\\one.txt") == big && file("C:\\cp\\to\\box\\in.txt") == "in" &&
+          file("C:\\cp\\to\\box\\deep\\d.txt") == "deep");
+    CHECK(file("C:\\cp\\one.txt") == big && exists("C:\\cp\\box\\deep\\d.txt"));
+    CHECK(!exists("C:\\cp\\to\\.~one.txt.tmp"));
+    // What was copied can be pasted again: the names taken are numbered.
+    shell::paste_files("C:\\cp\\to", os::kNoWindow);
+    CHECK(file("C:\\cp\\to\\one (2).txt") == big && file("C:\\cp\\to\\box (2)\\deep\\d.txt") == "deep");
+    // Pasted where it came from: a numbered copy beside it.
+    shell::paste_files("C:\\cp", os::kNoWindow);
+    CHECK(file("C:\\cp\\one (2).txt") == big && exists("C:\\cp\\box (2)\\in.txt") && exists("C:\\cp\\one.txt"));
+
+    // Cut: Paste moves them, once; the clipboard is empty afterwards.
+    shell::copy_files({"C:\\cp", two, 2}, true);
+    CHECK(os::clipboard::files_cut());
+    shell::paste_files("C:\\cp", os::kNoWindow); // where they are already: nothing moves
+    CHECK(exists("C:\\cp\\one.txt") && !exists("C:\\cp\\one (3).txt") && !shell::can_paste("C:\\cp"));
+    shell::copy_files({"C:\\cp", two, 2}, true);
+    shell::paste_files("C:\\cp\\to", os::kNoWindow);
+    CHECK(!exists("C:\\cp\\one.txt") && !exists("C:\\cp\\box"));
+    CHECK(file("C:\\cp\\to\\one (3).txt") == big && file("C:\\cp\\to\\box (3)\\deep\\d.txt") == "deep");
+    CHECK(os::clipboard::file_count() == 0 && !shell::can_paste("C:\\cp\\to"));
+
+    // A folder is not put inside itself, copied or cut: it says so.
+    const char *box[] = {"box"};
+    for (int cut = 0; cut < 2; cut++) {
+        shell::copy_files({"C:\\cp\\to", box, 1}, cut == 1);
+        shell::paste_files("C:\\cp\\to\\box\\deep", os::kNoWindow);
+        CHECK(strcmp(title(), "Paste") == 0);
+        key(wm::key::Enter);
+        CHECK(!exists("C:\\cp\\to\\box\\deep\\box") && exists("C:\\cp\\to\\box\\in.txt"));
+    }
+    // What was cut and has gone since: it says so, and nothing else happens.
+    const char *one[] = {"one.txt"};
+    shell::copy_files({"C:\\cp\\to", one, 1}, false);
+    storage.remove("C:\\cp\\to\\one.txt");
+    shell::paste_files("C:\\cp", os::kNoWindow);
+    CHECK(strcmp(title(), "Paste") == 0);
+    key(wm::key::Enter);
+    // A disk that fails half way: no part of a file is left, and it says so.
+    const char *numbered[] = {"one (2).txt"};
+    shell::copy_files({"C:\\cp\\to", numbered, 1}, false);
+    spy.fail_after = 1;
+    shell::paste_files("C:\\cp", os::kNoWindow);
+    spy.fail_after = -1;
+    CHECK(strcmp(title(), "Paste") == 0);
+    key(wm::key::Enter);
+    CHECK(file("C:\\cp\\one (2).txt") == big && !exists("C:\\cp\\one (3).txt") && !exists("C:\\cp\\.~one (3).txt.tmp"));
+    // Text put on the clipboard takes the files away.
+    wm::clipboard::set(reinterpret_cast<const uint8_t *>("abc"), 3);
+    CHECK(!shell::can_paste("C:\\cp") && os::clipboard::file_count() == 0 && os::ui::clipboard_size() == 3);
+
+    // Delete for several asks once, saying how many, and all go to the
+    // Trash, each remembered with where it came from.
+    const char *three[] = {"one (2).txt", "box", "box (2)"};
+    shell::delete_asking({"C:\\cp\\to", three, 3});
+    CHECK(strcmp(title(), "Confirm Delete") == 0);
+    letter('n', 4);
+    CHECK(exists("C:\\cp\\to\\box") && !exists("C:\\.trash\\box"));
+    shell::delete_asking({"C:\\cp\\to", three, 3});
+    letter('y', 4);
+    CHECK(!exists("C:\\cp\\to\\one (2).txt") && !exists("C:\\cp\\to\\box") && !exists("C:\\cp\\to\\box (2)"));
+    CHECK(exists("C:\\.trash\\one (2).txt") && exists("C:\\.trash\\box\\deep\\d.txt") && exists("C:\\.trash\\box (2)"));
+    char from[fs::kMaxPath];
+    CHECK(shell::trash_origin("box (2)", from, sizeof(from)) && strcmp(from, "C:\\cp\\to\\box (2)") == 0);
+    // In the Trash the same question is for good.
+    const char *gone[] = {"one (2).txt", "box"};
+    shell::delete_asking({"C:\\.trash", gone, 2});
+    CHECK(strcmp(title(), "Confirm Delete") == 0);
+    letter('y', 4);
+    CHECK(!exists("C:\\.trash\\one (2).txt") && !exists("C:\\.trash\\box") && exists("C:\\.trash\\box (2)"));
+    // A question dropped for another one costs nothing.
+    shell::delete_asking({"C:\\cp\\to", three + 2, 0});
+    shell::delete_asking("C:\\cp\\to\\box (3)");
+    shell::delete_asking("C:\\cp\\to\\one (3).txt");
+    CHECK(strcmp(title(), "Confirm File Delete") == 0);
+    letter('y', 4);
+    CHECK(exists("C:\\cp\\to\\box (3)") && !exists("C:\\cp\\to\\one (3).txt"));
+    CHECK(os::blocks_out() == blocks); // every Paste and every question gave its block back
+    delete as;
+
+    // The File manager. C:\cp shows: box (2), to, one (2).txt, uno.txt.
+    storage.write_file("C:\\cp\\uno.txt", "uno", 3);
+    shell::open_folder("C:\\cp");
+    key(wm::key::End);
+    letter('c', 2); // Ctrl+C
+    CHECK(os::clipboard::file_count() == 1);
+    letter('v', 2); // Ctrl+V: a copy beside it
+    CHECK(file("C:\\cp\\uno (2).txt") == "uno");
+    key(wm::key::End); // uno.txt, after its copy
+    letter('x', 2);    // Ctrl+X
+    CHECK(os::clipboard::files_cut());
+    key(wm::key::Home);
+    key(wm::key::Right); // "to"
+    key(wm::key::Enter);
+    CHECK(strcmp(title(), "to") == 0);
+    // Edit > Paste.
+    letter('e', 4);
+    CHECK(menu_labels() == "Cu&t(off) &Copy(off) &Paste ");
+    letter('p');
+    CHECK(file("C:\\cp\\to\\uno.txt") == "uno" && !exists("C:\\cp\\uno.txt"));
+    letter('e', 4);
+    CHECK(menu_labels() == "Cu&t(off) &Copy(off) &Paste(off) "); // nothing picked, nothing to paste
+    key(wm::key::Escape);
+
+    // A right click on a file picks it and offers Open, Cut, Copy, Delete.
+    // Here: box (3), uno.txt.
+    right_click_view(12 + 76 + 30, 30);
+    CHECK(menu_labels() == "&Open - Cu&t &Copy - &Delete ");
+    letter('c');
+    char path[fs::kMaxPath] = "";
+    CHECK(os::clipboard::file_count() == 1 && os::clipboard::file(0, path, sizeof(path)) &&
+          strcmp(path, "C:\\cp\\to\\uno.txt") == 0);
+    // On a folder there is Paste too, into that folder.
+    right_click_view(12 + 30, 30); // box (3)
+    CHECK(menu_labels() == "&Open - Cu&t &Copy &Paste - &Delete ");
+    letter('p');
+    CHECK(file("C:\\cp\\to\\box (3)\\uno.txt") == "uno");
+    // On the blank part: Paste into the folder shown, and nothing picked.
+    key(wm::key::Backspace); // up to C:\cp: box (2), to, one (2).txt, uno (2).txt
+    right_click_view(200, 150);
+    CHECK(menu_labels() == "&Paste - New &Folder... Re&fresh ");
+    letter('p');
+    CHECK(file("C:\\cp\\uno.txt") == "uno");
+    // Cut from the menu, pasted into a folder: moved, and Paste is over.
+    right_click_view(12 + 2 * 76 + 30, 30); // one (2).txt
+    letter('t');
+    right_click_view(12 + 30, 30); // box (2)
+    letter('p');
+    CHECK(file("C:\\cp\\box (2)\\one (2).txt") == big && !exists("C:\\cp\\one (2).txt"));
+    right_click_view(200, 150);
+    CHECK(menu_labels() == "&Paste(off) - New &Folder... Re&fresh ");
+    key(wm::key::Escape);
+    // Delete from the menu asks as the key does. Now: box (2), to,
+    // uno (2).txt, uno.txt.
+    right_click_view(12 + 3 * 76 + 30, 30);
+    letter('d');
+    CHECK(strcmp(title(), "Confirm File Delete") == 0);
+    letter('y', 4);
+    CHECK(!exists("C:\\cp\\uno.txt") && exists("C:\\.trash\\uno.txt"));
+
+    // In the Trash nothing is cut, copied or pasted; Restore is in the menu.
+    shell::open_trash();
+    letter('e', 4);
+    CHECK(menu_labels() == "Cu&t(off) &Copy(off) &Paste(off) ");
+    key(wm::key::Escape);
+    right_click_view(12 + 30, 30);
+    CHECK(menu_labels() == "&Open &Restore - &Delete ");
+    key(wm::key::Escape);
+    right_click_view(300, 150);
+    CHECK(menu_labels() == "&Empty Trash - Re&fresh ");
+    key(wm::key::Escape);
+    // And in My Board, whose entries are drives.
+    shell::open_folder(nullptr);
+    right_click_view(12 + 30, 30);
+    CHECK(menu_labels() == "&Open ");
+    key(wm::key::Escape);
+    right_click_view(300, 150);
+    CHECK(menu_labels() == "Re&fresh ");
+    key(wm::key::Escape);
+    CHECK(no_stale_pixels());
+    while (desktop.active() != nullptr) {
+        desktop.close(*desktop.active());
+    }
+    clock_.now += 10000;
+    desktop.tick(); // closed windows are destroyed at the next safe point
+    CHECK(os::blocks_out() == blocks);
+}
+
 } // namespace
 
 int main()
@@ -344,6 +571,7 @@ int main()
     test_editor();
     test_file_manager();
     test_trash_view();
+    test_copy_cut_paste();
     if (failures == 0) {
         printf("all tests passed\n");
     }

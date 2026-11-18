@@ -248,6 +248,25 @@ Error write_file(const char *path, const void *data, size_t size);
 
 } // namespace file
 
+/* ---- Files on the clipboard --------------------------------------------------- */
+
+// Copy and Cut put files and folders on the clipboard by their full paths;
+// Paste asks which, and whether they were cut (they are then moved, and
+// whoever pasted clears the clipboard). The clipboard is the one the text
+// uses: it holds text or files, never both (os::ui::clipboard_size() is of
+// the text).
+namespace clipboard {
+
+// Empties the clipboard and puts these there: each is `folder` with a name
+// of `names`. False if not all of them fitted (the clipboard is then empty).
+bool set_files(const char *folder, const char *const *names, int count, bool cut);
+int file_count();                                  // 0: no files there
+bool file(int index, char *out, size_t capacity);  // a full path
+bool files_cut();
+void clear();
+
+} // namespace clipboard
+
 /* ---- Settings ------------------------------------------------------------------ */
 
 // A program's own settings file, C:\.config\<program>.ini. load: false when

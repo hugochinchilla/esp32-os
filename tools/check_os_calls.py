@@ -25,6 +25,7 @@ MOVED = [
     "display.cpp",
     "editor.cpp",
     "file_manager.cpp",
+    "file_ops.cpp",
     "gallery.cpp",
     "network.cpp",
     "run.cpp",

@@ -850,11 +850,13 @@ public:
         }
         return false;
     }
-    // The right button: to the topmost picture under it that takes the mouse.
+    // The right button: to the topmost picture under it that takes the
+    // mouse, or icon view (the program asks item_at() what is there).
     void right_click(int x, int y) override
     {
         for (int i = count_ - 1; i >= 0; i--) {
-            if (kinds_[i] == Kind::Picture && controls_[i]->wants_mouse() && controls_[i]->rect.contains(x, y)) {
+            if (((kinds_[i] == Kind::Picture && controls_[i]->wants_mouse()) || kinds_[i] == Kind::IconView) &&
+                controls_[i]->rect.contains(x, y)) {
                 Event e{What::RightClick};
                 e.control = i + 1;
                 e.x = x - controls_[i]->rect.x;
@@ -1449,6 +1451,16 @@ void menu_under(Window window, Control control, wm::Menu &menu)
     if (const wm::Widget *c = w != nullptr ? w->any(control) : nullptr) {
         const gfx::Rect client = w->client();
         os::open_menu(menu, client.x + c->rect.x, client.y + c->rect.bottom());
+    }
+}
+
+void menu_at(Window window, Control control, int x, int y, wm::Menu &menu)
+{
+    const prog::InCall in_call;
+    Behind *w = behind(window);
+    if (const wm::Widget *c = w != nullptr ? w->any(control) : nullptr) {
+        const gfx::Rect client = w->client();
+        os::open_menu(menu, client.x + c->rect.x + x, client.y + c->rect.y + y);
     }
 }
 

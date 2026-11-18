@@ -260,6 +260,8 @@ public:
     int selected() const { return os::ui::selected(window_, number_); } // -1: none
     void select(int index) const { os::ui::select(window_, number_, index); } // tells of it (changed)
     int item_at(int x, int y) const { return os::ui::item_at(window_, number_, x, y); } // in its coordinates
+    // The program's menu at a point of it (Window::right_click).
+    void menu_at(int x, int y, wm::Menu &menu) const { os::ui::menu_at(window_, number_, x, y, menu); }
 };
 
 // The text editor: a whole text file, with its own memory for the text
@@ -355,7 +357,8 @@ public:
     // The left button in a picture made with kMouse, in its coordinates;
     // from Down to Up they all go to the picture that was pressed.
     virtual void mouse(Control /*which*/, const wm::MouseMsg &) {}
-    // The right button went down in a picture made with kMouse.
+    // The right button went down in a picture made with kMouse, or in an
+    // icon view, at this point of it.
     virtual void right_click(Control /*which*/, int /*x*/, int /*y*/) {}
     // The client area has another size: the controls go where they belong now.
     virtual void resized(int /*width*/, int /*height*/) {}

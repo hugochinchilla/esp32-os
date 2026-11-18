@@ -5,6 +5,8 @@
 
 #include "core/wm/wm.hpp"
 
+#include <cstdio>
+
 namespace wm {
 
 using gfx::Canvas;
@@ -15,6 +17,8 @@ constexpr int kBar = ScrollBar::kThickness;
 
 uint8_t *g_clip = nullptr;
 size_t g_clip_cap = 0, g_clip_size = 0;
+clipboard::Kind g_clip_kind = clipboard::Kind::Text;
+int g_clip_files = 0;
 
 bool word_char(uint8_t c)
 {
@@ -31,6 +35,20 @@ void clipboard::init(uint8_t *buffer, size_t capacity)
     g_clip = buffer;
     g_clip_cap = buffer != nullptr ? capacity : 0;
     g_clip_size = 0;
+    g_clip_kind = Kind::Text;
+    g_clip_files = 0;
+}
+
+clipboard::Kind clipboard::kind()
+{
+    return g_clip_kind;
+}
+
+void clipboard::clear()
+{
+    g_clip_size = 0;
+    g_clip_kind = Kind::Text;
+    g_clip_files = 0;
 }
 
 void clipboard::set(const uint8_t *latin1, size_t size)
@@ -38,6 +56,7 @@ void clipboard::set(const uint8_t *latin1, size_t size)
     if (g_clip == nullptr) {
         return;
     }
+    clear();
     g_clip_size = size < g_clip_cap ? size : g_clip_cap;
     memcpy(g_clip, latin1, g_clip_size);
 }
@@ -49,7 +68,43 @@ const uint8_t *clipboard::data()
 
 size_t clipboard::size()
 {
-    return g_clip_size;
+    return g_clip_kind == Kind::Text ? g_clip_size : 0;
+}
+
+// The files are their paths one after another, each with its closing zero.
+void clipboard::begin_files(bool cut)
+{
+    clear();
+    g_clip_kind = cut ? Kind::CutFiles : Kind::Files;
+}
+
+bool clipboard::add_file(const char *path)
+{
+    const size_t n = strlen(path) + 1;
+    if (g_clip_kind == Kind::Text || n < 2 || g_clip_size + n > g_clip_cap) {
+        return false;
+    }
+    memcpy(g_clip + g_clip_size, path, n);
+    g_clip_size += n;
+    g_clip_files++;
+    return true;
+}
+
+int clipboard::file_count()
+{
+    return g_clip_kind == Kind::Text ? 0 : g_clip_files;
+}
+
+bool clipboard::file(int index, char *out, size_t capacity)
+{
+    if (index < 0 || index >= file_count() || capacity == 0) {
+        return false;
+    }
+    const char *at = reinterpret_cast<const char *>(g_clip);
+    for (int i = 0; i < index; i++) {
+        at += strlen(at) + 1;
+    }
+    return snprintf(out, capacity, "%s", at) < static_cast<int>(capacity);
 }
 
 /* ---- Set-up -------------------------------------------------------------------- */

@@ -210,9 +210,28 @@ ports::FsError restore_from_trash(const char *name);
 ports::FsError move_to_folder(const char *path, const char *folder);
 // A name for `name` not taken in `folder`: itself, else "name (2).ext"...
 bool free_name_in(const char *folder, const char *name, bool is_folder, char *out, int capacity);
-// The Delete command: asks, then moves to the Trash (on C:) or deletes for
-// good (in the Trash, on other drives).
+// What a file command acts on (backlog items 54 and 55): entries of one
+// folder, by name. The names are the caller's and need only last the call.
+struct Selection {
+    const char *folder;
+    const char *const *names;
+    int count;
+};
+// The Delete command: asks once, for all of them, then moves them to the
+// Trash (on C:) or deletes them for good (in the Trash, on other drives).
 void delete_asking(const char *path);
+void delete_asking(const Selection &s);
+// Copy and Cut (file_ops.cpp): onto the clipboard, as files.
+void copy_files(const Selection &s, bool cut);
+// Whether Paste would do anything in `folder`: there are files on the
+// clipboard, and it is a folder that takes them (not My Board, not the
+// Trash).
+bool can_paste(const char *folder);
+// Paste: what is on the clipboard is copied into `folder`, or moved there
+// if it was cut, by a job of the asker's; a name taken there is numbered,
+// nothing is replaced. `window` shows the hourglass meanwhile
+// (os::kNoWindow: none does). It says what went wrong, if anything.
+void paste_files(const char *folder, int window);
 // Dragged to the Trash: moved without asking on C:, asks elsewhere.
 void drop_in_trash(const char *path);
 void open_trash();

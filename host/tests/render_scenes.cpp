@@ -14,6 +14,7 @@
 #include "core/shell/defrag.hpp"
 #include "core/desk/desk.hpp"
 #include "core/shell/shell.hpp"
+#include "core/wm/text_edit.hpp"
 #include "core/wm/wm.hpp"
 #include "../host_adapters.hpp"
 
@@ -609,7 +610,7 @@ int main(int argc, char **argv)
         mouse(400, 300, 0);
         check(desktop.menu_open(), "a right click on the desktop opens its menu");
         save("37p-desktop-menu");
-        centre_of(desktop.popup_item(0, 3), x, y);
+        centre_of(desktop.popup_item(0, 5), x, y);
         click(x, y);
         check(desktop.active() != nullptr && strcmp(desktop.active()->title(), "Display") == 0, "the dialog opens");
         save("37q-display-dialog");
@@ -904,7 +905,7 @@ int main(int argc, char **argv)
         check(shell::load_settings("icons", ini) && ini.get("system", "My Board", value, sizeof(value)) &&
                   strcmp(value, "214,124") == 0,
               "its place is in icons.ini");
-        desktop_menu_item(0);
+        desktop_menu_item(2);
         click(x, y); // Snap icons to grid
         check(shell::desktop_icons()->snap() && shell::desktop_icons()->icon_rect(0).x == 214,
               "snapping on moves nothing");
@@ -913,17 +914,17 @@ int main(int argc, char **argv)
         mouse(2 + 4 * 76 + 50, 8 + 3 * 70 + 30, 0);
         check(shell::desktop_icons()->icon_rect(1).x == 2 + 4 * 76 && shell::desktop_icons()->icon_rect(1).y == 8 + 3 * 70,
               "Documents snaps to the grid");
-        desktop_menu_item(0);
+        desktop_menu_item(2);
         save("39c-icons-menu-snap");
         key(wm::key::Escape);
-        desktop_menu_item(1);
+        desktop_menu_item(3);
         click(x, y); // Realign icons
         save("39d-icons-realigned");
         for (int i = 0; !shell::desktop_icons()->icon_rect(i).empty(); i++) {
             const gfx::Rect r = shell::desktop_icons()->icon_rect(i);
             check((r.x - 2) % 76 == 0 && (r.y - 8) % 70 == 0, "Realign puts every icon in the grid");
         }
-        desktop_menu_item(0);
+        desktop_menu_item(2);
         click(x, y); // snapping off again
         check(!shell::desktop_icons()->snap(), "and off again");
     }
@@ -986,6 +987,74 @@ int main(int argc, char **argv)
         pick(0);
         key(wm::key::Enter);
         check(gfx::theme_index() == 0 && kept("classic"), "and the classic one again");
+    }
+
+    // Copy, Cut, Paste and Delete for files (backlog item 54): the right
+    // click menus of the File manager and of the desktop, and Edit.
+    {
+        const auto check = [&](bool ok, const char *what) {
+            if (!ok) {
+                printf("File commands: %s\n", what);
+                failures++;
+            }
+        };
+        const auto right_click = [&](int at_x, int at_y) {
+            mouse(at_x, at_y, 0);
+            mouse(at_x, at_y, 2);
+            mouse(at_x, at_y, 0);
+        };
+        while (desktop.active() != nullptr) {
+            desktop.close(*desktop.active());
+        }
+        shell::open_folder("C:\\Documents");
+        const gfx::Rect c = desktop.active()->client();
+        // The entries: Desktop, then the files.
+        right_click(c.x + 12 + 76 + 30, c.y + 64 + 10 + 20);
+        check(desktop.menu_open() && desktop.popup_menu(0)->count == 6, "a file's menu: Open, Cut, Copy, Delete");
+        save("70-file-right-click");
+        centre_of(desktop.popup_item(0, 3), x, y);
+        click(x, y); // Copy
+        check(wm::clipboard::file_count() == 1, "Copy puts the file on the clipboard");
+        right_click(c.x + 12 + 30, c.y + 64 + 10 + 20); // the first entry, a folder
+        check(desktop.menu_open() && desktop.popup_menu(0)->count == 7, "a folder's menu has Paste too");
+        save("71-folder-right-click");
+        key(wm::key::Escape);
+        right_click(c.x + c.w - 60, c.y + c.h - 50);
+        check(desktop.menu_open() && desktop.popup_menu(0)->count == 4, "the blank part: Paste, New Folder, Refresh");
+        save("72-folder-blank-right-click");
+        key(wm::key::Escape);
+        key(wm::key::A + 4, true); // Alt+E
+        save("73-folder-edit-menu");
+        key(wm::key::Escape);
+        while (desktop.active() != nullptr) {
+            desktop.close(*desktop.active());
+        }
+        // The desktop: Paste away from the icons puts the copy there, and
+        // its icon has the menu of a file.
+        right_click(400, 300);
+        save("74-desktop-paste");
+        centre_of(desktop.popup_item(0, 0), x, y);
+        click(x, y); // Paste
+        // The files' icons are in the order of their names: español.txt,
+        // then readme.txt, which was there before.
+        const int pasted = 4;
+        check(!shell::desktop_icons()->icon_rect(5).empty(), "the pasted file has an icon on the desktop");
+        centre_of(shell::desktop_icons()->icon_rect(pasted), x, y);
+        right_click(x, y);
+        check(desktop.menu_open() && desktop.popup_menu(0)->count == 6 && shell::desktop_icons()->selected_icon() == pasted,
+              "a desktop file's menu, and the icon is selected");
+        save("75-desktop-icon-right-click");
+        centre_of(desktop.popup_item(0, 5), x, y);
+        click(x, y); // Delete
+        check(desktop.active() != nullptr && strcmp(desktop.active()->title(), "Confirm File Delete") == 0,
+              "Delete asks first");
+        key(wm::key::Enter); // Yes
+        check(shell::desktop_icons()->icon_rect(5).empty(), "and the icon is gone");
+        centre_of(shell::desktop_icons()->icon_rect(1), x, y);
+        right_click(x, y);
+        check(desktop.menu_open() && desktop.popup_menu(0)->count == 3, "Documents: Open and Paste");
+        save("76-desktop-documents-right-click");
+        key(wm::key::Escape);
     }
 
     // Shut Down from the Start menu: Enter picks Shut Down, and the screen
