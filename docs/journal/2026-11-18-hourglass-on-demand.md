@@ -133,3 +133,16 @@ touched; everything is in `core/`), and nothing has run on the board.
   with the pointer over the window and beside it, and `tools/dbg.py misses`.
 - Chess (item 50) turns it on while the engine thinks and off when the move
   is made.
+
+## On the board (2026-11-18, 0c99632)
+
+App-flashed on the BIOS layout. Passed: the Widget gallery's client area shows
+the arrow; Alt+O, H turns the hourglass on at once without moving the mouse;
+the title bar, the menu bar and the desktop beside the window keep the arrow
+and the left border the sizing arrow; back over the client area it is the
+hourglass again. With it on, "Push me" counts ("Pushed 1 time") and the
+Options > Hourglass row is ticked. Closing the window with the pointer at rest
+leaves the arrow and nothing behind; reopening the gallery starts with the
+arrow and the row unticked. The Editor's save of a 300 KB file shows the
+hourglass during the save and the arrow after it. `tools/build_programs.sh`:
+324 names exported, none missing; `dbg.py misses`: none.

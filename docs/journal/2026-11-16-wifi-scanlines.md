@@ -60,3 +60,12 @@ amount of filming could.
 ## What is left
 
 The hardware measures above, if the lines ever come back at higher power.
+
+## On the board (2026-11-18, dcce7aa)
+
+With no `tx_power_dbm` line in `network.ini` (the file removed, the saved
+network left alone) the OS logs `wifi transmit power 20 dBm (ESP_OK)`, joins
+the network and gets its address. From the webcam the picture stays steady
+from the desktop on through the next 25 seconds (mean brightness moves by
+0.2 on a scale of 255, nothing visible in a frame); `dbg.py misses`: none.
+VNC throughput was not measured.
