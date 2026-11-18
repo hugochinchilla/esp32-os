@@ -14,6 +14,7 @@
 #include "core/shell/defrag.hpp"
 #include "core/desk/desk.hpp"
 #include "core/shell/shell.hpp"
+#include "core/wm/text_edit.hpp"
 #include "core/wm/wm.hpp"
 #include "../host_adapters.hpp"
 
@@ -609,7 +610,7 @@ int main(int argc, char **argv)
         mouse(400, 300, 0);
         check(desktop.menu_open(), "a right click on the desktop opens its menu");
         save("37p-desktop-menu");
-        centre_of(desktop.popup_item(0, 3), x, y);
+        centre_of(desktop.popup_item(0, 5), x, y);
         click(x, y);
         check(desktop.active() != nullptr && strcmp(desktop.active()->title(), "Display") == 0, "the dialog opens");
         save("37q-display-dialog");
@@ -904,7 +905,7 @@ int main(int argc, char **argv)
         check(shell::load_settings("icons", ini) && ini.get("system", "My Board", value, sizeof(value)) &&
                   strcmp(value, "214,124") == 0,
               "its place is in icons.ini");
-        desktop_menu_item(0);
+        desktop_menu_item(2);
         click(x, y); // Snap icons to grid
         check(shell::desktop_icons()->snap() && shell::desktop_icons()->icon_rect(0).x == 214,
               "snapping on moves nothing");
@@ -913,17 +914,17 @@ int main(int argc, char **argv)
         mouse(2 + 4 * 76 + 50, 8 + 3 * 70 + 30, 0);
         check(shell::desktop_icons()->icon_rect(1).x == 2 + 4 * 76 && shell::desktop_icons()->icon_rect(1).y == 8 + 3 * 70,
               "Documents snaps to the grid");
-        desktop_menu_item(0);
+        desktop_menu_item(2);
         save("39c-icons-menu-snap");
         key(wm::key::Escape);
-        desktop_menu_item(1);
+        desktop_menu_item(3);
         click(x, y); // Realign icons
         save("39d-icons-realigned");
         for (int i = 0; !shell::desktop_icons()->icon_rect(i).empty(); i++) {
             const gfx::Rect r = shell::desktop_icons()->icon_rect(i);
             check((r.x - 2) % 76 == 0 && (r.y - 8) % 70 == 0, "Realign puts every icon in the grid");
         }
-        desktop_menu_item(0);
+        desktop_menu_item(2);
         click(x, y); // snapping off again
         check(!shell::desktop_icons()->snap(), "and off again");
     }
@@ -1058,6 +1059,271 @@ int main(int argc, char **argv)
         pick(0);
         key(wm::key::Enter);
         check(gfx::theme_index() == 0 && kept("classic"), "and the classic one again");
+    }
+
+    // Copy, Cut, Paste and Delete for files (backlog item 54): the right
+    // click menus of the File manager and of the desktop, and Edit.
+    {
+        const auto check = [&](bool ok, const char *what) {
+            if (!ok) {
+                printf("File commands: %s\n", what);
+                failures++;
+            }
+        };
+        const auto right_click = [&](int at_x, int at_y) {
+            mouse(at_x, at_y, 0);
+            mouse(at_x, at_y, 2);
+            mouse(at_x, at_y, 0);
+        };
+        while (desktop.active() != nullptr) {
+            desktop.close(*desktop.active());
+        }
+        shell::open_folder("C:\\Documents");
+        const gfx::Rect c = desktop.active()->client();
+        // The entries: Desktop, then the files.
+        right_click(c.x + 12 + 76 + 30, c.y + 64 + 10 + 20);
+        check(desktop.menu_open() && desktop.popup_menu(0)->count == 6, "a file's menu: Open, Cut, Copy, Delete");
+        save("70-file-right-click");
+        centre_of(desktop.popup_item(0, 3), x, y);
+        click(x, y); // Copy
+        check(wm::clipboard::file_count() == 1, "Copy puts the file on the clipboard");
+        right_click(c.x + 12 + 30, c.y + 64 + 10 + 20); // the first entry, a folder
+        check(desktop.menu_open() && desktop.popup_menu(0)->count == 7, "a folder's menu has Paste too");
+        save("71-folder-right-click");
+        key(wm::key::Escape);
+        right_click(c.x + c.w - 60, c.y + c.h - 50);
+        check(desktop.menu_open() && desktop.popup_menu(0)->count == 4, "the blank part: Paste, New Folder, Refresh");
+        save("72-folder-blank-right-click");
+        key(wm::key::Escape);
+        key(wm::key::A + 4, true); // Alt+E
+        save("73-folder-edit-menu");
+        key(wm::key::Escape);
+        while (desktop.active() != nullptr) {
+            desktop.close(*desktop.active());
+        }
+        // The desktop: Paste away from the icons puts the copy there, and
+        // its icon has the menu of a file.
+        right_click(400, 300);
+        save("74-desktop-paste");
+        centre_of(desktop.popup_item(0, 0), x, y);
+        click(x, y); // Paste
+        // The files' icons are in the order of their names: español.txt,
+        // then readme.txt, which was there before.
+        const int pasted = 4;
+        check(!shell::desktop_icons()->icon_rect(5).empty(), "the pasted file has an icon on the desktop");
+        centre_of(shell::desktop_icons()->icon_rect(pasted), x, y);
+        right_click(x, y);
+        check(desktop.menu_open() && desktop.popup_menu(0)->count == 6 && shell::desktop_icons()->selected_icon() == pasted,
+              "a desktop file's menu, and the icon is selected");
+        save("75-desktop-icon-right-click");
+        centre_of(desktop.popup_item(0, 5), x, y);
+        click(x, y); // Delete
+        check(desktop.active() != nullptr && strcmp(desktop.active()->title(), "Confirm File Delete") == 0,
+              "Delete asks first");
+        key(wm::key::Enter); // Yes
+        check(shell::desktop_icons()->icon_rect(5).empty(), "and the icon is gone");
+        centre_of(shell::desktop_icons()->icon_rect(1), x, y);
+        right_click(x, y);
+        check(desktop.menu_open() && desktop.popup_menu(0)->count == 3, "Documents: Open and Paste");
+        save("76-desktop-documents-right-click");
+        key(wm::key::Escape);
+    }
+
+    // Several files at once (backlog item 55), in a folder of its own:
+    // Box, a.txt to f.txt. What is picked is told by what moves when one of
+    // them is dragged onto Box.
+    {
+        const auto check = [&](bool ok, const char *what) {
+            if (!ok) {
+                printf("Several: %s\n", what);
+                failures++;
+            }
+        };
+        const auto in_many = [&](const char *name) { return there((std::string("C:\\Many\\") + name).c_str()); };
+        const auto in_box = [&](const char *name) { return there((std::string("C:\\Many\\Box\\") + name).c_str()); };
+        storage.make_folder("C:\\Many");
+        storage.make_folder("C:\\Many\\Box");
+        for (const char *name : {"a.txt", "b.txt", "c.txt", "d.txt", "e.txt", "f.txt"}) {
+            storage.write_file((std::string("C:\\Many\\") + name).c_str(), "0123456789", 10);
+        }
+        shell::open_folder("C:\\Many");
+        wm::Window *w = desktop.active();
+        const gfx::Rect c = w->client();
+        // The middle of the picture of the entry at (column, row): four across.
+        const auto at = [&](int i, int &px, int &py) {
+            px = c.x + 2 + 10 + 38 + (i % 4) * 76;
+            py = c.y + 64 + 2 + 8 + 16 + (i / 4) * 66;
+        };
+        const auto press = [&](int i, uint16_t held = 0) {
+            int px, py;
+            at(i, px, py);
+            if (held != 0) {
+                desktop.key(held, true);
+            }
+            click(px, py);
+            if (held != 0) {
+                desktop.key(held, false);
+            }
+        };
+        const auto drag_onto_box = [&](int i) {
+            int px, py, bx, by;
+            at(i, px, py);
+            at(0, bx, by);
+            mouse(px, py, 0);
+            mouse(px, py, 1);
+            mouse(px + 8, py + 8, 1);
+            mouse(bx, by, 1);
+        };
+        const auto let_go = [&] {
+            int bx, by;
+            at(0, bx, by);
+            mouse(bx, by, 0);
+        };
+        // Box 0, a 1, b 2, c 3 / d 4, e 5, f 6. Ctrl+click adds one at a time.
+        press(1);
+        press(3, wm::key::LeftCtrl);
+        press(5, wm::key::LeftCtrl);
+        save("77a-several-ctrl-click");
+        // And takes one away again. The two left go together.
+        press(5, wm::key::LeftCtrl);
+        drag_onto_box(1);
+        save("77b-several-dragged");
+        let_go();
+        check(in_box("a.txt") && in_box("c.txt") && !in_many("a.txt") && !in_many("c.txt"),
+              "the two picked with Ctrl did not move together");
+        check(in_many("b.txt") && in_many("d.txt") && in_many("e.txt") && in_many("f.txt"),
+              "one that was not picked moved (e.txt was taken away with Ctrl)");
+        // Box 0, b 1, d 2, e 3 / f 4. A click picks one alone; Shift+click
+        // picks from it to there.
+        press(1);
+        press(3, wm::key::LeftShift);
+        save("77c-several-shift-click");
+        // A click on one of several, not dragged: it alone. Dragged now, only it goes.
+        press(2);
+        drag_onto_box(2);
+        let_go();
+        check(in_box("d.txt") && in_many("b.txt") && in_many("e.txt"), "a click on one of several did not pick it alone");
+        // Box 0, b 1, e 2, f 3. A rectangle from the empty space under the
+        // row up to e.txt picks e and f, which it touches, and not b.
+        int ex, ey, fx, fy;
+        at(2, ex, ey);
+        at(3, fx, fy);
+        mouse(fx + 30, fy + 80, 0);
+        mouse(fx + 30, fy + 80, 1);
+        mouse(fx, fy + 40, 1);
+        mouse(ex - 10, ey + 5, 1);
+        save("77d-several-rectangle");
+        mouse(ex - 10, ey + 5, 0);
+        save("77e-several-rectangle-done");
+        drag_onto_box(3);
+        let_go();
+        check(in_box("e.txt") && in_box("f.txt") && in_many("b.txt"), "the rectangle did not pick e.txt and f.txt alone");
+        // Ctrl+A picks everything. With a.txt and c.txt here again, the two
+        // cannot go where there is one of that name already: one box says so
+        // after all were tried, and b.txt has moved.
+        storage.write_file("C:\\Many\\a.txt", "again", 5);
+        storage.write_file("C:\\Many\\c.txt", "again", 5);
+        key(0x3E); // F5: look at the folder again
+        press(1); // Box 0, a 1, b 2, c 3
+        desktop.key(wm::key::LeftCtrl, true);
+        key(0x04); // A
+        desktop.key(wm::key::LeftCtrl, false);
+        save("77f-several-all");
+        drag_onto_box(1);
+        let_go();
+        save("77g-several-not-moved");
+        check(in_box("b.txt") && in_many("a.txt") && in_many("c.txt") && in_many("Box"),
+              "Ctrl+A and a drag: b.txt should move, a.txt and c.txt stay, Box not go into itself");
+        key(wm::key::Enter); // OK
+        check(desktop.active() == w, "more than one box came for one drag");
+
+        // The commands of item 54 act on all that is picked. Box 0, a 1,
+        // c 2: a right click on one of the two picked keeps both, and its
+        // menu has what goes for both (no Open).
+        const auto right_click = [&](int at_x, int at_y) {
+            mouse(at_x, at_y, 0);
+            mouse(at_x, at_y, 2);
+            mouse(at_x, at_y, 0);
+        };
+        int px, py;
+        press(1);
+        press(2, wm::key::LeftCtrl);
+        at(2, px, py);
+        right_click(px, py);
+        check(desktop.menu_open() && desktop.popup_menu(0)->count == 4, "the menu for several: Cut, Copy, a line, Delete");
+        save("77h-several-right-click");
+        key(wm::key::Escape);
+        // Delete asks once, for the two; No. Then Yes: both are in the Trash.
+        key(wm::key::Delete);
+        save("77i-several-delete-asks");
+        key(wm::key::Escape);
+        check(in_many("a.txt") && in_many("c.txt"), "Escape at the question deleted them");
+        key(wm::key::Delete);
+        key(wm::key::Enter);
+        check(!in_many("a.txt") && !in_many("c.txt") && there("C:\\.trash\\a.txt") && there("C:\\.trash\\c.txt"),
+              "Delete did not move the two picked files to the Trash");
+        check(desktop.active() == w, "Delete asked more than once");
+        // A right click on an entry that is not one of those picked picks it alone.
+        storage.write_file("C:\\Many\\x.txt", "x", 1);
+        storage.write_file("C:\\Many\\y.txt", "y", 1);
+        storage.write_file("C:\\Many\\z.txt", "z", 1);
+        key(0x3E); // F5. Box 0, x 1, y 2, z 3
+        press(1);
+        press(2, wm::key::LeftCtrl);
+        at(3, px, py);
+        right_click(px, py);
+        key(wm::key::Escape);
+        key(wm::key::Delete);
+        key(wm::key::Enter);
+        check(in_many("x.txt") && in_many("y.txt") && !in_many("z.txt"), "a right click outside what was picked did not pick that one alone");
+        desktop.close(*w);
+
+        // On the desktop: Ctrl+click picks a second icon, and the two keep
+        // their places among themselves when one is dragged.
+        desk::Icons &icons = *shell::desktop_icons();
+        const gfx::Rect one = icons.icon_rect(0), two = icons.icon_rect(1);
+        centre_of(one, x, y);
+        click(x, y);
+        centre_of(two, x, y);
+        desktop.key(wm::key::LeftCtrl, true);
+        click(x, y);
+        desktop.key(wm::key::LeftCtrl, false);
+        check(icons.picked(0) && icons.picked(1) && icons.picked_count() == 2, "Ctrl+click on the desktop");
+        mouse(x, y, 1);
+        mouse(x + 8, y + 8, 1);
+        mouse(x + 200, y + 100, 1);
+        mouse(x + 200, y + 100, 0);
+        // The one held has its picture under the pointer; the other went as far.
+        const int dx = icons.icon_rect(1).x - two.x, dy = icons.icon_rect(1).y - two.y;
+        check(dx > 150 && dy > 50 && icons.icon_rect(0).x == one.x + dx && icons.icon_rect(0).y == one.y + dy,
+              "two desktop icons did not move together");
+        save("77j-desktop-several-moved");
+        // A rectangle over the desktop picks what it touches.
+        const gfx::Rect third = icons.icon_rect(2);
+        mouse(third.x + 150, third.y + 120, 0);
+        mouse(third.x + 150, third.y + 120, 1);
+        mouse(third.x + 100, third.y + 60, 1);
+        mouse(third.x + 40, third.y + 20, 1);
+        save("77k-desktop-rectangle");
+        mouse(third.x + 40, third.y + 20, 0);
+        check(icons.picked_count() >= 1 && icons.picked(2) && !icons.picked(0), "the rectangle on the desktop");
+        click(600, 300); // the desktop itself: nothing picked
+        check(icons.picked_count() == 0, "a click on the desktop itself");
+        // The desktop's menu, closed with Escape, is gone: a click where
+        // each of its entries was does nothing (asked after the board turn
+        // of 2026-11-18, where the Display dialog was once found open).
+        for (int item = 0; item < 6; item++) {
+            mouse(300, 200, 0);
+            mouse(300, 200, 2);
+            mouse(300, 200, 0);
+            check(desktop.menu_open() && desktop.popup_menu(0)->count == 6, "the desktop's menu has six entries");
+            int ix, iy;
+            centre_of(desktop.popup_item(0, item), ix, iy);
+            key(wm::key::Escape);
+            check(!desktop.menu_open(), "Escape closes the desktop's menu");
+            click(ix, iy);
+            check(desktop.window_count() == 0 && gfx::theme_index() == 0, "a click after Escape did what the menu entry does");
+        }
     }
 
     // Shut Down from the Start menu: Enter picks Shut Down, and the screen

@@ -297,14 +297,17 @@ void open_run(void *) { run_dialog(); }
 // A right click on the desktop: a menu with what can be done to it.
 void toggle_snap(void *);
 void realign_icons(void *);
+void paste_on_desktop(void *);
 wm::MenuItem g_desktop_items[] = {
+    {"&Paste", &paste_on_desktop, nullptr, nullptr, nullptr, 0},
+    {nullptr, nullptr, nullptr, nullptr, nullptr, wm::kMenuSeparator},
     {"&Snap icons to grid", &toggle_snap, nullptr, nullptr, nullptr, 0},
     {"&Realign icons", &realign_icons, nullptr, nullptr, nullptr, 0},
     {nullptr, nullptr, nullptr, nullptr, nullptr, wm::kMenuSeparator},
     {"&Display...", &open_display, nullptr, nullptr, nullptr, 0},
 };
-wm::Menu g_desktop_menu = {g_desktop_items, 4};
-void desktop_menu(int x, int y, void *);
+wm::Menu g_desktop_menu = {g_desktop_items, 6};
+void desktop_menu(int icon, int x, int y, void *);
 wm::MenuItem g_settings_items[] = {
     {"&Control Panel", nullptr, nullptr, nullptr, nullptr, wm::kMenuDisabled},
     {"&Taskbar...", nullptr, nullptr, nullptr, nullptr, wm::kMenuDisabled},
@@ -430,21 +433,135 @@ void realign_icons(void *)
     }
 }
 
-void desktop_menu(int x, int y, void *)
+void open_desktop_path(const char *path)
 {
-    g_desktop_items[0].flags = g_desk != nullptr && g_desk->snap() ? wm::kMenuChecked : 0;
-    manager().open_menu(g_desktop_menu, x, y);
-}
-
-void open_desktop_file(void *context)
-{
-    const DesktopFile &f = *static_cast<const DesktopFile *>(context);
     ports::DirEntry e;
-    if (storage().stat(f.path, e) == ports::FsError::Ok && e.folder) {
-        open_folder(f.path);
-    } else if (!open_file(f.path)) {
+    if (storage().stat(path, e) == ports::FsError::Ok && e.folder) {
+        open_folder(path);
+    } else if (!open_file(path)) {
         message_box("Desktop", "There is no program for this kind of file yet.");
     }
+}
+
+void open_desktop_file(void *context) { open_desktop_path(static_cast<const DesktopFile *>(context)->path); }
+
+void drop_on_folder(const char *path, void *context);
+
+// A right click on an icon (backlog item 54): Open, and for a file or folder
+// of C:\Documents\Desktop Cut, Copy and Delete; Paste on what is a folder.
+// The menu keeps the icon's path, not its place in the table: the icons are
+// read again every two seconds, and the menu may be open across that.
+wm::MenuItem g_icon_items[7];
+wm::Menu g_icon_menu = {g_icon_items, 0};
+int g_menu_icon = -1;               // a system icon: its place in the table, which does not change
+char g_menu_path[fs::kMaxPath];     // a file's icon: the file
+char g_paste_target[fs::kMaxPath];  // the folder the icon stands for
+
+void icon_open(void *)
+{
+    if (g_menu_path[0] != 0) {
+        open_desktop_path(g_menu_path);
+    } else if (g_menu_icon >= 0 && g_menu_icon < kSystemIcons && g_icons[g_menu_icon].open != nullptr) {
+        g_icons[g_menu_icon].open(g_icons[g_menu_icon].context);
+    }
+}
+// Several icons were picked when the menu opened (backlog item 55): the
+// names of the files among them, copied for the same reason.
+char g_menu_names[desk::Icons::kMax - kSystemIcons][64];
+const char *g_menu_name_list[desk::Icons::kMax - kSystemIcons];
+int g_menu_name_count = 0;
+
+// What Cut, Copy and Delete of the menu act on: those, or the one file.
+Selection menu_selection()
+{
+    if (g_menu_name_count == 0) {
+        g_menu_name_list[0] = fs::path::name(g_menu_path);
+        return {kDesktopFolder, g_menu_name_list, 1};
+    }
+    return {kDesktopFolder, g_menu_name_list, g_menu_name_count};
+}
+void icon_to_clipboard(bool cut) { copy_files(menu_selection(), cut); }
+void icon_cut(void *) { icon_to_clipboard(true); }
+void icon_copy(void *) { icon_to_clipboard(false); }
+void icon_paste(void *) { paste_files(g_paste_target, os::kNoWindow); }
+void icon_delete(void *)
+{
+    if (g_menu_name_count == 0) {
+        delete_asking(g_menu_path);
+    } else {
+        delete_asking(menu_selection());
+    }
+}
+
+void paste_on_desktop(void *)
+{
+    storage().make_folder("C:\\Documents");
+    storage().make_folder(kDesktopFolder);
+    paste_files(kDesktopFolder, os::kNoWindow);
+}
+
+void desktop_menu(int icon, int x, int y, void *)
+{
+    if (icon < 0) {
+        g_desktop_items[0].flags = can_paste(kDesktopFolder) ? 0 : wm::kMenuDisabled;
+        g_desktop_items[2].flags = g_desk != nullptr && g_desk->snap() ? wm::kMenuChecked : 0;
+        manager().open_menu(g_desktop_menu, x, y);
+        return;
+    }
+    const desk::Icon &it = g_icons[icon];
+    g_menu_icon = icon;
+    snprintf(g_menu_path, sizeof(g_menu_path), "%s", it.path != nullptr ? it.path : "");
+    // The folders: one of the desktop's own, and Documents.
+    g_paste_target[0] = 0;
+    if (it.path != nullptr && it.drop == &drop_on_folder) {
+        snprintf(g_paste_target, sizeof(g_paste_target), "%s", it.path);
+    } else if (it.path == nullptr && icon == 1) {
+        snprintf(g_paste_target, sizeof(g_paste_target), "C:\\Documents");
+    }
+    int n = 0;
+    const auto add = [&](const char *label, void (*action)(void *), bool enabled = true) {
+        g_icon_items[n++] = {label, action, nullptr, nullptr, nullptr,
+                             static_cast<uint8_t>(enabled ? 0 : wm::kMenuDisabled)};
+    };
+    const auto line = [&] { g_icon_items[n++] = {nullptr, nullptr, nullptr, nullptr, nullptr, wm::kMenuSeparator}; };
+    // On one of several picked icons: what goes for all the files among
+    // them. No Open, and no Paste into one of them.
+    g_menu_name_count = 0;
+    if (g_desk != nullptr && g_desk->picked_count() > 1) {
+        for (int i = kSystemIcons; i < desk::Icons::kMax; i++) {
+            if (g_desk->picked(i) && g_icons[i].path != nullptr) {
+                snprintf(g_menu_names[g_menu_name_count], sizeof(g_menu_names[0]), "%s", fs::path::name(g_icons[i].path));
+                g_menu_name_list[g_menu_name_count] = g_menu_names[g_menu_name_count];
+                g_menu_name_count++;
+            }
+        }
+    }
+    if (g_menu_name_count > 0) {
+        add("Cu&t", &icon_cut);
+        add("&Copy", &icon_copy);
+        line();
+        add("&Delete", &icon_delete);
+        g_icon_menu.count = n;
+        manager().open_menu(g_icon_menu, x, y);
+        return;
+    }
+    add("&Open", &icon_open);
+    if (it.path != nullptr || g_paste_target[0] != 0) {
+        line();
+    }
+    if (it.path != nullptr) {
+        add("Cu&t", &icon_cut);
+        add("&Copy", &icon_copy);
+    }
+    if (g_paste_target[0] != 0) {
+        add("&Paste", &icon_paste, can_paste(g_paste_target));
+    }
+    if (it.path != nullptr) {
+        line();
+        add("&Delete", &icon_delete);
+    }
+    g_icon_menu.count = n;
+    manager().open_menu(g_icon_menu, x, y);
 }
 
 // A file let go on the desktop itself goes into C:\Documents\Desktop

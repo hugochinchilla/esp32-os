@@ -3,6 +3,7 @@
 // under the icons, since each pixel is painted once.
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 #include "core/desk/desk.hpp"
@@ -42,9 +43,13 @@ void Icons::set_icons(const Icon *icons, int count)
     if (count != count_) {
         // Icons came or went, so the others moved: nothing stays selected.
         selected_ = -1;
+        picked_ = 0;
+        moving_ = 0;
+        collapse_ = -1;
         drop_icon_ = -1;
         pressed_ = -1;
     }
+    band_ = false;
     count_ = count;
     layout();
     wm_.invalidate(wm_.work_area());
@@ -66,12 +71,13 @@ Rect Icons::cell(int index) const
     return {kIconX - 4 + col * kIconColumn, kIconY + row * kIconStep, kIconW, kIconH};
 }
 
-// No icon other than `but` is on the cell.
+// No icon other than `but` is on the cell. Those of a group that is being
+// put down and have not got their place yet do not count: they are leaving.
 bool Icons::free_cell(int index, int but) const
 {
     const Rect c = cell(index);
     for (int i = 0; i < count_; i++) {
-        if (i != but && !rects_[i].empty() && rects_[i].overlaps(c)) {
+        if (i != but && !(moving_ >> i & 1) && !rects_[i].empty() && rects_[i].overlaps(c)) {
             return false;
         }
     }
@@ -108,9 +114,15 @@ void Icons::layout()
 // cell while snapping is on.
 Rect Icons::place_at(int x, int y, int but) const
 {
+    return place_for({x - kIconW / 2, y - 16, kIconW, kIconH}, but);
+}
+
+// The same for an icon whose corner would be at (r.x, r.y): kept on the
+// screen, and in the nearest free cell while snapping is on.
+Rect Icons::place_for(Rect r, int but) const
+{
     const Rect work = wm_.work_area();
-    Rect r = {std::max(0, std::min(x - kIconW / 2, work.w - kIconW)), std::max(0, std::min(y - 16, work.h - kIconH)),
-              kIconW, kIconH};
+    r = {std::max(0, std::min(r.x, work.w - kIconW)), std::max(0, std::min(r.y, work.h - kIconH)), kIconW, kIconH};
     if (snap_) {
         const Rect free = r;
         long best = -1;
@@ -210,27 +222,103 @@ int Icons::icon_at(int x, int y) const
     return hit;
 }
 
+// What is picked becomes `picked`, and `last` the one picked last: the
+// icons that changed are painted again.
+void Icons::pick(uint32_t picked, int last)
+{
+    for (int i = 0; i < count_; i++) {
+        if (((picked ^ picked_) >> i & 1) != 0) {
+            wm_.invalidate(icon_rect(i));
+        }
+    }
+    picked_ = picked;
+    selected_ = last;
+}
+
+// The rectangle being pulled over the desktop.
+Rect Icons::band() const
+{
+    return {std::min(band_x0_, band_x1_), std::min(band_y0_, band_y1_), std::abs(band_x1_ - band_x0_) + 1,
+            std::abs(band_y1_ - band_y0_) + 1};
+}
+
+void Icons::band_dirty()
+{
+    const Rect r = band();
+    wm_.invalidate({r.x, r.y, r.w, 1});
+    wm_.invalidate({r.x, r.bottom() - 1, r.w, 1});
+    wm_.invalidate({r.x, r.y, 1, r.h});
+    wm_.invalidate({r.right() - 1, r.y, 1, r.h});
+}
+
+void Icons::pull_band(int x, int y)
+{
+    const Rect work = wm_.work_area();
+    band_dirty();
+    band_x1_ = std::max(0, std::min(x, work.w - 1));
+    band_y1_ = std::max(0, std::min(y, work.h - 1));
+    band_dirty();
+    // What it touches, by picture or by label, on top of what was there.
+    const Rect r = band();
+    uint32_t picked = band_base_;
+    int last = -1;
+    for (int i = 0; i < count_; i++) {
+        const Rect at = icon_rect(i);
+        const int tw = Canvas::text_width(icons_[i].label);
+        const Rect picture = {at.x + 20, at.y, 32, 33};
+        const Rect label = {at.x + 36 - tw / 2 - 1, at.y + 33, tw + 2, 14};
+        if (r.overlaps(picture) || r.overlaps(label)) {
+            picked |= 1u << i;
+            last = i;
+        }
+    }
+    if (picked != picked_) {
+        pick(picked, last >= 0 ? last : (picked != 0 ? __builtin_ctz(picked) : -1));
+    }
+}
+
 void Icons::mouse(const wm::MouseMsg &m)
 {
     switch (m.kind) {
     case wm::MouseKind::Down: {
         pressed_ = -1;
+        collapse_ = -1;
+        if (band_) { // the button came up where the panel was not told
+            band_ = false;
+            band_dirty();
+        }
+        const bool ctrl = (wm_.modifiers() & wm::kCtrl) != 0;
         const int hit = icon_at(m.x, m.y);
-        if (hit != selected_) {
-            if (selected_ >= 0) {
-                wm_.invalidate(icon_rect(selected_));
+        if (hit < 0) {
+            // The desktop itself: a rectangle starts there. What was picked
+            // goes, unless Ctrl is held: then the rectangle adds to it.
+            if (!ctrl) {
+                pick(0, -1);
             }
+            last_hit_ = -1;
+            band_base_ = picked_;
+            band_ = true;
+            band_x0_ = band_x1_ = m.x;
+            band_y0_ = band_y1_ = m.y;
+            break;
+        }
+        if (ctrl) {
+            const uint32_t picked = picked_ ^ (1u << hit);
+            pick(picked, (picked >> hit & 1) != 0 ? hit : (picked != 0 ? __builtin_ctz(picked) : -1));
+        } else if (picked(hit) && picked_count() > 1) {
+            // One of several: they may be about to be dragged together, so
+            // the others stay picked until the button comes up.
+            collapse_ = hit;
             selected_ = hit;
-            if (hit >= 0) {
-                wm_.invalidate(icon_rect(hit));
-            }
+        } else {
+            pick(1u << hit, hit);
         }
         // Twice on the same icon opens it; a third press starts again.
-        const bool twice = m.double_click && hit == last_hit_;
+        const bool twice = m.double_click && hit == last_hit_ && !ctrl;
         last_hit_ = twice ? -1 : hit;
-        if (twice && hit >= 0 && icons_[hit].open != nullptr) {
+        if (twice && icons_[hit].open != nullptr) {
             icons_[hit].open(icons_[hit].context);
-        } else if (hit >= 0) {
+        } else if (picked(hit)) {
             pressed_ = hit; // may become a drag
             press_x_ = m.x;
             press_y_ = m.y;
@@ -238,17 +326,35 @@ void Icons::mouse(const wm::MouseMsg &m)
         break;
     }
     case wm::MouseKind::Move:
-        if (pressed_ >= 0 && pressed_ < count_ &&
-            (m.x - press_x_) * (m.x - press_x_) + (m.y - press_y_) * (m.y - press_y_) > 16) {
+        if (band_) {
+            pull_band(m.x, m.y);
+        } else if (pressed_ >= 0 && pressed_ < count_ &&
+                   (m.x - press_x_) * (m.x - press_x_) + (m.y - press_y_) * (m.y - press_y_) > 16) {
+            // The one held, then the others that are picked. One that
+            // stands for no file goes nowhere but the desktop.
             const int icon = pressed_;
             pressed_ = -1;
+            collapse_ = -1;
             char name[wm::Wm::kDragPath];
             drag_name(icon, name, sizeof(name));
             wm_.begin_drag(name, icons_[icon].path == nullptr);
+            for (int i = 0; i < count_; i++) {
+                if (i != icon && picked(i)) {
+                    drag_name(i, name, sizeof(name));
+                    wm_.add_to_drag(name, icons_[i].path == nullptr);
+                }
+            }
         }
         break;
     case wm::MouseKind::Up:
+        if (band_) {
+            band_ = false;
+            band_dirty();
+        } else if (pressed_ >= 0 && collapse_ >= 0 && collapse_ < count_) {
+            pick(1u << collapse_, collapse_); // clicked and not dragged: it alone now
+        }
         pressed_ = -1;
+        collapse_ = -1;
         break;
     default:
         break;
@@ -257,9 +363,18 @@ void Icons::mouse(const wm::MouseMsg &m)
 
 void Icons::right_click(int x, int y)
 {
-    // The desktop itself, away from the icons.
-    if (menu_ != nullptr && icon_at(x, y) < 0) {
-        menu_(x, y, menu_context_);
+    // The icon under the pointer is picked alone, as a left press would,
+    // unless it is one of several picked already: those stay. Then the menu
+    // for it, or for the desktop itself away from the icons.
+    const int hit = icon_at(x, y);
+    if (hit >= 0 && picked(hit)) {
+        selected_ = hit;
+    } else {
+        pick(hit >= 0 ? 1u << hit : 0, hit);
+    }
+    last_hit_ = -1;
+    if (menu_ != nullptr) {
+        menu_(hit, x, y, menu_context_);
     }
 }
 
@@ -291,26 +406,66 @@ bool Icons::drag_over(const char *path, int x, int y)
     return icon >= 0 || own(path) >= 0 || drop_ != nullptr;
 }
 
+// When several were dragged this comes once for each, the one held first.
+// The desktop's own icons keep their places among themselves: each goes as
+// far as the first did. Files from somewhere else each get a place of their
+// own. If the first went onto an icon that takes files, the ones it does
+// not take stay where they are.
 void Icons::dropped(const char *path, int x, int y)
 {
-    // Worked out again: the server has already said the drag is over.
-    const int icon = target(path, x, y);
+    const bool first = !batch_;
+    batch_ = wm_.drops_to_come() > 0;
+    // Worked out again: the server has already said the drag is over. When
+    // the first went to a place on the desktop the others follow it there
+    // and no icon is asked: the first may be a folder, which is under the
+    // pointer by now and would take the files that came along with it (seen
+    // on the board, 2026-11-18).
+    const int icon = first || batch_onto_ ? target(path, x, y) : -1;
     const int mine = own(path);
+    if (first) {
+        batch_onto_ = icon >= 0;
+        batch_moved_ = false;
+        batch_files_ = 0;
+        batch_dx_ = batch_dy_ = 0;
+        moving_ = mine >= 0 && !batch_onto_ && batch_ ? picked_ : 0;
+    }
     if (icon >= 0) {
-        icons_[icon].drop(path, icons_[icon].context);
+        icons_[icon].drop(path, icons_[icon].context); // may bring other icons: `mine` is stale now
+    } else if (batch_onto_) {
+        // It came along with one that went into a folder or the Trash.
     } else if (mine >= 0) {
-        const Rect to = place_at(x, y, mine);
+        Rect to;
+        if (first) {
+            to = place_at(x, y, mine);
+            batch_dx_ = to.x - rects_[mine].x;
+            batch_dy_ = to.y - rects_[mine].y;
+        } else {
+            to = place_for({rects_[mine].x + batch_dx_, rects_[mine].y + batch_dy_, kIconW, kIconH}, mine);
+        }
+        moving_ &= ~(1u << mine);
         if (to.x != rects_[mine].x || to.y != rects_[mine].y) {
             wm_.invalidate(rects_[mine]);
             rects_[mine] = to;
             wm_.invalidate(to);
-            if (moved_ != nullptr) {
-                moved_(moved_context_);
-            }
+            batch_moved_ = true;
         }
-    } else if (drop_ != nullptr) {
-        const Rect to = place_at(x, y, -1);
+    } else if (drop_ != nullptr && path[0] != kOwnDrag) {
+        // The first where it was let go; the others in the free cells
+        // nearest to there, so that none lands on another.
+        Rect to = place_at(x, y, -1);
+        if (batch_files_++ > 0 && !snap_) {
+            snap_ = true;
+            to = place_at(x, y, -1);
+            snap_ = false;
+        }
         drop_(path, to.x, to.y, drop_context_);
+    }
+    if (!batch_) {
+        moving_ = 0;
+        if (batch_moved_ && moved_ != nullptr) {
+            moved_(moved_context_);
+        }
+        batch_moved_ = false;
     }
 }
 
@@ -335,7 +490,7 @@ void Icons::paint(const RectList &clip)
         }
         const Icon &icon = icons_[i];
         const int x = r.x + 4, y = r.y;
-        const bool selected = i == selected_ || i == drop_icon_;
+        const bool selected = picked(i) || i == drop_icon_;
         const auto draw = [&](Canvas &c) {
         if (split) {
             wm_.fill_backdrop(c, r);
@@ -362,6 +517,16 @@ void Icons::paint(const RectList &clip)
         } else {
             draw(c); // the background is down already
         }
+    }
+    // The rectangle being pulled, over the icons: white with black dots,
+    // which shows on any background.
+    const Rect r = band();
+    if (band_ && (r.w > 2 || r.h > 2) && r.overlaps(bounds)) {
+        c.hline(r.x, r.y, r.w, gfx::kWhite);
+        c.hline(r.x, r.bottom() - 1, r.w, gfx::kWhite);
+        c.vline(r.x, r.y, r.h, gfx::kWhite);
+        c.vline(r.right() - 1, r.y, r.h, gfx::kWhite);
+        c.focus_rect(r);
     }
 }
 

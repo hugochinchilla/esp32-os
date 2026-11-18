@@ -51,7 +51,8 @@ enum class What : uint8_t {
     Cell,    // a cell of a grid is to be painted: `control`, `index`, `part` (the cell), `drawing`
     Mouse,   // the left button in a picture that asked for it (kMouse): `control`, `mouse`, in the
              // picture's coordinates. From Down to Up they all go to the picture pressed
-    RightClick, // the right button went down in a picture that asked for the mouse: `control`, `x`, `y`
+    RightClick, // the right button went down in a picture that asked for the mouse, or in an icon
+                // view: `control`, `x`, `y` in its coordinates
     Resized, // the client area has another size (the user pulled an edge, or maximised): `x`, `y` are
              // its width and height. The program puts its controls where they go now
     Drag,    // an entry of an icon view was held and moved a little: `control`. The program starts
@@ -178,6 +179,8 @@ Control drop_down(Window window, const gfx::Bitmap *icon, const gfx::Rect &place
 // A menu of the program's just under a control. The menu and its items
 // are the program's and must stay valid while it is open.
 void menu_under(Window window, Control control, wm::Menu &menu);
+// The same at a point of a control (where the right button went down).
+void menu_at(Window window, Control control, int x, int y, wm::Menu &menu);
 
 /* ---- The text editor: a control that holds a whole text file ----
  *
@@ -225,13 +228,30 @@ bool hourglass(Window window);
 
 // Icons in a grid with their names under them: what a folder holds. The
 // names and the pictures (32 by 32) are the program's tables and must stay
-// valid; set_items() is a list's, and keeps what is picked. One entry is
-// picked: selected() and select() are a list's, and select() tells of it
-// (Changed), as a click or an arrow key does. Chosen: Enter or a double
-// click. Drag: an entry held and moved.
+// valid; set_items() is a list's. Several entries can be picked at once
+// (backlog item 55): a click picks one alone, Ctrl+click adds or takes away
+// one, Shift+click picks from the last one clicked to this one, a rectangle
+// pulled from an empty place picks what it touches, Ctrl+A picks all, and
+// the arrow keys move as in a list (with Shift they stretch the range).
+// selected_count() and is_selected() say which; selected() is the one
+// picked last (the one Enter opens), or -1. select() picks one alone and
+// tells of it (Changed), as every change by the mouse or the keys does.
+// set_items() keeps what is picked while the number of entries stays the
+// same; otherwise only the one picked last stays. highlight() shows one
+// more entry as picked without picking it (the folder a dragged file would
+// go into); -1: none. Chosen: Enter or a double click. Drag: a picked entry
+// held and moved; all the picked ones go together. The first 256 entries
+// can be picked.
+// RightClick: the right button went down in it; the program asks item_at()
+// what is there and picks it, unless it is one of several picked already.
 Control icon_view(Window window, const gfx::Rect &place);
 void reset_view(Window window, Control icon_view); // nothing picked, back at the top
-int item_at(Window window, Control icon_view, int x, int y); // the entry at a point of it, or -1
+// The entry whose picture or name is at a point of it, or -1 (the empty
+// space between two entries is no entry).
+int item_at(Window window, Control icon_view, int x, int y);
+int selected_count(Window window, Control icon_view);
+bool is_selected(Window window, Control icon_view, int index);
+void highlight(Window window, Control icon_view, int index);
 
 // A bar that fills from the left in blocks, in a sunken box: progress, or
 // how full something is.

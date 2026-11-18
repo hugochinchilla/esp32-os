@@ -11,6 +11,7 @@
 #include "core/msg/queue.hpp"
 #include "core/saver/saver.hpp"
 #include "core/sys/log.hpp"
+#include "core/wm/text_edit.hpp"
 
 namespace os {
 
@@ -335,6 +336,16 @@ void begin_drag(const char *path)
 {
     const prog::InCall in_call;
     g_kit.wm->begin_drag(path);
+}
+bool add_to_drag(const char *path)
+{
+    const prog::InCall in_call;
+    return g_kit.wm->add_to_drag(path);
+}
+int drops_to_come()
+{
+    const prog::InCall in_call;
+    return g_kit.wm->drops_to_come();
 }
 
 Busy::Busy()
@@ -676,6 +687,50 @@ Error write_file(const char *path, const void *data, size_t size)
 }
 
 } // namespace file
+
+/* ---- Files on the clipboard --------------------------------------------------- */
+
+namespace clipboard {
+
+bool set_files(const char *folder, const char *const *names, int count, bool cut)
+{
+    const prog::InCall in_call;
+    wm::clipboard::begin_files(cut);
+    char path[fs::kMaxPath];
+    for (int i = 0; i < count; i++) {
+        if (!fs::path::join(folder, names[i], path, sizeof(path)) || !wm::clipboard::add_file(path)) {
+            wm::clipboard::clear();
+            return false;
+        }
+    }
+    return count > 0;
+}
+
+int file_count()
+{
+    const prog::InCall in_call;
+    return wm::clipboard::file_count();
+}
+
+bool file(int index, char *out, size_t capacity)
+{
+    const prog::InCall in_call;
+    return wm::clipboard::file(index, out, capacity);
+}
+
+bool files_cut()
+{
+    const prog::InCall in_call;
+    return wm::clipboard::kind() == wm::clipboard::Kind::CutFiles;
+}
+
+void clear()
+{
+    const prog::InCall in_call;
+    wm::clipboard::clear();
+}
+
+} // namespace clipboard
 
 /* ---- Settings ------------------------------------------------------------------ */
 

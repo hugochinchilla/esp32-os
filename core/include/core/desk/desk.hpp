@@ -117,9 +117,10 @@ public:
 
     // The icons: the array is the caller's and must stay valid.
     void set_icons(const Icon *icons, int count);
-    // A right click on the desktop away from the icons calls `menu` with
-    // the pointer's place (the shell opens a menu there).
-    void set_menu(void (*menu)(int x, int y, void *context), void *context)
+    // A right click on the desktop calls `menu` with the icon under the
+    // pointer, which is selected first (-1: away from the icons), and the
+    // pointer's place (the shell opens a menu there).
+    void set_menu(void (*menu)(int icon, int x, int y, void *context), void *context)
     {
         menu_ = menu;
         menu_context_ = context;
@@ -147,7 +148,13 @@ public:
     void realign();
 
     Rect icon_rect(int index) const;
+    // Several can be picked (backlog item 55): Ctrl+click adds or takes
+    // away one, and a rectangle pulled from the desktop itself picks what it
+    // touches. Held and moved, the picked ones go together. selected_icon()
+    // is the one picked last, or -1.
     int selected_icon() const { return selected_; }
+    bool picked(int index) const { return index >= 0 && index < count_ && (picked_ >> index & 1) != 0; }
+    int picked_count() const { return __builtin_popcount(picked_); }
     int drop_icon() const { return drop_icon_; }
 
     void paint(const gfx::RectList &clip) override;
@@ -167,18 +174,35 @@ private:
     int own(const char *name) const;
     int target(const char *name, int x, int y) const;
     Rect place_at(int x, int y, int but) const;
+    Rect place_for(Rect r, int but) const;
+    void pick(uint32_t picked, int last);
+    Rect band() const;
+    void band_dirty();
+    void pull_band(int x, int y);
     void drag_name(int icon, char *out, size_t capacity) const;
 
     wm::Wm &wm_;
     bool attached_ = false;
     const Icon *icons_ = nullptr;
     int count_ = 0;
-    int selected_ = -1;
+    int selected_ = -1;   // the one picked last
+    uint32_t picked_ = 0; // a bit for each icon that is picked
+    int collapse_ = -1;   // held without Ctrl among several: it alone when let go
+    bool band_ = false;   // a rectangle is being pulled
+    int band_x0_ = 0, band_y0_ = 0, band_x1_ = 0, band_y1_ = 0;
+    uint32_t band_base_ = 0; // what was picked when it started (Ctrl held)
+    // While the files of one drag are let go here, one call each:
+    bool batch_ = false;      // more of them are to come
+    bool batch_onto_ = false; // the first went onto an icon that takes files
+    bool batch_moved_ = false;
+    int batch_dx_ = 0, batch_dy_ = 0; // how far the first of the desktop's own icons went
+    int batch_files_ = 0;             // how many files from elsewhere got a place
+    uint32_t moving_ = 0;             // its own icons still to be put down
     int pressed_ = -1; // the icon held, which may become a drag
     int press_x_ = 0, press_y_ = 0;
     int last_hit_ = -1; // what the last press hit, for a double click
     int drop_icon_ = -1;
-    void (*menu_)(int x, int y, void *context) = nullptr;
+    void (*menu_)(int icon, int x, int y, void *context) = nullptr;
     void *menu_context_ = nullptr;
     void (*drop_)(const char *path, int x, int y, void *context) = nullptr;
     void *drop_context_ = nullptr;
