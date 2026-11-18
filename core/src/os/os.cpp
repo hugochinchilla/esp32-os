@@ -707,5 +707,10 @@ uint32_t busy_us()
     const prog::InCall in_call;
     return g_kit.wm->busy_us();
 }
+void beep(const ports::Beep *steps, int count)
+{
+    const prog::InCall in_call;
+    g_kit.system->beep(steps, count);
+}
 
 } // namespace os

@@ -13,7 +13,7 @@ Output (default /mnt/project-files/look/sounds/):
   final/...                        the five sounds he chose; raw 16-bit copies also
                                    go to docs/sounds/ in the repository
 
-The piezo beeper (GPIO14) gets no system sounds: it is kept for the modem.
+The piezo beeper (GPIO14) has its own sounds: tools/sounds/make_beeps.py.
 
 Needs only numpy.  Run:  python3 tools/sounds/make_sounds.py [out_dir]
 """

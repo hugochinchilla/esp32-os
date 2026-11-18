@@ -47,6 +47,30 @@ bool wait_until(BootIo &io, uint32_t until)
     return true;
 }
 
+void beep(BootIo &io, const ports::Beep *steps, int count)
+{
+    uint32_t ms = 0;
+    for (int i = 0; i < count; i++) {
+        ms += steps[i].ms;
+    }
+    io.system.beep(steps, count);
+    io.beep_end_us = io.clock.micros() + ms * 1000;
+    io.beeping = count > 0;
+}
+
+void let_beep_end(BootIo &io)
+{
+    int32_t left;
+    while (io.beeping && (left = static_cast<int32_t>(io.beep_end_us - io.clock.micros())) > 0) {
+        if (io.nap != nullptr && left > static_cast<int32_t>(BootIo::kNapMarginUs)) {
+            io.nap(io.context);
+        } else if (io.idle != nullptr) {
+            io.idle(io.context);
+        }
+    }
+    io.beeping = false;
+}
+
 void format_bytes(char *out, size_t n, uint64_t bytes)
 {
     if (bytes >= 1024u * 1024u) {

@@ -57,6 +57,7 @@ set(CORE_SRCS
     src/sh/system.cpp
     src/sh/terminal_session.cpp
     src/sh/ted.cpp
+    src/sound/beeps.cpp
     src/sys/crash.cpp
     src/sys/log.cpp
     src/sys/missed_refills.cpp

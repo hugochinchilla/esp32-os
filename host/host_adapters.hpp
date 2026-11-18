@@ -403,6 +403,15 @@ public:
         return false;
     }
 
+    // The PC has no beeper: it keeps the last tune asked for, and how many.
+    void beep(const ports::Beep *steps, int count) override
+    {
+        beeps.assign(steps, steps + count);
+        beep_calls++;
+    }
+    std::vector<ports::Beep> beeps;
+    int beep_calls = 0;
+
     bool reboot_requested = false;
     int64_t utc = 0;
     bool real_clock = false;

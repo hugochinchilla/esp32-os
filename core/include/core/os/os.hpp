@@ -246,6 +246,9 @@ void stats(ports::SystemStats &out);
 bool fact(ports::Fact which, uint32_t &value, char *text, size_t capacity);
 // How long the UI task has worked since start-up, in µs (wraps).
 uint32_t busy_us();
+// A tune on the beeper (ports::System::beep): returns at once, and a new
+// one replaces what was playing.
+void beep(const ports::Beep *steps, int count);
 
 /* ---- For the system, not for programs ------------------------------------------ */
 

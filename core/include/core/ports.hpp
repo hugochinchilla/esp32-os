@@ -339,6 +339,20 @@ enum class Fact : uint8_t {
     Sound,       // text: the sound output
 };
 
+// One step of a tune for the beeper: a square wave at `hz` for `ms`
+// milliseconds; 0 Hz is silence. The beeper plays one pitch at a time,
+// on or off. A pin cannot play quietly, but a narrower pulse sounds
+// quieter: with `fade_ms` the note dies away like a struck bar, its
+// loudness falling to about a third every fade_ms (0: steady), and
+// `level` is how loud it starts, 1 to 255 (0: as loud as it goes).
+struct Beep {
+    uint16_t hz;
+    uint16_t ms;
+    uint16_t fade_ms = 0;
+    uint8_t level = 0;
+};
+constexpr int kBeepSteps = 64; // the longest tune System::beep takes
+
 // One task as the kernel sees it (a FreeRTOS task on the board). Programs
 // that share the UI task are not tasks: they all show up as "ui".
 enum class TaskState : uint8_t {
@@ -413,6 +427,15 @@ public:
         (void)capacity;
         value = 0;
         return false;
+    }
+    // Plays the steps on the beeper and returns at once; the machine keeps
+    // the time itself, so a busy caller does not make the tune stumble.
+    // The steps are copied (kBeepSteps at most). A new call replaces what
+    // was playing; count 0 silences. A machine with no beeper does nothing.
+    virtual void beep(const Beep *steps, int count)
+    {
+        (void)steps;
+        (void)count;
     }
     virtual void reboot() = 0;
     // Makes the fault happen in the calling task, now.

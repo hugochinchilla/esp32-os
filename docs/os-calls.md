@@ -62,6 +62,7 @@ The journal entry with the reasons is
 | Settings | `os::load_settings(program, ini)`, `os::save_settings(program, ini)` | `C:\.config\<program>.ini` |
 | Machine | `os::restart()` | |
 | | `os::stats(out)`, `os::fact(which, ...)`, `os::busy_us()` | Figures and facts for the tools that show them |
+| | `os::beep(steps, count)` | A tune on the piezo beeper: pitches and silences, one at a time. Returns at once; a new tune replaces the one playing |
 
 Dialogs that any program may open (message box, questions, the file
 dialogs) stay where they are, in `core/shell/shell.hpp`: they are programs

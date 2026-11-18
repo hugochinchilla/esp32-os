@@ -303,6 +303,10 @@ void test_run()
     CHECK(row(s, bios::kSetupRow) == "  Press DEL to enter SETUP (there is no setup)" && row(s, bios::kIdRow) == "  TEST-ID");
     CHECK(s.colour_at(20, bios::kMemoryRow) == bios::kBright && s.colour_at(2, bios::kMemoryRow) == bios::kText);
     CHECK(clock.now >= 3000000); // the countdown
+    // The beep code: one long and three short for the drive.
+    CHECK(post.result == sound::PostResult::Drive && system.beep_calls == 1);
+    CHECK(system.beeps.size() == 7 && system.beeps[0].hz == 1000 && system.beeps[0].ms == sound::kLongMs &&
+          system.beeps[1].hz == 0 && system.beeps[6].ms == sound::kShortMs);
 
     // Serial shows the same lines: every row of the screen down to the
     // countdown is a line of the terminal, the bottom lines after the header.
@@ -339,6 +343,9 @@ void test_run()
     CHECK(row(q, bios::kSummaryRow) == "  2 checks failed. Starting Chinchilla anyway..." && row(q, bios::kKeyRow).empty());
     CHECK(row(q, bios::kIdRow).empty());
     CHECK(fast_clock.now < 1000000);
+    // Not held: silent, though the result is known (the drive is worse
+    // than the flash's size).
+    CHECK(broken.beep_calls == 0 && quick_post.result == sound::PostResult::Drive);
 }
 
 // The monitor wait, and a key that skips the rest of the waiting.
@@ -396,6 +403,9 @@ void test_boot_device()
         return true;
     };
     CHECK(bios::run_post(post, true) == 0 && post.bootable);
+    // All well: one short beep.
+    CHECK(post.result == sound::PostResult::Ok && system.beep_calls == 1);
+    CHECK(system.beeps.size() == 1 && system.beeps[0].hz == sound::kBeepHz && system.beeps[0].ms == 200);
     CHECK(row(s, bios::kDriveRow) == "  Detecting drive C: .... 11 MB flash disk");
     CHECK(row(s, bios::kBootRow) == "  Boot device ........... ota_0, 1.4 MB, image OK");
     CHECK(row(s, bios::kSummaryRow) == "  Starting Chinchilla..." && row(s, bios::kCountdownRow) == "  Booting in 1");
@@ -419,6 +429,16 @@ void test_boot_device()
     CHECK(row(s, bios::kSummaryRow) == "  No operating system found." && s.colour_at(2, bios::kSummaryRow) == bios::kRed);
     CHECK(row(s, bios::kKeyRow) == "  Flash one with the cable, then restart." && row(s, bios::kCountdownRow).empty());
     CHECK(clock2.now - before < 5000000); // no countdown
+    // No beep from the self-test here: whoever stays on that screen repeats
+    // the long one.
+    CHECK(none.result == sound::PostResult::NoSystem && system.beep_calls == 1);
+    CHECK(sound::post_code(none.result).count == 2 && sound::length_ms(sound::post_code(none.result)) == 1000);
+    // The worse a failure, the earlier its code; and each code is itself.
+    CHECK(sound::PostResult::Memory < sound::PostResult::Video && sound::PostResult::Drive < sound::PostResult::NotFatal);
+    CHECK(sound::post_code(sound::PostResult::Memory).count == 5 && sound::post_code(sound::PostResult::Video).count == 5);
+    CHECK(sound::post_code(sound::PostResult::NotFatal).count == 3);
+    CHECK(sound::desktop_chime().count > 0 && sound::desktop_chime().count <= ports::kBeepSteps);
+    CHECK(sound::length_ms(sound::desktop_chime()) < 1000);
 }
 
 // The bootloader's choice between the BIOS and the OS, over the restarts

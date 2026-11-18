@@ -6,6 +6,7 @@
 
 #include "core/fs/memory_volume.hpp"
 #include "core/shell/shell.hpp"
+#include "core/sound/beeps.hpp"
 #include "core/wm/wm.hpp"
 #include "../host_adapters.hpp"
 
@@ -267,6 +268,9 @@ int main()
     storage.write_file("C:\\docs\\only.txt", "only", 4);
     shell::start(desktop, system_, storage, memory);
     desktop.start();
+    // The desktop is up: the beeper's chime, once.
+    CHECK(system_.beep_calls == 1 && system_.beeps.size() == static_cast<size_t>(sound::desktop_chime().count) &&
+          system_.beeps[0].hz == sound::desktop_chime().steps[0].hz);
     CHECK(!exists("C:\\docs") && file("C:\\Documents\\only.txt") == "only" &&
           file("C:\\Documents\\notes (2).txt") == "mine" && file("C:\\Documents\\old\\in.txt") == "in" &&
           file("C:\\Documents\\notes.txt").size() > 100);

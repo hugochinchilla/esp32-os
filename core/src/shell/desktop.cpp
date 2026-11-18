@@ -11,6 +11,7 @@
 #include "core/os/os.hpp"
 #include "core/init/init.hpp"
 #include "core/shell/shell.hpp"
+#include "core/sound/beeps.hpp"
 #include "core/wm/text_edit.hpp"
 #include "core/wm/widgets.hpp"
 #include "internal.hpp"
@@ -975,6 +976,9 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
         start_taskbar_again();
     }
     // The desktop starts with no windows open (the owner's choice).
+    // The beeper says it is up.
+    const sound::Tune chime = sound::desktop_chime();
+    os::beep(chime.steps, chime.count);
 }
 
 void open_demo_windows()

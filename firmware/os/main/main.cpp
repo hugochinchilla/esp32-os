@@ -14,6 +14,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 
+#include "beeper.h"
 #include "bootloader_common.h"
 #include "driver/uart.h"
 #include "driver/uart_select.h"
@@ -509,11 +510,12 @@ public:
             snprintf(text, capacity, "serial debug link"); // no USB host yet
             return true;
         case ports::Fact::Sound:
-            snprintf(text, capacity, "none");
+            snprintf(text, capacity, beeper::g.ready ? "piezo beeper" : "none");
             return true;
         }
         return false;
     }
+    void beep(const ports::Beep *steps, int count) override { beeper::play(steps, count); }
     void arm_fast_boot() override { arm_fast_next(); }
     void fault(ports::Fault kind) override { crash_fault(kind); }
     void reboot() override

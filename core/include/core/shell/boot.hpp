@@ -66,6 +66,9 @@ struct BootIo {
     // left; the rest is done with idle so the wait does not overshoot.
     void (*nap)(void *context) = nullptr;
     static constexpr uint32_t kNapMarginUs = 20000;
+    // When the beeper's last tune ends (clock.micros()); see shell::beep.
+    uint32_t beep_end_us = 0;
+    bool beeping = false;
 };
 
 // C:\.config\boot.ini, [boot] section (docs/settings.md).
@@ -95,6 +98,11 @@ inline bool take_one_shot_fast_boot(uint32_t &word)
 // Waits until the clock reaches `until` (micros, wrapping), answering the
 // debug link meanwhile; false if a key or button skipped it.
 bool wait_until(BootIo &io, uint32_t until);
+// Starts a tune on the beeper and notes when it ends; does not wait.
+void beep(BootIo &io, const ports::Beep *steps, int count);
+// Waits for that tune to end. A key does not cut it short: what comes next
+// may restart the chip, and the tune would stop in the middle.
+void let_beep_end(BootIo &io);
 // "12 MB", "1.5 MB", "376 KB".
 void format_bytes(char *out, size_t n, uint64_t bytes);
 // The mascot's face, 16 by 16 squares of `scale` pixels.

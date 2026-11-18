@@ -6,6 +6,7 @@
 
 #include "core/bios/text_screen.hpp"
 #include "core/shell/boot.hpp"
+#include "core/sound/beeps.hpp"
 
 namespace bios {
 
@@ -49,6 +50,10 @@ struct Post {
     // Set by run_post: there is a system to start. When false the screen
     // says so and does not count down; the caller must not hand over.
     bool bootable = true;
+    // Set by run_post: the worst thing found, which is the beep code it
+    // played. With no system to start it plays none: the caller repeats
+    // sound::post_code(NoSystem) for as long as it stays there.
+    sound::PostResult result = sound::PostResult::Ok;
 };
 
 // Black, the mascot, and every cell of the screen.
@@ -66,6 +71,7 @@ void draw_splash(gfx::Canvas &c, TextScreen &screen, const char *version, const 
 // Runs the self-test; returns the number of failed checks. Every check runs
 // to the end. With hold it paces the lines, waits for the monitor first and
 // counts down at the end, as io says; a key or button skips the waiting.
+// With hold it also beeps once the checks are done (core/sound/beeps.hpp).
 int run_post(Post &post, bool hold = true);
 
 // The finished screen with given values, nothing sent to serial (for the PC

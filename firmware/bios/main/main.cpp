@@ -30,7 +30,9 @@
 #include "nvs_flash.h"
 
 #include "boot_flag.h"
+#include "beeper.h"
 #include "core/bios/post.hpp"
+#include "core/sound/beeps.hpp"
 #include "core/bios/text_screen.hpp"
 #include "core/ports.hpp"
 #include "core/shell/boot.hpp"
@@ -122,11 +124,12 @@ public:
             snprintf(text, capacity, "serial console"); // no USB host yet
             return true;
         case ports::Fact::Sound:
-            snprintf(text, capacity, "none");
+            snprintf(text, capacity, beeper::g.ready ? "piezo beeper" : "none");
             return true;
         }
         return false;
     }
+    void beep(const ports::Beep *steps, int count) override { beeper::play(steps, count); }
     void reboot() override { esp_restart(); }
 };
 
@@ -282,6 +285,7 @@ void bios_task(void *)
     io.skip = [](void *) { return s_key; };
     io.nap = &nap;
 
+    beeper::begin();
     static bios::Post post{io, screen};
     post.id = identity();
     post.drive = drive_text();
@@ -291,10 +295,12 @@ void bios_task(void *)
     bios::run_post(post);
 
     if (!post.bootable) {
-        // Nothing to start: the screen says so. Stay here; flashing a
-        // system resets the chip.
+        // Nothing to start: the screen says so, and the beeper, with long
+        // beeps without end. Stay here; flashing a system resets the chip.
+        const sound::Tune code = sound::post_code(sound::PostResult::NoSystem);
         while (true) {
-            vTaskDelay(pdMS_TO_TICKS(1000));
+            system.beep(code.steps, code.count);
+            vTaskDelay(pdMS_TO_TICKS(sound::length_ms(code)));
         }
     }
     start_os();
