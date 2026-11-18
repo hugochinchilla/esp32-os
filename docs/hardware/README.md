@@ -102,9 +102,12 @@ to it.
 
 ## Beeper
 
-A piezo beeper sits in the top-left corner, between 3V3 and GPIO14, with one
-insulated wire under the board to GPIO14. The firmware keeps GPIO14 high when
-silent. This direct connection is only for a piezo beeper. A magnetic buzzer or
+A piezo beeper sits in the top-left corner, between GPIO14 and ground (as
+the owner built it, 2026-11-18; the plan had said between 3V3 and GPIO14),
+with one insulated wire under the board to GPIO14. The firmware keeps GPIO14
+low when silent (`firmware/common/beeper.h`). A bare piezo element has no
+polarity. This direct connection is only for a bare piezo element, which
+also is the only kind that plays the pitch it is given. A magnetic buzzer or
 a 5 V buzzer with built-in oscillator draws too much current for a pin and
 needs a transistor.
 

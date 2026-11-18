@@ -55,6 +55,35 @@ pitch is the part's own and the chime cannot be played on it.
 
 Tested: PC tests; both firmwares compile and link. Not run.
 
+## The second board turn, and the cause
+
+The owner, with the changes above flashed:
+
+> 1st boot: silence during the whole bios, never heard the 1000hz tone.
+> other reboots: beeps continuosly on bios after self test. the OS loads:
+> the screen is still black, but I can heard some intermitent chimes, then
+> the dekstop is visible and a constant buzz never stops. Did I miss a
+> component? The buzzer is straig from pin to ground, does buzzer polarity
+> matter?
+
+That is the cause of the first turn: the beeper is between GPIO14 and
+**ground**, not between 3V3 and GPIO14 as `docs/hardware/README.md` said
+and the driver assumed. "Silent" was the pin held high, which on his board
+is 3.3 V across the beeper for as long as nothing plays. A part that
+sounds on a steady voltage has its own oscillator, so it very likely is
+not a bare piezo element; that also explains the current that put lines
+on the picture.
+
+The second turn's driver let go of the pin for silence and gave it back to
+the PWM for a tone, by writing the pin's routing itself. That did not
+behave (no beep on a cold start, sound stuck on after restarts) and was
+not understood from here. It is gone: the pin stays the PWM's from the
+start and silence is the channel's idle level, now **low**, the plain use
+of the driver. The hardware page says what was built.
+
+Lesson: the wiring was taken from the page, not asked. One question to the
+owner before the first board turn would have saved two.
+
 ## What is left
 
 The second board turn; the owner's answer about the part; the lines on
