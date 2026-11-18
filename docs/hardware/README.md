@@ -54,8 +54,9 @@ greys.
 | 5 | Ground. The hat uses this pin to sense a monitor instead (pulled up, read on GPIO47); whether the hand-built board follows is open, see [perfboard-build.md](perfboard-build.md) |
 | Shell | Ground: the cable's outer braid |
 
-Ground every one of them. With the colour returns left open the picture
-still shows, but each colour's current then comes back through whatever
+Ground every one the cable has. The cut cable in use has no wires for pins
+6, 7 and 8, so on this build they stay open. With the colour returns left
+open the picture still shows, but each colour's current then comes back through whatever
 ground it finds, which is the path the radio's current also uses.
 
 ### Wire colours of the cut VGA cable in use
@@ -131,11 +132,13 @@ to the second 3V3 pin, another takes − down to the ground rail. A wide
 capacitor stands a little above the neighbouring resistors, or lies on its
 side. A 100 nF ceramic capacitor across the same two legs is optional.
 
-It is there to test whether the lines seen on the picture at high Wi-Fi
-transmit power come from the 3.3 V supply dipping when the radio transmits
-(`docs/DECISIONS.md`, "Found on the bench"). The video voltage is the
-3.3 V supply divided by the resistors, so a dip in the supply is a dip in
-brightness. The test is described in [perfboard-build.md](perfboard-build.md).
+It keeps the 3.3 V supply from dipping when the radio transmits. The video
+voltage is the 3.3 V supply divided by the resistors, so a dip in the supply
+is a dip in brightness: without the capacitor, lines showed on the picture
+at high Wi-Fi transmit power (`docs/DECISIONS.md`, "Found on the bench");
+with it the owner sees none at 20 dBm. It began as a test, described in
+[perfboard-build.md](perfboard-build.md), and is a permanent part of the
+board since 2026-11-18.
 
 ## USB socket for a keyboard or mouse (optional, no firmware yet)
 

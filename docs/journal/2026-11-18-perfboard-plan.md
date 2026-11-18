@@ -105,3 +105,14 @@ that measured 50 nF on his meter (cheap discs run far from their marking;
 it does not matter here). Which of them is on the board, and whether the
 lines were seen that day before the capacitor went in, is still to confirm.
 The result is in the table in `docs/hardware/perfboard-build.md`.
+
+## At midday: the capacitor stays
+
+> No puedo conectar retornos porque mi cable no los tiene. Pero añade en
+> condensador a la placa. El WiFi a 20 va bien
+
+So the test's third step cannot be run on this cable, and does not need to
+be: the capacitor alone cured the lines. It becomes a permanent part of the
+hand-built board and of the hat (`docs/DECISIONS.md`, "Supply capacitor").
+The firmware's 2 dBm default was not changed here; whether it rises is
+asked and open.

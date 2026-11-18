@@ -9,10 +9,10 @@ state of the one board that exists and the order to change it in.
 | --- | --- |
 | Video: nine colour resistors, two sync resistors, header to the VGA cable | Fitted, in use |
 | VGA ground: pin 10 (white wire) and the cable's braid | Fitted |
-| VGA ground: colour returns, pins 6, 7 and 8 | **Not connected** |
+| VGA ground: colour returns, pins 6, 7 and 8 | Not connected, and cannot be: the cut cable in use has no wires for them (the owner, 2026-11-18). A cable or socket that has them should ground them |
 | Beeper on GPIO14 | To fit |
 | Audio output on GPIO13 | To fit |
-| Supply capacitor, 3V3 to ground | To fit |
+| Supply capacitor, 3V3 to ground | Fitted 2026-11-18. A permanent part of the board since the test (the owner's decision) |
 | USB-C breakout on GPIO19 and GPIO20 | Parts arrived; optional, the firmware has no USB host yet |
 
 ## What to solder
@@ -53,7 +53,7 @@ does not show them.
 | --- | --- | --- | --- | --- |
 | A | Beeper and audio fitted, no capacitor, returns open | | | The baseline. Lines expected, as on 2026-11-16 |
 | B | A plus the supply capacitor | **None** (the owner, 2026-11-18: "ya no veo scanlines por wifi") | | Colour returns still open. To confirm with the owner: that step A showed the lines the same day, and which capacitor is fitted (470 µF 10 V and a 100 nF disc were the ones picked from his kits) |
-| C | B plus the colour returns grounded | | | |
+| C | B plus the colour returns grounded | Not possible with this cable: it has no return wires | | |
 | D (optional) | C with the capacitor lifted or cut out | | | Tells whether the returns alone are enough |
 
 For each cell write none, fewer or fainter, or the same. If B leaves fainter
@@ -68,9 +68,13 @@ longer sees the lines. That points at the 3.3 V supply dipping during
 transmit bursts as the cause, or at least the main one, and says the hat
 should get its second 100 µF capacitor on 3.3 V. It is one look by eye on
 one board with one monitor; the details marked "to confirm" in the table are
-not yet confirmed. Steps C and D would add little now. Worth doing instead:
-a few restarts at 20 dBm to see that the lines stay away, and then a
-decision on the 2 dBm default.
+not yet confirmed. Step C cannot be run: the cable has no wires for the
+colour returns.
+
+Later the same day the owner reported that Wi-Fi at 20 dBm works well, and
+decided that the capacitor goes on the board for good, on the hand-built
+board and on the hat. Whether the firmware's 2 dBm default rises is still
+open.
 
 What each outcome means for the hat:
 

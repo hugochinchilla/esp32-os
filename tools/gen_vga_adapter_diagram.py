@@ -94,7 +94,7 @@ a(f'<text x="{x(3)+P*0.55}" y="{hr(13)+4}" text-anchor="middle" font-size="15" f
 a(f'<text x="{x(3)+P*0.55}" y="{hr(14)+6}" text-anchor="middle" font-size="15" font-weight="bold" fill="#fff">−</text>')
 dot(3,13,REDW); dot(3,14,"#111"); dot(3,22,"#111")
 a(f'<text x="{x(1)-20}" y="{(hr(13)+hr(14))/2-3}" text-anchor="end" font-size="13" fill="{REDW}" font-weight="bold">100 to 470 µF, + up</text>')
-a(f'<text x="{x(1)-20}" y="{(hr(13)+hr(14))/2+13}" text-anchor="end" font-size="12" fill="#444">3V3 to GND (supply test)</text>')
+a(f'<text x="{x(1)-20}" y="{(hr(13)+hr(14))/2+13}" text-anchor="end" font-size="12" fill="#444">3V3 to GND</text>')
 # beeper between 3V3 and GPIO14
 bridge(6,1,7,1); bridge(3,1,3,2)
 a(f'<circle cx="{(x(3)+x(6))/2}" cy="{hr(1)}" r="{P*2.0}" fill="#222" fill-opacity="0.82" stroke="#000" stroke-width="2"/>')
@@ -111,7 +111,7 @@ for k,t in enumerate(["Video: each colour has 510 Ω, 1 kΩ and 2 kΩ joined at 
  "Audio: GPIO13 through 1 kΩ. The 100 nF capacitor goes from that point to ground, the 1 to 10 µF capacitor (+ towards the resistor) to AUDIO OUT.",
  "Beeper: between 3V3 and GPIO14, for a piezo beeper of about 10 mm; a 12 mm one overhangs the edge a little. A magnetic or 5 V buzzer needs a transistor instead.",
  "Supply capacitor: 100 to 470 µF, 10 V or more, + to the second 3V3 pin, − to the ground rail. Stand it a little above the resistors if it is wide.",
- "VGA ground: the three colour returns (pins 6, 7, 8), the sync ground (pin 10) and the cable's shield all go to the GND pin or straight to the ground rail.",
+ "VGA ground: the three colour returns (pins 6, 7, 8), the sync ground (pin 10) and the cable's shield all go to the GND pin or the ground rail, as far as the cable has them.",
  "The right socket strip is drawn 10 holes from the left one; if your board is 9 apart, use column 16.",
  "Pin names follow the ESP32-S3-DevKitC-1 layout. Compare them with the labels printed on your board before soldering."]):
     a(f'<text x="60" y="{ly+118+k*26}" font-size="15">{t}</text>')

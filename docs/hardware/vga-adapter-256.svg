@@ -496,7 +496,7 @@
 <circle cx="418" cy="596" r="5" fill="#111"/>
 <circle cx="418" cy="868" r="5" fill="#111"/>
 <text x="330" y="576.0" text-anchor="end" font-size="13" fill="#c0392b" font-weight="bold">100 to 470 µF, + up</text>
-<text x="330" y="592.0" text-anchor="end" font-size="12" fill="#444">3V3 to GND (supply test)</text>
+<text x="330" y="592.0" text-anchor="end" font-size="12" fill="#444">3V3 to GND</text>
 <line x1="520" y1="154" x2="554" y2="154" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
 <line x1="418" y1="154" x2="418" y2="188" stroke="#9aa0a6" stroke-width="9" stroke-linecap="round"/>
 <circle cx="469.0" cy="154" r="68.0" fill="#222" fill-opacity="0.82" stroke="#000" stroke-width="2"/>
@@ -517,7 +517,7 @@
 <text x="60" y="1116" font-size="15">Audio: GPIO13 through 1 kΩ. The 100 nF capacitor goes from that point to ground, the 1 to 10 µF capacitor (+ towards the resistor) to AUDIO OUT.</text>
 <text x="60" y="1142" font-size="15">Beeper: between 3V3 and GPIO14, for a piezo beeper of about 10 mm; a 12 mm one overhangs the edge a little. A magnetic or 5 V buzzer needs a transistor instead.</text>
 <text x="60" y="1168" font-size="15">Supply capacitor: 100 to 470 µF, 10 V or more, + to the second 3V3 pin, − to the ground rail. Stand it a little above the resistors if it is wide.</text>
-<text x="60" y="1194" font-size="15">VGA ground: the three colour returns (pins 6, 7, 8), the sync ground (pin 10) and the cable's shield all go to the GND pin or straight to the ground rail.</text>
+<text x="60" y="1194" font-size="15">VGA ground: the three colour returns (pins 6, 7, 8), the sync ground (pin 10) and the cable's shield all go to the GND pin or the ground rail, as far as the cable has them.</text>
 <text x="60" y="1220" font-size="15">The right socket strip is drawn 10 holes from the left one; if your board is 9 apart, use column 16.</text>
 <text x="60" y="1246" font-size="15">Pin names follow the ESP32-S3-DevKitC-1 layout. Compare them with the labels printed on your board before soldering.</text>
 </svg>
