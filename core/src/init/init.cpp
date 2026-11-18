@@ -25,7 +25,134 @@ bool same(const char *a, const char *b)
 
 Init *g_the = nullptr;
 
+// One line of the file's text, from `at`: where it ends (before its \r\n)
+// and where the next one starts.
+struct Span {
+    size_t start, end, next;
+};
+
+Span line_at(const char *text, size_t length, size_t at)
+{
+    Span s = {at, at, length};
+    while (s.end < length && text[s.end] != '\n') {
+        s.end++;
+    }
+    s.next = s.end < length ? s.end + 1 : length;
+    while (s.end > s.start && (text[s.end - 1] == '\r' || is_space(text[s.end - 1]))) {
+        s.end--;
+    }
+    return s;
+}
+
+// Whether the line is WHAT:ACTION for this `what`; where its action starts.
+bool names(const char *text, const Span &line, const char *what, size_t &action)
+{
+    size_t from = line.start;
+    while (from < line.end && is_space(text[from])) {
+        from++;
+    }
+    if (from == line.end || text[from] == '#') {
+        return false;
+    }
+    size_t colon = line.end;
+    while (colon > from && text[colon - 1] != ':') {
+        colon--;
+    }
+    if (colon == from) {
+        return false; // no colon
+    }
+    size_t name_end = colon - 1;
+    while (name_end > from && is_space(text[name_end - 1])) {
+        name_end--;
+    }
+    const size_t n = strlen(what);
+    if (name_end - from != n) {
+        return false;
+    }
+    for (size_t i = 0; i < n; i++) {
+        const char x = text[from + i], y = what[i];
+        const char a = x >= 'A' && x <= 'Z' ? static_cast<char>(x + 32) : x;
+        const char b = y >= 'A' && y <= 'Z' ? static_cast<char>(y + 32) : y;
+        if (a != b) {
+            return false;
+        }
+    }
+    action = colon;
+    while (action < line.end && is_space(text[action])) {
+        action++;
+    }
+    return true;
+}
+
 } // namespace
+
+bool line_action(const char *text, size_t length, const char *what, char *action, size_t capacity)
+{
+    for (size_t at = 0; at < length;) {
+        const Span line = line_at(text, length, at);
+        size_t from = 0;
+        if (names(text, line, what, from)) {
+            snprintf(action, capacity, "%.*s", static_cast<int>(line.end - from), text + from);
+            return true;
+        }
+        at = line.next;
+    }
+    return false;
+}
+
+size_t set_line_action(char *text, size_t length, size_t capacity, const char *what, const char *action)
+{
+    // In place. The first change is the only one that can make the text
+    // longer, so one that does not fit leaves it as it was.
+    const size_t action_size = strlen(action);
+    bool done = false;
+    for (size_t at = 0; at < length;) {
+        const Span line = line_at(text, length, at);
+        size_t from = 0;
+        if (!names(text, line, what, from)) {
+            at = line.next;
+        } else if (!done) {
+            // Its action, and any spaces after it, up to the line's end.
+            size_t tail = line.next;
+            while (tail > line.end && (text[tail - 1] == '\n' || text[tail - 1] == '\r')) {
+                tail--;
+            }
+            const size_t after = from + action_size;
+            if (length - (tail - from) + action_size > capacity) {
+                return 0;
+            }
+            memmove(text + after, text + tail, length - tail);
+            memcpy(text + from, action, action_size);
+            length = length - (tail - from) + action_size;
+            at = after + (line.next - tail);
+            done = true;
+        } else {
+            // A second line for the same thing: taken out.
+            memmove(text + line.start, text + line.next, length - line.next);
+            length -= line.next - line.start;
+            at = line.start;
+        }
+    }
+    if (!done) {
+        const bool open_end = length > 0 && text[length - 1] != '\n';
+        const size_t name_size = strlen(what);
+        if (length + (open_end ? 2 : 0) + name_size + 1 + action_size + 2 > capacity) {
+            return 0;
+        }
+        if (open_end) {
+            memcpy(text + length, "\r\n", 2);
+            length += 2;
+        }
+        memcpy(text + length, what, name_size);
+        length += name_size;
+        text[length++] = ':';
+        memcpy(text + length, action, action_size);
+        length += action_size;
+        memcpy(text + length, "\r\n", 2);
+        length += 2;
+    }
+    return length;
+}
 
 Init *the() { return g_the; }
 
@@ -37,7 +164,8 @@ const char *Init::default_text()
            "#\r\n"
            "#   WHAT:ACTION, as in a Unix /etc/inittab.\r\n"
            "#\r\n"
-           "#   WHAT    a part of the system (desktop, taskbar, inetd, console),\r\n"
+           "#   WHAT    a part of the system (desktop, taskbar, inetd, telnetd,\r\n"
+           "#           vncd, console),\r\n"
            "#           or a program or a file, as Start > Run... takes it\r\n"
            "#   ACTION  once     started\r\n"
            "#           respawn  started, and started again whenever it ends\r\n"
@@ -45,14 +173,22 @@ const char *Init::default_text()
            "#           off      not started\r\n"
            "#   # ...   a comment\r\n"
            "#\r\n"
-           "# inetd is the network services: the remote screen, its web page,\r\n"
-           "# and telnet and updates if network.ini switches them on. The\r\n"
-           "# desktop and its taskbar are started even if no line names them.\r\n"
-           "# With once, a taskbar that is ended stays away until run taskbar.\r\n"
+           "# The desktop and its taskbar are started even if no line names\r\n"
+           "# them. With once, a taskbar that is ended stays away until\r\n"
+           "# run taskbar.\r\n"
            "\r\n"
            "desktop:once\r\n"
            "taskbar:respawn\r\n"
+           "\r\n"
+           "# The network services. inetd is the task they all run on (and\r\n"
+           "# updates, if network.ini switches them on); telnetd is the\r\n"
+           "# command shell on port 23, vncd the remote screen and its web\r\n"
+           "# page. Start > Settings > Services changes the two lines;\r\n"
+           "# service NAME stop and service NAME start do it until the next\r\n"
+           "# start of the machine.\r\n"
            "inetd:once\r\n"
+           "telnetd:once\r\n"
+           "vncd:once\r\n"
            "\r\n"
            "# The command shell on the serial port, on the same wire as the\r\n"
            "# debug link (tools/dbg.py console, or any serial terminal):\r\n"
@@ -108,6 +244,35 @@ bool Init::add(const char *name, StartFn start, void *context, bool needed, Agai
     u.again = again;
     u.respawn = again == Again::Does;
     return true;
+}
+
+bool Init::set_stop(const char *name, StopFn stop)
+{
+    Unit *u = unit(name);
+    if (u == nullptr) {
+        return false;
+    }
+    u->stop = stop;
+    return true;
+}
+
+Init::Info Init::info(int index) const
+{
+    if (index < 0 || index >= count_) {
+        return {};
+    }
+    const Unit &u = units_[index];
+    return {u.name, u.started, u.respawn, u.held, u.stop != nullptr || u.again != Again::No};
+}
+
+Init::Info Init::info(const char *name) const
+{
+    for (int i = 0; i < count_; i++) {
+        if (same(units_[i].name, name)) {
+            return info(i);
+        }
+    }
+    return {};
 }
 
 bool Init::started(const char *name) const
@@ -166,7 +331,8 @@ void Init::ended(const proc::Process &process)
         }
         u.pid = proc::kNone;
         u.started = false;
-        if (u.respawn && may_restart(u, process) && due_count_ < kMaxUnits) {
+        // Stopped by hand: it stays away, whatever its line says.
+        if (u.respawn && !u.held && may_restart(u, process) && due_count_ < kMaxUnits) {
             due_[due_count_++] = &u;
         }
         return;
@@ -184,7 +350,7 @@ int Init::restart_due()
     due_count_ = 0;
     int started = 0;
     for (int i = 0; i < n; i++) {
-        if (!now[i]->started) {
+        if (!now[i]->started && !now[i]->held) {
             log("init: %s ended; starting it again", now[i]->name);
             started += start(*now[i]) ? 1 : 0;
         }
@@ -208,6 +374,43 @@ bool Init::start_again(const char *name)
     return true;
 }
 
+Stopped Init::stop(const char *name)
+{
+    Unit *u = unit(name);
+    if (u == nullptr) {
+        return Stopped::NoSuchThing;
+    }
+    if (!u->started) {
+        return Stopped::NotStarted;
+    }
+    if (u->stop != nullptr) {
+        u->held = true;
+        u->started = false;
+        u->pid = proc::kNone; // its row, if it has one, is the machine's to take away
+        u->stop(u->context);
+    } else if (u->pid != proc::kNone) {
+        // Its process is asked to end, as kill would; ended() hears of it
+        // and, the thing being held, does not put it on the list.
+        u->held = true;
+        if (procs_.signal(u->pid, proc::Signal::Term) != proc::Sent::Ok) {
+            u->held = false;
+            return Stopped::CannotBe;
+        }
+    } else {
+        return Stopped::CannotBe;
+    }
+    log("init: %s stopped by hand; not started again until the next start", u->name);
+    return Stopped::Ok;
+}
+
+void Init::down(const char *name)
+{
+    if (Unit *u = unit(name)) {
+        u->started = false;
+        u->pid = proc::kNone;
+    }
+}
+
 bool Init::start(Unit &unit)
 {
     if (unit.started) {
@@ -221,6 +424,7 @@ bool Init::start(Unit &unit)
         return false;
     }
     unit.started = true;
+    unit.held = false;
     log("init: started %s", unit.name);
     // What can come back is watched by its process, which has its name:
     // init is told when it ends, to start it again or to know it has gone.

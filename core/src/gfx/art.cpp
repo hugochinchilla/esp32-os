@@ -958,6 +958,28 @@ const Bitmap &display_icon_16()
     return bitmap;
 }
 
+// Services: two units of a rack, one with its light on and one with it off.
+const Bitmap &services_icon_16()
+{
+    static constexpr const char *rows[16] = {
+        "................", ".KKKKKKKKKKKKKK.", ".KWWWWWWWWWWWSK.", ".KWBBBBBBBBBBSK.",
+        ".KWBGGBKKKKKBSK.", ".KWBGGBBBBBBBSK.", ".KWBBBBBBBBBBSK.", ".KSSSSSSSSSSSSK.",
+        ".KKKKKKKKKKKKKK.", ".KWWWWWWWWWWWSK.", ".KWBBBBBBBBBBSK.", ".KWBRRBKKKKKBSK.",
+        ".KWBRRBBBBBBBSK.", ".KWBBBBBBBBBBSK.", ".KSSSSSSSSSSSSK.", ".KKKKKKKKKKKKKK.",
+    };
+    static constexpr Ink inks[] = {
+        {'K', rgb(0, 0, 0)},
+        {'W', rgb(7, 7, 3)},
+        {'B', rgb(5, 5, 2)},
+        {'S', rgb(3, 3, 1)},
+        {'G', rgb(0, 6, 0)},
+        {'R', rgb(5, 0, 0)},
+    };
+    static constexpr Pixels<16> pixels = paint<16>(rows, inks);
+    static constexpr Bitmap bitmap = {16, 16, pixels.p, kClear};
+    return bitmap;
+}
+
 const Bitmap &settings_icon_32()
 {
     static constexpr const char *rows[32] = {

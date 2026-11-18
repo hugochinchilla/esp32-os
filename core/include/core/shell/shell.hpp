@@ -82,6 +82,9 @@ void screen_saver_dialog();
 // The Display dialog (Start > Settings > Display, or a right click on the
 // desktop): the desktop's colour and pattern.
 void display_dialog();
+// Which network services start with the machine (services.cpp): two lines
+// of init's start-up file.
+void services_dialog();
 
 // File dialogs, for any program. Modal to `owner`, a window by its number
 // (os::WindowId: wm::Window::id(), or app::Window::number()). `chosen` gets the full
@@ -156,6 +159,9 @@ void set_session_kits(SessionKit *kits, int count);
 // `ui` reaches the UI task from the session's own; large memory (ted's
 // text) is counted as `owner`'s. After start(). One such session at a time.
 sh::Env session_environment(sh::UiCall *ui, proc::Pid owner);
+// Another owner for that memory: a service that is stopped and started
+// again (telnetd) has a new process each time.
+void set_session_owner(const sh::Env &env, proc::Pid owner);
 // Tests: the grid of the Terminal in front (nullptr: none is open).
 const tty::Screen *terminal_screen();
 

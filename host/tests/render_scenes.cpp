@@ -928,6 +928,75 @@ int main(int argc, char **argv)
         check(!shell::desktop_icons()->snap(), "and off again");
     }
 
+    // Services, from Start > Settings: which network services start with
+    // the machine. It changes their two lines of init's start-up file and
+    // nothing else of it.
+    {
+        const auto check = [&](bool ok, const char *what) {
+            if (!ok) {
+                printf("FAILED services: %s\n", what);
+                failures++;
+            }
+        };
+        const auto file = [&]() {
+            char text[init::Init::kMaxFile + 64];
+            size_t size = 0;
+            return storage.read_file(init::kPath, text, sizeof(text), size) == ports::FsError::Ok
+                       ? std::string(text, size)
+                       : std::string("(none)");
+        };
+        // A file in the owner's own hand: a comment, the taskbar his way,
+        // telnet coming back and no line for vncd.
+        const std::string before = "# mine\r\ndesktop:once\r\ntaskbar:once\r\ninetd:once\r\ntelnetd:respawn\r\n";
+        storage.make_folder("C:\\.config");
+        storage.write_file(init::kPath, before.data(), before.size());
+        centre_of(shell::taskbar()->button(-1), x, y);
+        click(x, y);
+        centre_of(desktop.popup_item(0, 1), x, y);
+        mouse(x, y, 0);
+        clock_.now += wm::Wm::kSubmenuDelayUs;
+        desktop.tick();
+        centre_of(desktop.popup_item(1, 5), x, y); // Services...
+        click(x, y);
+        check(desktop.active() != nullptr && strcmp(desktop.active()->title(), "Services") == 0, "the dialog opens");
+        save("60-services-dialog");
+        // OK with nothing changed writes nothing; Escape neither.
+        key(wm::key::Enter);
+        check(file() == before && desktop.active() == nullptr, "OK without a change leaves the file");
+        shell::services_dialog();
+        key(0x17, true); // Alt+T: telnet off
+        key(wm::key::Escape);
+        check(file() == before, "Escape leaves the file");
+        // The remote screen on: its line is added, telnet's respawn stays.
+        shell::services_dialog();
+        key(0x15, true); // Alt+R
+        save("60b-services-both");
+        key(wm::key::Enter);
+        check(file() == before + "vncd:once\r\n", "a ticked box adds the line, the rest is as it was");
+        // Telnet off: only its word changes.
+        shell::services_dialog();
+        key(wm::key::Space); // the focus is on Telnet
+        key(wm::key::Enter);
+        check(file() == "# mine\r\ndesktop:once\r\ntaskbar:once\r\ninetd:once\r\ntelnetd:off\r\nvncd:once\r\n",
+              "an emptied box says off");
+        // And on again: once, as the dialog writes it.
+        shell::services_dialog();
+        key(0x17, true);
+        key(wm::key::Enter);
+        check(file() == "# mine\r\ndesktop:once\r\ntaskbar:once\r\ninetd:once\r\ntelnetd:once\r\nvncd:once\r\n",
+              "a ticked box says once");
+        // Without a file it shows what init went by, the usual text, and
+        // writes that with the change.
+        storage.remove(init::kPath);
+        shell::services_dialog();
+        key(0x15, true);
+        key(wm::key::Enter);
+        std::string usual = init::Init::default_text();
+        usual.replace(usual.find("vncd:once"), 9, "vncd:off");
+        check(file() == usual, "with no file the usual one is written, changed");
+        storage.remove(init::kPath);
+    }
+
     // The themes (backlog item 47): each picked in Display, shown by Apply,
     // kept by OK, and seen on the Start menu and the widget gallery. Escape
     // takes back what Apply showed. Classic again at the end.
@@ -982,6 +1051,9 @@ int main(int argc, char **argv)
             click(x, y);
             save((name + "-widgets").c_str());
             key(0x3D, true); // Alt+F4
+            shell::services_dialog();
+            save((name + "-services").c_str());
+            key(wm::key::Escape);
         }
         pick(0);
         key(wm::key::Enter);
