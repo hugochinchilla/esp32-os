@@ -70,6 +70,7 @@ void install(const Kit &kit)
             }
         },
         nullptr);
+    prog::runner().set_memory(g_kit.memory);
     prog::runner().set_wake(
         [](void *) {
             if (msg::queue() != nullptr) {

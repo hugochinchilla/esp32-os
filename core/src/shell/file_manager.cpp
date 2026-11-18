@@ -130,13 +130,25 @@ void large_icons(const Listing &listing, const gfx::Bitmap **icons)
     }
 }
 
-// The folder windows there can be at once; nullptr where there is none now.
-// Each is made when it opens and gone once it has closed.
-constexpr int kWindows = 3;
-app::Number g_windows[kWindows] = {}; // their numbers: dead once closed
+// The folder windows that exist: as many as there is memory for (the
+// owner's decision, 2026-11-17). Each is made when it opens and gone once it
+// has closed; they are a chain through the windows themselves, which each
+// joins when it is made and leaves when it is destroyed.
+class FolderWindow;
+FolderWindow *g_windows = nullptr;
 
 class FolderWindow : public app::Window {
 public:
+    FolderWindow *next_ = nullptr;
+    ~FolderWindow() override
+    {
+        for (FolderWindow **at = &g_windows; *at != nullptr; at = &(*at)->next_) {
+            if (*at == this) {
+                *at = next_;
+                break;
+            }
+        }
+    }
     static constexpr int kHistory = 8;
     static constexpr int kViewTop = 64;
 
@@ -784,11 +796,9 @@ app::Number g_trash = app::kNone; // the Trash window's number: dead once closed
 
 void refresh_folder_windows()
 {
-    for (const app::Number number : g_windows) {
-        if (FolderWindow *w = app::program<FolderWindow>(number)) {
-            if (w->on_screen()) {
-                w->refresh();
-            }
+    for (FolderWindow *w = g_windows; w != nullptr; w = w->next_) {
+        if (w->on_screen()) {
+            w->refresh();
         }
     }
     if (TrashWindow *trash = app::program<TrashWindow>(g_trash)) {
@@ -830,41 +840,34 @@ void open_folder(const char *path)
     in_program("File manager", [p] {
         const char *want = p.text;
         // Already shown: bring that window forward.
-        for (const app::Number number : g_windows) {
-            FolderWindow *w = app::program<FolderWindow>(number);
-            if (w != nullptr && w->on_screen() && strcmp(w->folder(), want) == 0) {
+        int n = 0; // how many there are: each new one a step down and to the right
+        for (FolderWindow *w = g_windows; w != nullptr; w = w->next_) {
+            if (w->on_screen() && strcmp(w->folder(), want) == 0) {
                 w->refresh();
-                app::bring_forward(number);
+                app::bring_forward(w->number());
                 return;
             }
+            n++;
         }
-        // A place with no open window, else the first window is reused.
-        int n = 0;
-        for (int i = 0; i < kWindows; i++) {
-            if (!os::ui::alive(g_windows[i])) {
-                n = i;
-                break;
-            }
+        n %= 8;
+        // Every other folder gets a window of its own.
+        app::Look look;
+        look.title = "My Board";
+        look.x = 96 + n * 24;
+        look.y = 28 + n * 24;
+        look.width = 400;
+        look.height = 300;
+        look.icon = &gfx::folder_icon_16();
+        look.flags = app::kMenuBar;
+        const app::Number number = app::make<FolderWindow>(look);
+        if (number == app::kNone) {
+            no_memory_for("File manager");
+            return;
         }
-        if (!os::ui::alive(g_windows[n])) {
-            app::Look look;
-            look.title = "My Board";
-            look.x = 96 + n * 24;
-            look.y = 28 + n * 24;
-            look.width = 400;
-            look.height = 300;
-            look.icon = &gfx::folder_icon_16();
-            look.flags = app::kMenuBar;
-            g_windows[n] = app::make<FolderWindow>(look);
-            if (g_windows[n] == app::kNone) {
-                no_memory_for("File manager");
-                return;
-            }
-        }
-        FolderWindow *use = app::program<FolderWindow>(g_windows[n]);
+        FolderWindow *use = app::program<FolderWindow>(number);
         use->forget_history();
         use->go_to(want, false);
-        app::show(g_windows[n]);
+        app::show(number);
     });
 }
 

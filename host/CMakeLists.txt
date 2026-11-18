@@ -53,6 +53,17 @@ target_link_libraries(test_fs PRIVATE core Threads::Threads)
 add_executable(render_scenes tests/render_scenes.cpp)
 target_link_libraries(render_scenes PRIVATE core)
 
+# The mock-up of the chess game's look (backlog item 50): built only when
+# asked for (--target chess_mockup). Its pieces are drawn by a script.
+add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/chess_pieces.inc
+                   COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/mockup/chess_pieces.py header
+                           ${CMAKE_CURRENT_BINARY_DIR}/chess_pieces.inc
+                   DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../tools/mockup/chess_pieces.py)
+add_executable(chess_mockup EXCLUDE_FROM_ALL ../tools/mockup/chess_mockup.cpp
+               ${CMAKE_CURRENT_BINARY_DIR}/chess_pieces.inc)
+target_include_directories(chess_mockup PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+target_link_libraries(chess_mockup PRIVATE core)
+
 enable_testing()
 add_test(NAME dbg COMMAND test_dbg)
 add_test(NAME wm COMMAND test_wm)
