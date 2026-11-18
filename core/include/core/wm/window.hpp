@@ -207,6 +207,7 @@ public:
     int min_height() const { return kClientTop + (menu_bar_ ? kMenuBarHeight : 0) + 24; }
     void set_frame(const Rect &r); // before the window is opened, or to move it
     void set_title(const char *title); // the text must stay valid
+    void set_icon(const gfx::Bitmap *icon);
 
     // Locked: the window is shown and can be moved, sized and minimised,
     // but it takes no keys, no clicks in its client area or menu bar, no
