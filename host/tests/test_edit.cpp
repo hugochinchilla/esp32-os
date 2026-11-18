@@ -203,6 +203,18 @@ static void test_scrolling_and_large_files()
     CHECK(rig.w.edit.caret_line() == 10000 && rig.w.edit.top_line() == 10001 - rows);
     rig.key(wm::key::PageUp);
     CHECK(rig.w.edit.caret_line() == 10000 - (rows - 1));
+    // The wheel moves the text three lines a notch and leaves the caret
+    // where it is in the text; sideways, the long lines.
+    const gfx::Rect c = rig.w.client();
+    const int16_t wx = static_cast<int16_t>(c.x + 100), wy = static_cast<int16_t>(c.y + 60);
+    const int top = rig.w.edit.top_line(), caret = rig.w.edit.caret_line();
+    rig.wm.mouse({true, wx, wy, 0, 2});
+    CHECK(rig.w.edit.top_line() == top - 6 && rig.w.edit.caret_line() == caret);
+    rig.wm.mouse({true, wx, wy, 0, -1});
+    CHECK(rig.w.edit.top_line() == top - 3);
+    rig.wm.mouse({true, wx, wy, 0, 0, 1});
+    CHECK(rig.w.edit.left_column() == 0); // nothing wider than the window
+    CHECK(rig.no_stale_pixels());
     // Typing in the middle of a big file.
     rig.w.edit.select(150000, 150000);
     rig.wm.text("ñ");

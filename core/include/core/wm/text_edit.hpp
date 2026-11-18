@@ -92,6 +92,17 @@ public:
     void paint(gfx::Canvas &c) override;
     bool wants_mouse() const override { return true; }
     void mouse(const MouseMsg &m) override;
+    // The text moves under the caret, which stays where it is in the text.
+    bool wheel(const WheelMsg &m) override
+    {
+        if (vbar_.wheel(m)) {
+            invalidate_part(vbar_.rect);
+        }
+        if (hbar_.wheel(m)) {
+            invalidate_part(hbar_.rect);
+        }
+        return true;
+    }
     bool focusable() const override { return true; }
     bool key(const KeyMsg &k) override;
     void text(const char *utf8) override;

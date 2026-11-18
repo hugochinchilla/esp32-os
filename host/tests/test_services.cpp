@@ -165,7 +165,8 @@ public:
     void mouse(const ports::MouseEvent &e) override
     {
         log += "m" + std::to_string(e.x) + "," + std::to_string(e.y) + "," + std::to_string(e.buttons) + "," +
-               std::to_string(e.wheel) + (e.absolute ? "a" : "r") + " ";
+               std::to_string(e.wheel) + (e.wheel_x != 0 ? "," + std::to_string(e.wheel_x) : "") +
+               (e.absolute ? "a" : "r") + " ";
         events++;
     }
     void text(const char *utf8) override
@@ -190,10 +191,11 @@ void test_posted_input()
     input.mouse({true, 639, 479, 5, -1});
     input.mouse({false, -3, -200, 0, 1});
     input.key(0xE1, false);
+    input.mouse({true, 1, 2, 0, 0, -3}); // the wheel sideways
     CHECK(desktop.events == 0); // nothing reaches the desktop on the sender's task
     while (inbox.deliver()) {
     }
-    CHECK(desktop.log == "k4+ m639,479,5,-1a m-3,-200,0,1r k225- ");
+    CHECK(desktop.log == "k4+ m639,479,5,-1a m-3,-200,0,1r k225- m1,2,0,0,-3a ");
 
     // Text: short in one message, long in several, never cut inside a
     // character (ñ and € are two and three bytes).

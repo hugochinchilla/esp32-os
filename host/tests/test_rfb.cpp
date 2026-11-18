@@ -77,7 +77,11 @@ public:
     void mouse(const ports::MouseEvent &e) override
     {
         char text[40];
-        snprintf(text, sizeof(text), "m%d,%d,%d,%d ", e.x, e.y, e.buttons, e.wheel);
+        if (e.wheel_x != 0) {
+            snprintf(text, sizeof(text), "m%d,%d,%d,%d,%d ", e.x, e.y, e.buttons, e.wheel, e.wheel_x);
+        } else {
+            snprintf(text, sizeof(text), "m%d,%d,%d,%d ", e.x, e.y, e.buttons, e.wheel);
+        }
         events += text;
     }
     void text(const char *utf8) override { events += std::string("'") + utf8 + "' "; }
@@ -212,6 +216,12 @@ void test_pointer()
     pointer_at(100, 50, 16);
     pointer_at(100, 50, 0);
     CHECK(desktop.take() == "m100,50,0,1 m100,50,0,0 m100,50,0,-1 m100,50,0,0 ");
+    pointer_at(100, 50, 32); // sideways: bit 5 left, bit 6 right
+    pointer_at(100, 50, 0);
+    pointer_at(100, 50, 64 | 1); // with the left button held
+    pointer_at(100, 50, 1);
+    pointer_at(100, 50, 0);
+    CHECK(desktop.take() == "m100,50,0,0,-1 m100,50,0,0 m100,50,1,0,1 m100,50,1,0 m100,50,0,0 ");
     pointer_at(5000, 5000, 0); // outside the screen
     CHECK(desktop.take() == "m639,479,0,0 ");
 

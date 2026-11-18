@@ -671,7 +671,8 @@ void Server::key_event(uint32_t keysym, bool pressed)
 
 void Server::pointer_event(uint8_t mask, int x, int y)
 {
-    // RFB: bit 0 left, 1 middle, 2 right, 3 wheel up, 4 wheel down.
+    // RFB: bit 0 left, 1 middle, 2 right, 3 wheel up, 4 wheel down, 5 wheel
+    // left, 6 wheel right. Each press of a wheel bit is one notch.
     const uint8_t buttons = static_cast<uint8_t>((mask & 1) | ((mask & 4) >> 1) | ((mask & 2) << 1));
     int8_t wheel = 0;
     if ((mask & 8) && !(wheel_ & 8)) {
@@ -679,13 +680,19 @@ void Server::pointer_event(uint8_t mask, int x, int y)
     } else if ((mask & 16) && !(wheel_ & 16)) {
         wheel = -1;
     }
-    wheel_ = mask & 24;
+    int8_t wheel_x = 0;
+    if ((mask & 32) && !(wheel_ & 32)) {
+        wheel_x = -1;
+    } else if ((mask & 64) && !(wheel_ & 64)) {
+        wheel_x = 1;
+    }
+    wheel_ = mask & 120;
     buttons_ = buttons;
     x = x >= width_ ? width_ - 1 : x;
     y = y >= height_ ? height_ - 1 : y;
     last_x_ = static_cast<int16_t>(x);
     last_y_ = static_cast<int16_t>(y);
-    input_.mouse({true, static_cast<int16_t>(x), static_cast<int16_t>(y), buttons, wheel});
+    input_.mouse({true, static_cast<int16_t>(x), static_cast<int16_t>(y), buttons, wheel, wheel_x});
 }
 
 /* ---- What the viewer gets --------------------------------------------------------- */

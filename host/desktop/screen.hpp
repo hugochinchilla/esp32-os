@@ -70,6 +70,25 @@ inline void to_screen(const Fit &f, int window_x, int window_y, int width, int h
     y = window_y < f.y ? 0 : (y >= height ? height - 1 : y);
 }
 
+// The wheel as whole notches. A mouse wheel sends whole notches; two fingers
+// on a trackpad send many small parts of one, which are added up here until
+// they make a notch, so a slow movement scrolls slowly and none is lost.
+// Turning back starts from nothing, so the first notch back is whole.
+// One of these for each direction.
+struct WheelNotches {
+    float part = 0;
+    int take(float amount)
+    {
+        if (amount * part < 0) {
+            part = 0;
+        }
+        part += amount;
+        const int whole = static_cast<int>(part); // towards zero
+        part -= static_cast<float>(whole);
+        return whole > 127 ? 127 : (whole < -127 ? -127 : whole);
+    }
+};
+
 // How many times larger the picture is first drawn with hard pixel edges,
 // before it is smoothed down to the window: the next whole number up. At a
 // whole multiple of 640x480 nothing is smoothed at all.

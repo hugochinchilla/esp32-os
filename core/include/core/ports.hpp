@@ -145,7 +145,8 @@ struct MouseEvent {
     int16_t x;
     int16_t y;
     uint8_t buttons; // bit 0 left, bit 1 right, bit 2 middle
-    int8_t wheel;
+    int8_t wheel;       // notches: positive is away from the user (the view goes up)
+    int8_t wheel_x = 0; // notches sideways: positive is to the right
 };
 
 // Receives keyboard and mouse events, whatever their source.

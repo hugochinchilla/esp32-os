@@ -245,6 +245,12 @@ void test_idle_and_wake()
     mouse(c.x + 12, c.y + 10, 0);
     CHECK(probe.presses == 1);
 
+    // The wheel wakes it too, and scrolls nothing.
+    wait(61);
+    CHECK(desktop.screen_saver_active());
+    desktop.mouse({true, static_cast<int16_t>(c.x + 12), static_cast<int16_t>(c.y + 10), 0, 1});
+    CHECK(!desktop.screen_saver_active());
+
     // Not while a button is held (a drag left alone).
     mouse(c.x + 12, c.y + 10, 1);
     wait(120);

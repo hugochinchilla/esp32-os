@@ -13,7 +13,7 @@ void run_key(const Message &m) { target_of(m).key(static_cast<uint16_t>(m.a), (m
 void run_mouse(const Message &m)
 {
     target_of(m).mouse({(m.b >> 16) != 0, static_cast<int16_t>(m.a), static_cast<int16_t>(m.a >> 16),
-                        static_cast<uint8_t>(m.b), static_cast<int8_t>(m.b >> 8)});
+                        static_cast<uint8_t>(m.b), static_cast<int8_t>(m.b >> 8), static_cast<int8_t>(m.b >> 24)});
 }
 
 // Up to seven bytes of text and the zero that ends it, in the two values.
@@ -40,7 +40,8 @@ void PostedInput::key(uint16_t usage, bool pressed) { send(&run_key, usage | (pr
 void PostedInput::mouse(const ports::MouseEvent &e)
 {
     send(&run_mouse, static_cast<uint16_t>(e.x) | static_cast<uint32_t>(static_cast<uint16_t>(e.y)) << 16,
-         e.buttons | static_cast<uint32_t>(static_cast<uint8_t>(e.wheel)) << 8 | (e.absolute ? 0x10000u : 0u));
+         e.buttons | static_cast<uint32_t>(static_cast<uint8_t>(e.wheel)) << 8 | (e.absolute ? 0x10000u : 0u) |
+             static_cast<uint32_t>(static_cast<uint8_t>(e.wheel_x)) << 24);
 }
 
 void PostedInput::text(const char *utf8)

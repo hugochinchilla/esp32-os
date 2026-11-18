@@ -146,7 +146,7 @@ public:
 private:
     void handle(const SDL_Event &e);
     void key(const SDL_KeyboardEvent &e);
-    void mouse_at(int window_x, int window_y, int wheel);
+    void mouse_at(int window_x, int window_y, int wheel = 0, int wheel_x = 0);
     void release_keys();
     void close_asked();
     void draw();
@@ -181,6 +181,7 @@ private:
     bool booting_ = true;   // the start-up screens: input only skips them
     bool skip_boot_ = false;
     uint8_t buttons_ = 0;
+    desktop::WheelNotches wheel_y_, wheel_x_;
     bool down_[256] = {};   // keys held, by USB usage code
     uint32_t refused_ms_ = 0; // when a program last kept the window from closing
     bool refused_ = false;
@@ -387,7 +388,7 @@ void Machine::key(const SDL_KeyboardEvent &e)
     screen_.key(static_cast<uint16_t>(usage), pressed);
 }
 
-void Machine::mouse_at(int window_x, int window_y, int wheel)
+void Machine::mouse_at(int window_x, int window_y, int wheel, int wheel_x)
 {
     // Mouse positions come in window units; the picture is laid out in the
     // renderer's pixels (they differ on high-density screens).
@@ -404,8 +405,8 @@ void Machine::mouse_at(int window_x, int window_y, int wheel)
         skip_boot_ |= buttons_ != 0;
         return;
     }
-    wheel = wheel > 127 ? 127 : (wheel < -127 ? -127 : wheel);
-    screen_.mouse({true, static_cast<int16_t>(x), static_cast<int16_t>(y), buttons_, static_cast<int8_t>(wheel)});
+    screen_.mouse({true, static_cast<int16_t>(x), static_cast<int16_t>(y), buttons_, static_cast<int8_t>(wheel),
+                   static_cast<int8_t>(wheel_x)});
 }
 
 // The window's close button (or the PC's Alt+F4) is Shut Down: every program
@@ -460,7 +461,17 @@ void Machine::handle(const SDL_Event &e)
     case SDL_MOUSEWHEEL: {
         int x = 0, y = 0;
         SDL_GetMouseState(&x, &y);
-        mouse_at(x, y, e.wheel.y);
+        // Parts of a notch where SDL gives them (a trackpad, a wheel that
+        // turns freely; in the browser, the page's wheel events).
+#if SDL_VERSION_ATLEAST(2, 0, 18)
+        const float turned_y = e.wheel.preciseY, turned_x = e.wheel.preciseX;
+#else
+        const float turned_y = static_cast<float>(e.wheel.y), turned_x = static_cast<float>(e.wheel.x);
+#endif
+        const int wheel = wheel_y_.take(turned_y), wheel_x = wheel_x_.take(turned_x);
+        if (wheel != 0 || wheel_x != 0) {
+            mouse_at(x, y, wheel, wheel_x);
+        }
         break;
     }
     case SDL_WINDOWEVENT:

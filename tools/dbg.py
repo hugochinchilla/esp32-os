@@ -373,8 +373,8 @@ class Board:
             if shift:
                 self.key("shift", False)
 
-    def mouse(self, x=0, y=0, buttons=0, absolute=False, wheel=0):
-        self.request(MOUSE, struct.pack("<BhhBb", 1 if absolute else 0, x, y, buttons, wheel))
+    def mouse(self, x=0, y=0, buttons=0, absolute=False, wheel=0, wheel_x=0):
+        self.request(MOUSE, struct.pack("<BhhBbb", 1 if absolute else 0, x, y, buttons, wheel, wheel_x))
 
     def text(self, s):
         """Types text as characters (any Latin-1 letter, such as ñ or é)."""
@@ -915,8 +915,9 @@ def main(argv=None):
     for name in ("down", "up", "click"):
         m = msub.add_parser(name)
         m.add_argument("button", nargs="?", default="left", choices=sorted(BUTTONS))
-    m = msub.add_parser("wheel")
+    m = msub.add_parser("wheel", help="notches: positive is up; --x sideways, positive is right")
     m.add_argument("amount", type=int)
+    m.add_argument("--x", type=int, default=0)
 
     args = parser.parse_args(argv)
     try:
@@ -1040,7 +1041,7 @@ def main(argv=None):
             elif args.action == "doubleclick":
                 board.doubleclick(args.x, args.y)
             elif args.action == "wheel":
-                board.mouse(wheel=args.amount)
+                board.mouse(wheel=args.amount, wheel_x=args.x)
             elif args.action == "down":
                 board.mouse(buttons=BUTTONS[args.button])
             elif args.action == "up":
