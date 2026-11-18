@@ -131,6 +131,9 @@ void open_in_editor(const char *path);
 // when there is none (the defaults apply). save: makes C:\.config if needed.
 bool load_settings(const char *program, fs::Ini &ini);
 bool save_settings(const char *program, const fs::Ini &ini);
+// Vizcacha, the web browser, on an address or the path of a page on a
+// drive (nullptr: its home page, or the window as it is if it is open).
+void open_browser(const char *address);
 // The Picture viewer with a picture (nullptr: asks for one).
 void open_picture(const char *path);
 // Tests: decode the picture shown to the end now. Timings of the last
