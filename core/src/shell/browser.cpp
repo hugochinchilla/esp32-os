@@ -17,6 +17,8 @@
 #include "core/os/os.hpp"
 #include "core/os/tcp.hpp"
 #include "core/shell/shell.hpp"
+#include "core/image/convert.hpp"
+#include "core/image/image.hpp"
 #include "core/www/html.hpp"
 #include "core/www/http.hpp"
 #include "core/www/url.hpp"
@@ -34,6 +36,39 @@ constexpr int kHistory = 16;      // ponytail: pages it can go back through
 constexpr int kFavourites = 8;
 constexpr uint32_t kPollUs = 30000;
 constexpr int kLineStep = 3 * (www::kCharHeight + 2);
+// ponytail: how many of a page's pictures are fetched, and how much memory
+// they may take once decoded (a byte a pixel). The rest keep their boxes.
+constexpr int kMaxPictures = 24;
+constexpr size_t kMaxPictureBytes = 1536 * 1024;
+constexpr int kMaxPictureHeight = 2000;
+constexpr uint32_t kDecodeSliceUs = 8000; // of decoding in one turn of the timer
+
+// A picture that has come: a board colour for each pixel.
+struct Loaded {
+    uint8_t *pixels;
+    uint16_t w, h;
+};
+
+// A picture's bytes in memory, as the decoder reads them.
+struct FromBytes final : image::Source {
+    bool read(void *data, size_t wanted, size_t &got) override
+    {
+        got = wanted < size - at ? wanted : size - at;
+        memcpy(data, bytes + at, got);
+        at += got;
+        return true;
+    }
+    bool seek(uint32_t offset) override
+    {
+        if (offset > size) {
+            return false;
+        }
+        at = offset;
+        return true;
+    }
+    const uint8_t *bytes = nullptr;
+    size_t size = 0, at = 0;
+};
 
 // The system's outgoing connections, as the fetch wants them.
 class OsWire final : public www::Wire {
@@ -95,7 +130,8 @@ public:
           scroll_(scroll_bar({100, kBarHeight, os::ui::kScrollBarThickness, 100}, true)),
           status_(plain({4, 0, 100, 14})),
           doc_(os::memory()),
-          fetch_(wire_, os::memory())
+          fetch_(wire_, os::memory()),
+          picture_fetch_(wire_, os::memory())
     {
         file_items_[0] = {"&Open File...", &BrowserWindow::menu_open, this, nullptr, nullptr, 0};
         file_items_[1] = {nullptr, nullptr, nullptr, nullptr, nullptr, wm::kMenuSeparator};
@@ -115,7 +151,11 @@ public:
         update_buttons();
     }
 
-    ~BrowserWindow() { stop_timer(); }
+    ~BrowserWindow()
+    {
+        stop_timer();
+        forget_pictures();
+    }
 
     // Opens an address as if it had been typed.
     void open_typed(const char *typed)
@@ -320,12 +360,13 @@ public:
         if (which == 1) {
             go_items_[0].flags = at_ > 0 ? 0 : wm::kMenuDisabled;
             go_items_[1].flags = at_ + 1 < count_ ? 0 : wm::kMenuDisabled;
-            go_items_[5].flags = fetch_.busy() ? 0 : wm::kMenuDisabled;
+            go_items_[5].flags = fetch_.busy() || picture_at_ >= 0 ? 0 : wm::kMenuDisabled;
         }
     }
 
     void closed() override
     {
+        forget_pictures();
         fetch_.stop();
         stop_timer();
     }
@@ -399,6 +440,7 @@ private:
 
     void load(const char *url, int top)
     {
+        stop_picture(); // those that have come stay until the next page is shown
         fetch_.stop();
         stop_timer();
         wanted_top_ = top;
@@ -481,6 +523,14 @@ private:
     static void tick(void *self) { static_cast<BrowserWindow *>(self)->poll(); }
     void poll()
     {
+        if (!fetch_.busy()) {
+            if (picture_at_ >= 0) {
+                poll_picture();
+            } else {
+                stop_timer();
+            }
+            return;
+        }
         const www::Fetch::State before = fetch_.state();
         const www::Fetch::State now = fetch_.poll(static_cast<uint32_t>(os::now_us()));
         if (now == www::Fetch::State::Failed) {
@@ -529,6 +579,19 @@ private:
         const bool html = type[0] == 0 || strncasecmp(type, "text/html", 9) == 0 ||
                           strncasecmp(type, "application/xhtml", 17) == 0;
         const bool plain = strncasecmp(type, "text/", 5) == 0 && !html;
+        if (strncasecmp(type, "image/", 6) == 0) {
+            // A picture by itself: a page of one picture, made of the bytes
+            // that have just come.
+            char *page = static_cast<char *>(os::allocate(6 * www::kMaxUrl + 64));
+            if (page != nullptr) {
+                const int n = snprintf(page, 16, "<img src=\"");
+                escape(url, page + n, 6 * www::kMaxUrl);
+                snprintf(page + strlen(page), 16, "\">");
+                show(url, page, strlen(page), false, true);
+                os::release(page);
+                return;
+            }
+        }
         if (!html && !plain) {
             char why[120];
             snprintf(why, sizeof(why), "It is not a page but a file of the kind \"%.40s\", which the browser cannot show.",
@@ -553,10 +616,12 @@ private:
     }
 
     // Puts a page in the window.
-    void show(const char *url, const char *bytes, size_t size, bool plain)
+    void show(const char *url, const char *bytes, size_t size, bool plain, bool direct = false)
     {
         set_typing(-1);
         pressed_ = -1;
+        forget_pictures();
+        direct_ = direct;
         if (!doc_.load(reinterpret_cast<const uint8_t *>(bytes), size, plain)) {
             doc_.load(reinterpret_cast<const uint8_t *>(""), 0);
             set_status("There is not enough memory for this page.");
@@ -573,6 +638,261 @@ private:
         set_title(title_);
         page_.redraw();
         set_focus(page_);
+        start_pictures();
+    }
+
+    /* ---- Pictures ---- */
+
+    // The pictures of the page just shown are fetched one after another,
+    // from the same timer as the page was, and each is drawn when it is
+    // whole. The page can be read meanwhile.
+    void start_pictures()
+    {
+        picture_at_ = -1;
+        pictures_failed_ = 0;
+        const int count = doc_.picture_count() < kMaxPictures ? doc_.picture_count() : kMaxPictures;
+        if (count > 0) {
+            loaded_ = static_cast<Loaded *>(os::allocate(static_cast<size_t>(count) * sizeof(Loaded)));
+        }
+        if (loaded_ == nullptr) {
+            end_direct();
+            return;
+        }
+        memset(loaded_, 0, static_cast<size_t>(count) * sizeof(Loaded));
+        loaded_count_ = count;
+        if (timer_ == 0) {
+            timer_ = os::start_timer(kPollUs, kPollUs, &BrowserWindow::tick, this);
+        }
+        if (timer_ == 0) {
+            end_direct();
+            return; // no timer free: the page without its pictures
+        }
+        next_picture();
+    }
+
+    void next_picture()
+    {
+        while (++picture_at_ < loaded_count_ && loaded_bytes_ < kMaxPictureBytes) {
+            if (begin_picture()) {
+                update_buttons();
+                return;
+            }
+            pictures_failed_++;
+        }
+        picture_at_ = -1;
+        end_direct();
+        stop_timer();
+        if (pictures_failed_ > 0) {
+            char text[64];
+            snprintf(text, sizeof(text), pictures_failed_ == 1 ? "Done. One picture could not be shown."
+                                                               : "Done. %d pictures could not be shown.",
+                     pictures_failed_);
+            set_status(text);
+        } else {
+            set_status("Done.");
+        }
+        update_buttons();
+    }
+
+    // True: picture_at_ is being fetched or decoded.
+    bool begin_picture()
+    {
+        if (direct_) {
+            return begin_decode(fetch_.body(), fetch_.size());
+        }
+        const char *source = doc_.text(doc_.picture(picture_at_).source);
+        char url[www::kMaxUrl];
+        if (source[0] == 0 ||
+            !www::resolve(doc_.base()[0] != 0 ? doc_.base() : current_, source, url, sizeof(url))) {
+            return false;
+        }
+        char text[48];
+        snprintf(text, sizeof(text), "Fetching picture %d of %d...", picture_at_ + 1, loaded_count_);
+        switch (www::scheme_of(url)) {
+        case www::Scheme::File:
+            {
+                char path[fs::kMaxPath];
+                fs::DirEntry entry;
+                size_t size = 0;
+                if (!www::file_path(url, path, sizeof(path)) || os::file::stat(path, entry) != os::file::Error::Ok ||
+                    entry.folder || entry.size > www::Fetch::kMaxBody) {
+                    return false;
+                }
+                file_bytes_ = os::allocate(entry.size + 1);
+                if (file_bytes_ == nullptr ||
+                    os::file::read_file(path, file_bytes_, entry.size, size) != os::file::Error::Ok ||
+                    !begin_decode(static_cast<const uint8_t *>(file_bytes_), size)) {
+                    os::release(file_bytes_);
+                    file_bytes_ = nullptr;
+                    return false;
+                }
+                return true;
+            }
+        case www::Scheme::Http:
+            if (!os::tcp::available() || !picture_fetch_.start(url, static_cast<uint32_t>(os::now_us()))) {
+                picture_fetch_.stop();
+                return false;
+            }
+            set_status(text);
+            return true;
+        default: return false;
+        }
+    }
+
+    void poll_picture()
+    {
+        if (decoding_ == nullptr) {
+            const www::Fetch::State now = picture_fetch_.poll(static_cast<uint32_t>(os::now_us()));
+            if (now == www::Fetch::State::Done && picture_fetch_.status() < 400 && !picture_fetch_.cut() &&
+                begin_decode(picture_fetch_.body(), picture_fetch_.size())) {
+                return;
+            }
+            if (!picture_fetch_.busy()) {
+                picture_fetch_.stop();
+                pictures_failed_++;
+                next_picture();
+            }
+            return;
+        }
+        const uint64_t start = os::now_us();
+        image::Error e = image::Error::None;
+        while (!decoder_.done() && e == image::Error::None && os::now_us() - start < kDecodeSliceUs) {
+            e = decoder_.step(converter_, 4);
+        }
+        if (e != image::Error::None) {
+            end_decode(false);
+            pictures_failed_++;
+            next_picture();
+        } else if (decoder_.done()) {
+            end_decode(true);
+            next_picture();
+        }
+    }
+
+    // Opens the picture in these bytes and makes room for it at the size it
+    // will have in the page: the page's own figures if it gives them, never
+    // larger than the picture is, never wider than the page.
+    bool begin_decode(const uint8_t *bytes, size_t size)
+    {
+        source_.bytes = bytes;
+        source_.size = size;
+        source_.at = 0;
+        const gfx::Rgb paper = gfx::shown(doc_.background());
+        const uint8_t behind[3] = {paper.r, paper.g, paper.b};
+        image::Info info;
+        if (bytes == nullptr || decoder_.open(source_, os::memory(), info, behind) != image::Error::None ||
+            info.width <= 0 || info.height <= 0) {
+            decoder_.release(os::memory());
+            return false;
+        }
+        const www::Picture &asked = doc_.picture(picture_at_);
+        long w = info.width, h = info.height;
+        if (asked.width > 0 && asked.height > 0) {
+            w = asked.width;
+            h = asked.height;
+        } else if (asked.width > 0) {
+            w = asked.width;
+            h = static_cast<long>(info.height) * w / info.width;
+        } else if (asked.height > 0) {
+            h = asked.height;
+            w = static_cast<long>(info.width) * h / info.height;
+        }
+        const auto fit = [&w, &h](long most_w, long most_h) {
+            if (w > most_w) {
+                h = h * most_w / w;
+                w = most_w;
+            }
+            if (h > most_h) {
+                w = w * most_h / h;
+                h = most_h;
+            }
+        };
+        const int room = page_size().w - 2 * www::Document::kMargin;
+        fit(info.width, info.height);
+        fit(room > 16 ? room : 16, kMaxPictureHeight);
+        w = w < 1 ? 1 : w;
+        h = h < 1 ? 1 : h;
+        const size_t pixels = static_cast<size_t>(w) * static_cast<size_t>(h);
+        if (loaded_bytes_ + pixels <= kMaxPictureBytes) {
+            decoding_ = static_cast<uint8_t *>(os::allocate(pixels));
+        }
+        if (decoding_ == nullptr || !converter_.ready(os::memory())) {
+            os::release(decoding_);
+            decoding_ = nullptr;
+            decoder_.release(os::memory());
+            return false;
+        }
+        converting_ = true;
+        memset(decoding_, doc_.background(), pixels);
+        decode_w_ = static_cast<int>(w);
+        decode_h_ = static_cast<int>(h);
+        converter_.begin(info.width, info.height, decode_w_, decode_h_, decoding_, image::Dither::FloydSteinberg);
+        return true;
+    }
+
+    // Gives back what decoding borrowed. `shown`: the picture is whole and
+    // takes its place in the page.
+    void end_decode(bool shown)
+    {
+        decoder_.release(os::memory());
+        if (converting_) {
+            converter_.release(os::memory());
+            converting_ = false;
+        }
+        picture_fetch_.stop();
+        os::release(file_bytes_);
+        file_bytes_ = nullptr;
+        end_direct();
+        if (!shown || decoding_ == nullptr) {
+            os::release(decoding_);
+            decoding_ = nullptr;
+            return;
+        }
+        loaded_[picture_at_] = {decoding_, static_cast<uint16_t>(decode_w_), static_cast<uint16_t>(decode_h_)};
+        loaded_bytes_ += static_cast<size_t>(decode_w_) * static_cast<size_t>(decode_h_);
+        decoding_ = nullptr;
+        doc_.set_picture_size(picture_at_, decode_w_, decode_h_);
+        // The same words stay at the top while the lines below make room.
+        const int first = doc_.first_at(top_);
+        const int into = first < doc_.item_count() ? top_ - doc_.item(first).y : 0;
+        doc_.layout(doc_.width());
+        if (top_ != 0 && first < doc_.item_count()) {
+            top_ = doc_.item(first).y + into;
+        }
+        update_scroll();
+        page_.redraw();
+        update_caret();
+    }
+
+    // The bytes of a picture opened by itself are the page fetch's.
+    void end_direct()
+    {
+        if (direct_) {
+            direct_ = false;
+            fetch_.stop();
+        }
+    }
+
+    // Stops fetching pictures; those that have come stay.
+    void stop_picture()
+    {
+        if (picture_at_ >= 0) {
+            end_decode(false);
+            picture_at_ = -1;
+        }
+        end_direct();
+    }
+
+    void forget_pictures()
+    {
+        stop_picture();
+        for (int i = 0; i < loaded_count_; i++) {
+            os::release(loaded_[i].pixels);
+        }
+        os::release(loaded_);
+        loaded_ = nullptr;
+        loaded_count_ = 0;
+        loaded_bytes_ = 0;
     }
 
     // A page of the browser's own that says what went wrong.
@@ -635,7 +955,8 @@ private:
 
     void stop_loading(const char *say)
     {
-        if (fetch_.busy()) {
+        if (fetch_.busy() || picture_at_ >= 0) {
+            stop_picture();
             fetch_.stop();
             stop_timer();
             set_address(current_);
@@ -808,6 +1129,12 @@ private:
         case www::Kind::Image:
             {
                 const gfx::Rect box = {item.x, y, item.w, item.h};
+                if (item.extra < loaded_count_ && loaded_[item.extra].pixels != nullptr) {
+                    const Loaded &picture = loaded_[item.extra];
+                    app::Canvas inside = c.sub(box);
+                    inside.blit({picture.w, picture.h, picture.pixels, -1}, 0, 0);
+                    break;
+                }
                 c.edge(box, gfx::kDarkGrey, gfx::kDarkGrey);
                 app::Canvas inside = c.sub({box.x + 2, box.y + 1, box.w - 4, box.h - 2});
                 inside.text(1, 0, doc_.text(doc_.picture(item.extra).alt), item.link != 0 ? item.colour : gfx::kDarkGrey);
@@ -941,7 +1268,7 @@ private:
     {
         back_.set_enabled(at_ > 0);
         forward_.set_enabled(at_ + 1 < count_);
-        stop_.set_enabled(fetch_.busy());
+        stop_.set_enabled(fetch_.busy() || picture_at_ >= 0);
     }
 
     /* ---- Menus ---- */
@@ -1072,6 +1399,21 @@ private:
     int pressed_ = -1;   // the item the mouse went down on
     int typing_ = -1;    // the text field the keys go to
     size_t shown_kb_ = 0;
+
+    www::Fetch picture_fetch_;
+    Loaded *loaded_ = nullptr; // one for each of the page's first pictures
+    int loaded_count_ = 0;
+    size_t loaded_bytes_ = 0;
+    int picture_at_ = -1;      // the one being fetched or decoded; -1 for none
+    int pictures_failed_ = 0;
+    bool direct_ = false;      // the page is one picture, and fetch_ holds its bytes
+    image::Decoder decoder_;
+    image::Converter converter_;
+    bool converting_ = false;
+    FromBytes source_;
+    void *file_bytes_ = nullptr;
+    uint8_t *decoding_ = nullptr; // the pixels of the picture being decoded
+    int decode_w_ = 0, decode_h_ = 0;
 
     char current_[www::kMaxUrl] = "";  // the page shown
     char loading_[www::kMaxUrl] = "";

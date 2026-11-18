@@ -99,6 +99,7 @@ struct Form {
 struct Picture {
     uint32_t source, alt;
     uint16_t width, height; // as the page gives them; 0 if it does not
+    uint16_t shown_w, shown_h; // of the picture once it has been fetched; 0 until then
 };
 
 class Document {
@@ -144,6 +145,9 @@ public:
     const Field &field(int number) const { return fields_[number]; }
     const Option &option(int number) const { return options_[number]; }
     const Picture &picture(int number) const { return pictures_[number]; }
+    int picture_count() const { return picture_count_; }
+    // The picture has come: its place takes this size at the next layout().
+    void set_picture_size(int number, int width, int height);
     const Form *form(int number) const { return number >= 1 && number <= form_count_ ? &forms_[number - 1] : nullptr; }
     // What a field shows: what was typed, a button's label, a select's choice.
     const char *shown(const Field &field) const;

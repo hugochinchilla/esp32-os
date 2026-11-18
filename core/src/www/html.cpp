@@ -1443,6 +1443,14 @@ bool Document::load(const uint8_t *bytes, size_t size, bool plain)
     return true;
 }
 
+void Document::set_picture_size(int number, int width, int height)
+{
+    if (number >= 0 && number < picture_count_) {
+        pictures_[number].shown_w = static_cast<uint16_t>(width);
+        pictures_[number].shown_h = static_cast<uint16_t>(height);
+    }
+}
+
 const char *Document::shown(const Field &field) const
 {
     switch (field.type) {
@@ -1610,7 +1618,10 @@ void Document::layout(int width)
             {
                 const Picture &picture = pictures_[item.extra];
                 int w = picture.width, h = picture.height;
-                if (w == 0 || h == 0) {
+                if (picture.shown_w != 0) {
+                    w = picture.shown_w;
+                    h = picture.shown_h;
+                } else if (w == 0 || h == 0) {
                     w = count_chars(pool_ + picture.alt) * kCharWidth + 8;
                     h = kCharHeight + 4;
                     if (pool_[picture.alt] == 0) {
