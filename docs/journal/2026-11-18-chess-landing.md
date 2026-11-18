@@ -1,7 +1,8 @@
 # The computer's chess piece lands
 
-2026-11-18. Backlog item 64. Built and tested on the PC. Nothing here has
-run on the board.
+2026-11-18. Backlog item 64. Built and tested on the PC. The firmware and
+`chess.app` (51,904 bytes, 50,688 before the hourglass and this) compile in
+the cloud. Nothing here has run on the board.
 
 ## 1. What was asked
 
@@ -92,6 +93,10 @@ a full repaint would give; a late tick; Take back while the piece lands;
 the user's own piece not lifted; the window closed while a piece lands,
 with all memory given back. 50 of 50 PC tests pass and the reference
 pictures are unchanged.
+
+Compiled in the cloud with ESP-IDF v5.5: the firmware builds, and
+`tools/build_programs.sh` finds every name `chess.app` asks the system for
+in the firmware's exports (352 names, none missing). Compiled only.
 
 ## 6. What was learned
 
