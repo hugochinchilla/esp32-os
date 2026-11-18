@@ -13,9 +13,15 @@ constexpr ports::Beep kVideo[] = {kLong, kGap, kShort, kGap, kShort};
 constexpr ports::Beep kDrive[] = {kLong, kGap, kShort, kGap, kShort, kGap, kShort};
 constexpr ports::Beep kNoSystem[] = {kLong, {0, 400}};
 
-// The owner has not chosen the chime yet (docs/journal/2026-11-18-beeper.md):
-// this is candidate A, C major climbing an octave.
-constexpr ports::Beep kChime[] = {{1047, 70}, {1319, 70}, {1568, 70}, {2093, 200}};
+// "First light" (candidate N of round four, docs/journal/2026-11-18-beeper.md),
+// a melody of our own in D major: a quiet held note, a full one, a small
+// figure, then four bells that climb and fade. About 5.4 s. Put forward as
+// the default while the owner had not picked one; his to change.
+constexpr ports::Beep kChime[] = {
+    {587, 850, 0, 89},                                                    // D5, quiet and steady
+    {880, 520, 300},   {740, 260, 300},     {880, 260, 300}, {1175, 620, 300}, // A5 F#5 A5 D6
+    {1480, 720, 330, 204}, {1760, 720, 330, 140}, {2349, 720, 330, 97}, {2960, 720, 330, 56}, // F#6 A6 D7 F#7
+};
 
 template <int N> constexpr Tune tune(const ports::Beep (&steps)[N]) { return {steps, N}; }
 

@@ -438,6 +438,7 @@ void test_boot_device()
     CHECK(sound::post_code(sound::PostResult::Memory).count == 5 && sound::post_code(sound::PostResult::Video).count == 5);
     CHECK(sound::post_code(sound::PostResult::NotFatal).count == 3);
     CHECK(sound::desktop_chime().count > 0 && sound::desktop_chime().count <= ports::kBeepSteps);
+    CHECK(sound::length_ms(sound::desktop_chime()) < 7000);
     // A tune as text: steps, comments, and lines that are not steps skipped.
     static const char text[] = "# mine\n659 900 300\n0 120\r\n1319, 760, 320, 128  # quieter\nhello 3 4\n440\n70000 10\n988 500";
     ports::Beep steps[4];
