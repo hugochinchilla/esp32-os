@@ -2806,9 +2806,8 @@ are in `docs/journal/2026-11-18-file-commands.md`.
   closing it does not stop the copy. It stops at the first thing that goes
   wrong and says which file and why. A folder is not put inside itself.
 - **The menus.** In the File manager: Edit, between File and View, with
-  Cut, Copy and Paste, and File keeps Delete (the owner was asked on
-  2026-11-18 whether he would rather have them all in File; built this way
-  meanwhile); Ctrl+X, Ctrl+C, Ctrl+V. A right click picks the entry under the
+  Cut, Copy and Paste, and File keeps Delete (**confirmed by the owner**,
+  2026-11-18, over having them all in File); Ctrl+X, Ctrl+C, Ctrl+V. A right click picks the entry under the
   pointer first. On a file: Open, Cut, Copy, Delete. On a folder the same
   with Paste, which pastes into that folder. On the blank part: Paste, New
   Folder, Refresh. On the desktop: the same for the icons of files and

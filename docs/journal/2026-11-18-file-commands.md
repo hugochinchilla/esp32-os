@@ -82,7 +82,7 @@ has no such state, and it is item 55's widget this week.
 
 **Where the commands go in the menu bar.** A new Edit menu with Cut, Copy
 and Paste, Delete staying in File (built), or all of them in File. The
-owner was asked; the entry is updated if he prefers File.
+owner was asked and chose the Edit menu (2026-11-18).
 
 ## 4. What was chosen, and what was built
 
