@@ -1,6 +1,6 @@
 // Draws the proposed look of the chess game (backlog item 50) for the owner
 // to choose from: the board in both colour sets, the captured pieces, the
-// hourglass while the engine thinks, and the dialog before a game. It is a
+// hourglass while the engine thinks, the sets of pieces, and the dialog before a game. It is a
 // mock-up, not the game: there are no rules and no engine here, only fixed
 // positions. The windows, menus and controls are the system's real ones
 // (core/), running on the PC as in host/tests/render_scenes.cpp, so what is
@@ -51,6 +51,8 @@ constexpr Colours kBrown = {gfx::rgb(7, 6, 2), gfx::rgb(5, 4, 1), gfx::rgb(7, 7,
 constexpr gfx::Colour kWhiteInks[3] = {gfx::kBlack, gfx::kWhite, gfx::kBlack};
 constexpr gfx::Colour kBlackInks[3] = {gfx::kBlack, gfx::rgb(2, 2, 1), gfx::rgb(5, 5, 2)};
 
+int g_set = 0; // which set of pieces is in use (Options > Pieces)
+
 int piece_index(char letter)
 {
     const char *order = "pnbrqk";
@@ -62,7 +64,7 @@ int piece_index(char letter)
 void draw_piece(app::Canvas &c, int x, int y, char letter, bool big)
 {
     const int size = big ? kBigSize : kSmallSize;
-    const char *const *rows = big ? kBig[piece_index(letter)] : kSmall[piece_index(letter)];
+    const char *const *rows = big ? kBig[g_set][piece_index(letter)] : kSmall[g_set][piece_index(letter)];
     const gfx::Colour *inks = letter < 'a' ? kWhiteInks : kBlackInks;
     static uint8_t pixels[kBigSize * kBigSize];
     constexpr int kClear = 0xE3; // a pink no piece uses
@@ -102,8 +104,13 @@ public:
                            static_cast<uint8_t>(scene.colours == &kGreen ? wm::kMenuChecked : 0)};
         board_items_[1] = {"&Brown", nullptr, nullptr, nullptr, nullptr,
                            static_cast<uint8_t>(scene.colours == &kBrown ? wm::kMenuChecked : 0)};
+        for (int i = 0; i < kSets; i++) {
+            piece_items_[i] = {kSetNames[i], nullptr, nullptr, nullptr, nullptr,
+                               static_cast<uint8_t>(i == g_set ? wm::kMenuChecked : 0)};
+        }
         option_items_[0] = {"&Board", nullptr, nullptr, &board_menu_, nullptr, 0};
-        option_items_[1] = {"Show where a piece can &go", nullptr, nullptr, nullptr, nullptr, wm::kMenuChecked};
+        option_items_[1] = {"&Pieces", nullptr, nullptr, &pieces_menu_, nullptr, 0};
+        option_items_[2] = {"Show where a piece can &go", nullptr, nullptr, nullptr, nullptr, wm::kMenuChecked};
         help_items_[0] = {"&How to play", nullptr, nullptr, nullptr, nullptr, 0};
         help_items_[1] = {"&About Chess", nullptr, nullptr, nullptr, nullptr, 0};
         set_menu_bar(&bar_);
@@ -190,11 +197,13 @@ private:
     app::Plain status_;
     wm::MenuItem game_items_[5];
     wm::MenuItem board_items_[2];
-    wm::MenuItem option_items_[2];
+    wm::MenuItem piece_items_[kSets];
+    wm::MenuItem option_items_[3];
     wm::MenuItem help_items_[2];
     wm::Menu game_menu_ = {game_items_, 5};
     wm::Menu board_menu_ = {board_items_, 2};
-    wm::Menu options_ = {option_items_, 2};
+    wm::Menu pieces_menu_ = {piece_items_, kSets};
+    wm::Menu options_ = {option_items_, 3};
     wm::Menu help_ = {help_items_, 2};
     const wm::MenuBarEntry entries_[3] = {{"&Game", &game_menu_}, {"&Options", &options_}, {"&Help", &help_}};
     const wm::MenuBar bar_ = {entries_, 3};
@@ -336,6 +345,31 @@ int main(int argc, char **argv)
     save(folder + "/chess-2-brown-black-side.ppm", true);
     os::ui::close(board);
     desktop.update();
+
+    // 4. The same position with each of the other sets, and for the first
+    //    of them the Options menu open at Pieces.
+    for (g_set = 1; g_set < kSets; g_set++) {
+        board = open_board(thinking);
+        if (g_set == 1) {
+            desktop.key(wm::key::LeftAlt, true); // Alt+O, then P
+            desktop.key(0x12, true);
+            desktop.key(0x12, false);
+            desktop.key(wm::key::LeftAlt, false);
+            desktop.key(0x13, true);
+            desktop.key(0x13, false);
+        }
+        move_pointer(560, 300);
+        std::string name = kSetNames[g_set];
+        name[0] = static_cast<char>(name[0] | 0x20);
+        save(folder + "/chess-4-pieces-" + name + ".ppm", true);
+        desktop.key(wm::key::Escape, true);
+        desktop.key(wm::key::Escape, false);
+        desktop.key(wm::key::Escape, true);
+        desktop.key(wm::key::Escape, false);
+        os::ui::close(board);
+        desktop.update();
+    }
+    g_set = 0;
 
     // 3. The dialog before a game, over a board not yet played on.
     Scene fresh = {{}, true, &kGreen, "", "", 0, "", "", "", "Choose a game."};

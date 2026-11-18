@@ -429,9 +429,13 @@ in `docs/journal/2026-11-18-chess-design.md`. Nothing is built.
 - Decided by the owner (2026-11-18): a piece is moved by dragging it, or
   by a click on it and a click on where it goes. The captured pieces are
   evenly spaced.
-- The look: squares of 40 pixels, the pieces as drawn by
-  `tools/mockup/chess_pieces.py` (two sets: "symbols", plainer, asked
-  for by the owner after the first, "classic"; which stays is open), green with white squares or brown with
+- Decided by the owner (2026-11-18): the game offers sets of pieces to
+  choose from (Options > Pieces), as it offers board colours. Three are
+  drawn by `tools/mockup/chess_pieces.py`: Contour (the detail all in the
+  outline), Symbols (plain signs) and Classic (with inner lines). Open:
+  which one a new installation starts with, and whether all three stay.
+- The look: squares of 40 pixels,
+  green with white squares or brown with
   cream ones, the last move in yellow, dots where a picked piece can go,
   letters and numbers inside the squares, the board turned so the user's
   side is at the bottom.

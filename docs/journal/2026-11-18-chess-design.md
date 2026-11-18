@@ -221,3 +221,31 @@ can be written and tested on the PC meanwhile, as their own piece of work.
   it goes: decided by the owner, as proposed.
 
 The three mock-ups were drawn again. PC only; nothing built.
+
+## Piece sets become themes (the same day)
+
+> add more detail to the pieces by contour, not by internal lines, but
+> record this as a theme, the app will have custom pieces to choose
+
+So the plain set stays, and the game is to offer sets of pieces to choose
+from, as it offers board colours: Options > Pieces. Decided by the owner.
+
+A third set was drawn, "Contour": turned pieces seen against the light.
+Collars, waists, a stepped foot, the cut in the bishop's mitre, the
+knight's ears and mane and the five points of the queen's crown are all in
+the outline, and nothing is drawn inside. The bishop's cut is a real bite
+out of the shape (`notch` in the script), so the outline follows it.
+
+The three sets, in the order of the menu: Contour, Symbols, Classic (the
+first one drawn, with inner lines). `chess-pieces.png` shows them side by
+side. The first three mock-ups use Contour; `chess-4-pieces-symbols.png`
+shows the Symbols set with the menu open at Pieces, and
+`chess-4-pieces-classic.png` the Classic set. Which set a new installation
+starts with, and whether Classic is kept at all, are the owner's to say.
+The set chosen would be kept in `chess.ini` with the rest.
+
+What a set costs: six drawings at two sizes, about 3 KB of the program's
+file if kept at two bits a pixel. The mock-up keeps them as text rows,
+which is larger.
+
+PC only; nothing built.

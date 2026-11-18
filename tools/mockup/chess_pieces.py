@@ -9,8 +9,9 @@ drawings serve both sides.
     python3 tools/mockup/chess_pieces.py header out.inc   the rows, for C++
     python3 tools/mockup/chess_pieces.py sheet out.png    a sheet to look at
 
-There are two sets: the first one drawn ("classic"), and "symbols", plainer,
-which the mock-up uses. The sheet shows both.
+There are three sets, which the game will offer as themes: Contour (the
+detail is all in the outline), Symbols (plain signs) and Classic (the first
+drawn, with inner lines). The sheet shows them side by side in that order.
 """
 import sys
 
@@ -45,6 +46,10 @@ class Pen:
 
     def cut(self, x0, y0, x1, y1):
         self.on.rectangle(self._p([(x0, y0), (x1, y1)]), fill=0)
+
+    def notch(self, *pts):
+        """Takes a bite out of the body: the outline follows it."""
+        self.on.polygon(self._p(pts), fill=0)
 
     def line(self, *pts, width=1.0):
         self.marks.line(self._p(pts), fill=255, width=max(1, round(width * self.k)), joint="curve")
@@ -179,8 +184,78 @@ def s_king(p):
 
 SYMBOLS = [("pawn", s_pawn), ("knight", s_knight), ("bishop", s_bishop), ("rook", s_rook),
            ("queen", s_queen), ("king", s_king)]
-SETS = {"classic": CLASSIC, "symbols": SYMBOLS}
-PIECES = SYMBOLS
+
+
+# The third set (the owner: "add more detail to the pieces by contour, not
+# by internal lines"): turned pieces seen against the light. Collars,
+# waists, a stepped foot, the bishop's cut and the knight's mane are all in
+# the outline; nothing is drawn inside.
+def step(p):
+    p.box(11, 29.5, 29, 33)
+    p.box(8.5, 32.5, 31.5, 36.5)
+
+
+def c_pawn(p):
+    p.oval(20, 12.3, 5.4)
+    p.oval(20, 19, 7.2, 1.9)
+    p.poly((17.5, 19), (22.5, 19), (24, 24), (27, 29.8), (13, 29.8), (16, 24))
+    step(p)
+
+
+def c_knight(p):
+    p.poly((12.5, 29.8), (13.5, 25.5), (16, 21.5), (19, 18.5), (16, 19.3), (13, 22), (10, 22.8),
+           (7.8, 21), (7.6, 18.5), (9.6, 15), (12, 11.5), (13.8, 8.5), (14.2, 4.2), (16.8, 7),
+           (18.6, 3.6), (20.6, 7.2), (24.2, 8.4), (24.6, 11.8), (28, 12.2), (28, 16.4),
+           (31, 17.2), (30.4, 22), (32, 23.4), (31.2, 29.8))
+    p.notch((7, 20.4), (10.6, 19.2), (10.6, 20.4))
+    step(p)
+
+
+def c_bishop(p):
+    p.oval(20, 4.8, 2.3)
+    p.poly((20, 6.3), (23.5, 9.8), (26, 14.5), (26.4, 18.5), (24.5, 22.5), (15.5, 22.5), (13.6, 18.5),
+           (14, 14.5), (16.5, 9.8))
+    p.notch((25, 10.4), (27.6, 12.4), (21.6, 16.6), (20.8, 15.2))
+    p.oval(20, 23.6, 7.6, 1.9)
+    p.poly((17.5, 24), (22.5, 24), (24, 27), (27, 29.8), (13, 29.8), (16, 27))
+    step(p)
+
+
+def c_rook(p):
+    p.box(10.5, 5.5, 29.5, 12)
+    p.cut(15, 4, 17.6, 8.6)
+    p.cut(22.4, 4, 25, 8.6)
+    p.poly((10.5, 12), (29.5, 12), (26, 15.5), (14, 15.5))
+    p.box(14.5, 15, 25.5, 26)
+    p.poly((14.5, 25), (25.5, 25), (28, 29.8), (12, 29.8))
+    step(p)
+
+
+def c_queen(p):
+    for x, y in ((8.6, 10.5), (14.2, 7.3), (20, 6.2), (25.8, 7.3), (31.4, 10.5)):
+        p.oval(x, y, 2.1)
+    p.poly((12, 26), (8.6, 11.5), (13.6, 19), (14.2, 8.5), (17.6, 18.3), (20, 7.5), (22.4, 18.3),
+           (25.8, 8.5), (26.4, 19), (31.4, 11.5), (28, 26))
+    p.oval(20, 26.3, 10.4, 1.9)
+    p.poly((13, 26.5), (27, 26.5), (28, 29.8), (12, 29.8))
+    step(p)
+
+
+def c_king(p):
+    p.box(18.8, 2.2, 21.2, 10.5)
+    p.box(16, 4.2, 24, 6.5)
+    p.oval(20, 12.6, 4.2, 3.4)
+    p.poly((13, 26), (9, 19.5), (9.4, 16.2), (12.5, 14.2), (16.5, 14.6), (20, 18), (23.5, 14.6),
+           (27.5, 14.2), (30.6, 16.2), (31, 19.5), (27, 26))
+    p.oval(20, 26.3, 9.6, 1.9)
+    p.poly((13, 26.5), (27, 26.5), (28, 29.8), (12, 29.8))
+    step(p)
+
+
+CONTOUR = [("pawn", c_pawn), ("knight", c_knight), ("bishop", c_bishop), ("rook", c_rook),
+           ("queen", c_queen), ("king", c_king)]
+# The sets the game will offer, by the names its menu shows.
+SETS = [("Contour", CONTOUR), ("Symbols", SYMBOLS), ("Classic", CLASSIC)]
 
 
 def rows(draw, size):
@@ -211,13 +286,18 @@ def rows(draw, size):
 def header(path):
     with open(path, "w") as f:
         f.write("// Made by tools/mockup/chess_pieces.py: do not edit.\n")
+        f.write("constexpr int kSets = %d;\n" % len(SETS))
+        f.write("constexpr const char *kSetNames[kSets] = {%s};\n" % ", ".join('"%s"' % n for n, _ in SETS))
         for size, tag in ((BIG, "Big"), (SMALL, "Small")):
             f.write("constexpr int k%sSize = %d;\n" % (tag, size))
-            f.write("constexpr const char *k%s[6][%d] = {\n" % (tag, size))
-            for name, draw in PIECES:
-                f.write("    { // %s\n" % name)
-                for row in rows(draw, size):
-                    f.write('        "%s",\n' % row)
+            f.write("constexpr const char *k%s[kSets][6][%d] = {\n" % (tag, size))
+            for set_name, pieces in SETS:
+                f.write("    { // %s\n" % set_name)
+                for name, draw in pieces:
+                    f.write("        { // %s\n" % name)
+                    for row in rows(draw, size):
+                        f.write('            "%s",\n' % row)
+                    f.write("        },\n")
                 f.write("    },\n")
             f.write("};\n")
 
@@ -228,10 +308,10 @@ def sheet(path):
     squares = [(255, 255, 255), (109, 146, 85), (255, 219, 170), (182, 146, 85)]
     white = {"X": (0, 0, 0), "o": (255, 255, 255), "-": (0, 0, 0)}
     black = {"X": (0, 0, 0), "o": (73, 73, 85), "-": (182, 182, 170)}
-    img = Image.new("RGB", (12 * BIG + 8, 8 * BIG + 2 * SMALL + 8), (182, 182, 170))
-    # The new set on the left, the first one on the right.
-    both = [(i * BIG, d) for i, (_, d) in enumerate(SYMBOLS)]
-    both += [(6 * BIG + 8 + i * BIG, d) for i, (_, d) in enumerate(CLASSIC)]
+    img = Image.new("RGB", (len(SETS) * (6 * BIG + 8) - 8, 8 * BIG + 2 * SMALL + 8), (182, 182, 170))
+    # The sets side by side, in the order of the game's menu.
+    both = [(n * (6 * BIG + 8) + i * BIG, d) for n, (_, pieces) in enumerate(SETS)
+            for i, (_, d) in enumerate(pieces)]
     for left, draw in both:
         big, small = rows(draw, BIG), rows(draw, SMALL)
         for band in range(8):
