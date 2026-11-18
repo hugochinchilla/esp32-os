@@ -468,7 +468,8 @@ and tested on the PC, not yet run on the board.
   only so far. The engine thinks in a background job a program starts by
   an OS call (`os::start_job`, asked for by the coordinator from the
   engine's findings), on a block of memory apart from the window, which
-  may close under it. **To confirm**, chosen on the recommended option:
+  may close under it. Chosen on the recommended option and confirmed by
+  the owner as a whole when shown the result ("perfect", 2026-11-18):
   the job runs at priority Low and rests a tick about four times a second
   (`os::job_rest`); the level's time is told by a timer of the window's,
   the engine having no clock; a pawn on the last rank asks in a dialog of

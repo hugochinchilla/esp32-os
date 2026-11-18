@@ -226,3 +226,13 @@ after closing, also when closed while thinking.
 - The board check, and the owner's word on the choices marked above.
 - Not built, and not in the approved design: a list of the moves played,
   a clock, saving a game, sounds.
+
+## The owner's answer (the same day)
+
+Shown the pull request, the screenshots and the list of choices marked "to
+confirm", the owner wrote:
+
+> perfect
+
+Taken as his yes to all of them, as built. `docs/DECISIONS.md` says so now.
+The board check is still to come.
