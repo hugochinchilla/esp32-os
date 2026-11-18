@@ -155,3 +155,36 @@ should not be there.
   the owner to decide.
 - The debug link's own work (a screenshot takes 0.3 s on the desktop's
   task) is not counted as a piece: it would only measure the measuring.
+
+## The first board turn (2026-11-18, commit 6f101d2 with main merged in)
+
+The standard checks passed and `dbg.py frames` answered. The benchmark did
+not run, for two reasons that are the script's, both found by the board
+thread:
+
+- The board starts with no window open (the owner's choice), and the
+  script waited for one, as `dbg.wait_for_desktop` does. It now waits for
+  the desktop's loop instead: a mouse event that is counted as a piece of
+  work.
+- On the board the games are files in `C:\Programs` (backlog item 27), and
+  Start > Run does not know "Culebra" or "Chess" by name there. The script
+  now gives Run the file (`C:\Programs\culebra.app`) when the name is
+  refused, and waits for the program's own window instead of counting
+  windows.
+
+Neither showed on the PC, where the simulator opens two demo windows and
+has the games built in.
+
+What `dbg.py frames` said on the idle desktop was a finding of its own,
+before any benchmark: 23 pieces over budget out of 574, every one a tick of
+about 84 ms, all of it in a timer of PID 3, the taskbar, coming round every
+two seconds; each followed by a timer of the desktop's 36.7 ms late. That
+timer is `desktop_files_tick` in `core/src/shell/desktop.cpp`: every two
+seconds it lists `C:\Documents\Desktop` again to see whether the icons
+changed, on the desktop's task, and on the board's flash drive that takes
+five video frames. So an idle desktop already holds everything still for
+84 ms every two seconds; a drag would stutter there, and a game's step
+would come late. `dbg.py misses` stayed at 0: the picture itself is not
+disturbed, it is only late. What to do about it (list on a job's task,
+list only when something says the folder changed, list less often) is the
+owner's to choose and a separate piece of work.

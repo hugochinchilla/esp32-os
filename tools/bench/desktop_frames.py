@@ -47,9 +47,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 import dbg  # noqa: E402
 
 MOUSE_HZ = 125  # what a USB mouse reports at
-# What Start > Run is given, and how the window's title starts or ends.
-PROGRAMS = (("Editor", "Editor"), ("File manager", "My Board"), ("Terminal", "Terminal"),
-            ("Culebra", "Culebra"), ("Chess", "Chess"))
+# What Start > Run is given, the file to give it instead where the program
+# is not built in (on the board the games are files in C:\Programs, backlog
+# item 27), and how the window's title starts or ends.
+PROGRAMS = (("Editor", None, "Editor"), ("File manager", None, "My Board"), ("Terminal", None, "Terminal"),
+            ("Culebra", "C:\\Programs\\culebra.app", "Culebra"), ("Chess", "C:\\Programs\\chess.app", "Chess"))
 # Chess's board inside its window: where square a8 starts, and a square's side.
 CHESS_BOARD = (12, 74, 40)
 # Quiet moves for White that stay legal whatever Black answers in so few moves.
@@ -105,21 +107,34 @@ class Bench:
             time.sleep(0.1)
         raise dbg.DebugError("could not bring %s to the front" % title)
 
-    def run(self, name):
-        """Start > Run, the program's name, Enter."""
-        before = len(self.board.windows())
-        self.board.tap("gui")
-        time.sleep(0.2)
-        self.board.tap("r")
-        time.sleep(0.4)
-        self.board.text(name)
-        self.board.tap("enter")
-        end = time.monotonic() + 10
-        while time.monotonic() < end:
+    def run(self, name, path, title):
+        """Start > Run, the program's name, Enter. Where Run does not know
+        the name (it says so in a box), the program's file instead."""
+        # Twice round: just after a start the Start menu may not be there yet.
+        for what in (name, path, name, path):
+            if what is None:
+                continue
+            self.board.tap("gui")
             time.sleep(0.2)
-            windows = self.board.windows()
-            if len(windows) > before and not any(w["title"] == "Run" for w in windows):
-                return
+            self.board.tap("r")
+            time.sleep(0.4)
+            self.board.text(what)
+            self.board.tap("enter")
+            end = time.monotonic() + 10
+            while time.monotonic() < end:
+                time.sleep(0.3)
+                windows = self.board.windows()
+                asking = [w for w in windows if w["title"] == "Run"]
+                if any(title in w["title"] for w in windows) and not asking:
+                    return
+                if len(asking) > 1:
+                    break  # the dialog and its box: "Cannot find"
+            # Put away the box, then the dialog, and try the next.
+            for _ in range(3):
+                if not any(w["title"] == "Run" for w in self.board.windows()):
+                    break
+                self.board.tap("esc")
+                time.sleep(0.3)
         raise dbg.DebugError("%s did not open" % name)
 
     def paced(self, seconds, step):
@@ -253,9 +268,9 @@ class Bench:
             pass  # it is there
         board.put("C:\\.config\\chess.ini", b"[game]\nlevel = 5\nside = white\n")
         open_now = [w["title"] for w in board.windows()]
-        for name, title in PROGRAMS:
+        for name, path, title in PROGRAMS:
             if not any(title in t for t in open_now):
-                self.run(name)
+                self.run(name, path, title)
         if any(w["title"] == "New game" for w in board.windows()):
             board.tap("enter")  # Chess's dialog before a game: as the file says
             time.sleep(0.5)
@@ -308,7 +323,7 @@ class Bench:
     def part_to_front_chess(self):
         self.chess_think()
         for _ in range(2):
-            for _, title in PROGRAMS:
+            for _, _, title in PROGRAMS:
                 self.focus(title)
                 time.sleep(0.2)
 
@@ -341,6 +356,30 @@ class Bench:
         self.measure("maximise", self.part_maximise, expected_slow=True)
 
 
+def wait_for_desktop(board, timeout=30):
+    """Waits until the desktop's loop is running: it answers, and a mouse
+    event is counted as a piece of its work. (A board may start with no
+    window at all, so windows are not what to wait for.)"""
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        try:
+            before = board.frames()["pieces"]
+            board.mouse(1, 0)
+            board.mouse(-1, 0)
+            time.sleep(0.2)
+            if board.frames()["pieces"] > before:
+                board.windows()
+                # The taskbar comes a moment after the desktop, and the
+                # programs that are files are put in C:\\Programs two
+                # seconds after that.
+                time.sleep(5)
+                return
+        except dbg.DebugError:
+            pass
+        time.sleep(0.5)
+    raise dbg.DebugError("the desktop did not start")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--port", default=os.environ.get("DBG_PORT", "/dev/ttyACM0"))
@@ -357,7 +396,7 @@ def main():
     failed = True
     try:
         board = dbg.Board(port, timeout=2.0)
-        dbg.wait_for_desktop(board)
+        wait_for_desktop(board)
         bench = Bench(board, args.seconds)
         bench.run_all()
         rows = bench.rows
