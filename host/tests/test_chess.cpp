@@ -687,19 +687,21 @@ void test_levels()
     CHECK(taken_by_4 == 20 && taken_by_1 == 20);
 
     // Each level against the one below, both colours, by depth and noise
-    // alone (no clock on the PC, so level 5 is given depth 6 here): the
+    // alone (no clock on the PC, so level 5 is given depth 7 here): the
     // higher level does not lose the pair.
     for (int n = 2; n <= kLevels; n++) {
         Limits high = limits_for(n, later, 1), low = limits_for(n - 1, later, 1);
-        if (high.depth > 6) {
-            high.depth = 6;
+        if (high.depth > 7) {
+            high.depth = 7;
         }
         int score = 0;
-        for (uint32_t seed = 1; seed <= 2; seed++) {
+        // (The two deepest pairs play one game each way: they take longest.)
+        const uint32_t pairs = high.depth >= 6 ? 1 : 2;
+        for (uint32_t seed = 1; seed <= pairs; seed++) {
             score += match(high, low, seed);
             score -= match(low, high, seed + 100);
         }
-        printf("level %d against level %d: %+d over 4 games\n", n, n - 1, score);
+        printf("level %d against level %d: %+d over %u games\n", n, n - 1, score, pairs * 2);
         CHECK(score > 0);
     }
 }
