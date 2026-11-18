@@ -111,3 +111,25 @@ in the firmware's exports (352 names, none missing). Compiled only.
 The board: that it looks smooth on the monitor, and that the timer at 60
 ticks a second for a quarter of a second costs no missed refill and no
 frame over budget (item 63).
+
+## On the board (2026-11-18, d5d8399)
+
+App-flashed on the BIOS layout; the firmware installed the new `chess.app`
+(51,184 bytes) on the first start. Level 1 as White, six moves by click-click
+(e2-e4, d2-d4, g1-f3, b1-c3, f1-e2, c1-e3): the computer answered each at once
+and its piece ended at rest on its square, whole, with the two squares of its
+move in yellow; one second after the last move nothing was cut and no pixel was
+left in the square above. Filmed with the webcam at 60 frames a second: the
+piece comes down over a few frames and settles, nothing else on the screen
+flickered or showed lines (the owner is to judge the motion himself on the
+monitor). Take back (Ctrl+Z) 0.08, 0.13 and 0.18 s after a move left the
+board whole each time, F2 and Play right after a move gave a fresh board, and
+Alt+F4 0.12 s after a move closed Chess with no crash. No missed refill of the
+video signal; free internal RAM was the same before opening Chess and after
+closing it.
+
+The frames reading (`dbg.py frames`): the landing's ticks do not all paint one
+square. Some paint the expected 1,600 pixels (6.1 ms), but several paint
+10,880 pixels in 16.4 to 19.1 ms (a frame is 16.8 ms), Chess's own PID, so a
+landing is at or just over the budget in a few of its steps; the mouse event
+that makes the move paints 12,480 pixels in 26 to 30 ms.
