@@ -5,6 +5,7 @@
 #include <initializer_list>
 
 #include "core/gfx/art.hpp"
+#include "core/sys/log.hpp"
 
 namespace wm {
 
@@ -892,6 +893,7 @@ Window *Wm::taskbar_window(int index) const
 
 void Wm::key(uint16_t usage, bool pressed)
 {
+    const Work piece(*this, sys::Frames::kKey);
     const proc::Scope desktop(procs_, desktop_pid_);
     const uint32_t start = clock_.micros();
     last_input_us_ = now_us();
@@ -1043,6 +1045,7 @@ void Wm::handle_key(uint16_t usage, bool pressed)
 
 void Wm::text(const char *utf8)
 {
+    const Work piece(*this, sys::Frames::kText);
     const proc::Scope desktop(procs_, desktop_pid_);
     const uint32_t start = clock_.micros();
     last_input_us_ = now_us();
@@ -1061,6 +1064,7 @@ void Wm::text(const char *utf8)
 
 void Wm::mouse(const ports::MouseEvent &event)
 {
+    const Work piece(*this, sys::Frames::kMouse);
     const proc::Scope desktop(procs_, desktop_pid_);
     if (screen_fn_ != nullptr) {
         return;
@@ -2055,8 +2059,10 @@ void Wm::update()
         const Rect screen = {0, 0, width_, height_};
         Canvas c(display_.pixels(), width_, height_, dirty_, screen);
         screen_fn_(c, screen_context_);
+        const long area = dirty_.area();
         dirty_.clear();
         last_update_us_ = clock_.micros() - start;
+        frames_.painted(last_update_us_, static_cast<uint32_t>(area));
         return;
     }
     const bool outline = outline_shown_;
@@ -2069,11 +2075,32 @@ void Wm::update()
             damage_fn_(dirty_[i], damage_context_);
         }
     }
+    const long area = dirty_.area();
     dirty_.clear();
     if (outline) {
         xor_outline();
     }
     last_update_us_ = clock_.micros() - start;
+    frames_.painted(last_update_us_, static_cast<uint32_t>(area));
+}
+
+Wm::Work::Work(Wm &wm, sys::Frames::Work work) : wm_(wm)
+{
+    wm_.frames_.begin(work, wm_.clock_.micros());
+}
+
+Wm::Work::~Work()
+{
+    const uint32_t at_ms = static_cast<uint32_t>(wm_.now_us() / 1000);
+    if (!wm_.frames_.end(wm_.clock_.micros(), at_ms)) {
+        return;
+    }
+    char text[200];
+    const size_t n = wm_.frames_.line(at_ms, text, sizeof(text) - 1);
+    if (n > 0) {
+        text[n] = '\n';
+        sys::log().write(text, n + 1);
+    }
 }
 
 void Wm::take_over(ScreenFn paint, void *context)
@@ -2166,7 +2193,9 @@ void Wm::paint(bool painter)
     if (!region_.empty()) {
         if (Panel *bar = panel(PanelPlace::Bar)) {
             const proc::Scope as(procs_, owner_of(PanelPlace::Bar));
+            const uint32_t start = clock_.micros();
             bar->paint(region_);
+            frames_.ran(sys::Frames::kPanelPaint, owner_of(PanelPlace::Bar), clock_.micros() - start);
         } else {
             // No bar: the background shows in its strip.
             Canvas strip(display_.pixels(), width_, height_, region_, taskbar());
@@ -2219,7 +2248,9 @@ void Wm::paint_desktop(const RectList &clip)
 {
     if (Panel *desk = panel(PanelPlace::Desktop)) {
         const proc::Scope as(procs_, owner_of(PanelPlace::Desktop));
+        const uint32_t start = clock_.micros();
         desk->paint(clip);
+        frames_.ran(sys::Frames::kPanelPaint, owner_of(PanelPlace::Desktop), clock_.micros() - start);
         return;
     }
     const Rect screen = {0, 0, width_, height_};
@@ -2229,6 +2260,7 @@ void Wm::paint_desktop(const RectList &clip)
 
 void Wm::paint_window(Window &w, const RectList &clip)
 {
+    const uint32_t start = clock_.micros();
     uint8_t *pixels = display_.pixels();
     Canvas frame(pixels, width_, height_, clip, w.frame_);
     paint_frame(frame, w);
@@ -2243,6 +2275,7 @@ void Wm::paint_window(Window &w, const RectList &clip)
     } else {
         w.paint(client);
     }
+    frames_.ran(sys::Frames::kWindowPaint, w.owner_, clock_.micros() - start);
 }
 
 void Wm::paint_frame(Canvas &c, Window &w)
@@ -2504,6 +2537,7 @@ void Wm::stop_timer(int id)
 
 void Wm::tick()
 {
+    const Work piece(*this, sys::Frames::kTick);
     if (procs_ != nullptr) {
         procs_->between(); // programs that were late and have come back
     }
@@ -2517,6 +2551,9 @@ void Wm::tick()
         const TimerFn fn = t.fn;
         void *context = t.context;
         const proc::Scope as(procs_, t.owner);
+        frames_.late(static_cast<uint32_t>(now - t.due));
+        const proc::Pid owner = t.owner; // the callback may stop the timer
+        const uint32_t called = clock_.micros();
         if (t.period != 0) {
             t.due += t.period;
             if (t.due <= now) {
@@ -2530,6 +2567,7 @@ void Wm::tick()
         } else {
             fn(context);
         }
+        frames_.ran(sys::Frames::kTimer, owner, clock_.micros() - called);
     }
     if (saver_on_) {
         saver_->tick(now);
@@ -2660,13 +2698,22 @@ Window *Wm::blocker(const Window &w) const
 
 void Wm::set_outline(const Rect &r, bool shown)
 {
+    // A step of a drag is a frame drawn too, though no window is painted.
+    const uint32_t start = clock_.micros();
+    const uint32_t ring = static_cast<uint32_t>(2 * kOutline * (r.w + r.h - 2 * kOutline));
+    uint32_t pixels = 0;
     if (outline_shown_) {
         xor_outline();
+        pixels += static_cast<uint32_t>(2 * kOutline * (outline_.w + outline_.h - 2 * kOutline));
     }
     outline_ = r;
     outline_shown_ = shown;
     if (outline_shown_) {
         xor_outline();
+        pixels += ring;
+    }
+    if (pixels > 0) {
+        frames_.painted(clock_.micros() - start, pixels);
     }
 }
 

@@ -18,6 +18,7 @@
 #include "core/gfx/rect.hpp"
 #include "core/ports.hpp"
 #include "core/proc/table.hpp"
+#include "core/sys/frames.hpp"
 #include "core/wm/window.hpp"
 
 namespace wm {
@@ -206,6 +207,22 @@ public:
     // Time the UI task has spent handling input, timers and painting since
     // start-up, in µs (wraps): the desktop's share of the processor.
     uint32_t busy_us() const { return busy_us_; }
+
+    // Whether the desktop keeps up with the monitor: every key, mouse
+    // event, typed text and tick is measured against one video frame
+    // (core/sys/frames.hpp). Whoever runs other work on the desktop's task
+    // (the messages from other tasks) puts a Work around it.
+    sys::Frames *frames() override { return &frames_; }
+    class Work {
+    public:
+        Work(Wm &wm, sys::Frames::Work work);
+        ~Work();
+        Work(const Work &) = delete;
+        Work &operator=(const Work &) = delete;
+
+    private:
+        Wm &wm_;
+    };
 
     // A program is about to keep the desktop waiting (a save, a load): the
     // pointer becomes the hourglass until the matching end_wait(). Calls
@@ -491,6 +508,7 @@ private:
     uint32_t last_update_us_ = 0;
     uint32_t last_event_us_ = 0;
     uint32_t busy_us_ = 0;
+    sys::Frames frames_;
     AttentionFn attention_ = nullptr;
     void *attention_context_ = nullptr;
     ScreenFn screen_fn_ = nullptr;

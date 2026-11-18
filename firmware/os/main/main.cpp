@@ -768,6 +768,10 @@ void ui_task(void *)
     static EspSystem system;
     static EspClock clock;
     static wm::Wm desktop(display, pointer, clock); // internal: every event and repaint goes through it
+    // One video frame: 800 x 525 pixels with the blanking, at the pixel
+    // clock (16 800 us at 25 MHz). What the desktop's work is measured
+    // against (core/sys/frames.hpp, tools/dbg.py frames).
+    desktop.frames()->set_budget(static_cast<uint32_t>(800ULL * 525 * 1000000 / vga_pixel_clock_hz()));
     static BootInput input(desktop);
     static EXT_RAM_BSS_ATTR dbg::Protocol protocol(sink, lock, display, pointer, input, system, "esp32-os");
     protocol.set_desktop(&desktop);
@@ -1222,7 +1226,11 @@ void ui_task(void *)
             }
             protocol.feed(buffer, static_cast<size_t>(got));
         }
-        more |= inbox.deliver(); // what other tasks asked the UI task to do
+        {
+            // Measured against the video frame, as the desktop's own work is.
+            const wm::Wm::Work piece(desktop, sys::Frames::kMessage);
+            more |= inbox.deliver(); // what other tasks asked the UI task to do
+        }
         desktop.tick();          // timers (caret, key repeat, clock), then any painting
         uint32_t sleep_us = 0;
         if (!more) {

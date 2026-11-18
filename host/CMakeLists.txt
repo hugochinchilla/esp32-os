@@ -248,6 +248,10 @@ add_test(NAME crash COMMAND test_crash)
 add_executable(test_missed_refills tests/test_missed_refills.cpp)
 target_link_libraries(test_missed_refills PRIVATE core)
 add_test(NAME missed_refills COMMAND test_missed_refills)
+# The desktop against the video frame: frames over budget and late timers.
+add_executable(test_frames tests/test_frames.cpp)
+target_link_libraries(test_frames PRIVATE core)
+add_test(NAME frames COMMAND test_frames)
 
 # Chinchilla as a desktop program (backlog item 32): the same core in an SDL2
 # window. Its parts that need no window are tested everywhere; the program
