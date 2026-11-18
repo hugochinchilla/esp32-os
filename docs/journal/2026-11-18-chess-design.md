@@ -249,3 +249,19 @@ file if kept at two bits a pixel. The mock-up keeps them as text rows,
 which is larger.
 
 PC only; nothing built.
+
+## Approved (the same day)
+
+> perfect, go ahead
+
+The owner approved the design as last shown. Taken from that, and to be
+corrected if it was not what he meant: the three sets of pieces stay and a
+new installation starts with Contour (the one the mock-ups use); the boards
+are green with white and brown with cream; five levels; the program is
+called "Chess".
+
+The building is three pieces of work, each its own thread and branch: item
+49 (the hourglass on demand), the rules and the engine of item 50 with
+their PC tests, and then the window. The mock-up and its script stay in
+`tools/mockup/` as the reference for the window: the measures, the colours
+and the pieces are in them.

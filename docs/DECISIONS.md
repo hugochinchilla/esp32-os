@@ -417,31 +417,32 @@ and reasons are in `docs/journal/2026-11-17-program-lifecycle.md`.
 | How the PC build shows the screen | SDL window, image files only | Open |
 | Clock chip | DS3231 module, another I2C chip | DS3231 |
 
-### The chess game (asked 2026-11-18; the engine decided, the look to choose)
+### The chess game (the owner's decisions, 2026-11-18)
 
 Backlog item 50; the mock-ups are in `docs/look/chess/` and the reasoning
-in `docs/journal/2026-11-18-chess-design.md`. Nothing is built.
+in `docs/journal/2026-11-18-chess-design.md`. Designed and approved, not
+built.
 
-- Decided by the owner (2026-11-18, on a card): the engine is one written
-  for this project in `core/src/games/`, tested on the PC. Not micro-Max
-  (through mcu-max), and not a port of a larger engine. The points below
-  are still his to choose.
-- Decided by the owner (2026-11-18): a piece is moved by dragging it, or
-  by a click on it and a click on where it goes. The captured pieces are
-  evenly spaced.
-- Decided by the owner (2026-11-18): the game offers sets of pieces to
-  choose from (Options > Pieces), as it offers board colours. Three are
-  drawn by `tools/mockup/chess_pieces.py`: Contour (the detail all in the
-  outline), Symbols (plain signs) and Classic (with inner lines). Open:
-  which one a new installation starts with, and whether all three stay.
-- The look: squares of 40 pixels,
-  green with white squares or brown with
-  cream ones, the last move in yellow, dots where a picked piece can go,
-  letters and numbers inside the squares, the board turned so the user's
-  side is at the bottom.
-- Five levels of difficulty, and White, Black or Random, in a dialog
-  before each game; kept in `C:\.config\chess.ini`.
-- The name of the program ("Chess" in the mock-ups).
+- The engine is one written for this project in `core/src/games/`, tested
+  on the PC (chosen on a card). Not micro-Max (through mcu-max), and not a
+  port of a larger engine.
+- A piece is moved by dragging it, or by a click on it and a click on
+  where it goes.
+- What each side has taken is shown as small pieces, evenly spaced: the
+  engine's captures above the board, the user's below, with the lead in
+  pawns.
+- The game offers sets of pieces to choose from (Options > Pieces), as it
+  offers board colours (Options > Board). Three sets, drawn by
+  `tools/mockup/chess_pieces.py`: Contour (the detail all in the outline),
+  Symbols (plain signs) and Classic (with inner lines).
+- Approved as shown ("perfect, go ahead"), and so to confirm only if it
+  turns out not to be what he meant: Contour is the set a new installation
+  starts with; squares of 40 pixels; green with white squares or brown
+  with cream ones; the last move in yellow, dots where a picked piece can
+  go, letters and numbers inside the squares, the board turned so the
+  user's side is at the bottom; five levels of difficulty, and White,
+  Black or Random, in a dialog before each game; everything chosen kept in
+  `C:\.config\chess.ini`; the program is called "Chess".
 
 ## Ideas kept for later
 
