@@ -60,7 +60,9 @@ The rest is the agent's and waits for him:
 - **Programs** ask through `os::play_sound`, `os::beep` and
   `os::sound_playing`.
 - **The browser** plays nothing on a page nobody has clicked, so the page
-  starts switched off with a power button; pressing it starts the machine
+  starts switched off with a power button and the words "Click to start
+  Chinchilla 96" (the owner's choice and words, 2026-11-18); a click
+  anywhere starts the machine
   and the beep and chime are heard in their places. After Restart the page
   comes back on without the button. A sound that the browser still holds
   back for half a second is dropped rather than played late. Not chosen:

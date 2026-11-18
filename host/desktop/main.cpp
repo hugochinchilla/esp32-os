@@ -80,12 +80,13 @@ EM_ASYNC_JS(int, web_mount_drive, (const char *path), {
 // The size the canvas has on the page, in the screen's real pixels.
 // Browsers play no sound on a page nobody has clicked, so the page starts
 // switched off, with a power button (web/shell.html): this waits for it.
-// A page without the button starts at once.
+// The words under it are the owner's ("Click to start Chinchilla 96"). A page
+// without the button starts at once.
 EM_ASYNC_JS(void, web_wait_for_power, (), {
-    const button = document.getElementById('power');
-    if (button) {
-        await new Promise((pressed) => button.addEventListener('click', pressed, {once: true}));
-        document.getElementById('off').remove();
+    const off = document.getElementById('off'); // a click anywhere on it will do
+    if (off) {
+        await new Promise((pressed) => off.addEventListener('click', pressed, {once: true}));
+        off.remove();
     }
     Module.canvas.focus();
 });
