@@ -660,7 +660,8 @@ void list_desktop(DesktopListing &out)
                 continue; // hidden
             }
             DesktopListing::Found &f = out.found[out.count++];
-            snprintf(f.name, sizeof(f.name), "%s", run[i].name);
+            static_assert(sizeof(f.name) == sizeof(run[i].name), "a name is copied whole");
+            memcpy(f.name, run[i].name, sizeof(f.name));
             f.folder = run[i].folder;
         }
         if (got < kRun) {

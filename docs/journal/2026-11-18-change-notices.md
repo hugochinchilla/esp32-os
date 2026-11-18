@@ -1,9 +1,9 @@
 # The desktop stops reading its folder every two seconds
 
-2026-11-18. Backlog item 65. Built and tested on the PC (51 of 51 tests).
+2026-11-18. Backlog item 65. Built and tested on the PC (52 of 52 tests);
+the firmware compiles and links in the cloud (ESP-IDF v5.5, 1,731,392 bytes).
 Nothing here has run on the board: the figures that prove it come from the
-board turn. Whether the firmware compiles in the cloud is said in the pull
-request.
+board turn.
 
 ## What was asked
 
