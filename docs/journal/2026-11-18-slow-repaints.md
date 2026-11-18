@@ -127,3 +127,100 @@ pass.
 - The board turn, and then the options for the owner with the board's
   figures in them. Nothing that changes how windows are painted is built
   before he picks.
+
+## On the board (2026-11-18, b63d78b)
+
+The firmware compiled and linked in the cloud before the turn. The board
+thread ran the bench with the benchmark's five windows open, three times
+and once with the Editor maximised; the runs agree within about 5 %, and
+`dbg.py misses` stayed at 0. The figures below are as the coordinator
+relayed them from the board thread's report (the raw output stayed in that
+thread). Free memory with the five windows open: 161,359 bytes internal,
+5,163,708 external.
+
+Each kind of drawing over 480 x 300 = 144,000 pixels (the tiles: 134,400):
+
+| Drawing | Time | A pixel |
+| --- | --- | --- |
+| `fill` | 3.8 ms | 26 ns |
+| `fill` through the scratch band | 4.1 ms | 29 ns |
+| `fill_rgb` | 5.4 ms | 37 ns |
+| `fill_fade` | 216.5 ms | 1,504 ns |
+| `text_opaque` | 22.5 ms | 156 ns |
+| the same text, the straight loop | 4.9 ms | 34 ns |
+| `text` | 9.9 ms | |
+| `blit_opaque`, 84 squares | 6.0 ms | 44 ns |
+| `blit`, 84 squares | 8.9 ms | |
+| copy from external RAM | 6.2 ms | 43 ns |
+| copy from internal RAM | 3.8 ms | 26 ns |
+
+Each window painted alone, its frame and its inside:
+
+| Window | Frame | Inside |
+| --- | --- | --- |
+| Editor (empty) | 7.6 ms | 6.2 ms |
+| File manager | 6.8 ms | 5.7 ms |
+| Terminal | 7.9 ms | 25.4 ms |
+| Culebra | 5.8 ms | 10.4 ms |
+| Chess | 7.0 ms | 28.8 ms |
+
+Everything painted again: 14.9 ms with no window open, 69.9 to 71.0 ms with
+the five, 20.8 ms with the Editor maximised over them.
+
+What the board adds to the PC's profile:
+
+- **Writing to the screen has a floor of 26 ns a pixel**, 38 MB a second.
+  A window of 180,000 pixels cannot be painted in less than 4.7 ms, the
+  whole screen in less than 8.
+- **The title bar is the surprise.** `fill_fade` costs 1.5 µs a pixel, 58
+  times a plain fill: it walks down each column, and works a colour out
+  with three divisions and a dither for every column. A window's frame
+  takes 6 to 8 ms, nearly all of it the 18 lines of fade, and five frames
+  are 35 of the 70 ms of a whole repaint. The PC showed it as a tenth of a
+  window; on the board it is as much as the Editor's whole inside.
+- **The text loop is 4.6 times dearer than it needs to be**: 156 ns a pixel
+  against 34 for the straight loop, which is close to the floor.
+- **The Terminal's and Chess's insides** are the two outliers the PC
+  pointed at: 25.4 and 28.8 ms.
+- **A copy from external RAM runs at 43 ns a pixel**, 23 MB a second. A kept
+  picture of a 180,000-pixel window goes to the screen in 7.7 ms; a whole
+  screen in 13.2 ms. That fits in a frame, but not by much.
+
+Meanwhile the taskbar's two-second timer was fixed on another branch (PR
+65): the benchmark now counts 40 to 41 pieces over budget, all of them
+repaints (drops 14, to the front 12, maximise 6).
+
+## The options, for the owner
+
+Estimates, worked from the board's rates above; none is built.
+
+**A. Faster drawing, no kept pictures.** Three changes in the drawing code:
+the title bar's fade worked out once and copied (a few KB); `text_cells`
+as the straight loop; Chess painted square by square, each pixel once,
+from pieces unpacked once when the window opens (about 19 KB), without the
+band. Estimated: a frame 7 ms to about 1.5; the Terminal 33 ms to about 8;
+Chess 36 to about 9, and a moved piece 16 ms to under 1; the Editor full
+of text about 22 to about 6. Bringing any one window to the front then
+fits in a frame. What does not: going back from maximised, which paints
+the desktop and every window (70 ms to an estimated 45 to 50), and a drop
+that uncovers several windows (an estimated 15 to 25 ms). Memory: about 20
+KB. It also makes everyday painting faster: typing and scrolling in the
+Terminal, a chess move.
+
+**B. A kept picture of every window in external RAM.** Each window draws
+into its own picture and the window manager copies to the screen. To the
+front, a drop and back from maximised become copies: 7.7 ms for a window,
+at most 13 ms for a screenful. Memory: a byte a pixel, 681 KB for the
+benchmark's five windows and up to 289 KB more for each one maximised, of
+5.1 MB free. It does not make drawing faster: the first paint, a resize
+and scrolling the Terminal still cost what they cost today, plus the copy,
+and a moved chess piece stays at a frame. It reverses "Windows keep no
+stored picture of themselves", and it is the larger change: every program's
+painting goes through it.
+
+**C. A now, measure again, then B only for what is still slow.** After A,
+what is left over budget is the repaint of many windows at once, which is
+exactly what B is good at, and B's copies would then sit on top of cheap
+drawing instead of slow drawing.
+
+The agent recommends C: A first.
