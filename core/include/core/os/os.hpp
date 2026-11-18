@@ -134,6 +134,14 @@ const gfx::Bitmap *window_icon(WindowId window);
 bool bring_forward(WindowId window);
 // A file or folder starts being dragged (the File manager).
 void begin_drag(const char *path);
+// One more carried by the drag just begun, when several are picked: let go,
+// they are dropped one after the other, that of begin_drag() first. False:
+// no memory for it.
+bool add_to_drag(const char *path);
+// While a Dropped event is answered: how many more files of the same drag
+// will be dropped here after this one. What can wait for the last (looking
+// at the folder again, saying what went wrong) waits for 0.
+int drops_to_come();
 // The hourglass while slow work runs on the UI task:
 //     const os::Busy busy;
 class Busy {
@@ -247,6 +255,25 @@ Error read_file(const char *path, void *data, size_t capacity, size_t &size);
 Error write_file(const char *path, const void *data, size_t size);
 
 } // namespace file
+
+/* ---- Files on the clipboard --------------------------------------------------- */
+
+// Copy and Cut put files and folders on the clipboard by their full paths;
+// Paste asks which, and whether they were cut (they are then moved, and
+// whoever pasted clears the clipboard). The clipboard is the one the text
+// uses: it holds text or files, never both (os::ui::clipboard_size() is of
+// the text).
+namespace clipboard {
+
+// Empties the clipboard and puts these there: each is `folder` with a name
+// of `names`. False if not all of them fitted (the clipboard is then empty).
+bool set_files(const char *folder, const char *const *names, int count, bool cut);
+int file_count();                                  // 0: no files there
+bool file(int index, char *out, size_t capacity);  // a full path
+bool files_cut();
+void clear();
+
+} // namespace clipboard
 
 /* ---- Settings ------------------------------------------------------------------ */
 

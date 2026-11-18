@@ -60,7 +60,6 @@ bool free_name(const char *folder, const char *name, bool is_folder, const fs::I
     return false;
 }
 
-char g_pending[fs::kMaxPath];
 char g_message[fs::kMaxPath + 120];
 
 void report(ports::FsError e, const char *what, const char *path)
@@ -72,31 +71,84 @@ void report(ports::FsError e, const char *what, const char *path)
     message_box("Delete", g_message);
 }
 
-void delete_answer(int choice, void *permanent)
+// Into the Trash, with the index the caller has loaded and will save if
+// `indexed` comes back true: one write of the index however many go.
+ports::FsError trash_one(const char *path, fs::Ini &index, bool &indexed)
 {
-    if (choice != 0) {
-        return;
+    if (!trashable(path)) {
+        return ports::FsError::BadName;
     }
-    const ports::FsError e = permanent != nullptr ? remove_tree(g_pending) : to_trash(g_pending);
-    files_changed();
-    report(e, permanent != nullptr ? "delete" : "move to the Trash", g_pending);
+    ports::DirEntry e;
+    ports::FsError err = os::file::stat(path, e);
+    if (err != ports::FsError::Ok) {
+        return err;
+    }
+    os::file::make_folder(kTrashFolder);
+    char name[fs::kMaxPath], to[fs::kMaxPath];
+    if (!free_name(kTrashFolder, fs::path::name(path), e.folder, &index, name, sizeof(name)) ||
+        !fs::path::join(kTrashFolder, name, to, sizeof(to))) {
+        return ports::FsError::Exists;
+    }
+    err = os::file::rename(path, to);
+    if (err == ports::FsError::Ok && indexable(name) && index.set("from", name, path)) {
+        indexed = true;
+    }
+    return err;
 }
 
-// Asks before removing g_pending for good: in the Trash, or on a drive
-// without one.
-void ask_permanent(bool folder)
+// What the Delete question is about, kept until it is answered: a block of
+// the asker's, given back with the answer. A question that is dropped
+// without one (another took its place) leaves its block here, and the next
+// Delete gives it back.
+struct Pending {
+    int count;
+    bool permanent;
+    char folder[fs::kMaxPath];
+    char names[1]; // `count` of them, each with its closing zero
+};
+Pending *g_pending = nullptr;
+
+void forget_pending()
 {
-    const char *name = fs::path::name(g_pending);
-    static char text[fs::kMaxPath + 120];
-    if (in_trash(g_pending)) {
-        snprintf(text, sizeof(text), "Are you sure you want to delete '%s'%s?\nIt cannot be put back.", name,
-                 folder ? " and everything in it" : "");
-    } else {
-        snprintf(text, sizeof(text), "Drive %c: has no Trash. Are you sure you want to\ndelete '%s'%s for good?",
-                 fs::path::drive(g_pending), name, folder ? " and everything in it" : "");
+    os::release(g_pending);
+    g_pending = nullptr;
+}
+
+void delete_answer(int choice, void *)
+{
+    Pending *p = g_pending;
+    if (p == nullptr) {
+        return;
     }
-    static const char *const yes_no[] = {"&Yes", "&No"};
-    ask(folder ? "Confirm Folder Delete" : "Confirm File Delete", text, yes_no, 2, &delete_answer, g_pending);
+    if (choice != 0) {
+        forget_pending();
+        return;
+    }
+    ports::FsError e = ports::FsError::Ok;
+    char path[fs::kMaxPath] = "";
+    {
+        const os::Busy hourglass;
+        fs::Ini index;
+        bool indexed = false;
+        if (!p->permanent) {
+            load_settings(kIndex, index);
+        }
+        const char *name = p->names;
+        for (int i = 0; i < p->count && e == ports::FsError::Ok; i++, name += strlen(name) + 1) {
+            if (!fs::path::join(p->folder, name, path, sizeof(path))) {
+                e = ports::FsError::BadName;
+            } else {
+                e = p->permanent ? remove_tree(path) : trash_one(path, index, indexed);
+            }
+        }
+        if (indexed) {
+            save_settings(kIndex, index);
+        }
+    }
+    const bool permanent = p->permanent;
+    forget_pending();
+    files_changed();
+    report(e, permanent ? "delete" : "move to the Trash", path); // the one it stopped at
 }
 
 } // namespace
@@ -144,24 +196,11 @@ ports::FsError remove_tree(const char *p, int depth)
 
 ports::FsError to_trash(const char *path)
 {
-    if (!trashable(path)) {
-        return ports::FsError::BadName;
-    }
-    ports::DirEntry e;
-    ports::FsError err = os::file::stat(path, e);
-    if (err != ports::FsError::Ok) {
-        return err;
-    }
-    os::file::make_folder(kTrashFolder);
     fs::Ini index;
     load_settings(kIndex, index);
-    char name[fs::kMaxPath], to[fs::kMaxPath];
-    if (!free_name(kTrashFolder, fs::path::name(path), e.folder, &index, name, sizeof(name)) ||
-        !fs::path::join(kTrashFolder, name, to, sizeof(to))) {
-        return ports::FsError::Exists;
-    }
-    err = os::file::rename(path, to);
-    if (err == ports::FsError::Ok && indexable(name) && index.set("from", name, path)) {
+    bool indexed = false;
+    const ports::FsError err = trash_one(path, index, indexed);
+    if (indexed) {
         save_settings(kIndex, index);
     }
     return err;
@@ -254,20 +293,75 @@ ports::FsError move_to_folder(const char *path, const char *folder)
 
 void delete_asking(const char *path)
 {
+    if (fs::path::relative(path)[0] == 0) {
+        return;
+    }
+    char folder[fs::kMaxPath];
+    fs::path::parent(path, folder, sizeof(folder));
+    const char *name = fs::path::name(path);
+    delete_asking(Selection{folder, &name, 1});
+}
+
+// One question for all of them. On C: they go to the Trash; in the Trash,
+// and on a drive that has none, they are deleted for good, and the question
+// says so.
+void delete_asking(const Selection &s)
+{
+    forget_pending();
+    if (s.count < 1 || s.folder == nullptr || s.folder[0] == 0) {
+        return;
+    }
+    size_t bytes = 0;
+    for (int i = 0; i < s.count; i++) {
+        bytes += strlen(s.names[i]) + 1;
+    }
+    char first[fs::kMaxPath];
     ports::DirEntry e;
-    if (fs::path::relative(path)[0] == 0 || os::file::stat(path, e) != ports::FsError::Ok) {
+    if (!fs::path::join(s.folder, s.names[0], first, sizeof(first)) || os::file::stat(first, e) != ports::FsError::Ok) {
         return;
     }
-    snprintf(g_pending, sizeof(g_pending), "%s", path);
-    if (!trashable(path)) {
-        ask_permanent(e.folder);
+    Pending *p = static_cast<Pending *>(os::allocate(sizeof(Pending) + bytes));
+    if (p == nullptr) {
+        message_box("Delete", "There is not enough memory to delete these.");
         return;
     }
-    static char text[fs::kMaxPath + 80];
-    snprintf(text, sizeof(text), "Are you sure you want to move '%s'%s\nto the Trash?", fs::path::name(path),
-             e.folder ? " and everything in it" : "");
+    p->count = s.count;
+    p->permanent = !trashable(first);
+    snprintf(p->folder, sizeof(p->folder), "%s", s.folder);
+    char *at = p->names;
+    for (int i = 0; i < s.count; i++) {
+        const size_t n = strlen(s.names[i]) + 1;
+        memcpy(at, s.names[i], n);
+        at += n;
+    }
+    g_pending = p;
+
+    static char text[fs::kMaxPath + 120];
+    const char *title = e.folder ? "Confirm Folder Delete" : "Confirm File Delete";
+    const char *all = e.folder ? " and everything in it" : "";
+    if (s.count > 1) {
+        title = "Confirm Delete";
+        if (!p->permanent) {
+            snprintf(text, sizeof(text), "Are you sure you want to move these %d items\nto the Trash?", s.count);
+        } else if (in_trash(first)) {
+            snprintf(text, sizeof(text), "Are you sure you want to delete these %d items?\nThey cannot be put back.",
+                     s.count);
+        } else {
+            snprintf(text, sizeof(text),
+                     "Drive %c: has no Trash. Are you sure you want to\ndelete these %d items for good?",
+                     fs::path::drive(first), s.count);
+        }
+    } else if (!p->permanent) {
+        snprintf(text, sizeof(text), "Are you sure you want to move '%s'%s\nto the Trash?", s.names[0], all);
+    } else if (in_trash(first)) {
+        snprintf(text, sizeof(text), "Are you sure you want to delete '%s'%s?\nIt cannot be put back.", s.names[0],
+                 all);
+    } else {
+        snprintf(text, sizeof(text), "Drive %c: has no Trash. Are you sure you want to\ndelete '%s'%s for good?",
+                 fs::path::drive(first), s.names[0], all);
+    }
     static const char *const yes_no[] = {"&Yes", "&No"};
-    ask(e.folder ? "Confirm Folder Delete" : "Confirm File Delete", text, yes_no, 2, &delete_answer, nullptr);
+    ask(title, text, yes_no, 2, &delete_answer, nullptr);
 }
 
 void drop_in_trash(const char *path)

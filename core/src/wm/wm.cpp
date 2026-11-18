@@ -988,6 +988,7 @@ void Wm::handle_key(uint16_t usage, bool pressed)
             }
             drop_window_ = nullptr;
         }
+        forget_drag_list();
         capture_ = Capture::Swallow; // the release that follows does nothing
         return;
     }
@@ -1513,10 +1514,58 @@ void Wm::begin_drag(const char *path, bool desktop_only)
     }
     drag_desktop_only_ = desktop_only;
     snprintf(drag_path_, sizeof(drag_path_), "%s", path);
+    forget_drag_list();
     capture_ = Capture::Item;
     captured_ = nullptr;
     set_outline({pointer_x_ - 16, pointer_y_ - 16, 32, 32}, true);
     update_drop_target();
+}
+
+// The drag is over: the memory for the others it carried goes back.
+void Wm::forget_drag_list()
+{
+    if (drag_more_ != nullptr && memory_ != nullptr) {
+        memory_->release(drag_more_);
+    }
+    drag_more_ = nullptr;
+    drag_more_room_ = drag_more_used_ = 0;
+    drag_more_count_ = 0;
+}
+
+bool Wm::add_to_drag(const char *path, bool desktop_only)
+{
+    if (capture_ != Capture::Item || path == nullptr || path[0] == 0) {
+        return false;
+    }
+    const size_t n = strlen(path);
+    if (n >= kDragPath) {
+        return false;
+    }
+    const size_t need = drag_more_used_ + n + 2;
+    if (need > drag_more_room_) {
+        if (memory_ == nullptr) {
+            return false;
+        }
+        size_t room = drag_more_room_ > 0 ? drag_more_room_ * 2 : 1024;
+        while (room < need) {
+            room *= 2;
+        }
+        auto *block = static_cast<char *>(memory_->allocate(room));
+        if (block == nullptr) {
+            return false;
+        }
+        if (drag_more_ != nullptr) {
+            memcpy(block, drag_more_, drag_more_used_);
+            memory_->release(drag_more_);
+        }
+        drag_more_ = block;
+        drag_more_room_ = room;
+    }
+    drag_more_[drag_more_used_] = desktop_only ? 1 : 0;
+    memcpy(drag_more_ + drag_more_used_ + 1, path, n + 1);
+    drag_more_used_ = need;
+    drag_more_count_++;
+    return true;
 }
 
 // The drag is no longer over the desktop panel: it is told, once.
@@ -1627,16 +1676,38 @@ void Wm::on_release()
         const bool on_desktop = desktop_target_;
         Panel *desk = panel(PanelPlace::Desktop);
         leave_desktop_target();
-        drop_window_ = nullptr;
-        if (on_desktop && desk != nullptr) {
-            const proc::Scope as(procs_, owner_of(PanelPlace::Desktop));
-            desk->dropped(path, pointer_x_, pointer_y_);
-        } else if (target != nullptr) {
-            const proc::Scope as(procs_, target->owner_);
-            target->drag_over(nullptr, -1, -1);
-            const Rect c = target->client();
-            target->dropped(path, pointer_x_ - c.x, pointer_y_ - c.y);
+        // The first, then the others in turn. Each is copied out first:
+        // what a target does may start another drag or end its window.
+        const int count = on_desktop || target != nullptr ? drag_more_count_ : 0;
+        size_t at = 0;
+        for (int i = 0; i <= count; i++) {
+            bool desktop_only = drag_desktop_only_;
+            if (i > 0) {
+                if (at >= drag_more_used_) {
+                    break;
+                }
+                desktop_only = drag_more_[at] != 0;
+                snprintf(path, sizeof(path), "%s", drag_more_ + at + 1);
+                at += strlen(drag_more_ + at + 1) + 2;
+            }
+            drops_to_come_ = count - i;
+            if (on_desktop && desk != nullptr) {
+                if (panel(PanelPlace::Desktop) == desk) {
+                    const proc::Scope as(procs_, owner_of(PanelPlace::Desktop));
+                    desk->dropped(path, pointer_x_, pointer_y_);
+                }
+            } else if (target != nullptr && !desktop_only && drop_window_ == target) { // it has not closed
+                const proc::Scope as(procs_, target->owner_);
+                if (i == 0) {
+                    target->drag_over(nullptr, -1, -1);
+                }
+                const Rect c = target->client();
+                target->dropped(path, pointer_x_ - c.x, pointer_y_ - c.y);
+            }
         }
+        drop_window_ = nullptr;
+        drops_to_come_ = 0;
+        forget_drag_list();
         break;
     }
     case Capture::Menu: {
