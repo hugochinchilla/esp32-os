@@ -257,9 +257,14 @@ public:
         os::ui::set_items(window_, number_, names, count, icons);
     }
     void reset() const { os::ui::reset_view(window_, number_); } // nothing picked, back at the top
-    int selected() const { return os::ui::selected(window_, number_); } // -1: none
-    void select(int index) const { os::ui::select(window_, number_, index); } // tells of it (changed)
+    int selected() const { return os::ui::selected(window_, number_); } // the one picked last; -1: none
+    void select(int index) const { os::ui::select(window_, number_, index); } // it alone; tells of it (changed)
     int item_at(int x, int y) const { return os::ui::item_at(window_, number_, x, y); } // in its coordinates
+    // Several can be picked (Ctrl+click, Shift+click, a rectangle, Ctrl+A).
+    int selected_count() const { return os::ui::selected_count(window_, number_); }
+    bool is_selected(int index) const { return os::ui::is_selected(window_, number_, index); }
+    // Shown as picked without being picked (where a dragged file would go); -1: none.
+    void highlight(int index) const { os::ui::highlight(window_, number_, index); }
 };
 
 // The text editor: a whole text file, with its own memory for the text

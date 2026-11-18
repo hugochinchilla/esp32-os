@@ -44,8 +44,10 @@ The journal entry with the reasons is
 | | `os::caret_moved()` | The text cursor of the window in use has moved: shown at once (the Terminal) |
 | Windows by number | `os::ui` (`core/os/ui.hpp`): windows, controls and their events | A program asks for a window and controls and gets numbers; written through the thin classes of `core/app/app.hpp` (item 37) |
 | | `os::ui::icon_view`, `set_items`, `item_at`, `reset_view`; events Drag, DragOver, Dropped | The view of icons with names (File manager), and files dragged out of it and dropped on a window |
+| | `os::ui::selected_count`, `is_selected`, `highlight` | Several entries of an icon view picked at once (item 55): how many, whether this one is, and one more shown as picked without being it (the folder a dragged file would go into). `selected()` is the one picked last |
 | | `os::ui::draw::fill`, `text`, `text_scaled`, `blit`, `part`, `dent`, ... | Drawing while a Paint event is answered, on a number good only until it returns (`app::Canvas`) |
 | | `os::begin_drag(path)` | A file starts being dragged |
+| | `os::add_to_drag(path)`, `os::drops_to_come()` | One more file carried by the drag just begun (item 55); and, while a Dropped event is answered, how many more of the same drag follow, so that the folder is read again and the error box shown once, after the last |
 | | `os::Busy busy;` | The hourglass over the whole screen until the end of the block |
 | | `os::ui::set_hourglass(window, on)`, `os::ui::hourglass(window)` | The hourglass on demand (item 49): over the window's client area while it is on, and the window answers as before. A switch the program turns off itself; it goes with the window |
 | Desktop | `os::set_backdrop(backdrop)` | The desktop's colour and pattern (Display) |

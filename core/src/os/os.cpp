@@ -336,6 +336,16 @@ void begin_drag(const char *path)
     const prog::InCall in_call;
     g_kit.wm->begin_drag(path);
 }
+bool add_to_drag(const char *path)
+{
+    const prog::InCall in_call;
+    return g_kit.wm->add_to_drag(path);
+}
+int drops_to_come()
+{
+    const prog::InCall in_call;
+    return g_kit.wm->drops_to_come();
+}
 
 Busy::Busy()
 {

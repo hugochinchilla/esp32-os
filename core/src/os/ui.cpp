@@ -391,11 +391,15 @@ private:
 };
 
 // Icons in a grid with their names under them, 76 x 66 per entry: a
-// folder's contents. One is picked; a scroll bar comes when they do not fit.
+// folder's contents. Several can be picked (backlog item 55): Ctrl+click,
+// Shift+click, a rectangle pulled from an empty place, Ctrl+A. A scroll bar
+// comes when they do not fit.
 class IconView : public wm::Widget {
 public:
     using Callback = void (*)(IconView &view, void *context);
     static constexpr int kCellW = 76, kCellH = 66;
+    // ponytail: entries past this cannot be picked; a folder shows 160.
+    static constexpr int kMaxPicked = 256;
 
     IconView(const gfx::Rect &r, Callback on_open, Callback on_select, Callback on_drag, void *context)
         : Widget(r), on_open_(on_open), on_select_(on_select), on_drag_(on_drag), context_(context),
@@ -404,48 +408,74 @@ public:
         bar_.set_parent(this);
     }
     ~IconView() = default;
-    // The entries: the program's own tables, which must stay valid.
+    // The entries: the program's own tables, which must stay valid. What is
+    // picked stays while there are as many entries as before (a file was
+    // saved again); otherwise only the one picked last does, as the numbers
+    // now stand for other entries.
     void set_items(const char *const *names, int count, const gfx::Bitmap *const *icons)
     {
         names_ = names;
         icons_ = icons;
-        count_ = count;
-        if (selected_ >= count_) {
-            selected_ = -1;
+        if (count != count_) {
+            const int lead = selected_ < count ? selected_ : -1;
+            picked_ = {};
+            picked_.set(lead, true);
+            selected_ = lead;
+            anchor_ = lead;
+            highlight_ = -1;
         }
+        count_ = count;
+        band_ = false;
+        pressed_ = false;
+        collapse_ = -1;
         layout();
     }
+    // The one picked last, or -1.
     int selected() const { return selected_; }
-    // The entry at a point of the view, or -1.
+    bool picked(int i) const { return i >= 0 && i < count_ && picked_.get(i); }
+    int picked_count() const { return picked_.count(); }
+    // The entry whose picture or name is at a point of the view, or -1.
     int item_at(int x, int y) const
     {
         const int col = (x - 2 - 10) / kCellW, row = (y - 2 - 8) / kCellH;
         const int i = (row + top_row_) * columns() + col;
-        return x >= 12 && y >= 10 && col < columns() && i < count_ ? i : -1;
+        if (x < 12 || y < 10 || col >= columns() || i >= count_) {
+            return -1;
+        }
+        gfx::Rect icon, label;
+        parts(i, icon, label);
+        return icon.contains(x, y) || label.contains(x, y) ? i : -1;
     }
+    // One alone (-1: none), brought into view; tells of it.
     void select(int i)
     {
         i = i < -1 ? -1 : (i >= count_ ? count_ - 1 : i);
-        if (i == selected_) {
+        Bits next;
+        next.set(i, true);
+        if (i == selected_ && next == picked_) {
             return;
         }
-        selected_ = i;
-        if (i >= 0) {
-            const int row = i / columns();
-            if (row < top_row_) {
-                top_row_ = row;
-            } else if (row >= top_row_ + visible_rows()) {
-                top_row_ = row - visible_rows() + 1;
-            }
-        }
-        layout();
-        if (on_select_ != nullptr) {
-            on_select_(*this, context_);
+        anchor_ = i;
+        show(i);
+        set_picked(next, i);
+    }
+    // Shown as picked without being picked; -1: none.
+    void highlight(int i)
+    {
+        i = i >= 0 && i < count_ ? i : -1;
+        if (i != highlight_) {
+            invalidate_item(highlight_);
+            highlight_ = i;
+            invalidate_item(i);
         }
     }
     void reset()
     {
+        picked_ = {};
         selected_ = -1;
+        anchor_ = -1;
+        highlight_ = -1;
+        band_ = false;
         top_row_ = 0;
         layout();
     }
@@ -472,7 +502,7 @@ public:
     {
         const gfx::Rect r = {0, 0, rect.w, rect.h};
         c.sunken(r);
-        const gfx::Rect area = {2, 2, rect.w - 4 - (bar_.maximum() > 0 ? wm::ScrollBar::kThickness : 0), rect.h - 4};
+        const gfx::Rect area = view_area();
         c.fill(area, gfx::paper());
         gfx::Canvas inner = c.sub(area);
         const int cols = columns();
@@ -483,7 +513,7 @@ public:
             }
             const int x = 10 + col * kCellW, y = 8 + row * kCellH;
             const gfx::Bitmap *icon = icons_[i];
-            const bool chosen = i == selected_;
+            const bool chosen = picked_.get(i) || i == highlight_;
             if (chosen) {
                 inner.blit_selected(*icon, x + 22, y, gfx::rgb(0, 0, 2));
             } else {
@@ -501,6 +531,11 @@ public:
                 }
                 inner.text(tx, ty, lines[l], chosen ? gfx::theme().select_ink : gfx::ink());
             }
+        }
+        // The rectangle being pulled: dotted, over the entries.
+        const gfx::Rect band = band_rect();
+        if (band_ && (band.w > 2 || band.h > 2)) {
+            inner.focus_rect({band.x - area.x, band.y - area.y, band.w, band.h});
         }
         if (bar_.maximum() > 0) {
             gfx::Canvas bc = c.sub(bar_.rect);
@@ -529,24 +564,73 @@ public:
             return;
         }
         if (m.kind == wm::MouseKind::Move) {
-            // Held on an entry and moved a little: it is dragged.
+            if (band_) {
+                pull_band(m.x, m.y);
+                return;
+            }
+            // Held on a picked entry and moved a little: what is picked is
+            // dragged.
             const int dx = m.x - press_x_, dy = m.y - press_y_;
             if (pressed_ && dx * dx + dy * dy > 16 && on_drag_ != nullptr) {
                 pressed_ = false;
+                collapse_ = -1;
                 on_drag_(*this, context_);
             }
             return;
         }
         if (m.kind != wm::MouseKind::Down) {
+            if (band_) {
+                band_ = false;
+                outline_dirty(band_rect());
+            } else if (pressed_ && collapse_ >= 0) {
+                // One of several was clicked and not dragged: it alone now.
+                select(collapse_);
+            }
             pressed_ = false;
+            collapse_ = -1;
             return;
         }
+        const uint8_t mods = manager() != nullptr ? manager()->modifiers() : 0;
+        const bool ctrl = (mods & wm::kCtrl) != 0, shift = (mods & wm::kShift) != 0;
         const int i = item_at(m.x, m.y);
-        select(i);
-        pressed_ = i >= 0 && !m.double_click;
+        pressed_ = false;
+        collapse_ = -1;
+        if (band_) { // the button came up where the view was not told
+            band_ = false;
+            outline_dirty(band_rect());
+        }
+        if (i < 0) {
+            // An empty place: a rectangle starts there. What was picked
+            // goes, unless Ctrl is held: then the rectangle adds to it.
+            if (!ctrl) {
+                set_picked({}, -1);
+            }
+            band_base_ = picked_;
+            band_ = true;
+            band_x0_ = band_x1_ = clamp_x(m.x);
+            band_y0_ = band_y1_ = clamp_y(m.y) + top_row_ * kCellH;
+            return;
+        }
+        if (shift && anchor_ >= 0 && anchor_ < count_) {
+            stretch(i, ctrl);
+        } else if (ctrl) {
+            Bits next = picked_;
+            next.set(i, !picked_.get(i));
+            anchor_ = i;
+            set_picked(next, next.get(i) ? i : next.first());
+        } else if (picked_.get(i) && picked_.count() > 1) {
+            // One of several: they may be about to be dragged together, so
+            // the others stay picked until the button comes up.
+            anchor_ = i;
+            collapse_ = i;
+            set_picked(picked_, i);
+        } else {
+            select(i);
+        }
+        pressed_ = picked_.get(i) && !m.double_click;
         press_x_ = m.x;
         press_y_ = m.y;
-        if (i >= 0 && m.double_click && on_open_ != nullptr) {
+        if (m.double_click && !ctrl && !shift && on_open_ != nullptr) {
             on_open_(*this, context_);
         }
     }
@@ -556,25 +640,36 @@ public:
             return false;
         }
         const int cols = columns();
+        if ((k.mods & wm::kCtrl) && wm::key::letter(k.usage) == 'a') {
+            Bits all;
+            for (int i = 0; i < count_ && i < kMaxPicked; i++) {
+                all.set(i, true);
+            }
+            set_picked(all, selected_ >= 0 ? selected_ : all.first());
+            return true;
+        }
+        // Where an arrow goes from the one picked last. With Shift what is
+        // picked stretches from where it started to there.
+        int to;
         switch (k.usage) {
         case wm::key::Left:
-            select(selected_ < 0 ? 0 : selected_ - 1);
-            return true;
+            to = selected_ < 0 ? 0 : selected_ - 1;
+            break;
         case wm::key::Right:
-            select(selected_ + 1);
-            return true;
+            to = selected_ + 1;
+            break;
         case wm::key::Up:
-            select(selected_ < 0 ? 0 : (selected_ - cols >= 0 ? selected_ - cols : selected_));
-            return true;
+            to = selected_ < 0 ? 0 : (selected_ - cols >= 0 ? selected_ - cols : selected_);
+            break;
         case wm::key::Down:
-            select(selected_ < 0 ? 0 : (selected_ + cols < count_ ? selected_ + cols : selected_));
-            return true;
+            to = selected_ < 0 ? 0 : (selected_ + cols < count_ ? selected_ + cols : selected_);
+            break;
         case wm::key::Home:
-            select(0);
-            return true;
+            to = 0;
+            break;
         case wm::key::End:
-            select(count_ - 1);
-            return true;
+            to = count_ - 1;
+            break;
         case wm::key::Enter:
             if (selected_ >= 0 && on_open_ != nullptr) {
                 on_open_(*this, context_);
@@ -583,6 +678,14 @@ public:
         default:
             return false;
         }
+        if ((k.mods & wm::kShift) && anchor_ >= 0 && anchor_ < count_ && count_ > 0) {
+            to = to < 0 ? 0 : (to >= count_ ? count_ - 1 : to);
+            show(to);
+            stretch(to, false);
+        } else {
+            select(to);
+        }
+        return true;
     }
 
 private:
@@ -639,18 +742,175 @@ private:
         v->invalidate();
     }
 
+    // Which entries are picked: a bit each.
+    struct Bits {
+        uint32_t words[kMaxPicked / 32] = {};
+        bool get(int i) const { return i >= 0 && i < kMaxPicked && (words[i >> 5] >> (i & 31) & 1) != 0; }
+        void set(int i, bool on)
+        {
+            if (i >= 0 && i < kMaxPicked) {
+                words[i >> 5] = on ? words[i >> 5] | (1u << (i & 31)) : words[i >> 5] & ~(1u << (i & 31));
+            }
+        }
+        int count() const
+        {
+            int n = 0;
+            for (const uint32_t w : words) {
+                n += __builtin_popcount(w);
+            }
+            return n;
+        }
+        int first() const
+        {
+            for (int i = 0; i < kMaxPicked; i++) {
+                if (get(i)) {
+                    return i;
+                }
+            }
+            return -1;
+        }
+        bool operator==(const Bits &o) const { return memcmp(words, o.words, sizeof(words)) == 0; }
+    };
+
+    // Where the entries are shown, inside the sunken edge and beside the bar.
+    gfx::Rect view_area() const
+    {
+        return {2, 2, rect.w - 4 - (bar_.maximum() > 0 ? wm::ScrollBar::kThickness : 0), rect.h - 4};
+    }
+    // Where the picture and the name of an entry are now (widget
+    // coordinates): what a click and the rectangle go by.
+    void parts(int i, gfx::Rect &icon, gfx::Rect &label) const
+    {
+        const int cols = columns();
+        const int x = 12 + (i % cols) * kCellW, y = 10 + (i / cols - top_row_) * kCellH;
+        icon = {x + 22, y, 32, 35};
+        char lines[2][48];
+        split_name(names_[i], lines);
+        const int w0 = gfx::Canvas::text_width(lines[0]), w1 = gfx::Canvas::text_width(lines[1]);
+        const int tw = w0 > w1 ? w0 : w1;
+        label = {x + 38 - tw / 2 - 1, y + 35, tw + 2, lines[1][0] != 0 ? 25 : 13};
+    }
+    void invalidate_item(int i)
+    {
+        if (i >= 0 && i < count_) {
+            const int cols = columns();
+            invalidate_part({12 + (i % cols) * kCellW, 10 + (i / cols - top_row_) * kCellH, kCellW, kCellH});
+        }
+    }
+    // Scrolls so that an entry is in view.
+    void show(int i)
+    {
+        if (i < 0) {
+            return;
+        }
+        const int row = i / columns();
+        const int top = row < top_row_ ? row : (row >= top_row_ + visible_rows() ? row - visible_rows() + 1 : top_row_);
+        if (top != top_row_) {
+            top_row_ = top;
+            layout();
+        }
+    }
+    // What is picked becomes `next`, and `lead` the one picked last: only
+    // the entries that changed are painted again, and the program is told.
+    void set_picked(const Bits &next, int lead)
+    {
+        const bool same = next == picked_ && lead == selected_;
+        for (int i = 0; i < count_ && i < kMaxPicked; i++) {
+            if (next.get(i) != picked_.get(i)) {
+                invalidate_item(i);
+            }
+        }
+        picked_ = next;
+        selected_ = lead;
+        if (!same && on_select_ != nullptr) {
+            on_select_(*this, context_);
+        }
+    }
+    // From where the picking started to `to`, in the order shown; `add`:
+    // on top of what is picked already (Ctrl+Shift).
+    void stretch(int to, bool add)
+    {
+        Bits next = add ? picked_ : Bits{};
+        const int from = anchor_ < to ? anchor_ : to, last = anchor_ < to ? to : anchor_;
+        for (int i = from; i <= last; i++) {
+            next.set(i, true);
+        }
+        set_picked(next, to);
+    }
+
+    // The rectangle: pulled from (x0, y0) to (x1, y1), which are places in
+    // the whole grid, so that the wheel can turn while it is pulled.
+    int clamp_x(int x) const
+    {
+        const gfx::Rect a = view_area();
+        return x < a.x ? a.x : (x >= a.x + a.w ? a.x + a.w - 1 : x);
+    }
+    int clamp_y(int y) const
+    {
+        const gfx::Rect a = view_area();
+        return y < a.y ? a.y : (y >= a.y + a.h ? a.y + a.h - 1 : y);
+    }
+    gfx::Rect band_rect() const // widget coordinates
+    {
+        const int x = band_x0_ < band_x1_ ? band_x0_ : band_x1_, y = band_y0_ < band_y1_ ? band_y0_ : band_y1_;
+        const int w = band_x0_ < band_x1_ ? band_x1_ - band_x0_ : band_x0_ - band_x1_;
+        const int h = band_y0_ < band_y1_ ? band_y1_ - band_y0_ : band_y0_ - band_y1_;
+        return {x, y - top_row_ * kCellH, w + 1, h + 1};
+    }
+    void outline_dirty(const gfx::Rect &r)
+    {
+        invalidate_part({r.x, r.y, r.w, 1});
+        invalidate_part({r.x, r.y + r.h - 1, r.w, 1});
+        invalidate_part({r.x, r.y, 1, r.h});
+        invalidate_part({r.x + r.w - 1, r.y, 1, r.h});
+    }
+    void pull_band(int x, int y)
+    {
+        outline_dirty(band_rect());
+        band_x1_ = clamp_x(x);
+        band_y1_ = clamp_y(y) + top_row_ * kCellH;
+        const gfx::Rect band = band_rect();
+        outline_dirty(band);
+        // What it touches, by picture or by name, on top of what was there.
+        Bits next = band_base_;
+        const int cols = columns();
+        int first = (band.y - 10) / kCellH + top_row_, last = (band.y + band.h - 10) / kCellH + top_row_;
+        first = first < 0 ? 0 : first;
+        int lead = -1;
+        for (int i = first * cols; i < count_ && i < (last + 1) * cols; i++) {
+            gfx::Rect icon, label;
+            parts(i, icon, label);
+            if (band.overlaps(icon) || band.overlaps(label)) {
+                next.set(i, true);
+                lead = i;
+            }
+        }
+        if (!(next == picked_)) {
+            anchor_ = lead >= 0 ? lead : next.first();
+            set_picked(next, anchor_);
+        }
+    }
+
     const char *const *names_ = nullptr;
     const gfx::Bitmap *const *icons_ = nullptr;
     int count_ = 0;
     Callback on_open_, on_select_, on_drag_;
     void *context_;
-    bool pressed_ = false;
+    bool pressed_ = false; // a picked entry is held: moved, it is dragged
     int press_x_ = 0, press_y_ = 0;
-    int selected_ = -1;
+    int collapse_ = -1;  // held without Ctrl among several: it alone when let go
+    Bits picked_;
+    int selected_ = -1;  // the one picked last
+    int anchor_ = -1;    // where Shift stretches from
+    int highlight_ = -1; // shown as picked for now (a dragged file is over it)
+    bool band_ = false;  // a rectangle is being pulled
+    int band_x0_ = 0, band_y0_ = 0, band_x1_ = 0, band_y1_ = 0;
+    Bits band_base_;     // what was picked when it started (Ctrl held)
     int top_row_ = 0;
     bool in_bar_ = false;
     wm::ScrollBar bar_;
 };
+
 
 // The text editor with its own memory for the text and for undo.
 class OwnedTextEdit : public wm::TextEdit {
@@ -1220,6 +1480,28 @@ int item_at(Window window, Control control, int x, int y)
     const prog::InCall in_call;
     auto *v = control_of<IconView>(window, control, Kind::IconView);
     return v != nullptr ? v->item_at(x, y) : -1;
+}
+
+int selected_count(Window window, Control control)
+{
+    const prog::InCall in_call;
+    auto *v = control_of<IconView>(window, control, Kind::IconView);
+    return v != nullptr ? v->picked_count() : 0;
+}
+
+bool is_selected(Window window, Control control, int index)
+{
+    const prog::InCall in_call;
+    auto *v = control_of<IconView>(window, control, Kind::IconView);
+    return v != nullptr && v->picked(index);
+}
+
+void highlight(Window window, Control control, int index)
+{
+    const prog::InCall in_call;
+    if (auto *v = control_of<IconView>(window, control, Kind::IconView)) {
+        v->highlight(index);
+    }
 }
 
 Control text_edit(Window window, const gfx::Rect &place, size_t text_bytes, size_t undo_bytes)

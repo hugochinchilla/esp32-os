@@ -1621,6 +1621,150 @@ struct ProbePanel : wm::Panel {
     }
 };
 
+// Several files in one drag (backlog item 55): the first is what targets
+// are asked about, and let go they are dropped in turn.
+struct DropLog final : wm::Window {
+    DropLog(const char *title, const Rect &frame) : Window(title, frame, nullptr) {}
+    void paint(gfx::Canvas &c) override { c.fill({0, 0, client().w, client().h}, 0x03); }
+    bool drag_over(const char *path, int, int) override
+    {
+        asked += path != nullptr ? std::string(path) + " " : "";
+        return true;
+    }
+    void dropped(const char *path, int, int) override
+    {
+        seen += std::string(path) + ":" + std::to_string(manager()->drops_to_come()) + " ";
+    }
+    std::string asked, seen;
+};
+
+static std::string g_desk_drops;
+static void test_drag_several()
+{
+    Rig rig;
+    host::HostMemory memory;
+    rig.wm.set_memory(&memory);
+    static const char *const labels[4] = {"One", "Two", "Three", "Bin"};
+    static desk::Icon icons[6] = {{labels[0], nullptr, &run1, nullptr},
+                                  {labels[1], nullptr, &run1, nullptr},
+                                  {labels[2], nullptr, &run1, nullptr, "C:\\Documents\\Desktop\\three.txt"},
+                                  {labels[3], nullptr, &run1, nullptr}};
+    icons[3].drop = [](const char *path, void *) { g_desk_drops += std::string("bin:") + path + " "; };
+    rig.desk_icons.set_icons(icons, 4);
+    static int moves;
+    moves = 0;
+    rig.desk_icons.set_moved([](void *) { moves++; }, nullptr);
+    rig.desk_icons.set_drop(
+        [](const char *path, int x, int y, void *) {
+            g_desk_drops += std::string(path) + "@" + std::to_string(x) + "," + std::to_string(y) + " ";
+        },
+        nullptr);
+    DropLog w("W", {300, 60, 250, 200});
+    rig.wm.add(w);
+    rig.wm.start();
+
+    // From a window: three paths, dropped on the window in order, each told
+    // how many are still to come. Only the first was asked about.
+    const auto carry = [&](int to_x, int to_y) {
+        rig.move(600, 300, 0);
+        rig.move(600, 300, 1);
+        rig.wm.begin_drag("C:\\a.txt");
+        CHECK(rig.wm.add_to_drag("C:\\b.txt") && rig.wm.add_to_drag("*label", true) && rig.wm.add_to_drag("C:\\c.txt"));
+        rig.move(to_x, to_y, 1);
+        rig.move(to_x, to_y, 0);
+    };
+    carry(400, 150);
+    CHECK(w.seen == "C:\\a.txt:3 C:\\b.txt:2 C:\\c.txt:0 "); // the one for the desktop only is not the window's
+    CHECK(w.asked.find("b.txt") == std::string::npos && rig.wm.drops_to_come() == 0);
+    // Nothing is carried over into the next drag, and nothing is added
+    // when no drag is going on.
+    w.seen.clear();
+    CHECK(!rig.wm.add_to_drag("C:\\late.txt"));
+    rig.move(600, 300, 1);
+    rig.wm.begin_drag("C:\\d.txt");
+    rig.move(400, 150, 1);
+    rig.move(400, 150, 0);
+    CHECK(w.seen == "C:\\d.txt:0 ");
+    // Escape: none is dropped.
+    w.seen.clear();
+    rig.move(600, 300, 1);
+    rig.wm.begin_drag("C:\\a.txt");
+    rig.wm.add_to_drag("C:\\b.txt");
+    rig.move(400, 150, 1);
+    rig.key(wm::key::Escape);
+    rig.move(400, 150, 0);
+    CHECK(w.seen.empty());
+
+    // On the desktop itself, files from somewhere else: the first where it
+    // was let go, the others in free cells of the grid, no two in one place.
+    g_desk_drops.clear();
+    carry(200, 400);
+    CHECK(g_desk_drops.find("C:\\a.txt@164,384 ") == 0);
+    CHECK(g_desk_drops.find("C:\\b.txt@") != std::string::npos && g_desk_drops.find("C:\\c.txt@") != std::string::npos);
+    CHECK(g_desk_drops.find("label") == std::string::npos); // no icon of the desktop's is called that
+    // Onto an icon that takes files: each file goes to it.
+    g_desk_drops.clear();
+    const Rect bin = rig.desk_icons.icon_rect(3);
+    carry(bin.x + 30, bin.y + 20);
+    CHECK(g_desk_drops == "bin:C:\\a.txt bin:C:\\b.txt bin:C:\\c.txt ");
+
+    // The desktop's own: Ctrl+click picks a second and a third, and they go
+    // together when one is dragged, as far as the one held. The one moved
+    // callback comes once.
+    const Rect one = rig.desk_icons.icon_rect(0), two = rig.desk_icons.icon_rect(1), three = rig.desk_icons.icon_rect(2);
+    rig.click(one.x + 30, one.y + 20);
+    rig.wm.key(wm::key::LeftCtrl, true);
+    rig.click(two.x + 30, two.y + 20);
+    rig.click(three.x + 30, three.y + 20);
+    rig.wm.key(wm::key::LeftCtrl, false);
+    CHECK(rig.desk_icons.picked_count() == 3 && rig.desk_icons.selected_icon() == 2 && !rig.desk_icons.picked(3));
+    rig.move(two.x + 36, two.y + 16, 1);
+    rig.move(two.x + 46, two.y + 26, 1);
+    rig.move(two.x + 36 + 200, two.y + 16 + 100, 1);
+    rig.move(two.x + 36 + 200, two.y + 16 + 100, 0);
+    CHECK(rig.desk_icons.icon_rect(1).x == two.x + 200 && rig.desk_icons.icon_rect(1).y == two.y + 100);
+    CHECK(rig.desk_icons.icon_rect(0).x == one.x + 200 && rig.desk_icons.icon_rect(0).y == one.y + 100);
+    CHECK(rig.desk_icons.icon_rect(2).x == three.x + 200 && rig.desk_icons.icon_rect(2).y == three.y + 100);
+    CHECK(moves == 1 && rig.desk_icons.picked_count() == 3);
+    // Onto a window, only the one that is a file is offered (it was held).
+    w.seen.clear();
+    const Rect file = rig.desk_icons.icon_rect(2);
+    rig.move(file.x + 36, file.y + 16, 0);
+    rig.move(file.x + 36, file.y + 16, 1);
+    rig.move(file.x + 46, file.y + 26, 1);
+    rig.move(400, 150, 1);
+    rig.move(400, 150, 0);
+    CHECK(w.seen == "C:\\Documents\\Desktop\\three.txt:2 " && moves == 1);
+    // A click on one of several, not dragged, picks it alone; Ctrl+click
+    // takes one away; a click on the desktop itself, all.
+    rig.click(file.x + 36, file.y + 16);
+    CHECK(rig.desk_icons.picked_count() == 1 && rig.desk_icons.picked(2));
+    rig.wm.key(wm::key::LeftCtrl, true);
+    rig.click(file.x + 36, file.y + 16);
+    rig.wm.key(wm::key::LeftCtrl, false);
+    CHECK(rig.desk_icons.picked_count() == 0 && rig.desk_icons.selected_icon() == -1);
+    // A rectangle picks what it touches; with Ctrl it adds to what is picked.
+    const Rect a = rig.desk_icons.icon_rect(0), b = rig.desk_icons.icon_rect(1);
+    rig.move(a.x - 20, a.y - 6, 0);
+    rig.move(a.x - 20, a.y - 6, 1);
+    rig.move(a.x + 40, a.y + 20, 1);
+    CHECK(rig.desk_icons.picked(0) && rig.desk_icons.picked_count() == 1);
+    rig.move(b.x + 40, b.y + 20, 1);
+    CHECK(rig.desk_icons.picked(0) && rig.desk_icons.picked(1) && rig.desk_icons.picked_count() == 2);
+    rig.move(a.x + 40, a.y + 20, 1); // pulled back: Two is let off again
+    rig.move(a.x + 40, a.y + 20, 0);
+    CHECK(rig.desk_icons.picked(0) && rig.desk_icons.picked_count() == 1);
+    CHECK(rig.no_stale_pixels());
+    rig.wm.key(wm::key::LeftCtrl, true);
+    rig.move(file.x - 20, file.y - 6, 1);
+    rig.move(file.x + 40, file.y + 20, 1);
+    rig.move(file.x + 40, file.y + 20, 0);
+    rig.wm.key(wm::key::LeftCtrl, false);
+    CHECK(rig.desk_icons.picked(0) && rig.desk_icons.picked(2) && rig.desk_icons.picked_count() == 2);
+    CHECK(rig.no_stale_pixels());
+    rig.wm.close(w);
+}
+
 struct DragSource final : wm::Window {
     DragSource(const char *title, const Rect &frame, gfx::Colour colour) : Window(title, frame, nullptr), colour_(colour) {}
     void paint(gfx::Canvas &c) override { c.fill({0, 0, client().w, client().h}, colour_); }
@@ -1776,6 +1920,7 @@ int main()
     test_slow_key_does_not_repeat();
     test_start_menu_and_icons();
     test_icon_places();
+    test_drag_several();
     test_quick_launch();
     test_widgets();
     test_timers_and_clock();

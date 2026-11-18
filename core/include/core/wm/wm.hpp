@@ -345,6 +345,16 @@ public:
     // `desktop_only`: no window is offered it (a desktop icon that stands
     // for no file, on its way to another place on the desktop).
     void begin_drag(const char *path, bool desktop_only = false);
+    // One more file carried by the drag just begun (several were picked):
+    // the targets are asked about the first only, and when it is let go
+    // each is dropped in turn, the first first. One marked `desktop_only`
+    // is dropped only when the target is the desktop panel. False: there
+    // was no memory for it, and it stays where it is.
+    bool add_to_drag(const char *path, bool desktop_only = false);
+    // While a target is being told of a drop: how many more files of the
+    // same drag it will be told of after this one (it may wait for the
+    // last before it repaints or complains).
+    int drops_to_come() const { return drops_to_come_; }
     bool item_dragging() const { return capture_ == Capture::Item; }
     uint32_t last_update_us() const { return last_update_us_; }
     // Time to handle the last input event, painting included.
@@ -478,6 +488,15 @@ private:
     void leave_desktop_target();
     char drag_path_[kDragPath] = "";
     bool drag_desktop_only_ = false;
+    // The others, when several are dragged: for each a byte (1: for the
+    // desktop only) and its path with its 0. The block is asked of the
+    // Memory port when the second file joins a drag, grows by doubling, and
+    // goes back when the drag ends: once per drag of several, not per event.
+    void forget_drag_list();
+    char *drag_more_ = nullptr;
+    size_t drag_more_room_ = 0, drag_more_used_ = 0;
+    int drag_more_count_ = 0;
+    int drops_to_come_ = 0;
     Window *drop_window_ = nullptr;
     bool desktop_over_ = false;   // the desktop panel has been shown the drag
     bool desktop_target_ = false; // and it would take the file

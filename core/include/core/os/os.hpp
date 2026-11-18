@@ -134,6 +134,14 @@ const gfx::Bitmap *window_icon(WindowId window);
 bool bring_forward(WindowId window);
 // A file or folder starts being dragged (the File manager).
 void begin_drag(const char *path);
+// One more carried by the drag just begun, when several are picked: let go,
+// they are dropped one after the other, that of begin_drag() first. False:
+// no memory for it.
+bool add_to_drag(const char *path);
+// While a Dropped event is answered: how many more files of the same drag
+// will be dropped here after this one. What can wait for the last (looking
+// at the folder again, saying what went wrong) waits for 0.
+int drops_to_come();
 // The hourglass while slow work runs on the UI task:
 //     const os::Busy busy;
 class Busy {

@@ -225,13 +225,28 @@ bool hourglass(Window window);
 
 // Icons in a grid with their names under them: what a folder holds. The
 // names and the pictures (32 by 32) are the program's tables and must stay
-// valid; set_items() is a list's, and keeps what is picked. One entry is
-// picked: selected() and select() are a list's, and select() tells of it
-// (Changed), as a click or an arrow key does. Chosen: Enter or a double
-// click. Drag: an entry held and moved.
+// valid; set_items() is a list's. Several entries can be picked at once
+// (backlog item 55): a click picks one alone, Ctrl+click adds or takes away
+// one, Shift+click picks from the last one clicked to this one, a rectangle
+// pulled from an empty place picks what it touches, Ctrl+A picks all, and
+// the arrow keys move as in a list (with Shift they stretch the range).
+// selected_count() and is_selected() say which; selected() is the one
+// picked last (the one Enter opens), or -1. select() picks one alone and
+// tells of it (Changed), as every change by the mouse or the keys does.
+// set_items() keeps what is picked while the number of entries stays the
+// same; otherwise only the one picked last stays. highlight() shows one
+// more entry as picked without picking it (the folder a dragged file would
+// go into); -1: none. Chosen: Enter or a double click. Drag: a picked entry
+// held and moved; all the picked ones go together. The first 256 entries
+// can be picked.
 Control icon_view(Window window, const gfx::Rect &place);
 void reset_view(Window window, Control icon_view); // nothing picked, back at the top
-int item_at(Window window, Control icon_view, int x, int y); // the entry at a point of it, or -1
+// The entry whose picture or name is at a point of it, or -1 (the empty
+// space between two entries is no entry).
+int item_at(Window window, Control icon_view, int x, int y);
+int selected_count(Window window, Control icon_view);
+bool is_selected(Window window, Control icon_view, int index);
+void highlight(Window window, Control icon_view, int index);
 
 // A bar that fills from the left in blocks, in a sunken box: progress, or
 // how full something is.

@@ -267,14 +267,21 @@ public:
         open_selected(this);
         return true;
     }
+    // All that is picked goes together: the one held first, then the others.
     void drag(app::Control) override
     {
         char p[fs::kMaxPath];
-        if (folder_[0] != 0 && selected_path(p, sizeof(p))) {
-            os::begin_drag(p);
+        if (folder_[0] == 0 || !selected_path(p, sizeof(p))) {
+            return;
+        }
+        os::begin_drag(p);
+        const int held = view_.selected();
+        for (int i = 0; i < listing_.count(); i++) {
+            if (i != held && view_.is_selected(i) && fs::path::join(folder_, listing_.item(i).name, p, sizeof(p))) {
+                os::add_to_drag(p);
+            }
         }
     }
-
 
     bool key(const wm::KeyMsg &k) override
     {
@@ -303,24 +310,44 @@ public:
     bool drag_over(const char *path, int x, int y) override
     {
         char target[fs::kMaxPath];
-        return path != nullptr && drop_folder(path, x, y, target, true);
+        if (path == nullptr) {
+            view_.highlight(-1); // it left, or was let go
+            return false;
+        }
+        return drop_folder(path, x, y, target, true);
     }
 
+    // When several were dragged this comes once for each. The folders are
+    // looked at again after the last, and one box says what went wrong: the
+    // first that could not be moved, and how many more.
     void dropped(const char *path, int x, int y) override
     {
         char target[fs::kMaxPath];
-        if (!drop_folder(path, x, y, target, false)) {
+        if (drop_folder(path, x, y, target, false)) {
+            // Into the Trash too: move_to_folder() throws away what goes there.
+            const ports::FsError e = move_to_folder(path, target);
+            if (e != ports::FsError::Ok && drop_failed_++ == 0) {
+                snprintf(message_, sizeof(message_), "Cannot move '%s':\n%s.", fs::path::name(path),
+                         e == ports::FsError::Exists ? "there is one with that name there already"
+                                                     : fs::error_text(e));
+            }
+            drop_moved_ = true;
+        }
+        if (os::drops_to_come() > 0) {
             return;
         }
-        if (in_trash(target)) {
-            drop_in_trash(path);
-            return;
+        const int failed = drop_failed_;
+        const bool moved = drop_moved_;
+        drop_failed_ = 0;
+        drop_moved_ = false;
+        if (moved) {
+            files_changed();
         }
-        const ports::FsError e = move_to_folder(path, target);
-        files_changed();
-        if (e != ports::FsError::Ok) {
-            snprintf(message_, sizeof(message_), "Cannot move '%s':\n%s.", fs::path::name(path),
-                     e == ports::FsError::Exists ? "there is one with that name there already" : fs::error_text(e));
+        if (failed > 1) {
+            const size_t n = strlen(message_);
+            snprintf(message_ + n, sizeof(message_) - n, "\n%d more could not be moved either.", failed - 1);
+        }
+        if (failed > 0) {
             message_box("Move", message_);
         }
     }
@@ -486,7 +513,7 @@ private:
                  !(strncmp(target, path, n) == 0 && (target[n] == 0 || target[n] == '\\'));
         }
         if (show) {
-            view_.select(ok && onto ? i : -1); // the folder it would go into
+            view_.highlight(ok && onto ? i : -1); // the folder it would go into
         }
         return ok;
     }
@@ -498,7 +525,25 @@ private:
     {
         char t[fs::kMaxPath + 8], from[fs::kMaxPath];
         const int i = view_.selected();
-        if (i < 0 || i >= listing_.count() || folder_[0] == 0) {
+        const int picked = view_.selected_count();
+        if (picked > 1) {
+            // Several: how many, and what the files among them come to.
+            uint32_t bytes = 0;
+            bool files = false;
+            for (int k = 0; k < listing_.count() && folder_[0] != 0; k++) {
+                if (view_.is_selected(k) && !listing_.item(k).folder) {
+                    bytes += listing_.item(k).size;
+                    files = true;
+                }
+            }
+            char size[24];
+            with_commas(bytes, size);
+            if (files) {
+                snprintf(t, sizeof(t), "%d objects selected, %s byte%s", picked, size, bytes == 1 ? "" : "s");
+            } else {
+                snprintf(t, sizeof(t), "%d objects selected", picked);
+            }
+        } else if (i < 0 || i >= listing_.count() || folder_[0] == 0) {
             snprintf(t, sizeof(t), "%d object%s%s", listing_.count(), listing_.count() == 1 ? "" : "s",
                      listing_.truncated() ? " (more not shown)" : "");
         } else if (at_trash()) {
@@ -516,21 +561,25 @@ private:
             if (it.folder) {
                 snprintf(t, sizeof(t), "%s%s", when[0] != 0 ? "Folder, " : "Folder", when);
             } else {
-                // Thousands apart, as the shell's dir shows them.
-                char digits[16];
-                const int n = snprintf(digits, sizeof(digits), "%u", static_cast<unsigned>(it.size));
-                int at = 0;
-                for (int d = 0; d < n; d++) {
-                    size[at++] = digits[d];
-                    if ((n - d - 1) % 3 == 0 && d != n - 1) {
-                        size[at++] = ',';
-                    }
-                }
-                size[at] = 0;
+                with_commas(it.size, size);
                 snprintf(t, sizeof(t), "%s byte%s%s%s", size, it.size == 1 ? "" : "s", when[0] != 0 ? ", " : "", when);
             }
         }
         objects_.set_text(t);
+    }
+    // Thousands apart, as the shell's dir shows them.
+    static void with_commas(uint32_t number, char (&out)[24])
+    {
+        char digits[16];
+        const int n = snprintf(digits, sizeof(digits), "%u", static_cast<unsigned>(number));
+        int at = 0;
+        for (int d = 0; d < n; d++) {
+            out[at++] = digits[d];
+            if ((n - d - 1) % 3 == 0 && d != n - 1) {
+                out[at++] = ',';
+            }
+        }
+        out[at] = 0;
     }
     static void close_action(void *context) { static_cast<FolderWindow *>(context)->close(); }
     static void refresh_action(void *context) { static_cast<FolderWindow *>(context)->refresh(); }
@@ -697,7 +746,9 @@ private:
     char history_[kHistory][fs::kMaxPath];
     int history_count_ = 0;
     char title_text_[64] = "My Board";
-    char message_[fs::kMaxPath + 80] = "";
+    char message_[fs::kMaxPath + 120] = "";
+    int drop_failed_ = 0;     // of the files being dropped here, how many could not be moved
+    bool drop_moved_ = false; // and whether any was tried
     Listing listing_;
     const gfx::Bitmap *icons_[Listing::kMax] = {};
     int width_ = 100; // of the client area

@@ -988,6 +988,148 @@ int main(int argc, char **argv)
         check(gfx::theme_index() == 0 && kept("classic"), "and the classic one again");
     }
 
+    // Several files at once (backlog item 55), in a folder of its own:
+    // Box, a.txt to f.txt. What is picked is told by what moves when one of
+    // them is dragged onto Box.
+    {
+        const auto check = [&](bool ok, const char *what) {
+            if (!ok) {
+                printf("Several: %s\n", what);
+                failures++;
+            }
+        };
+        const auto in_many = [&](const char *name) { return there((std::string("C:\\Many\\") + name).c_str()); };
+        const auto in_box = [&](const char *name) { return there((std::string("C:\\Many\\Box\\") + name).c_str()); };
+        storage.make_folder("C:\\Many");
+        storage.make_folder("C:\\Many\\Box");
+        for (const char *name : {"a.txt", "b.txt", "c.txt", "d.txt", "e.txt", "f.txt"}) {
+            storage.write_file((std::string("C:\\Many\\") + name).c_str(), "0123456789", 10);
+        }
+        shell::open_folder("C:\\Many");
+        wm::Window *w = desktop.active();
+        const gfx::Rect c = w->client();
+        // The middle of the picture of the entry at (column, row): four across.
+        const auto at = [&](int i, int &px, int &py) {
+            px = c.x + 2 + 10 + 38 + (i % 4) * 76;
+            py = c.y + 64 + 2 + 8 + 16 + (i / 4) * 66;
+        };
+        const auto press = [&](int i, uint16_t held = 0) {
+            int px, py;
+            at(i, px, py);
+            if (held != 0) {
+                desktop.key(held, true);
+            }
+            click(px, py);
+            if (held != 0) {
+                desktop.key(held, false);
+            }
+        };
+        const auto drag_onto_box = [&](int i) {
+            int px, py, bx, by;
+            at(i, px, py);
+            at(0, bx, by);
+            mouse(px, py, 0);
+            mouse(px, py, 1);
+            mouse(px + 8, py + 8, 1);
+            mouse(bx, by, 1);
+        };
+        const auto let_go = [&] {
+            int bx, by;
+            at(0, bx, by);
+            mouse(bx, by, 0);
+        };
+        // Box 0, a 1, b 2, c 3 / d 4, e 5, f 6. Ctrl+click adds one at a time.
+        press(1);
+        press(3, wm::key::LeftCtrl);
+        press(5, wm::key::LeftCtrl);
+        save("70a-several-ctrl-click");
+        // And takes one away again. The two left go together.
+        press(5, wm::key::LeftCtrl);
+        drag_onto_box(1);
+        save("70b-several-dragged");
+        let_go();
+        check(in_box("a.txt") && in_box("c.txt") && !in_many("a.txt") && !in_many("c.txt"),
+              "the two picked with Ctrl did not move together");
+        check(in_many("b.txt") && in_many("d.txt") && in_many("e.txt") && in_many("f.txt"),
+              "one that was not picked moved (e.txt was taken away with Ctrl)");
+        // Box 0, b 1, d 2, e 3 / f 4. A click picks one alone; Shift+click
+        // picks from it to there.
+        press(1);
+        press(3, wm::key::LeftShift);
+        save("70c-several-shift-click");
+        // A click on one of several, not dragged: it alone. Dragged now, only it goes.
+        press(2);
+        drag_onto_box(2);
+        let_go();
+        check(in_box("d.txt") && in_many("b.txt") && in_many("e.txt"), "a click on one of several did not pick it alone");
+        // Box 0, b 1, e 2, f 3. A rectangle from the empty space under the
+        // row up to e.txt picks e and f, which it touches, and not b.
+        int ex, ey, fx, fy;
+        at(2, ex, ey);
+        at(3, fx, fy);
+        mouse(fx + 30, fy + 80, 0);
+        mouse(fx + 30, fy + 80, 1);
+        mouse(fx, fy + 40, 1);
+        mouse(ex - 10, ey + 5, 1);
+        save("70d-several-rectangle");
+        mouse(ex - 10, ey + 5, 0);
+        save("70e-several-rectangle-done");
+        drag_onto_box(3);
+        let_go();
+        check(in_box("e.txt") && in_box("f.txt") && in_many("b.txt"), "the rectangle did not pick e.txt and f.txt alone");
+        // Ctrl+A picks everything. With a.txt and c.txt here again, the two
+        // cannot go where there is one of that name already: one box says so
+        // after all were tried, and b.txt has moved.
+        storage.write_file("C:\\Many\\a.txt", "again", 5);
+        storage.write_file("C:\\Many\\c.txt", "again", 5);
+        key(0x3E); // F5: look at the folder again
+        press(1); // Box 0, a 1, b 2, c 3
+        desktop.key(wm::key::LeftCtrl, true);
+        key(0x04); // A
+        desktop.key(wm::key::LeftCtrl, false);
+        save("70f-several-all");
+        drag_onto_box(1);
+        let_go();
+        save("70g-several-not-moved");
+        check(in_box("b.txt") && in_many("a.txt") && in_many("c.txt") && in_many("Box"),
+              "Ctrl+A and a drag: b.txt should move, a.txt and c.txt stay, Box not go into itself");
+        key(wm::key::Enter); // OK
+        check(desktop.active() == w, "more than one box came for one drag");
+        desktop.close(*w);
+
+        // On the desktop: Ctrl+click picks a second icon, and the two keep
+        // their places among themselves when one is dragged.
+        desk::Icons &icons = *shell::desktop_icons();
+        const gfx::Rect one = icons.icon_rect(0), two = icons.icon_rect(1);
+        centre_of(one, x, y);
+        click(x, y);
+        centre_of(two, x, y);
+        desktop.key(wm::key::LeftCtrl, true);
+        click(x, y);
+        desktop.key(wm::key::LeftCtrl, false);
+        check(icons.picked(0) && icons.picked(1) && icons.picked_count() == 2, "Ctrl+click on the desktop");
+        mouse(x, y, 1);
+        mouse(x + 8, y + 8, 1);
+        mouse(x + 200, y + 100, 1);
+        mouse(x + 200, y + 100, 0);
+        // The one held has its picture under the pointer; the other went as far.
+        const int dx = icons.icon_rect(1).x - two.x, dy = icons.icon_rect(1).y - two.y;
+        check(dx > 150 && dy > 50 && icons.icon_rect(0).x == one.x + dx && icons.icon_rect(0).y == one.y + dy,
+              "two desktop icons did not move together");
+        save("70h-desktop-several-moved");
+        // A rectangle over the desktop picks what it touches.
+        const gfx::Rect third = icons.icon_rect(2);
+        mouse(third.x + 150, third.y + 120, 0);
+        mouse(third.x + 150, third.y + 120, 1);
+        mouse(third.x + 100, third.y + 60, 1);
+        mouse(third.x + 40, third.y + 20, 1);
+        save("70i-desktop-rectangle");
+        mouse(third.x + 40, third.y + 20, 0);
+        check(icons.picked_count() >= 1 && icons.picked(2) && !icons.picked(0), "the rectangle on the desktop");
+        click(600, 300); // the desktop itself: nothing picked
+        check(icons.picked_count() == 0, "a click on the desktop itself");
+    }
+
     // Shut Down from the Start menu: Enter picks Shut Down, and the screen
     // says the power can go.
     centre_of(shell::taskbar()->button(-1), x, y);
