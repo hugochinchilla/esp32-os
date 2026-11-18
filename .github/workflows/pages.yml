@@ -1,10 +1,15 @@
 # Publishes Chinchilla for the browser (web/) on GitHub Pages, at
 # https://<owner>.github.io/<repository>/, every time main changes.
 #
-# Not active here. To turn it on (once):
+# The copy that runs is .github/workflows/pages.yml; agent sessions cannot
+# push workflow files, so a change is made here and the owner copies it:
 #   1. Copy this file to .github/workflows/pages.yml.
 #   2. On GitHub: Settings > Pages > Build and deployment > Source:
 #      "GitHub Actions".
+#   3. For Vizcacha to reach the web from the page: Settings > Secrets and
+#      variables > Actions > Variables, add CHINCHILLA_RELAY with the
+#      relay's address (https://chinchilla-relay.<account>.workers.dev/;
+#      web/relay/README.md). Without it the page is built with no relay.
 name: Publish the browser version
 
 on:
@@ -34,7 +39,7 @@ jobs:
       - uses: mymindstorm/setup-emsdk@v14
         with:
           version: 7.0.0 # the version the page was tested with
-      - run: emcmake cmake -S web -B build/web
+      - run: emcmake cmake -S web -B build/web "-DCHINCHILLA_RELAY=${{ vars.CHINCHILLA_RELAY }}"
       - run: cmake --build build/web
       - uses: actions/upload-pages-artifact@v3
         with:
