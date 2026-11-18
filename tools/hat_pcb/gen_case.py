@@ -61,7 +61,7 @@ def board_parts(board):
     # small SMD parts and chips, from their courtyards
     for f in board.GetFootprints():
         ref = f.GetReference()
-        if not (ref[0] in "RCU" and ref[1:].isdigit()) or ref == "C12":
+        if not (ref[0] in "RCU" and ref[1:].isdigit()) or ref in ("C12", "C13"):
             continue
         bb = f.GetCourtyard(pcbnew.F_CrtYd).BBox()
         x0, y0 = mm(bb.GetLeft(), gen_pcb.OX) + 0.3, mm(bb.GetTop(), gen_pcb.OY) + 0.3
@@ -114,6 +114,8 @@ def board_parts(board):
     o.append(kcyl(x, y, 4.5, 5.2, 20.0, "silver"))
     x, y = pos("C12")
     o.append(kcyl(x + 1.25, y, 0, 11.0, 6.3, "#1d2f6f"))
+    x, y = pos("C13")
+    o.append(kcyl(x + 1.75, y, 0, 11.5, 8.0, "#1d2f6f"))
     x, y = pos("Y1")
     o.append(kbox(x - 3.1, y - 2.3, x + 8.0, y + 2.3, 0, 13.5, "silver"))
     x, y = pos("J8")

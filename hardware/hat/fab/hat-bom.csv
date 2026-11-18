@@ -1,5 +1,5 @@
 Designator,Quantity,Value,Footprint,Manufacturer,MPN,LCSC,Description,Mount,Fitted by
-"C1,C3,C4,C5,C8",5,100 nF,C_0603_1608Metric,Samsung,CL10B104KB8NNNC,C1591,100 nF 50 V X7R 0603,SMD,assembler
+"C1,C3,C4,C5,C8,C14",6,100 nF,C_0603_1608Metric,Samsung,CL10B104KB8NNNC,C1591,100 nF 50 V X7R 0603,SMD,assembler
 "C2,C6,C7,C9,C10,C11",6,10 uF,C_0805_2012Metric,Samsung,CL21A106KAYNNNE,C15850,10 uF 25 V X5R 0805,SMD,assembler
 "R1,R2,R3,R4,R5,R6,R7,R8,R9,R10,R11,R12,R13,R14,R15,R16,R17,R18,R19,R20,R33",21,1k,R_0603_1608Metric,YAGEO,RC0603FR-071KL,,Resistor 1k ohm 1% 0603,SMD,assembler
 "R21,R22,R23,R24,R25,R26,R27,R28,R29,R30,R31,R32",12,10k,R_0603_1608Metric,YAGEO,RC0603FR-0710KL,,Resistor 10k ohm 1% 0603,SMD,assembler
@@ -9,6 +9,7 @@ U3,1,TPS2051C,SOT-23-5,Texas Instruments,TPS2051CDBVR,,"USB power switch, 0.5 A,
 "U4,U5,U6,U7",4,USBLC6-2SC6,SOT-23-6,STMicroelectronics,USBLC6-2SC6,C7519,USB ESD protection,SMD,assembler
 BT1,1,CR2032 holder,BatteryHolder_Keystone_3034_1x20mm,Keystone,3034,,"Coin cell holder for CR2032, SMD with large pads (hand solder). Insert a CR2032",SMD,you
 C12,1,100 uF,CP_Radial_D6.3mm_P2.50mm,,,,"Electrolytic 100 uF 10 V or more, radial 6.3 mm, 2.5 mm pitch",THT,you
+C13,1,470 uF,CP_Radial_D8.0mm_P3.50mm,,,,"Electrolytic 470 uF 6.3 V or more, radial 8 mm, 3.5 mm pitch, at most 12 mm tall",THT,you
 J1,1,DevKitC left,PinSocket_1x22_P2.54mm_Vertical,Wurth Elektronik,61302211821,,"Socket strip 1x22, 2.54 mm, vertical",THT,you
 J2,1,DevKitC right,PinSocket_1x22_P2.54mm_Vertical,Wurth Elektronik,61302211821,,"Socket strip 1x22, 2.54 mm, vertical",THT,you
 J3,1,VGA,DSUB-15-HD_Female_Horizontal_P2.29x1.98mm_EdgePinOffset3.03mm_Housed_MountingHolesOffset4.94mm,Amphenol ICC,L77HDE15SD1CH4F,,"HD15 (VGA) female, right angle, through hole. Check the footprint against the part actually used",THT,you

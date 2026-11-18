@@ -72,6 +72,7 @@ PLACE = {
     "C7": (95.0, 9.5, 90), "C8": (92.5, 13.0, 90), "C9": (95.0, 13.0, 90),
     "U4": (83.5, 55.5, 0), "U5": (83.5, 59.5, 0),
     "U3": (55.0, 10.0, 0), "C10": (55.0, 5.0, 0), "C11": (49.0, 8.0, 90), "C12": (40.5, 8.0, 0),
+    "C13": (41.75, 62.0, 0), "C14": (45.5, 55.0, 0),
     "R30": (59.5, 9.0, 90), "R31": (59.5, 12.5, 90),
     "R20": (87.5, 56.0, 90), "C1": (89.5, 56.0, 90), "C2": (91.6, 56.0, 90),
 }
@@ -246,7 +247,7 @@ def build():
 
     # silkscreen
     add_rect(board, pcbnew.F_SilkS, SOCK_X0 - 12.0, J2_Y - 2.2, W - 0.6, J1_Y + 2.2, 0.12)
-    add_text(board, "ESP32-S3-DevKitC-1, USB-C flush with this edge", SOCK_X0 + 30.0, 30.0, 1.2)
+    add_text(board, "ESP32-S3-DevKitC-1, USB-C flush with this edge", SOCK_X0 + 30.0, 35.0, 1.2)
     add_text(board, "pin 1: 3V3", SOCK_X0, J1_Y - 3.0, 0.9)
     add_text(board, "CHINCHILLA HAT v0.3", SOCK_X0 + 30.0, 42.0, 1.6, bold=True)
     add_text(board, "github.com/hugochinchilla/esp32-os", SOCK_X0 + 30.0, 44.6, 0.9)

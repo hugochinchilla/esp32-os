@@ -163,6 +163,15 @@ part("J3", "hat:VGA_HD15",
 R("R32", "10k", "+3V3", "GPIO47", "vga")
 R("R33", "1k", "GPIO47", "VGA_SENSE", "vga")
 
+# ---- 3.3 V bulk capacitor -------------------------------------------------------
+# The VGA levels are the 3.3 V rail divided by resistors, so the rail's dip during
+# each Wi-Fi transmit burst showed as scanlines. 470 uF plus 100 nF across 3V3 cured
+# it on the perfboard at 20 dBm (owner's test, 2026-11-18).
+part("C13", "Device:C_Polarized", "Capacitor_THT:CP_Radial_D8.0mm_P3.50mm", "470 uF",
+     {"1": "+3V3", "2": "GND"}, "devkit", "", "", "",
+     "Electrolytic 470 uF 6.3 V or more, radial 8 mm, 3.5 mm pitch, at most 12 mm tall")
+C("C14", "100n", "+3V3", "GND", "devkit")
+
 # ---- Audio out and beeper -------------------------------------------------------
 R("R20", "1k", "AUDIO_PWM", "AUDIO_FILT", "audio")
 C("C1", "100n", "AUDIO_FILT", "GND", "audio")

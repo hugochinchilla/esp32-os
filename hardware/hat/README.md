@@ -34,6 +34,10 @@ the walls (see [Enclosure](#enclosure)).
   other four ground pins and the shell stay grounded. No DDC/EDID: it would
   need a level shifter, one more part type on every order (owner's choice,
   2026-11-17).
+- A 470 uF electrolytic and a 100 nF capacitor across 3V3, next to the dev
+  board sockets. The VGA levels are the 3.3 V rail divided by resistors, so
+  the rail's dip during each Wi-Fi transmit burst showed as scanlines. On the
+  perfboard the same pair removed them at 20 dBm (tested 2026-11-18).
 - A 6-pin expansion header (3V3, GPIO38, 47, 48, 5V, GND), not fitted.
   GPIO47 is shared with the monitor presence sense.
 
@@ -43,12 +47,12 @@ Only two resistor values (1 k, 10 k) and two capacitor values (100 nF,
 
 ### Who fits what
 
-| Board maker (SMD, 8 different parts, 51 placements) | You (hand soldering) |
+| Board maker (SMD, 8 different parts, 52 placements) | You (hand soldering) |
 | --- | --- |
 | 1 k and 10 k resistors, 100 nF and 10 uF capacitors (0603 / 0805) | Two 1x22 sockets for the dev board |
 | CH334R hub (QSOP-16, 0.635 mm pitch) | HD15 VGA socket, two stacked USB-A sockets |
 | DS3231MZ clock (SOIC-8) | microSD socket (SMD, 1.1 mm pitch) and CR2032 holder (SMD, big pads) |
-| TPS2051C power switch, 4x USBLC6-2SC6 | 12 MHz HC-49 crystal, 100 uF electrolytic, 3.5 mm jack, 2-pin piezo header |
+| TPS2051C power switch, 4x USBLC6-2SC6 | 12 MHz HC-49 crystal, 100 uF electrolytic, 3.5 mm jack, 2-pin piezo header, 470 uF electrolytic |
 
 The lists are `fab/hat-bom-assembly.csv` (send to the maker) and
 `fab/hat-hand-solder.csv` (buy yourself). `fab/hat-pos-top.csv` holds only the
@@ -122,7 +126,7 @@ the scripts should be retired.
 2. Upload the project and look at the assembler's 3D / placement preview,
    especially the polarity of U1 to U5. If the maker builds its BOM from the
    KiCad project (AISLER does), mark the hand-solder parts (J1 to J9, BT1,
-   Y1, C12) as "do not place" there; they are already left out of
+   Y1, C12, C13) as "do not place" there; they are already left out of
    `hat-pos-top.csv`.
 3. The VGA socket footprint is a generic KiCad one (Tonar/Amphenol style,
    pins 3.03 mm from the edge). If the assembler offers a different HD15
