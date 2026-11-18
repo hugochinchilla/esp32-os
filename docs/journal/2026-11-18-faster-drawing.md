@@ -194,3 +194,31 @@ A line that may be worth saying: one frame at 60 Hz is 16.8 ms, and this
 board writes a pixel to its screen memory in 26 ns at best, so a full
 screen is 8 ms of pure writing. Half the frame is gone before any drawing
 is clever or stupid; there was never room to be wasteful.
+
+## On the board (2026-11-18, 627a372)
+
+App-flashed on the BIOS layout with the new `chess.app`. Paint bench, first of
+four blocks (144,000 pixels, shortest of three, microseconds), against the
+last turn's: fill_fade 3,557 (was 216,528), text_opaque 10,161 (22,491), the
+Terminal's inside 13,137 (25,429), Chess's inside 11,503 (28,763), everything
+again 43,198 (69,850); the windows' frames 4,700 to 7,500 (5,790 to 7,906).
+The other three blocks agree within a few per cent; with the Editor maximised
+everything again is 17,709.
+
+Frames benchmark, three runs with `reboot --fast` before each: over budget 38,
+38 and 36 of about 1,930 frames drawn (last turn 41, 40, 41), 4, 1 and 2 late
+timers, no missed refill of the video signal. What is still over budget is the
+pieces that paint 180,000 to 290,000 pixels at once, now 19 to 36 ms instead of
+30 to 59 ms: a window dropped, brought to the front or maximised, and the
+Culebra and Chess events that repaint a whole window. Free RAM with the five
+windows open: 158,755 internal and 5,143,464 external (last turn 161,359 and
+5,163,708).
+
+Screenshots: title bars with the same blue fade, active and inactive; Terminal
+and Editor text whole at the edges of overlapping windows; Chess with a piece
+held over the middle of the board and one second after it landed: pieces
+whole, the two squares of the move yellow, nothing left behind. Options >
+Pieces: each of the three sets changes every piece. Filmed with the webcam at
+60 frames a second during the frames benchmark (windows to the front, a piece
+dragged): no flicker, tearing or trail seen; the owner is to judge the motion
+on the monitor.
