@@ -84,6 +84,15 @@ of the driver. The hardware page says what was built.
 Lesson: the wiring was taken from the page, not asked. One question to the
 owner before the first board turn would have saved two.
 
+## Paused
+
+Asked, the owner said the part is sealed, "+" to the pin: an active
+buzzer. He was told what plays a melody (a passive piezo element in the
+same holes). Then: "ok, remove all beeper sound from the board. I will
+review this again when I know what kind of beeper I want". The third
+board turn was cancelled, the board is back on `main`, PR 51 stays a
+draft, and `docs/handoff/beeper.md` says where things stand.
+
 ## What is left
 
 The second board turn; the owner's answer about the part; the lines on
