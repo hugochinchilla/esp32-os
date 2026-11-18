@@ -66,7 +66,7 @@ cable's side of the regulator).
 With the capacitor fitted and the colour returns still open, the owner no
 longer sees the lines. That points at the 3.3 V supply dipping during
 transmit bursts as the cause, or at least the main one, and says the hat
-should get its second 100 µF capacitor on 3.3 V. It is one look by eye on
+should carry a capacitor on 3.3 V too. It is one look by eye on
 one board with one monitor; the details marked "to confirm" in the table are
 not yet confirmed. Step C cannot be run: the cable has no wires for the
 colour returns.
@@ -78,8 +78,7 @@ open.
 
 What each outcome means for the hat:
 
-- B cures or clearly reduces them: the hat gets the second 100 µF capacitor
-  on 3.3 V.
+- B cures or clearly reduces them: the hat gets a capacitor on 3.3 V.
 - Only C cures them: the hat's ground plane and returns already cover it and
   the extra capacitor is not needed.
 - Neither: the cause is elsewhere (radiation into the cable or the HDMI
