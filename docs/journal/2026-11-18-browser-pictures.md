@@ -59,3 +59,8 @@ All 52 PC tests pass and the firmware compiles and links. **Not run on the board
 
 - A board turn: a FrogFind article with pictures, memory before and after, the task's stack, `dbg.py misses` while a picture decodes.
 - The owner's answer to the card. If GIF is wanted, it is the next piece.
+
+## The owner's answer
+
+The same evening, on the card: "Pictures inside pages". GIF is not part of it for now.
+

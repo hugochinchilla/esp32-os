@@ -1,8 +1,8 @@
 ---
 title: "Pictures in Vizcacha"
 date: 2026-11-18
-by: agent
-status: to-confirm
+by: owner+agent
+status: decided
 area: programs
 summary: "Vizcacha shows a page's PNG, JPEG and BMP pictures, fetched after the text and fitted to the page; GIF stays a box (backlog 53)"
 ---
@@ -10,9 +10,9 @@ summary: "Vizcacha shows a page's PNG, JPEG and BMP pictures, fetched after the 
 # Pictures in Vizcacha
 
 Backlog item 53. Journal: `docs/journal/2026-11-18-browser-pictures.md`.
-The owner reported that the browser showed no pictures and was asked how
-far to go; the work started on the recommended option before he answered,
-so all of this is to confirm.
+The owner reported that the browser showed no pictures, was given four
+options (in pages; only when opened; in pages with GIF; none) and chose
+pictures inside pages (2026-11-18). The details below are the agent's.
 
 - Pictures are drawn inside the page, with the decoders the Picture viewer
   already has: PNG, JPEG, BMP. A GIF keeps its box with the `alt` text:
