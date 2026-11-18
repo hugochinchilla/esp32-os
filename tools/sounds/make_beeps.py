@@ -22,6 +22,10 @@ Needs only numpy.  Run:  python3 tools/sounds/make_beeps.py [out_dir]
 To hear a tune of your own before it goes to C:\\.config\\chime.txt (the
 format is in docs/settings.md: "Hz ms [fade_ms [loudness]]" a line):
   python3 tools/sounds/make_beeps.py --file chime.txt     -> chime.txt.wav
+
+To turn a recording of one voice (a tune made in a tracker, whistled, played
+on one instrument) into such a file, one note at a time as the beeper plays:
+  python3 tools/sounds/make_beeps.py --from-wav tune.wav  -> tune.wav.chime.txt
 """
 import os
 import sys
@@ -32,7 +36,8 @@ import numpy as np
 SR = 44100
 OVER = 8  # the square wave is made at 8 times the rate, then averaged down
 FILE = sys.argv[sys.argv.index("--file") + 1] if "--file" in sys.argv else None
-OUT = sys.argv[1] if len(sys.argv) > 1 and not FILE else "/mnt/project-files/look/sounds/beeper"
+WAV = sys.argv[sys.argv.index("--from-wav") + 1] if "--from-wav" in sys.argv else None
+OUT = sys.argv[1] if len(sys.argv) > 1 and not FILE and not WAV else "/mnt/project-files/look/sounds/beeper"
 
 
 def note(name):
@@ -281,8 +286,80 @@ def from_file(path):
     return steps
 
 
+def from_wav(path):
+    """A one-voice recording -> chime.txt lines: pitch by autocorrelation
+    every 20 ms, runs of one pitch joined into a note, its loudness and
+    how fast it dies taken from the level at its start and end."""
+    with wave.open(path) as w:
+        sr, ch, sw = w.getframerate(), w.getnchannels(), w.getsampwidth()
+        raw = w.readframes(w.getnframes())
+    x = np.frombuffer(raw, dtype="<i2").astype(float) / 32768 if sw == 2 else \
+        (np.frombuffer(raw, dtype="u1").astype(float) - 128) / 128
+    x = x.reshape(-1, ch).mean(axis=1)
+    hop, win = sr // 50, sr // 25
+    frames = []
+    for i in range(0, len(x) - win, hop):
+        seg = x[i:i + win] - x[i:i + win].mean()
+        level = np.sqrt((seg ** 2).mean())
+        hz = 0
+        if level > 0.004:
+            ac = np.correlate(seg, seg, "full")[win - 1:]
+            lo, hi = sr // 5000, sr // 150
+            lag = lo + int(np.argmax(ac[lo:hi]))
+            # the shortest lag nearly as good: the note, not an octave below
+            for sub in (4, 3, 2):
+                near = int(round(lag / sub))
+                if near >= lo and ac[near - 1:near + 2].max() > 0.9 * ac[lag]:
+                    lag = near - 1 + int(np.argmax(ac[near - 1:near + 2]))
+                    break
+            if ac[lag] > 0.3 * ac[0]:
+                hz = sr / lag
+        frames.append((hz, level))
+    top = max(l for _, l in frames) or 1.0
+    notes = []  # [hz values, levels]
+    for hz, level in frames:
+        last = notes[-1] if notes else None
+        same = last and ((hz == 0) == (last[0][-1] == 0)) and (hz == 0 or abs(np.log2(hz / np.median(last[0]))) < 0.04)
+        rising = last and hz and len(last[1]) > 2 and level > 1.6 * last[1][-1]  # the same note struck again
+        if same and not rising:
+            last[0].append(hz)
+            last[1].append(level)
+        else:
+            notes.append([[hz], [level]])
+    # A frame or two between notes is the change itself, or a tail too
+    # quiet to tell its pitch: it goes to the note before it.
+    kept = []
+    for hzs, levels in notes:
+        if kept and (len(hzs) <= 2 or (hzs[0] and max(levels) < 0.12 * top)):
+            kept[-1][0] += [kept[-1][0][-1]] * len(hzs)
+            kept[-1][1] += levels
+        elif kept or hzs[0]:
+            kept.append([hzs, levels])
+    notes = kept
+    lines = []
+    for hzs, levels in notes:
+        ms = len(hzs) * 20
+        hz = int(round(np.median(hzs)))
+        if hz == 0:
+            lines.append(f"0 {ms}")
+            continue
+        start, end = max(levels[:2]), max(levels[-1], 1e-4)
+        fade = int(min(10000, ms / np.log(start / end))) if ms >= 80 and end < 0.6 * start else 0
+        loud = min(255, max(1, int(round(255 * start / top))))
+        lines.append(f"{hz} {ms} {fade} {loud if loud < 250 else 0}".replace(" 0 0", ""))
+    while lines and lines[-1].startswith("0 "):
+        lines.pop()
+    if len(lines) > 64:
+        print(f"{len(lines)} steps: the board takes the first 64", file=sys.stderr)
+    return lines
+
+
 if __name__ == "__main__":
-    if FILE:
+    if WAV:
+        with open(WAV + ".chime.txt", "w") as f:
+            f.write("# from " + os.path.basename(WAV) + "\n" + "\n".join(from_wav(WAV)) + "\n")
+        print(WAV + ".chime.txt")
+    elif FILE:
         x, path = write(FILE + ".wav", from_file(FILE))
         save(os.path.abspath(path), x, max(1e-9, np.abs(x).max()))
         print(path)
