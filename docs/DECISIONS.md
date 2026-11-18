@@ -177,6 +177,7 @@ Processes, tasks, signals, init, OS calls, memory.
 - [The settings tools ask through the OS calls](decisions/settings-tools-os-calls.md) (2026-11-17, agent, to-confirm): Display, Screen Saver, Network and Shut Down are programs that ask through new OS calls (backlog 20)
 - [Watchdog, crash record and error screen](decisions/watchdog-crash-record-error-screen.md) (2026-11-17, agent, to-confirm): Heartbeat watchdog, a crash record kept over the restart, and the error screen (backlog 7)
 - [Services are lines of the start-up file](decisions/services-start-up-file.md) (2026-11-18, owner, decided): `telnetd` and `vncd` are lines of init's start-up file; a Services dialog and commands edit them (backlog 62)
+- [Sound: the port, the beeper and the system's sounds](decisions/sound-port.md) (2026-11-18, owner+agent, to-confirm): A Sound port with two voices, samples and an emulated PC beeper; silent on the board, real on the PC and in the browser (backlog 58, 59)
 
 ### storage
 

@@ -9,6 +9,19 @@
   /* The canvas is the monitor: the whole page. The program draws the 4:3
      picture in the middle of it, as it does in a window of any size. */
   #canvas { display: block; width: 100vw; height: 100vh; outline: none; touch-action: none; }
+  /* Switched off: browsers play no sound on a page nobody has clicked, so
+     the machine starts with its power button. */
+  #off { position: fixed; inset: 0; display: none; flex-direction: column; align-items: center;
+         justify-content: center; gap: 22px; background: #000; cursor: pointer; color: #b6b6b6; font: 16px monospace; }
+  #off.ready { display: flex; }
+  #power { width: 84px; height: 84px; border-radius: 50%; cursor: pointer; background: #b6b6b6;
+           border: 3px solid; border-color: #fff #494949 #494949 #fff; position: relative; }
+  #power:active { border-color: #494949 #fff #fff #494949; }
+  /* The mark on it: a ring open at the top, and a bar through the gap. */
+  #power::before { content: ""; position: absolute; left: 22px; top: 24px; width: 28px; height: 28px;
+                   border: 5px solid #242424; border-top-color: transparent; border-radius: 50%; }
+  #power::after { content: ""; position: absolute; left: 39px; top: 16px; width: 6px; height: 24px;
+                  background: #242424; }
   #note { position: fixed; left: 0; right: 0; top: 45%; text-align: center; color: #b6b6b6;
           font: 16px monospace; }
 </style>
@@ -16,11 +29,19 @@
 <body>
 <canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
 <div id="note">Starting Chinchilla...</div>
+<div id="off">
+  <button id="power" type="button" aria-label="Power" autofocus></button>
+  <div>Click to start Chinchilla 96</div>
+</div>
 <script>
   var Module = {
     canvas: document.getElementById('canvas'),
-    // The program has started: the picture takes over.
-    onRuntimeInitialized: function () { document.getElementById('note').remove(); },
+    // The program is ready: the power button shows (the program waits for it).
+    onRuntimeInitialized: function () {
+      document.getElementById('note').remove();
+      var off = document.getElementById('off');
+      if (off) { off.className = 'ready'; document.getElementById('power').focus(); }
+    },
     printErr: function (text) { console.warn(text); },
     onAbort: function () {
       var note = document.createElement('div');
@@ -29,6 +50,15 @@
       document.body.appendChild(note);
     }
   };
+  // Start > Shut Down > Restart loads the page again: the machine was on,
+  // so it comes back on without the button. (Sound then waits for the
+  // first click or key, as the browser demands.)
+  try {
+    if (sessionStorage.getItem('chinchilla-restart')) {
+      sessionStorage.removeItem('chinchilla-restart');
+      document.getElementById('off').remove();
+    }
+  } catch (error) { /* no session storage: the button shows */ }
   // Keys go to Chinchilla as soon as the page is clicked.
   window.addEventListener('load', function () { Module.canvas.focus(); });
   Module.canvas.addEventListener('mousedown', function () { Module.canvas.focus(); });

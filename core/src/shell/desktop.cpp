@@ -1018,6 +1018,7 @@ void no_memory_for(const char *program)
     char text[96]; // the box keeps its own copy
     snprintf(text, sizeof(text), "There is not enough memory to open\n%s.", program);
     message_box("Chinchilla", text);
+    os::play_sound(sound::Id::Error); // in place of the box's own knock
 }
 
 void startup_trouble(int lines)
@@ -1059,6 +1060,7 @@ void message_box(const char *title, const char *text)
     static const char *const ok[] = {"OK"};
     if (MessageBox *box = message_window()) {
         box->ask(title, text, ok, 1, nullptr, nullptr);
+        os::play_sound(sound::Id::Alert);
     }
 }
 
@@ -1068,6 +1070,7 @@ void ask(const char *title, const char *text, const char *const *buttons, int co
     const prog::InCall in_call;
     if (MessageBox *box = message_window()) {
         box->ask(title, text, buttons, count, answer, context);
+        os::play_sound(sound::Id::Alert);
     }
 }
 
@@ -1301,6 +1304,8 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
         start_taskbar_again();
     }
     // The desktop starts with no windows open (the owner's choice).
+    // The welcome chime (backlog item 59).
+    os::play_sound(sound::Id::Boot);
 }
 
 void open_demo_windows()

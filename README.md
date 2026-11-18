@@ -145,6 +145,7 @@ another Linux PC with the same kind of processor that has SDL2 installed
 | `--fast` | No start-up screens (a key or a click also skips them) |
 | `--scale N` | Open the window at N times 640x480. Default: the largest of 1, 2, 3 that fits the desktop |
 | `--fullscreen` | Start on the whole screen |
+| `--mute` | No sound. Without it the self-test ends in a beep, the desktop comes up with a chime and message boxes knock, through the PC's sound card |
 
 In the window:
 
@@ -197,6 +198,10 @@ Settings > Pages > Source: "GitHub Actions". The address is then
 The page reaches the web through a relay, because a page may not open
 connections of its own: `web/relay/README.md` says how to put it on
 Cloudflare and give the page its address.
+
+The page starts switched off, with a power button: a browser plays no sound
+on a page nobody has clicked, and the self-test's beep and the welcome chime
+are the first things the machine does.
 
 What differs from the desktop program: the browser keeps some keys for itself
 (Ctrl+W, Ctrl+T, F5, F11 and others; Ctrl+Alt+End is still Ctrl+Alt+Del),

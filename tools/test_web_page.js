@@ -34,6 +34,11 @@ function check(what, ok) {
   const start = async () => {
     await page.goto(url);
     await page.waitForFunction(() => typeof FS !== 'undefined' && !document.getElementById('note'));
+    // The page starts switched off (a browser plays no sound on a page
+    // nobody has clicked): the power button starts the machine.
+    await page.waitForSelector('#off.ready');
+    await shot('web-off.png');
+    await page.click('#power');
     await page.waitForTimeout(800);
     await shot('web-start-up.png');
     await page.keyboard.press('Space');
@@ -41,6 +46,8 @@ function check(what, ok) {
   };
 
   await start();
+  check('the power button is gone and the sound output runs', await page.evaluate(
+    () => !document.getElementById('off') && Module.SDL2.audioContext.state === 'running'));
   check('a new C: has the sample files', (await read()).startsWith('Welcome to Chinchilla'));
   await shot('web-desktop.png');
 

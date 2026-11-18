@@ -70,6 +70,9 @@ The journal entry with the reasons is
 | Clipboard | `os::clipboard::set_files(folder, names, count, cut)` | Copy and Cut for files (item 54): their full paths go on the clipboard, which is the one the text uses and holds text or files, never both |
 | | `os::clipboard::file_count()`, `file(index, out, capacity)`, `files_cut()`, `clear()` | What Paste asks: which files, and whether they were cut. `os::ui::clipboard_size()` is of the text, 0 while files are there |
 | Settings | `os::load_settings(program, ini)`, `os::save_settings(program, ini)` | `C:\.config\<program>.ini` |
+| Sound | `os::play_sound(which)` | One of the system's sounds (`core/sound/sound.hpp`: Boot, Close, Alert, Error, Bell) from its start; it returns at once, and a new one takes the place of the one playing. Nothing on a machine with no sound output (the board, for now) |
+| | `os::beep(steps, count)` | The beeper: steps of a pitch in Hz and a time in ms, 0 Hz for silence; a voice of its own beside the recordings |
+| | `os::sound_playing()` | Whether anything is still to be heard |
 | Machine | `os::restart()` | |
 | | `os::stats(out)`, `os::fact(which, ...)`, `os::busy_us()` | Figures and facts for the tools that show them |
 

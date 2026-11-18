@@ -44,6 +44,9 @@ struct BlockNote {
     uint32_t pad[2]; // 16 bytes in all: what follows stays aligned as the port gave it
 };
 
+ports::Sound *g_sound = nullptr; // the machine's sound output, if it has one
+ports::Sound &sound_output() { return g_sound != nullptr ? *g_sound : sound::silence(); }
+
 void settings_path(const char *program, char *out, size_t n)
 {
     snprintf(out, n, "C:\\.config\\%s.ini", program);
@@ -84,6 +87,11 @@ void install_network(net::Manager *wifi)
 {
     const prog::InCall in_call;
     g_network = wifi;
+}
+void install_sound(ports::Sound *output)
+{
+    const prog::InCall in_call;
+    g_sound = output;
 }
 
 /* ---- The process ------------------------------------------------------------ */
@@ -772,6 +780,28 @@ uint32_t busy_us()
 {
     const prog::InCall in_call;
     return g_kit.wm->busy_us();
+}
+
+
+/* ---- Sound --------------------------------------------------------------------- */
+
+void play_sound(sound::Id which)
+{
+    const prog::InCall in_call;
+    const sound::Clip clip = sound::clip(which);
+    if (clip.count > 0) {
+        sound_output().play(clip.samples, clip.count);
+    }
+}
+void beep(const ports::Beep *steps, int count)
+{
+    const prog::InCall in_call;
+    sound_output().beep(steps, count);
+}
+bool sound_playing()
+{
+    const prog::InCall in_call;
+    return sound_output().playing();
 }
 
 } // namespace os
