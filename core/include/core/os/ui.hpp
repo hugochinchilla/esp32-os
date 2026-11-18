@@ -108,6 +108,8 @@ void *state(Window window);
 bool alive(Window window);
 bool on_screen(Window window); // shown, and not closed
 void set_title(Window window, const char *title); // the text must stay valid
+// Another icon for the title bar and the taskbar (16x16; nullptr: none).
+void set_icon(Window window, const gfx::Bitmap *icon);
 bool in_front(Window window);                     // it is the window in use
 // The size of the client area, as `w` and `h`.
 gfx::Rect client_size(Window window);

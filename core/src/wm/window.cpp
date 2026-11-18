@@ -126,6 +126,18 @@ void Window::set_title(const char *title)
     }
 }
 
+void Window::set_icon(const gfx::Bitmap *icon)
+{
+    if (icon == icon_) {
+        return;
+    }
+    icon_ = icon;
+    if (wm_ != nullptr) {
+        wm_->invalidate(frame_);
+        wm_->invalidate(wm_->taskbar());
+    }
+}
+
 void Window::add(Widget &w)
 {
     if (widget_count_ < kMaxWidgets) {
