@@ -103,3 +103,29 @@ Compiled in the cloud with ESP-IDF v5.5: the firmware builds and
 The board: that the pause feels right to the owner, and the frames reading
 again now that the user's move and the computer's are painted 250 ms
 apart and item 66 is in.
+
+## On the board (2026-11-19, 07b9272)
+
+App-flashed on the BIOS layout with `chess.app` (51,904 bytes, unchanged in
+size). Level 1 as White, six moves by click-click (e2-e4, d2-d4, g1-f3, b1-c3,
+f1-e2, c1-e3). A screenshot taken 0.4 s after the second click (the capture
+itself takes that long) showed the user's piece moved, the hourglass over the
+board, "The computer is thinking..." and the computer's piece not yet moved,
+every time; one second later each showed the computer's move at rest with its
+two squares in yellow and "Your move.". Take back (Ctrl+Z) 0.1 s after a move,
+three times: the board was whole each time with nothing moved by the computer
+two seconds later. F2 > Play 0.1 s after a move: a fresh board, nothing moved
+two seconds later. As Black the first move appeared after the pause (the
+screenshot right after Play showed the hourglass and no move, one second later
+the computer's h2-h4). Level 5 as White: still thinking 1.5 s after the move
+and answered (e7-e5) well before 12 s. Closing Chess 0.1 s after a move left no
+crash and the desktop went on. No missed refill of the video signal; free
+internal RAM 191,311 before opening Chess and after closing it.
+
+The frames reading over the six moves: 450 pieces of work, 54 painted, one
+over budget (a mouse event of 26,044 us that painted only 2,404 us, 9,280
+pixels), the user's move's painting 9,280 pixels and a tick of 10,880 pixels
+(3.7 ms) for the computer's, other landing steps cheap (a few ticks of 25,000
+to 27,000 pixels in 3.5 ms). The webcam was not used: whether the pause is
+short and even by eye is for the owner to judge on the monitor.
+
