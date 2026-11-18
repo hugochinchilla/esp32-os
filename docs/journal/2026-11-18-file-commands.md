@@ -1,7 +1,8 @@
 # Copy, Cut, Paste and Delete for files
 
-2026-11-18. Backlog item 54. Built and tested on the PC. Nothing here has run
-on the board.
+2026-11-18. Backlog item 54. Built and tested on the PC. The firmware compiles
+and links with this change (ESP-IDF v5.5 in the cloud container, no
+warnings). Nothing here has run on the board.
 
 ## 1. What was asked
 
