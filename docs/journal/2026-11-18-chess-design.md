@@ -188,3 +188,11 @@ the board, and nothing needed to.
 The owner's choices: the engine, the look (the pieces above all), the
 levels, the name. Then item 49, and item 50 in steps: the rules and their
 tests, the search, the window.
+
+## The owner's choice (the same day)
+
+Asked on a card with three options (our own engine, micro-Max through
+mcu-max, something else), the owner chose **our own engine**. It is
+recorded in `docs/DECISIONS.md`. The look, the levels and the name have not
+been answered yet. The rules and the search do not depend on them, so they
+can be written and tested on the PC meanwhile, as their own piece of work.

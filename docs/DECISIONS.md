@@ -417,15 +417,15 @@ and reasons are in `docs/journal/2026-11-17-program-lifecycle.md`.
 | How the PC build shows the screen | SDL window, image files only | Open |
 | Clock chip | DS3231 module, another I2C chip | DS3231 |
 
-### The chess game (asked 2026-11-18, the owner's to choose)
+### The chess game (asked 2026-11-18; the engine decided, the look to choose)
 
 Backlog item 50; the mock-ups are in `docs/look/chess/` and the reasoning
-in `docs/journal/2026-11-18-chess-design.md`. Nothing is built. Proposed,
-none of it decided:
+in `docs/journal/2026-11-18-chess-design.md`. Nothing is built.
 
-- The engine: one written for this project in `core/src/games/`, tested
-  on the PC, rather than micro-Max (through mcu-max) or a port of a larger
-  engine. Recommended; the owner chooses.
+- Decided by the owner (2026-11-18, on a card): the engine is one written
+  for this project in `core/src/games/`, tested on the PC. Not micro-Max
+  (through mcu-max), and not a port of a larger engine. The points below
+  are still his to choose.
 - The look: squares of 40 pixels, the pieces as drawn by
   `tools/mockup/chess_pieces.py`, green with white squares or brown with
   cream ones, the last move in yellow, dots where a picked piece can go,
