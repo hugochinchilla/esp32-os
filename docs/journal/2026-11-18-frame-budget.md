@@ -188,3 +188,41 @@ would come late. `dbg.py misses` stayed at 0: the picture itself is not
 disturbed, it is only late. What to do about it (list on a job's task,
 list only when something says the folder changed, list less often) is the
 owner's to choose and a separate piece of work.
+
+## On the board (2026-11-18, 0eff2d0)
+
+A first try with 6f101d2 stopped before it measured: the script waited for a
+window on a desktop that starts with none, and then typed "Culebra" in Run,
+which no longer finds the games now that they are program files. 0eff2d0
+fixed both. Then, three runs, each after `dbg.py reboot --fast`, on the board
+with the Editor (PID 7), the File manager (PID 9), a Terminal (PID 11),
+Culebra (PID 15) and Chess (PID 18) open; PID 2 is the desktop and PID 3 the
+taskbar. The script reported "not steady" in all nine parts of all three
+runs, and `dbg.py misses` and the log's `video:` lines showed no missed
+refill of the video signal in any run: the monitor was fed 59.52 frames a
+second by the pixel clock and 59.52 to 59.54 by the PC's clock, 2,941 to
+2,943 frames in 49.4 s.
+
+Frames over the 16,800 us budget, per run (parts in the script's order, then
+the total of the desktop's frames):
+
+| Part | Run 1 | Run 2 | Run 3 | Longest piece |
+| --- | --- | --- | --- | --- |
+| idle | 3 | 3 | 3 | 35.1 to 35.6 ms, the taskbar's timer (PID 3) every 2 s |
+| pointer | 3 | 3 | 3 | the same timer, 35.0 to 35.6 ms |
+| drag + chess | 5 | 5 | 5 | 38.0 to 39.2 ms (the taskbar's timer); a key 29.7 ms painting 204,372 pixels |
+| drops + chess | 16 | 15 | 15 | 57.6 to 59.1 ms: a mouse event painting 181,484 pixels, Chess's window (PID 18) 28 ms of it |
+| drag + culebra | 6 | 6 | 6 | 37.5 to 39.2 ms |
+| culebra | 4 | 3 | 4 | 35.2 to 35.3 ms |
+| to front + chess | 14 | 14 | 14 | 46.8 to 47.5 ms: a window brought to the front, the Terminal (PID 11) 40 ms of the painting |
+| typing + chess | 7 | 7 | 6 | 38.1 to 38.7 ms |
+| maximise | 8 | 8 | 8 | 40.5 to 42.2 ms: the Editor (PID 7), 289,280 pixels |
+| total | 66 | 64 | 64 | |
+
+Timers a frame or more late: 7, 17 and 3 in the three runs (the late ones come
+a frame or two after a long piece). On an idle desktop the taskbar's timer (PID
+3) takes 35 ms every 2 seconds (84 ms in the first seconds of one boot); a
+reading after 20 more seconds of idle shows ten such ticks, each 2 to 4
+frames long. Free internal memory with the five windows open: 161,351 against
+202,103 bytes; external 5,172,200 against 6,205,392; the largest external
+block 5,111,808 against 6,160,384.
