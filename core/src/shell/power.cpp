@@ -2,6 +2,7 @@
 // on machines of the time, on a screen that says the power can go. The
 // drawing is our own: the mascot asleep under a night sky.
 #include "core/gfx/font.hpp"
+#include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
 #include "internal.hpp"
 
@@ -138,6 +139,8 @@ bool power_down()
     }
     g_down = true;
     m.take_over(&paint_screen, nullptr);
+    // The closing melody (backlog item 59), over the last screen.
+    os::play_sound(sound::Id::Close);
     return true;
 }
 

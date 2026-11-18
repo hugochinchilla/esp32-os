@@ -47,6 +47,29 @@ bool wait_until(BootIo &io, uint32_t until)
     return true;
 }
 
+void post_beep(BootIo &io, sound::PostResult result)
+{
+    if (io.sound != nullptr) {
+        const sound::Tune code = sound::post_code(result);
+        io.sound->beep(code.steps, code.count);
+    }
+}
+
+void let_beep_end(BootIo &io, sound::PostResult result)
+{
+    if (io.sound == nullptr) {
+        return;
+    }
+    // An output that plays nothing says so at once. One that never stops
+    // saying it plays is not waited for longer than the code lasts.
+    const uint32_t until = io.clock.micros() + (sound::length_ms(sound::post_code(result)) + 100) * 1000;
+    while (io.sound->playing() && static_cast<int32_t>(until - io.clock.micros()) > 0) {
+        if (io.idle != nullptr) {
+            io.idle(io.context);
+        }
+    }
+}
+
 void format_bytes(char *out, size_t n, uint64_t bytes)
 {
     if (bytes >= 1024u * 1024u) {
@@ -399,6 +422,12 @@ int run_self_test(BootIo &io, bool hold)
         }
     };
     int failures = 0;
+    // The beep code at the end is for the worst thing found.
+    sound::PostResult result = sound::PostResult::Ok;
+    auto found = [&](bool passed, sound::PostResult what) {
+        failures += passed ? 0 : 1;
+        result = passed ? result : sound::worse(result, what);
+    };
     char v[96], t[128];
     uint32_t value = 0;
     pause();
@@ -409,7 +438,7 @@ int run_self_test(BootIo &io, bool hold)
     snprintf(t, sizeof(t), "Main Processor : %s", ok ? v : "not recognised");
     line(c, 3, t, ok ? kGreyC : kRedC);
     log("Processor", v, ok);
-    failures += ok ? 0 : 1;
+    found(ok, sound::PostResult::NotFatal);
     pause();
 
     // The memory tests, the count climbing as they go.
@@ -438,7 +467,7 @@ int run_self_test(BootIo &io, bool hold)
                      static_cast<unsigned long>(r.read));
             io.log(t, io.context);
         }
-        failures += ok ? 0 : 1;
+        found(ok, sound::PostResult::Memory);
         pause();
     }
 
@@ -449,7 +478,7 @@ int run_self_test(BootIo &io, bool hold)
         format_bytes(v, sizeof(v), value);
         log(f == ports::Fact::Flash ? "Flash" : (f == ports::Fact::InternalRam ? "Internal RAM" : "External RAM"), v,
             ok);
-        failures += ok ? 0 : 1;
+        found(ok, f == ports::Fact::Flash ? sound::PostResult::NotFatal : sound::PostResult::Memory);
     }
 
     // Video.
@@ -458,7 +487,7 @@ int run_self_test(BootIo &io, bool hold)
     snprintf(t, sizeof(t), "Detecting video ....... %s", v);
     line(c, 7, t, ok ? kGreyC : kRedC);
     log("Video", v, ok);
-    failures += ok ? 0 : 1;
+    found(ok, sound::PostResult::Video);
     pause();
 
     // Drive C:.
@@ -480,7 +509,7 @@ int run_self_test(BootIo &io, bool hold)
     snprintf(t, sizeof(t), "Detecting drive C: .... %s", v);
     line(c, 8, t, ok ? kGreyC : kRedC);
     log("Drive C:", v, ok);
-    failures += ok ? 0 : 1;
+    found(ok, sound::PostResult::Drive);
     pause();
 
     // Mouse (and keyboard), sound.
@@ -495,7 +524,7 @@ int run_self_test(BootIo &io, bool hold)
         snprintf(t, sizeof(t), "Detecting %s ....... %s", f.label, ok ? v : "not found");
         line(c, f.index, t, ok ? kGreyC : kRedC);
         log(f.label, v, ok);
-        failures += ok ? 0 : 1;
+        found(ok, sound::PostResult::NotFatal);
         pause();
     }
 
@@ -504,6 +533,11 @@ int run_self_test(BootIo &io, bool hold)
     } else {
         snprintf(t, sizeof(t), "%d check%s failed. Starting Chinchilla anyway...", failures, failures == 1 ? "" : "s");
         line(c, 12, t, kRedC);
+    }
+    if (hold) {
+        // The beep, as a PC gives when its self-test is done: one short
+        // when all is well, a code when not. It sounds over the countdown.
+        post_beep(io, result);
     }
     if (hold && !io.skipped) {
         if (io.hold_s > 0) {
@@ -518,6 +552,9 @@ int run_self_test(BootIo &io, bool hold)
             // Long enough to read the last line (longer when something failed).
             wait_until(io, io.clock.micros() + (failures ? 3 : 1) * kSelfTestHoldMs * 1000);
         }
+    }
+    if (hold) {
+        let_beep_end(io, result); // a key ended the wait: the beep still finishes
     }
     return failures;
 }

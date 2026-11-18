@@ -23,6 +23,7 @@
 #include "core/ports.hpp"
 #include "core/proc/table.hpp"
 #include "core/sh/terminal_session.hpp"
+#include "core/sound/sound.hpp"
 #include "core/wm/wm.hpp"
 
 namespace os {
@@ -292,6 +293,18 @@ bool fact(ports::Fact which, uint32_t &value, char *text, size_t capacity);
 // How long the UI task has worked since start-up, in µs (wraps).
 uint32_t busy_us();
 
+/* ---- Sound --------------------------------------------------------------------- */
+
+// One of the system's sounds (core/sound/sound.hpp), from its start. It
+// returns at once; a new one takes the place of the one playing. Nothing
+// on a machine that has no sound output or no recordings.
+void play_sound(sound::Id which);
+// The beeper: a square wave, one pitch at a time (ports::Sound::beep). It
+// returns at once, and a new call replaces what the beeper was playing.
+void beep(const ports::Beep *steps, int count);
+// Whether anything is still to be heard.
+bool sound_playing();
+
 /* ---- For the system, not for programs ------------------------------------------ */
 
 struct Kit {
@@ -308,5 +321,8 @@ void install(const Kit &kit);
 const Kit &installed_kit(); // for the other files of core/os
 // The Wi-Fi service, when the board has one (before or after install()).
 void install_network(net::Manager *wifi);
+// The sound output, when the machine has one (before or after install()).
+// Without one, or with nullptr, the calls reach sound::silence().
+void install_sound(ports::Sound *output);
 
 } // namespace os

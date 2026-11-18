@@ -44,6 +44,9 @@ set(CORE_SRCS
     src/www/html.cpp
     src/www/http.cpp
     src/www/url.cpp
+    src/sound/beeps.cpp
+    src/sound/mixer.cpp
+    src/sound/sound.cpp
     src/init/init.cpp
     src/os/os.cpp
     src/os/tcp.cpp

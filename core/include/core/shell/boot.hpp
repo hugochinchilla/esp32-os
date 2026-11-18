@@ -9,6 +9,7 @@
 #include "core/fs/fs.hpp"
 #include "core/gfx/canvas.hpp"
 #include "core/ports.hpp"
+#include "core/sound/beeps.hpp"
 #include "core/sys/crash.hpp"
 #include "core/sys/watchdog.hpp"
 
@@ -66,6 +67,8 @@ struct BootIo {
     // left; the rest is done with idle so the wait does not overshoot.
     void (*nap)(void *context) = nullptr;
     static constexpr uint32_t kNapMarginUs = 20000;
+    // Where the self-test's beep goes (may be nullptr: no beep).
+    ports::Sound *sound = nullptr;
 };
 
 // C:\.config\boot.ini, [boot] section (docs/settings.md).
@@ -95,6 +98,12 @@ inline bool take_one_shot_fast_boot(uint32_t &word)
 // Waits until the clock reaches `until` (micros, wrapping), answering the
 // debug link meanwhile; false if a key or button skipped it.
 bool wait_until(BootIo &io, uint32_t until);
+// The self-test is done: the beep code for what it found, as a PC gives
+// (core/sound/beeps.hpp). Starts it and returns.
+void post_beep(BootIo &io, sound::PostResult result);
+// Waits until the beeper has finished (at most as long as the code lasts).
+// A key does not cut it short.
+void let_beep_end(BootIo &io, sound::PostResult result);
 // "12 MB", "1.5 MB", "376 KB".
 void format_bytes(char *out, size_t n, uint64_t bytes);
 // The mascot's face, 16 by 16 squares of `scale` pixels.

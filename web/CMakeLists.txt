@@ -30,7 +30,13 @@ add_subdirectory(../core core)
 # published. They show in the build's output, to be tidied in core/.
 target_compile_options(core PRIVATE -Wno-error)
 
-add_executable(chinchilla ../host/desktop/main.cpp)
+# The system's sounds, compiled in (the board does not get them).
+add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/system_sounds.cpp
+    COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/sounds/embed_sounds.py
+            ${CMAKE_CURRENT_SOURCE_DIR}/../docs/sounds ${CMAKE_CURRENT_BINARY_DIR}/system_sounds.cpp
+    DEPENDS ../tools/sounds/embed_sounds.py ../docs/sounds/boot.pcm ../docs/sounds/close.pcm
+            ../docs/sounds/alert.pcm ../docs/sounds/error.pcm ../docs/sounds/bell.pcm)
+add_executable(chinchilla ../host/desktop/main.cpp ${CMAKE_CURRENT_BINARY_DIR}/system_sounds.cpp)
 target_compile_options(chinchilla PRIVATE -Wall -Wextra -Werror)
 target_link_libraries(chinchilla PRIVATE core idbfs.js)
 # How the page reaches the web (host/desktop/web_dialer.hpp): the address of

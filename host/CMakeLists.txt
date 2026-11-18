@@ -145,6 +145,10 @@ add_test(NAME proc COMMAND test_proc)
 add_executable(test_init tests/test_init.cpp)
 target_link_libraries(test_init PRIVATE core)
 add_test(NAME init COMMAND test_init)
+# Sound: the mixer, the beeper's codes, the system's sounds (backlog 58, 59).
+add_executable(test_sound tests/test_sound.cpp)
+target_link_libraries(test_sound PRIVATE core)
+add_test(NAME sound COMMAND test_sound)
 # The OS calls, and the check that the programs moved to them stay moved
 # (backlog 20).
 add_executable(test_os tests/test_os.cpp)
@@ -271,7 +275,13 @@ target_link_libraries(test_desktop PRIVATE core)
 add_test(NAME desktop COMMAND test_desktop)
 find_package(SDL2 QUIET)
 if(SDL2_FOUND)
-    add_executable(chinchilla desktop/main.cpp)
+    # The system's sounds, compiled in (the board does not get them).
+    add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/system_sounds.cpp
+        COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/sounds/embed_sounds.py
+                ${CMAKE_CURRENT_SOURCE_DIR}/../docs/sounds ${CMAKE_CURRENT_BINARY_DIR}/system_sounds.cpp
+        DEPENDS ../tools/sounds/embed_sounds.py ../docs/sounds/boot.pcm ../docs/sounds/close.pcm
+                ../docs/sounds/alert.pcm ../docs/sounds/error.pcm ../docs/sounds/bell.pcm)
+    add_executable(chinchilla desktop/main.cpp ${CMAKE_CURRENT_BINARY_DIR}/system_sounds.cpp)
     if(TARGET SDL2::SDL2)
         target_link_libraries(chinchilla PRIVATE core SDL2::SDL2)
     else()
