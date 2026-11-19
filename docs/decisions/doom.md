@@ -72,3 +72,8 @@ day and has not answered; all of it is his to overrule:
 - **The engine is run from a timer**, 35 times a second, a round of the
   game and a picture each time; a slower machine gets fewer pictures and
   the same speed of play. `dmesg` gets a line of figures every ten seconds.
+- **It stays at 35 pictures a second, as the original** (the owner's, on
+  a card, 2026-11-19, once the coarse screen had brought a round down to
+  11 or 12 ms and 60 had room). Not chosen: drawing between two moves of
+  the game to reach 60, now or on a branch of its own; the engine stays as
+  doomgeneric has it.
