@@ -136,6 +136,7 @@ The picture: signal, memory, painting, frame time.
 - [Missed video refills are logged](decisions/missed-video-refills.md) (2026-11-17, owner, decided): Missed refills are logged; `dbg.py tasks` stays although it can cause them
 - [Chosen for the frame budget](decisions/frame-budget.md) (2026-11-18, agent, to-confirm): The budget is one video frame, 16 800 us; how drawing is measured against it (backlog 63)
 - [Screen sizes: 640x480 and 800x600](decisions/screen-sizes.md) (2026-11-18, owner, decided): Display > Resolution changes the picture at once; a box asks to keep it, back after 15 s; 640x480 the default (backlog 68)
+- [Chosen for the refills missed at 800x600](decisions/scanout-ahead.md) (2026-11-19, agent, to-confirm): 800x600 copies the frame's third piece to internal RAM in the vertical blank (8,000 bytes); 640x480 is left as it was (backlog 68)
 
 ### boot
 

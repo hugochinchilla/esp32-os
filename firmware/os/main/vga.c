@@ -6,6 +6,9 @@
  *
  * We own the single framebuffer and fill the bounce buffers ourselves, so a
  * line hook (the mouse pointer) can be mixed in on the way out.
+ *
+ * A mode may ask for the frame's third piece to be copied ahead of time,
+ * in the vertical blank (`ahead` below, docs/decisions/scanout-ahead.md).
  */
 #include "vga.h"
 
@@ -47,16 +50,30 @@ typedef struct {
     uint16_t h_front, h_sync, h_back;
     uint16_t v_front, v_sync, v_back;
     bool sync_high;
+    /* Copy the frame's third piece to internal RAM in the vertical blank.
+     * The first refill inside a frame comes a whole blank (about 1 ms) after
+     * the cache was asked to fetch its piece, and under load the cache has
+     * let it go by then, so the copy runs at the speed of the external
+     * RAM's bus. At 800x600 that takes most of the 264 us between refills,
+     * the fetch for the next piece starts late, and the refills of lines 30
+     * to 50 are not ready in time. 640x480 has 320 us for 6,400 bytes and
+     * missed nothing, so it is left as it was. */
+    bool ahead;
 } vga_mode_t;
 static const vga_mode_t s_modes[] = {
-    {640, 480, 25000000, 16, 96, 48, 10, 2, 33, false}, /* 800 x 525 in all, 59.52 Hz */
-    {800, 600, 40000000, 40, 128, 88, 1, 4, 23, true},  /* 1056 x 628 in all, 60.32 Hz */
+    {640, 480, 25000000, 16, 96, 48, 10, 2, 33, false, false}, /* 800 x 525 in all, 59.52 Hz */
+    {800, 600, 40000000, 40, 128, 88, 1, 4, 23, true, true},   /* 1056 x 628 in all, 60.32 Hz */
 };
 #define MODE_COUNT ((int)(sizeof(s_modes) / sizeof(s_modes[0])))
 #define BOUNCE_LINES 10
 
 static esp_lcd_panel_handle_t s_panel;
 static uint8_t *s_framebuffer;
+/* One bounce buffer of picture in internal RAM, for a mode with `ahead`:
+ * the frame's third piece, copied when the second was handed over. Only the
+ * interrupt touches the two once the panel runs. */
+static uint8_t *s_ahead;
+static bool s_ahead_ready;
 /* The mode in use, as the interrupt needs it: in internal RAM, not read
  * from the table (which is constant data, behind the cache). */
 static int s_mode;
@@ -104,7 +121,12 @@ static IRAM_ATTR bool on_bounce_empty(esp_lcd_panel_handle_t panel, void *bounce
         s_scan.histogram[us < 200 ? 0 : us < 300 ? 1 : us < 340 ? 2 : us < 400 ? 3 : us < 640 ? 4 : 5]++;
     }
     const int32_t late = steady ? (int32_t)(interval - PERIOD_CYCLES) : 0;
-    memcpy(bounce_buf, s_framebuffer + pos_px, len_bytes);
+    if (s_ahead_ready && pos_px == 2 * len_bytes) {
+        memcpy(bounce_buf, s_ahead, len_bytes); /* copied in the blank, see below */
+    } else {
+        memcpy(bounce_buf, s_framebuffer + pos_px, len_bytes);
+    }
+    s_ahead_ready = false;
     vga_line_hook_t hook = s_line_hook;
     if (hook) {
         hook(bounce_buf, pos_px, len_bytes);
@@ -115,13 +137,34 @@ static IRAM_ATTR bool on_bounce_empty(esp_lcd_panel_handle_t panel, void *bounce
     if (next >= s_frame_bytes) {
         next = 0;
     }
-    Cache_Start_DCache_Preload((uint32_t)(s_framebuffer + next), len_bytes, 0);
+    /* The frame's second piece is asked for when the last lines of the
+     * frame before have gone out. Nothing more is asked for until the blank
+     * is over and the first piece has been shown (about 1 ms), so this is
+     * the time to copy the third, however slow the external RAM is now. It
+     * is not timed as a refill: nothing waits for it. */
+    const bool ahead = s_ahead != NULL && pos_px == len_bytes && s_frame_bytes >= 3 * len_bytes;
+    if (!ahead) {
+        Cache_Start_DCache_Preload((uint32_t)(s_framebuffer + next), len_bytes, 0);
+    }
     const uint32_t end = esp_cpu_get_cycle_count();
     const uint32_t fill = end - start;
     s_fill_cycles += fill;
     s_scan.refills++;
     if (fill > s_scan.max_fill_cycles) {
         s_scan.max_fill_cycles = fill;
+    }
+    const unsigned place = (unsigned)pos_px / (unsigned)len_bytes;
+    if (place < VGA_SCAN_PLACES && fill > s_scan.max_fill_at[place]) {
+        s_scan.max_fill_at[place] = fill;
+    }
+    if (ahead) {
+        memcpy(s_ahead, s_framebuffer + next, len_bytes);
+        s_ahead_ready = true;
+        const uint32_t took = esp_cpu_get_cycle_count() - end;
+        s_fill_cycles += took;
+        if (took > s_scan.max_ahead_cycles) {
+            s_scan.max_ahead_cycles = took;
+        }
     }
     if (steady) {
         if (late > (int32_t)s_scan.max_late_cycles) {
@@ -173,6 +216,13 @@ static void start_mode(int index)
                                  (CYCLES_PER_US * 1000000ULL) / m->pixel_clock_hz);
     s_last_pos = -1;
     memset(s_framebuffer, 0, s_picture_bytes);
+    /* A new mode has new timings: what was measured in the last one would
+     * only mislead. */
+    memset((void *)&s_scan, 0, sizeof(s_scan));
+    /* Without the memory the mode still works, as it did before. */
+    s_ahead_ready = false;
+    s_ahead = m->ahead ? heap_caps_malloc((size_t)BOUNCE_LINES * m->width, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)
+                       : NULL;
 
     esp_lcd_rgb_panel_config_t config = {
         .clk_src = LCD_CLK_SRC_DEFAULT,
@@ -255,6 +305,8 @@ void vga_set_mode(int index)
      * lines of the mode each. */
     ESP_ERROR_CHECK(esp_lcd_panel_del(s_panel));
     s_panel = NULL;
+    heap_caps_free(s_ahead); /* the interrupt went with the panel */
+    s_ahead = NULL;
     start_mode(index);
 }
 
@@ -305,7 +357,10 @@ void vga_scan_stats(vga_scan_stats_t *out, bool reset)
     *out = s_scan;
     if (reset) {
         s_scan.refills = s_scan.late = s_scan.missed = 0;
-        s_scan.max_late_cycles = s_scan.max_fill_cycles = 0;
+        s_scan.max_late_cycles = s_scan.max_fill_cycles = s_scan.max_ahead_cycles = 0;
+        for (int i = 0; i < VGA_SCAN_PLACES; i++) {
+            s_scan.max_fill_at[i] = 0;
+        }
         for (int i = 0; i < 6; i++) {
             s_scan.histogram[i] = 0;
         }
