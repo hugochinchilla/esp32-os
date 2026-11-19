@@ -24,12 +24,12 @@ built "suena alegre": it is for when the player is put in check and must
 sound like an alert. Of three new candidates that warn he picked e: the
 piece's knock, then two kalimba notes falling a tritone.
 
+The warning sounds only when the user is put in check; a check the user
+gives the computer sounds as any move. Built as the agent's reading of his
+words and confirmed by him on 2026-11-19: "Si, solo suena si me lo dan a mi".
+
 Still the agent's, waiting for him:
 
-- **Check sounds only when the user is put in check.** A check the user
-  gives the computer sounds as any move: a warning for one's own good move
-  would be the wrong way round. (His words can also be read as the same
-  alert for both.)
 - **Recordings, not the beeper.** Six more of the system's sounds
   (`sound::Id`: ChessMove, ChessCheck, ChessMate, SnakeEat, SnakeOver,
   Crumple), played with `os::play_sound` like the other five. Not chosen:
