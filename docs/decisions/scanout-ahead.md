@@ -10,8 +10,11 @@ summary: "800x600 copies the frame's third piece to internal RAM in the vertical
 # Chosen for the refills missed at 800x600
 
 The story and the figures are in
-`docs/journal/2026-11-19-refills-800x600.md`. Compiled only when this was
-written: the board has to say whether the 270 missed refills are gone.
+`docs/journal/2026-11-19-refills-800x600.md`. On the board (batch 21,
+2026-11-19): the frame benchmark at 800x600 missed nothing in three runs,
+against 270 before. One burst of 3 missed refills in the middle of a frame
+was seen once by hand (Culebra started with the Editor maximised); the
+owner chose to merge with that known and left ("Fusionar tal cual").
 
 Chosen by the agent, to confirm:
 
