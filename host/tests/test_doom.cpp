@@ -235,6 +235,16 @@ int main(int argc, char **argv)
         desktop.key(wm::key::LeftCtrl, false);
         desktop.key(wm::key::Up, false);
         CHECK(screen_sum() != standing);
+        // W, A, S and D are the arrows and Q and E step sideways: each
+        // moves the picture.
+        for (const uint16_t usage : {0x1A, 0x16, 0x04, 0x07, 0x14, 0x08}) {
+            const uint32_t before = screen_sum();
+            desktop.key(usage, true);
+            tics(12);
+            desktop.key(usage, false);
+            tics(2);
+            CHECK(screen_sum() != before);
+        }
         // The mouse turns the player.
         const uint32_t before_turn = screen_sum();
         for (int i = 0; i < 10; i++) {
@@ -250,7 +260,7 @@ int main(int argc, char **argv)
         // place, a name, Enter.
         press(0x3B); // F2
         press(wm::key::Enter);
-        press(0x04); // A
+        press(0x1A); // W: a letter here, not a step forward
         press(wm::key::Enter);
         tics(5);
         fs::DirEntry saved;
@@ -283,6 +293,24 @@ int main(int argc, char **argv)
         CHECK(desktop.screen_lent_to() == desktop.active() && desktop.active() != nullptr);
         CHECK(colours() > 20);
         save(pictures, "doom-7-back");
+
+        // The logo key does the same and puts the window away: its
+        // taskbar button brings it back, and Play the game.
+        {
+            wm::Window *game = desktop.active();
+            desktop.key(wm::key::LeftGui, true);
+            desktop.key(wm::key::LeftGui, false);
+            tics(3);
+            CHECK(desktop.screen_lent_to() == nullptr && game->state() == wm::WindowState::Minimized);
+            CHECK(!desktop.menu_open() && display.pixels()[5 * 640 + 5] == desktop_corner);
+            save(pictures, "doom-7b-logo-key");
+            desktop.restore(*game);
+            tics(2);
+            desktop.key(wm::key::Enter, true);
+            desktop.key(wm::key::Enter, false);
+            tics(3);
+            CHECK(desktop.screen_lent_to() == game && colours() > 20);
+        }
 
         // Leaving by the game's own menu: Escape, up to Quit Game, Enter, Y.
         press(wm::key::Escape);

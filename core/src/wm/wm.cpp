@@ -1144,6 +1144,17 @@ void Wm::handle_key(uint16_t usage, bool pressed)
         }
         return;
     }
+    if (lent_ != nullptr && bit == kGui) {
+        // The logo key leaves a game for the desktop (the owner's request,
+        // 2026-11-19): the screen comes back and the game's window is put
+        // away on the taskbar. The key does nothing else, down or up.
+        if (pressed) {
+            Window &game = *lent_;
+            return_screen();
+            minimize(game);
+        }
+        return;
+    }
     if (lent_ != nullptr) {
         // Every key as it is, the modifiers too: the window has the machine.
         const KeyMsg raw = {usage, pressed, mods_};

@@ -225,8 +225,9 @@ public:
     // (Window::mouse_moved). Returns the picture, one RRRGGGBB byte per
     // pixel, width() by height(); nullptr if the screen is not free to
     // lend. The loan ends with return_screen(), when the window closes,
-    // when the screen's mode changes and on Ctrl+Alt+Del, which then opens
-    // what it always opens: the window finds out with screen_lent_to().
+    // when the screen's mode changes, on Ctrl+Alt+Del, which then opens
+    // what it always opens, and on the logo key, which minimises the
+    // window: the window finds out with screen_lent_to().
     uint8_t *lend_screen(Window &to);
     void return_screen();
     Window *screen_lent_to() const { return lent_; }

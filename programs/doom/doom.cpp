@@ -235,7 +235,7 @@ private:
         port_show_again();
         line1_.set_text("Doom is paused.");
         line2_.set_text("Play goes back to the game.");
-        line3_.set_text("In the game, Ctrl+Alt+Del comes back here.");
+        line3_.set_text("In the game, the logo key comes back here.");
         if (timer_ == 0) {
             timer_ = os::start_timer(kTicUs, kTicUs, &DoomWindow::tick, this);
         }
@@ -253,9 +253,9 @@ private:
     void tick()
     {
         if (!has_screen()) {
-            // The system took the screen back (Ctrl+Alt+Del, or the screen
-            // changed its size): the game waits, with no key held, behind
-            // the window's Play button.
+            // The system took the screen back (the logo key, Ctrl+Alt+Del,
+            // or the screen changed its size): the game waits, with no key
+            // held, behind the window's Play button.
             stop();
             playing_ = false;
             screen_ = {};

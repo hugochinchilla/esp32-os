@@ -519,7 +519,7 @@ float mouse_acceleration = 2.0;
 int mouse_threshold = 10;
 int usegamma = 0;
 int usemouse = 1;
-int vanilla_keyboard_mapping = 1;
+int vanilla_keyboard_mapping = 0; /* a saved game's name takes what a key types, not the key: W is a letter there */
 
 static byte palette_now[768];
 static int palette_changed = 1;
@@ -583,7 +583,7 @@ void I_CheckIsScreensaver(void) {}
 
 /* A USB HID keyboard usage as the engine's key. The classic keys: arrows,
  * Ctrl fires, Space opens, Shift runs, Alt strafes, comma and full stop
- * step sideways. */
+ * step sideways; and W, A, S, D, Q and E beside them. */
 static int doom_key(int usage)
 {
     static const unsigned char kRow[] = {
@@ -593,6 +593,25 @@ static int doom_key(int usage)
         /* 0x46 */ KEY_PRTSCR, KEY_SCRLCK, KEY_PAUSE, KEY_INS, KEY_HOME, KEY_PGUP, KEY_DEL, KEY_END, KEY_PGDN,
         /* 0x4F */ KEY_RIGHTARROW, KEY_LEFTARROW, KEY_DOWNARROW, KEY_UPARROW,
     };
+    /* The left hand's keys as well (the owner's request, 2026-11-19): W, A,
+     * S and D are the arrows, Q and E step sideways. What they type, in the
+     * name of a saved game or a cheat code, is still the letter. */
+    switch (usage) {
+    case 0x1A: /* W */
+        return KEY_UPARROW;
+    case 0x16: /* S */
+        return KEY_DOWNARROW;
+    case 0x04: /* A */
+        return KEY_LEFTARROW;
+    case 0x07: /* D */
+        return KEY_RIGHTARROW;
+    case 0x14: /* Q */
+        return KEY_STRAFE_L;
+    case 0x08: /* E */
+        return KEY_STRAFE_R;
+    default:
+        break;
+    }
     if (usage >= 0x04 && usage <= 0x1D) {
         return 'a' + usage - 0x04;
     }

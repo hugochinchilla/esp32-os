@@ -677,17 +677,14 @@ void test_lent_screen()
     CHECK(g.keys == 1 && g.last.usage == wm::key::LeftCtrl && g.last.pressed);
     desktop.key(wm::key::LeftCtrl, false);
     CHECK(g.keys == 2 && !g.last.pressed);
-    desktop.key(wm::key::LeftGui, true); // no Start menu
-    desktop.key(wm::key::LeftGui, false);
-    CHECK(g.keys == 4 && !desktop.menu_open());
     desktop.key(wm::key::LeftAlt, true);
     desktop.key(wm::key::Tab, true); // no window switching
     desktop.key(wm::key::Tab, false);
     desktop.key(wm::key::LeftAlt, false);
-    CHECK(g.keys == 8 && strcmp(desktop.active()->title(), "Game") == 0);
+    CHECK(g.keys == 6 && strcmp(desktop.active()->title(), "Game") == 0);
     desktop.key(wm::key::Up, true);
     wait(2000000);
-    CHECK(g.keys == 9);
+    CHECK(g.keys == 7);
     desktop.key(wm::key::Up, false);
     // The mouse as movement, with its buttons; the pointer stays away.
     ports::MouseEvent move = {};
@@ -728,6 +725,24 @@ void test_lent_screen()
     while (desktop.active() != nullptr && strcmp(desktop.active()->title(), "Game") != 0) {
         desktop.close(*desktop.active()); // the Task Manager, where there is one
         wait(10000);
+    }
+
+    // The logo key leaves for the desktop: the screen comes back and the
+    // window is put away on the taskbar, with no Start menu and no key for
+    // the program. Its taskbar button brings the window back.
+    {
+        wm::Window *game = desktop.active();
+        CHECK(game != nullptr && g.take_screen(screen));
+        memset(screen.pixels, 0, 640 * 480);
+        const int before = g.keys;
+        desktop.key(wm::key::LeftGui, true);
+        desktop.key(wm::key::LeftGui, false);
+        wait(10000);
+        CHECK(g.keys == before && !g.has_screen() && pointer.state().visible && corner() == desk);
+        CHECK(!desktop.menu_open() && game->state() == wm::WindowState::Minimized && desktop.active() != game);
+        desktop.restore(*game);
+        wait(10000);
+        CHECK(desktop.active() == game);
     }
 
     // A window that closes with the screen gives it back.

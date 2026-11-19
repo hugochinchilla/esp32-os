@@ -51,7 +51,11 @@ day and has not answered; all of it is his to overrule:
   and the Sound port has recordings and a beeper, not a stream to mix into.
   A separate piece of work.
 - **The keys of 1993**: arrows, Ctrl fires, Space opens, Shift runs, Alt
-  strafes, comma and full stop step sideways. **The mouse turns** and fires
+  strafes, comma and full stop step sideways. **And W, A, S and D as the
+  arrows, Q and E to step sideways** (the owner's, 2026-11-19: "make wasd
+  move as arrows and q and e strafe"). In the name of a saved game and in
+  a cheat code they are still letters; in the menus W and S move the
+  skull, so the menu's own letters for those six are gone. **The mouse turns** and fires
   with the left button; its movement forward and back, which the old game
   took as walking, is left out.
 - **Saved games are files in `C:\Documents\Doom`.** The game's settings
@@ -59,8 +63,9 @@ day and has not answered; all of it is his to overrule:
   doomgeneric has the settings file turned off, because its key names do
   not survive the file.
 - **A small window stays behind the game**, as the program's window: it
-  says what is wrong when there is no WAD, and after Ctrl+Alt+Del it holds
-  a Play button that goes back to the game where it was.
+  says what is wrong when there is no WAD, and after the logo key (which
+  minimises it) or Ctrl+Alt+Del it holds a Play button that goes back to
+  the game where it was.
 - **Memory**: the game's zone is 4 MB, or less down to 2.5 MB if that much
   is not free, taken when the game starts and given back when it ends. The
   task's stack is 16 KB. Both to be checked on the board.

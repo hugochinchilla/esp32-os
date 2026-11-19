@@ -29,16 +29,23 @@ The rest is the agent's, to confirm:
   every picture); a second picture to draw in and a swap (there is one
   picture in memory, "Decided: video").
 - **Every key goes to the window's Key event as it is**, down and up, the
-  modifier keys too, and none repeats. Start, Alt+Tab, Alt+F4 and the menu
-  keys do nothing while the screen is lent.
+  modifier keys too, and none repeats. Alt+Tab, Alt+F4 and the menu keys
+  do nothing while the screen is lent; the logo key is the system's (below).
 - **The mouse comes as movement** (the new event `MouseMoved`: how far, and
   which buttons), since there is no pointer. A mouse that reports places (a
   remote screen) moves by the difference between them.
 - **Ctrl+Alt+Del is the way out that is always there.** It ends the loan
   and then does what it always does (the Task Manager). The owner asked on
   2026-11-17 for "one combination kept by the system to come back"; this
-  one was already the system's whatever has the focus. Not chosen: the
-  Start key (a game may want it, and it is easy to hit); Alt+Tab (the same).
+  one was already the system's whatever has the focus. The logo key was
+  first left to the game (easy to hit); the owner asked for it the same
+  evening.
+- **The logo key leaves for the desktop** (the owner's, 2026-11-19:
+  "while playing, windows key minimizes the game and returns to windows"):
+  the loan ends and the window is minimised to the taskbar. The key does
+  nothing else and does not reach the program. That the taskbar button
+  then brings back the program's window, and not the game at once, is the
+  agent's.
 - **The loan also ends** when the window closes or its process is ended,
   and when the screen changes its size. The program is not told: it asks
   `has_screen()` before each picture. Not chosen: an event (one more thing

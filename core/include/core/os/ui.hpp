@@ -131,12 +131,13 @@ void redraw(Window window, const gfx::Rect &part);
 // The whole screen for one window, for a game that fills it (backlog item
 // 81). While the window has it the system paints nothing and shows no
 // pointer; every key reaches the window's Key event as it goes down and
-// up, the modifier keys too, and none repeats; the mouse comes as
+// up, the modifier keys too (but not the logo key), and none repeats; the mouse comes as
 // MouseMoved. The picture is one RRRGGGBB byte per pixel (gfx::rgb),
 // `width` by `height`, rows one after the other, and stays the window's to
 // write until the loan ends: with give_screen_back(), when the window
 // closes, when the screen changes its size, or when the user presses
-// Ctrl+Alt+Del, the way out that is always there. The program is not told:
+// Ctrl+Alt+Del, the way out that is always there, or the logo key, which
+// also puts the window away on the taskbar. The program is not told:
 // it asks has_screen() before it writes each picture. Afterwards the
 // desktop is painted again.
 struct Screen {
