@@ -1907,6 +1907,37 @@ static void test_panels()
     bar.seen.clear();
     server.set_time(10, 30, 0);
     CHECK(bar.seen == "C ");
+    // After that, news once for each minute that ends and none in between:
+    // the clock is not painted again to show what it shows already.
+    bar.seen.clear();
+    clock.now += 1000000;
+    server.tick();
+    clock.now += 58000000;
+    server.tick();
+    CHECK(bar.seen.empty());
+    clock.now += 1000000;
+    server.tick();
+    clock.now += 1000000;
+    server.tick();
+    CHECK(bar.seen == "C ");
+    // The same from the start, before anyone has set the time: nothing in
+    // the first second (a remote viewer was sent the clock again for it).
+    {
+        host::MemoryDisplay display2{640, 480};
+        wm::Wm fresh{display2, pointer, clock};
+        ProbePanel bar2(fresh, wm::PanelPlace::Bar, 0xE0);
+        fresh.set_panel(wm::PanelPlace::Bar, &bar2);
+        fresh.start();
+        bar2.seen.clear();
+        clock.now += 1000000;
+        fresh.tick();
+        clock.now += 58000000;
+        fresh.tick();
+        CHECK(bar2.seen.empty());
+        clock.now += 1000000;
+        fresh.tick();
+        CHECK(bar2.seen == "C ");
+    }
 
     // A panel taken away in the middle of a press: the rest of the press
     // goes nowhere, and its place is background again.
