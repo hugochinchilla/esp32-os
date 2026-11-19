@@ -196,3 +196,31 @@ was there), so no version change.
   0.8 s; option 4). Dense captures of an animation, like the fade's,
   cannot be had over the serial link for that reason.
 - Brick-like patterns pack poorly (option 6).
+
+## On the board (2026-11-19, 03aaddc)
+
+App-flashed on the 3 MB layout (`esp32-os.bin` 1,757,984 bytes). With the
+Bricks desktop and the capture tool of batch 23 (a request every 0.6 s for
+20 s from the restart on): three fast restarts, no hang and no new record in
+`C:\crash.txt`, 23 screenshots received in each, 0.89 s each; three full
+restarts through the BIOS (with the fade), no hang, 21 to 22 received, 0.86 s
+each (batch 23: every request failed and the board hung 3 of 3). At rest with
+Bricks, 25 received at 0.83 s, no hang. The plain desktop: 94 received at 0.21 s
+each, no hang. A VNC viewer asking for whole screens while the tool ran at rest
+with Bricks kept getting them (5.3, 3.0 and 1.9 s).
+
+`dbg.py fault wait`: the record says "hang", "Task: ui, waiting (on no core)",
+"Doing: the debug link's requests" and a trace that decodes as `vTaskDelay`,
+`crash_fault`, `EspSystem::fault`, `Protocol::handle_frame`, `Protocol::feed`,
+`ui_task`; the error screen shows the new lines inside its frame. `fault hang`:
+"running on core 1", "Doing" and no trace; its error screen is whole too.
+`fault hang --pid` on the Editor behaves as on main: the Editor's window stays,
+frozen, and the desktop goes on answering.
+
+One panic was seen, once, and not reproduced (also not on main): clicking the
+Editor's quick-launch icon about a minute after the board restarted from a
+hang, with an Editor already hung, gave "panic, LoadProhibited" in the taskbar
+process at `shell::open_in_editor` (`core/src/shell/editor.cpp:364`, the walk
+over the list of Editors `g_editors`, address 0x0030C08D): a stale pointer in
+the list. Two later tries, with a hung Editor and a click on the icon, opened a
+second Editor on this build and on main. Not caused by this branch.
