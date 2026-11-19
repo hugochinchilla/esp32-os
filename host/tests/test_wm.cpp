@@ -726,6 +726,113 @@ static bool pointer_is(Rig &rig, const video::PointerShape &shape)
 
 // A program that is working something out asks for the hourglass over its
 // window (backlog item 49). Only the pointer changes: the window answers.
+static int g_leaves;
+static void leave(void *) { g_leaves++; }
+
+// Alt+F4 with no window in the focus is the shell's (Shut Down); the logo
+// key with D shows the desktop and brings the windows back.
+static void test_desktop_shortcuts()
+{
+    Rig rig;
+    TestWindow a("A", {50, 50, 200, 150}, 0x1C), b("B", {150, 100, 200, 150}, 0xE0),
+        c("C", {250, 150, 200, 150}, 0x03);
+    rig.wm.add(a);
+    rig.wm.add(b);
+    rig.wm.add(c);
+    wm::MenuItem items[1] = {{"Sh&ut Down...", &run0, nullptr, nullptr, nullptr, 0}};
+    wm::Menu start = {items, 1};
+    rig.wm.set_start_menu(&start, "Chinchilla");
+    rig.wm.start();
+    rig.wm.set_leave_key(&leave, nullptr);
+    g_leaves = 0;
+    const auto held = [&rig](uint16_t modifier, uint16_t usage) {
+        rig.wm.key(modifier, true);
+        rig.wm.key(usage, true);
+        rig.wait(wm::Wm::kRepeatDelayUs + 10000);
+        for (int i = 0; i < 5; i++) {
+            rig.wait(wm::Wm::kRepeatUs);
+        }
+        rig.wm.key(usage, false);
+        rig.wm.key(modifier, false);
+    };
+
+    // With a window in the focus Alt+F4 closes it and the shell hears nothing.
+    rig.key(wm::key::F4, wm::kAlt);
+    CHECK(!c.open() && g_leaves == 0 && rig.wm.active() == &b);
+    // A click on the desktop takes the focus from every window: now the key
+    // is the shell's, once however long it is held.
+    rig.click(600, 400);
+    CHECK(rig.wm.active() == nullptr);
+    held(wm::key::LeftAlt, wm::key::F4);
+    CHECK(g_leaves == 1 && a.open() && b.open());
+
+    // Logo+D: both windows minimised, nothing in the focus, their buttons
+    // still on the taskbar, and no Start menu when the logo key comes up.
+    const uint16_t d = static_cast<uint16_t>(wm::key::A + 3);
+    rig.click(200, 110); // B, on top of A
+    CHECK(rig.wm.active() == &b);
+    b.keys = 0;
+    rig.key(d, wm::kGui);
+    CHECK(a.state() == wm::WindowState::Minimized && b.state() == wm::WindowState::Minimized);
+    CHECK(rig.wm.active() == nullptr && rig.wm.taskbar_count() == 2 && b.keys == 0);
+    CHECK(!rig.wm.start_menu_open());
+    CHECK(rig.no_stale_pixels());
+    // Alt+F4 there is the shell's too.
+    rig.key(wm::key::F4, wm::kAlt);
+    CHECK(g_leaves == 2);
+    // Logo+D again: they come back as they were, B on top and in the focus.
+    rig.key(d, wm::kGui);
+    CHECK(a.state() == wm::WindowState::Normal && b.state() == wm::WindowState::Normal);
+    CHECK(rig.wm.active() == &b && rig.wm.window_under(160, 110) == &b);
+    CHECK(rig.no_stale_pixels());
+    // Held, it acts once.
+    held(wm::key::LeftGui, d);
+    CHECK(a.state() == wm::WindowState::Minimized && b.state() == wm::WindowState::Minimized);
+    CHECK(!rig.wm.start_menu_open());
+
+    // A window brought back by hand is all the next logo+D puts away; with
+    // nothing showing, the one after returns every window it put away.
+    rig.wm.restore(a);
+    rig.key(d, wm::kGui);
+    CHECK(a.state() == wm::WindowState::Minimized && rig.wm.active() == nullptr);
+    rig.key(d, wm::kGui);
+    CHECK(a.state() == wm::WindowState::Normal && b.state() == wm::WindowState::Normal);
+    CHECK(rig.wm.active() == &a); // on top since it was brought back
+    // A window the user minimised himself stays down.
+    rig.wm.minimize(a);
+    rig.key(d, wm::kGui);
+    rig.key(d, wm::kGui);
+    CHECK(a.state() == wm::WindowState::Minimized && b.state() == wm::WindowState::Normal);
+    // A maximised window comes back maximised.
+    rig.wm.toggle_maximize(b);
+    rig.key(d, wm::kGui);
+    rig.key(d, wm::kGui);
+    CHECK(b.state() == wm::WindowState::Maximized);
+    rig.wm.toggle_maximize(b);
+
+    // The logo key alone is still the Start key, when it comes up; and
+    // logo+D closes an open menu on its way.
+    rig.wm.key(wm::key::LeftGui, true);
+    CHECK(!rig.wm.start_menu_open());
+    rig.wm.key(wm::key::LeftGui, false);
+    CHECK(rig.wm.start_menu_open());
+    rig.key(d, wm::kGui);
+    CHECK(!rig.wm.start_menu_open() && b.state() == wm::WindowState::Minimized);
+    rig.key(d, wm::kGui);
+
+    // A dialog that holds the whole desktop: neither key does anything
+    // behind it (Alt+F4 closes the dialog, as it closes any window).
+    TestWindow dialog("Dialog", {120, 100, 200, 120}, 0x03);
+    dialog.set_dialog(true);
+    dialog.set_modal(nullptr, true);
+    rig.wm.add(dialog);
+    rig.key(d, wm::kGui);
+    CHECK(dialog.state() == wm::WindowState::Normal && b.state() == wm::WindowState::Normal);
+    rig.key(wm::key::F4, wm::kAlt);
+    CHECK(!dialog.open() && g_leaves == 2);
+    CHECK(rig.no_stale_pixels());
+}
+
 static void test_hourglass()
 {
     Rig rig;
@@ -2271,6 +2378,7 @@ int main()
     test_no_window_limit();
     test_resize();
     test_shortcuts();
+    test_desktop_shortcuts();
     test_menus();
     test_hourglass();
     test_slow_submenu();

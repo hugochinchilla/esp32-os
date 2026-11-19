@@ -199,6 +199,11 @@ public:
     void resize(Window &w, const Rect &frame);
     // Brings the window at the bottom of the stack to the front (Alt+Tab).
     void cycle_windows();
+    // The logo key with D: every window is minimised and no window has the
+    // focus. Asked again while no window shows, it restores the windows it
+    // put away, stacked as they were. Does nothing while a dialog holds the
+    // whole desktop.
+    void show_desktop();
     // Windows with a taskbar button (dialogs that belong to a window have
     // none), in the order they were opened.
     int taskbar_count() const;
@@ -211,6 +216,15 @@ public:
     {
         attention_ = fn;
         attention_context_ = context;
+    }
+    // Alt+F4 while no window has the focus: the shell's handler (the Shut
+    // Down dialog). Not called while a dialog holds the whole desktop, and
+    // not for a key that repeats.
+    using LeaveFn = void (*)(void *context);
+    void set_leave_key(LeaveFn fn, void *context)
+    {
+        leave_ = fn;
+        leave_context_ = context;
     }
     // Hands the whole screen to `paint` for good (the power-down screen):
     // windows, menus and the pointer go, and input is ignored except
@@ -581,6 +595,12 @@ private:
     sys::Frames frames_;
     AttentionFn attention_ = nullptr;
     void *attention_context_ = nullptr;
+    LeaveFn leave_ = nullptr;
+    void *leave_context_ = nullptr;
+    // The logo key opens the Start menu when it comes up, if no other key
+    // went down while it was held (logo+D is not the Start menu).
+    bool logo_alone_ = false;
+    bool repeating_ = false; // handle_key() is answering a held key
     ScreenFn screen_fn_ = nullptr;
     void *screen_context_ = nullptr;
     // The desktop fading in (start()).
