@@ -236,6 +236,11 @@ library's `isalnum`, `isalpha`, `isspace`, `isxdigit`, `tolower` and
 `strcspn`, which the HTML reader uses. The PC's test of the exports
 checks this project's own names only, so it could not tell.
 
+Run takes a program and what it is to open ("editor readme.txt",
+"vizcacha http://example.com"): the longest beginning of what was typed
+that names a program is the program, the rest its argument, and a file of
+the drives goes as its whole path.
+
 The test that opens and closes every program and counts the memory
 (`test_os`) went through the system's table; it goes through the one
 list now, files included.

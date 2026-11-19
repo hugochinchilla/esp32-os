@@ -219,6 +219,38 @@ bool run_text(const char *typed, const char *folder, char *why, size_t capacity,
             snprintf(why, capacity, "Cannot run %s:\n%s.", text, reason);
             return false;
         }
+        // A program and what it is to open: "editor readme.txt",
+        // "vizcacha http://example.com". A program's name may have spaces
+        // of its own, so the longest beginning that names one is it. A
+        // file of the drives goes as its whole path, anything else (an
+        // address) as it was typed.
+        for (size_t at = length; at-- > 1;) {
+            if (text[at] != ' ') {
+                continue;
+            }
+            text[at] = 0;
+            const Program *found = find_program(text, true);
+            if (found == nullptr) {
+                text[at] = ' ';
+                continue;
+            }
+            const char *argument = text + at + 1;
+            while (*argument == ' ') {
+                argument++;
+            }
+            char full[fs::kMaxPath];
+            fs::DirEntry entry;
+            if (sh::path::resolve(folder, argument, full, sizeof(full)) &&
+                os::file::stat(full, entry) == ports::FsError::Ok) {
+                argument = full;
+            }
+            char reason[96] = "";
+            if (start_program(*found, argument, reason, sizeof(reason))) {
+                return true;
+            }
+            snprintf(why, capacity, "Cannot run %s:\n%s.", text, reason);
+            return false;
+        }
     }
     if (paths) {
         char full[fs::kMaxPath];

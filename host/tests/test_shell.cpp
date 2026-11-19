@@ -227,6 +227,17 @@ void test_editor()
     CHECK(strcmp(title(), "copia.txt - Editor") == 0);
     CHECK(no_stale_pixels());
     key(wm::key::F4, 4);
+
+    // Run with a program and what it is to open: a name in the folder
+    // asked from, a whole path, and a program whose name has a space.
+    char why[160] = "";
+    CHECK(shell::run_text("editor a.txt", "C:\\Documents", why, sizeof(why)));
+    CHECK(strcmp(title(), "a.txt - Editor") == 0);
+    key(wm::key::F4, 4);
+    CHECK(shell::run_text("edit C:\\Documents\\copia.txt", "C:\\", why, sizeof(why)));
+    CHECK(strcmp(title(), "copia.txt - Editor") == 0);
+    key(wm::key::F4, 4);
+    CHECK(!shell::run_text("nothing a.txt", "C:\\Documents", why, sizeof(why)));
 }
 
 void test_file_manager()
