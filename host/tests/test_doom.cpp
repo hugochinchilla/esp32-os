@@ -369,18 +369,14 @@ int main(int argc, char **argv)
             CHECK(count > 20 && outside == 0); // the title picture, black above and below
         }
         save(pictures, "doom-10-coarse");
-        // F12 goes round the looks: the coarse picture undithered, the
-        // screen as it is with every pixel made four, and round again.
+        // F12 goes round the looks: 640x240, the screen as it is with
+        // every pixel made four, and round again.
         const auto f12 = [] {
             desktop.key(0x45, true);
             desktop.key(0x45, false);
             wait(10000);
             tics(3);
         };
-        const uint32_t dithered = screen_sum();
-        f12();
-        CHECK(desktop.screen_lent_to() != nullptr && display.coarse() && screen_sum() != dithered);
-        save(pictures, "doom-10b-coarse-plain");
         f12();
         CHECK(desktop.screen_lent_to() != nullptr && display.coarse() && display.width() == 640 &&
               display.height() == 240);
@@ -393,7 +389,6 @@ int main(int argc, char **argv)
         f12();
         CHECK(desktop.screen_lent_to() != nullptr && display.coarse() && display.width() == 320);
         // The look is remembered: left at 640x240, closed, started again.
-        f12();
         f12();
         CHECK(display.coarse() && display.width() == 640);
         CHECK(os::signal(t.find_by_name("Doom"), proc::Signal::Term) == proc::Sent::Ok);

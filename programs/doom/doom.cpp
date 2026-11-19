@@ -153,7 +153,7 @@ public:
             static constexpr int kLean[4] = {32, 159, 223, 96};
             for (int place = 0; place < 4; place++) {
                 for (int i = 0; i < 256; i++) {
-                    const int lean = look_ == kPlain ? 127 : kLean[place];
+                    const int lean = kLean[place];
                     const int r = (palette[i * 3] * 7 + lean) / 255;
                     const int g = (palette[i * 3 + 1] * 7 + lean) / 255;
                     const int b = (palette[i * 3 + 2] * 3 + lean) / 255;
@@ -277,22 +277,17 @@ private:
 
     // F12 goes round the ways of showing the picture (the owner kept the
     // key that was made to tell them apart on the monitor; the choice is
-    // remembered): the coarse screen with the dither,
-    // the coarse screen with each colour rounded to the nearest the board
-    // has, 640x240 where the screen only makes the lines tall, and the
-    // screen as it is with each pixel made four by this
-    // program (the finest dither, and four times the bytes).
+    // remembered): the coarse screen, 320x240; 640x240, where the screen
+    // only makes the lines tall; and the screen as it is with each pixel
+    // made four by this program (the finest dither, and four times the
+    // bytes). A fourth, 320x240 with no dither, the owner saw and took
+    // out: large stains of solid colour.
     void next_look()
     {
-        static const char *const kNames[kLooks] = {"doom: 320x240, dithered", "doom: 320x240, plain",
-                                                   "doom: 640x240, each pixel made two",
+        static const char *const kNames[kLooks] = {"doom: 320x240", "doom: 640x240, each pixel made two",
                                                    "doom: the screen as it is, each pixel made four"};
         look_ = (look_ + 1) % kLooks;
         os::log(kNames[look_]);
-        if (look_ == kPlain) {
-            port_show_again(); // the same screen, other tables
-            return;
-        }
         give_screen_back();
         if (!play()) {
             playing_ = false; // behind the Play button, as when the system takes the screen
@@ -412,7 +407,7 @@ private:
     os::ui::Screen screen_;
     int left_ = 0, top_ = 0;
     static constexpr uint16_t kLookKey = 0x45; // F12
-    enum { kDithered, kPlain, kTall, kFourfold, kLooks };
+    enum { kDithered, kTall, kFourfold, kLooks };
     int look_ = kDithered, saved_look_ = kDithered;
     fs::Ini settings_; // C:\.config\doom.ini
     int wide_ = 2, tall_ = 2; // how many of the screen's pixels one of the game's is
