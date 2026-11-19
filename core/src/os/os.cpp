@@ -460,10 +460,18 @@ bool shut_down()
     return g_kit.shut_down != nullptr && g_kit.shut_down();
 }
 
-bool launch(const char *program)
+void accept_open(OpenFn opened)
 {
     const prog::InCall in_call;
-    return g_kit.launch != nullptr && g_kit.launch(program);
+    if (g_kit.accept_open != nullptr) {
+        g_kit.accept_open(opened);
+    }
+}
+
+bool launch(const char *program, const char *argument)
+{
+    const prog::InCall in_call;
+    return g_kit.launch != nullptr && g_kit.launch(program, argument);
 }
 
 /* ---- The network ---------------------------------------------------------------- */

@@ -256,19 +256,25 @@ int processes_named(const char *name)
 void test_programs()
 {
     proc::Table &t = proc::table();
-    // What the OS itself holds, from start-up: the clipboard. Nothing else
-    // may be left over by anything below.
+    // What the OS itself holds, from start-up: the clipboard, and what the
+    // desktop keeps of the program files once it has listed them. Nothing
+    // else may be left over by anything below.
+    const int programs = shell::program_count();
     const int base = memory.in_use();
     const size_t base_bytes = memory.bytes_in_use();
-    CHECK(t.count() == 2 && desktop.window_count() == 0);
+    CHECK(t.count() == 2 && desktop.window_count() == 0 && programs >= 10);
 
-    // Every program on the Start menu: while open it holds memory; closed,
-    // it holds none, and its process is gone. Twice over, so the second run
-    // is a new program and not the first one found again.
+    // Every program on the Start menu, the system's own and the files of
+    // C:\Programs alike: while open it holds memory; closed, it holds none,
+    // and its process is gone. Twice over, so the second run is a new
+    // program and not the first one found again.
     for (int round = 0; round < 2; round++) {
-        for (int i = 0; i < shell::app_count(); i++) {
-            const shell::App &app = shell::app(i);
-            shell::launch(app);
+        for (int i = 0; i < shell::program_count(); i++) {
+            const std::string name = shell::program(i).name;
+            const struct {
+                const char *name;
+            } app = {name.c_str()};
+            shell::start_program(app.name);
             wait(1000000);
             CHECK(desktop.window_count() >= 1 && memory.in_use() > base);
             CHECK(processes_named(app.name) == 1);
@@ -331,11 +337,10 @@ void test_editors()
     const int base = memory.in_use();
 
     // Each launch is another Editor: its own process, window and text.
-    const shell::App &app = *shell::find_app("Editor");
-    shell::launch(app);
+    shell::start_program("Editor");
     wm::Window *first = desktop.active();
     desktop.text("one");
-    shell::launch(app);
+    shell::start_program("Editor");
     wm::Window *second = desktop.active();
     CHECK(first != second && first != nullptr && second != nullptr);
     CHECK(processes_named("Editor") == 2 && first->owner() != second->owner());
@@ -354,10 +359,10 @@ void test_editors()
 
     // No limit of the Editor's own (the owner's decision): a fifth opens,
     // as long as there is memory, and gives it all back when it closes.
-    shell::launch(app);
+    shell::start_program("Editor");
     CHECK(processes_named("Editor") == 4);
     const int four = memory.in_use();
-    shell::launch(app);
+    shell::start_program("Editor");
     CHECK(processes_named("Editor") == 5 && strcmp(title(), "Untitled - Editor") == 0);
     key(wm::key::F4, kAlt);
     wait(10000);

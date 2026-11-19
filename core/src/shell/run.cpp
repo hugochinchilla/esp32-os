@@ -255,6 +255,10 @@ void run_dialog()
     }
 }
 
+// The Editor is a program file; what the desktop, the File manager and the
+// command shell's `edit` want of it is this.
+void open_in_editor(const char *path) { start_program("Editor", path); }
+
 sh::Desktop &desktop_for_sessions()
 {
     static SessionDesktop desktop;

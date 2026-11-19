@@ -11,7 +11,6 @@ namespace shell {
 
 namespace {
 
-void open_editor() { open_in_editor(nullptr); }
 void open_viewer() { open_picture(nullptr); }
 void open_file_manager() { open_folder(nullptr); }
 
@@ -27,7 +26,6 @@ struct Entry {
 constexpr uint32_t kRoomy = 8 * 1024;
 const Entry kApps[] = {
     {{"About Chinchilla", nullptr, &open_about, false, true}, &gfx::mascot_16},
-    {{"Editor", nullptr, &open_editor, true, true, kRoomy}, &gfx::editor_icon_16},
     {{"File manager", nullptr, &open_file_manager, false, true, kRoomy}, &gfx::files_icon_16},
     {{"Picture viewer", nullptr, &open_viewer, false, true, kRoomy}, &gfx::viewer_icon_16},
     {{"Task Manager", nullptr, &open_task_manager, false, true, kRoomy}, &gfx::tasks_icon_16},

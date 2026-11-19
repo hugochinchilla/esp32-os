@@ -7,6 +7,7 @@
 #include <atomic>
 #include <cstdio>
 #include <cstring>
+#include <strings.h>
 
 #include "core/app/file.hpp"
 #include "core/os/os.hpp"
@@ -25,6 +26,7 @@ struct Loaded {
     proc::Pid pid = proc::kNone;
     void *module = nullptr;
     int32_t bytes = 0;               // counted as the process's memory
+    os::OpenFn opened = nullptr;     // os::accept_open: it takes one more thing to open while it runs
     char *words = nullptr;           // its file's path and what it was asked to open: argv
     char *argv[3] = {};
     int result = 0;                  // what its way in returned
@@ -74,6 +76,7 @@ void sweep(void *)
         g_loader->unload(l.module);
         os::release(l.words);
         l.words = nullptr;
+        l.opened = nullptr;
         l.pid = proc::kNone;
         l.module = nullptr;
         l.bytes = 0;
@@ -99,6 +102,10 @@ void ended(proc::Pid pid, void *)
     for (Loaded &l : g_loaded) {
         if (l.module != nullptr && l.pid == pid) {
             l.gone = true;
+            // Its arguments go with its process; its code leaves later.
+            os::release(l.words);
+            l.words = nullptr;
+            l.opened = nullptr;
             ask_sweep();
         }
     }
@@ -128,6 +135,36 @@ bool fail(char *why, size_t capacity, const char *text)
 }
 
 } // namespace
+
+void accept_open(os::OpenFn opened)
+{
+    const proc::Pid pid = os::self();
+    for (Loaded &l : g_loaded) {
+        if (l.module != nullptr && l.pid == pid) {
+            l.opened = opened;
+        }
+    }
+}
+
+bool show_document(const char *program, const char *path)
+{
+    if (path == nullptr || path[0] == 0) {
+        return false;
+    }
+    wm::Wm &wm = manager();
+    for (int z = wm.window_count() - 1; z >= 0; z--) {
+        wm::Window *w = wm.window_at(z);
+        if (w == nullptr || strcasecmp(w->document(), path) != 0) {
+            continue;
+        }
+        const proc::Process *owner = os::process(w->owner());
+        if (owner != nullptr && strcmp(owner->name, program) == 0) {
+            os::show(*w);
+            return true;
+        }
+    }
+    return false;
+}
 
 void set_loader(ports::Loader *loader)
 {
@@ -196,8 +233,19 @@ bool run_file(const char *path, char *why, size_t capacity, const char *argument
     if (ours) {
         memcpy(&info, image, sizeof(info));
     }
+    // What it is asked to open may be on the screen already, in a window
+    // of this program: that window comes forward and nothing is loaded.
+    if (ours && app::is_program(info)) {
+        char name[proc::Process::kNameSize];
+        process_name(path, info, name, sizeof(name));
+        if (show_document(name, argument)) {
+            os::release(image);
+            return true;
+        }
+    }
     // One copy at a time unless the program says otherwise: opened again,
-    // the one that runs comes forward.
+    // the one that runs comes forward, and is told what to open if it
+    // takes that (os::accept_open).
     if (ours && app::is_program(info) && info.many == 0) {
         char name[proc::Process::kNameSize];
         process_name(path, info, name, sizeof(name));
@@ -206,6 +254,16 @@ bool run_file(const char *path, char *why, size_t capacity, const char *argument
         if (window != nullptr) {
             os::release(image);
             os::activate(*window);
+            os::OpenFn opened = nullptr;
+            for (const Loaded &l : g_loaded) {
+                if (l.module != nullptr && l.pid == running) {
+                    opened = l.opened;
+                }
+            }
+            if (opened != nullptr && argument != nullptr) {
+                const PathArg words(argument);
+                in_process(running, nullptr, [opened, words] { opened(words.get()); });
+            }
             return true;
         }
     }
@@ -223,13 +281,20 @@ bool run_file(const char *path, char *why, size_t capacity, const char *argument
     process_name(path, info, name, sizeof(name));
     // Its arguments, kept while it is loaded: the file, then what to open.
     const size_t path_size = strlen(path) + 1, argument_size = argument != nullptr ? strlen(argument) + 1 : 0;
-    char *words = static_cast<char *>(os::allocate(path_size + argument_size));
-    const proc::Pid pid = words != nullptr ? os::spawn(name) : proc::kNone;
+    const proc::Pid pid = os::spawn(name);
     if (pid == proc::kNone) {
         g_loader->unload(module);
-        const bool memory = words == nullptr;
-        os::release(words);
-        return fail(why, capacity, memory ? "there is not enough memory" : "too many programs are running");
+        return fail(why, capacity, "too many programs are running");
+    }
+    char *words = nullptr;
+    {
+        const os::As as_program(pid); // counted as the program's own
+        words = static_cast<char *>(os::allocate(path_size + argument_size));
+    }
+    if (words == nullptr) {
+        os::signal(pid, proc::Signal::Kill);
+        g_loader->unload(module);
+        return fail(why, capacity, "there is not enough memory");
     }
     memcpy(words, path, path_size);
     if (argument != nullptr) {

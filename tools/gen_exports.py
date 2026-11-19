@@ -33,6 +33,8 @@ CORE = [
     r"^_ZN5shell(11message_box|3ask|16open_file_dialog|16save_file_dialog|12input_dialog|13colour_dialog)E",
     r"^_ZN5shell(13load_settings|13save_settings)E",  # a program's own settings file
     r"^_ZNK?2fs3Ini",  # the settings file's sections and keys
+    r"^_ZN2fs4path",  # a path's parts: its name, its folder, its extension
+    r"^_ZN2fs10error_textE",  # a file error in plain words
 ]
 # Variables of the core library, by name: few, and each for a reason.
 CORE_DATA = [

@@ -480,6 +480,8 @@ protected:
     void set_focus(const Control &control) { os::ui::set_focus(number_, control.number()); }
     Control focus() const { return {number_, os::ui::focus(number_)}; }
     void set_title(const char *title) { os::ui::set_title(number_, title); } // must stay valid
+    // The file (or the like) this window shows: see os::ui::set_document.
+    void set_document(const char *path) { os::ui::set_document(number_, path); } // must stay valid
     void set_icon(const gfx::Bitmap *icon) { os::ui::set_icon(number_, icon); }
     // The window was opened with kMenuBar; the table must stay valid.
     void set_menu_bar(const wm::MenuBar *bar) { os::ui::set_menu_bar(number_, bar); }
@@ -609,7 +611,7 @@ inline bool bring_forward(Number number) { return os::ui::alive(number) && os::u
 // `APP_MAIN(int argc, char **argv) { ... }`. The system calls it once, as
 // the program's own process; 0 says it started. argv[0] is the program's
 // file and argv[1], if there is one, what it was asked to open (a path, an
-// address); both last as long as the program is loaded.
+// address); both last until the program's process ends.
 //
 // What the program says of itself is kept at the front of its file
 // (core/app/file.hpp): its name, the stack its task asks for in bytes (0:

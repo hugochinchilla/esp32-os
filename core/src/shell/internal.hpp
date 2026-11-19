@@ -172,6 +172,13 @@ void set_tray_icon(int place, const gfx::Bitmap *icon, void (*click)(void *conte
 // after it ended too often to be restarted. False if it runs.
 bool start_taskbar_again();
 
+// What os::accept_open does (loaded.cpp): the program asking takes one more
+// thing to open while it runs.
+void accept_open(os::OpenFn opened);
+// Brings forward the window of `program` that shows `path`
+// (wm::Window::document), if there is one.
+bool show_document(const char *program, const char *path);
+
 // A terminal session for the process asking (sessions.cpp): what
 // os::open_session does.
 sh::TerminalSession *open_session(ports::ByteSink &device, const char *&why);

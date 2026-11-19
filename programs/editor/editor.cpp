@@ -4,12 +4,11 @@
 #include <strings.h>
 
 #include "core/app/app.hpp"
-#include "core/gfx/art.hpp"
 #include "core/job/job.hpp"
 #include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/wm.hpp"
-#include "internal.hpp"
+#include "art.hpp"
 
 namespace shell {
 
@@ -23,30 +22,16 @@ enum class Then : uint8_t { Nothing, New, Open, OpenPath, Exit };
 // More than one Editor can run at once, each a process of its own with its
 // own window and text. As many as there is memory for (the owner's
 // decision, 2026-11-17): each takes 576 KB of external RAM for its text and
-// undo, and the one that finds none says so. The Editors that exist are a
-// chain through the windows themselves: each joins it when it is made and
-// leaves it when it is destroyed.
-class EditorWindow;
-EditorWindow *g_editors = nullptr;
-
+// undo, and the one that finds none says so. A file that an Editor already
+// has open is not opened twice: the window names its file to the system
+// (set_document), which brings it forward instead.
 class EditorWindow : public app::Window {
 public:
-    EditorWindow *after_ = nullptr;
-    ~EditorWindow() override
-    {
-        for (EditorWindow **at = &g_editors; *at != nullptr; at = &(*at)->after_) {
-            if (*at == this) {
-                *at = after_;
-                break;
-            }
-        }
-    }
     // The text and its undo memory are the text editor's own, and go back
     // with the window.
     EditorWindow() : edit_(text_edit({0, 0, 100, 100}, kTextCapacity, kUndoCapacity))
     {
-        after_ = g_editors;
-        g_editors = this;
+        set_document(path_); // "" until it has a file
         file_items_[0] = {"&New", &EditorWindow::menu_new, this, nullptr, nullptr, 0};
         file_items_[1] = {"&Open...", &EditorWindow::menu_open, this, nullptr, nullptr, 0};
         file_items_[2] = {"&Save", &EditorWindow::menu_save, this, nullptr, nullptr, 0};
@@ -356,46 +341,50 @@ private:
 
 } // namespace
 
-// Every call starts another Editor, as a process of its own; a file that an
-// Editor already has open comes to the front instead.
-void open_in_editor(const char *path)
+} // namespace shell
+
+// The Editor is a program kept in a file (backlog item 82): not part of the
+// system. Each start is another copy with its own process. 8 KB of stack:
+// it reads and writes files on its own task, and the file system's code
+// runs on it too.
+APP_INFO(app::many(app::file_info("Editor", 8 * 1024, art::kSmall, art::kSmallInks, art::kLarge, art::kLargeInks)));
+
+namespace {
+// The window's icon: the header's own pixels are not in memory with the
+// program, so they are made again here from the same rows.
+constexpr app::Icon16 kWindowIcon = app::icon16(art::kSmall, art::kSmallInks);
+} // namespace
+
+// argv[1], if there is one, is the file to open.
+APP_MAIN(int argc, char **argv)
 {
-    int place = 0; // how many there are: each new one a step down and to the right
-    for (const EditorWindow *e = g_editors; e != nullptr; e = e->after_) {
-        if (path != nullptr && strcasecmp(e->path(), path) == 0) {
-            app::bring_forward(e->number());
-            return;
+    static const gfx::Bitmap icon = {16, 16, kWindowIcon.pixels, app::kClearInk};
+    // Each new one a step down and to the right of where the last began.
+    int place = 0;
+    for (int i = 0; i < os::process_count(); i++) {
+        const proc::Process &p = os::process_at(i);
+        if (p.pid != os::self() && strcmp(p.name, "Editor") == 0 && os::main_window(p.pid) != os::kNoWindow) {
+            place++;
         }
-        place++;
     }
     place %= 8;
-    const proc::Pid pid = os::spawn("Editor");
-    const PathArg p(path);
-    const auto open = [place, p] {
-        app::Look look;
-        look.title = "Untitled - Editor";
-        look.x = 150 + place * 24;
-        look.y = 60 + place * 24;
-        look.width = 440;
-        look.height = 330;
-        look.icon = &gfx::editor_icon_16();
-        look.flags = app::kMenuBar;
-        // Shown once it has its text: a new one, or the file's.
-        const app::Number number = app::make<EditorWindow>(look);
-        if (number == app::kNone) {
-            no_memory_for("Editor");
-            return;
-        }
-        app::program<EditorWindow>(number)->open_path(p.get());
-        if (!os::ui::on_screen(number)) {
-            os::ui::close(number); // no memory for the text, the file would not load, or no room
-        }
-    };
-    if (pid != proc::kNone) {
-        in_process(pid, "Editor", open);
-    } else {
-        open(); // no room in the table: it is the caller's window, as elsewhere
+    app::Look look;
+    look.title = "Untitled - Editor";
+    look.x = 150 + place * 24;
+    look.y = 60 + place * 24;
+    look.width = 440;
+    look.height = 330;
+    look.icon = &icon;
+    look.flags = app::kMenuBar;
+    // Shown once it has its text: a new one, or the file's.
+    const app::Number number = app::make<shell::EditorWindow>(look);
+    if (number == app::kNone) {
+        shell::message_box("Editor", "There is not enough memory to open the Editor.");
+        return 0; // said: the system has nothing to add
     }
+    app::program<shell::EditorWindow>(number)->open_path(argc > 1 ? argv[1] : nullptr);
+    if (!os::ui::on_screen(number)) {
+        os::ui::close(number); // no memory for the text, the file would not load, or no room
+    }
+    return 0;
 }
-
-} // namespace shell

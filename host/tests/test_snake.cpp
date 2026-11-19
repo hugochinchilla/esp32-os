@@ -393,7 +393,7 @@ void test_window(bool own_task)
     const int blocks = memory.in_use();
     key(wm::key::F4, true);
     CHECK(strcmp(title(), "Culebra") != 0);
-    CHECK(memory.in_use() == blocks - 4); // the window, with the game in it, and its three controls
+    CHECK(memory.in_use() == blocks - 5); // the window, with the game in it, its three controls and its arguments
     CHECK(prog::runner().tasks() == 0);   // and its task
     wait(kStep * 3);
     shell::start_program("Culebra");
@@ -405,7 +405,7 @@ void test_window(bool own_task)
     wait(80000 * 4);
     CHECK(g2.head_row() == 5); // still Fast
     key(wm::key::F4, true);
-    CHECK(memory.in_use() == blocks - 4);
+    CHECK(memory.in_use() == blocks - 5);
 }
 
 } // namespace

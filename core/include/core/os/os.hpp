@@ -193,9 +193,19 @@ SaverRun last_saver_run();
 // says the power can go. Returns at once; a program that says no calls it
 // off. False: this machine has no Shut Down.
 bool shut_down();
-// Starts one of the system's own programs by its name ("About Chinchilla"),
-// or brings it forward if it runs. False: there is none of that name.
-bool launch(const char *program);
+// Starts a program by its name ("About Chinchilla", "Editor"), whether it
+// is one of the system's own or a file in C:\Programs, or brings it forward
+// if it runs. `argument` is what it is asked to open (a path, an address):
+// its argv[1]. A window that already shows that (os::ui::set_document)
+// comes forward instead. False: there is none of that name, or it did not
+// start.
+bool launch(const char *program, const char *argument = nullptr);
+// For a program that runs one copy at a time and can open one more thing
+// while it runs (another picture, another folder): `opened` is called, as
+// the program, when it is started again with an argument. Without it the
+// program's window only comes forward. Once, from its way in.
+using OpenFn = void (*)(const char *argument);
+void accept_open(OpenFn opened);
 
 /* ---- The network ---------------------------------------------------------------- */
 
@@ -339,7 +349,8 @@ struct Kit {
     fs::Storage *storage = nullptr;
     ports::Memory *memory = nullptr;
     bool (*shut_down)() = nullptr; // starts Shut Down: programs close, the picture fades, the last screen
-    bool (*launch)(const char *program) = nullptr; // a row of the program table, by name
+    bool (*launch)(const char *program, const char *argument) = nullptr; // a program, by name
+    void (*accept_open)(OpenFn opened) = nullptr;
     sh::TerminalSession *(*open_session)(ports::ByteSink &device, const char *&why) = nullptr;
 };
 // What the calls work with. The desktop hands it in when it starts.

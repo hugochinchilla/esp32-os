@@ -1084,15 +1084,19 @@ void start_taskbar(void *)
     // Quick launch, by the Start button: one click opens the program
     // (backlog item 30; which three is in docs/DECISIONS.md).
     {
+        // By name, as Run would start them: they are program files, and
+        // one that is not on C: says so when its button is clicked. Their
+        // pictures here are the system's own, which are always there.
         static const char *const kQuick[] = {"File manager", "Editor", "Terminal"};
+        const gfx::Bitmap *const pictures[] = {&gfx::files_icon_16(), &gfx::editor_icon_16(),
+                                               &gfx::terminal_icon_16()};
         desk::Taskbar::QuickLaunch quick[desk::Taskbar::kMaxQuick];
         int count = 0;
         for (const char *name : kQuick) {
-            if (const App *program = find_app(name)) {
-                quick[count++] = {program->icon,
-                                  [](void *context) { launch(*static_cast<const App *>(context)); },
-                                  const_cast<App *>(program)};
-            }
+            quick[count] = {pictures[count],
+                            [](void *context) { start_program(static_cast<const char *>(context)); },
+                            const_cast<char *>(name)};
+            count++;
         }
         g_bar->set_quick_launch(quick, count);
     }
@@ -1188,11 +1192,12 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
     kit.memory = &memory;
     kit.shut_down = &power_down;
     kit.open_session = &open_session;
-    kit.launch = [](const char *program) {
+    kit.launch = [](const char *program, const char *argument) {
         char why[120];
         const Program *found = find_program(program);
-        return found != nullptr && start_program(*found, nullptr, why, sizeof(why));
+        return found != nullptr && start_program(*found, argument, why, sizeof(why));
     };
+    kit.accept_open = &accept_open;
     os::install(kit);
     // The desktop is a process too: the Start menu, the icons and the
     // taskbar, and the dialogs they open. (It is the window server and the
