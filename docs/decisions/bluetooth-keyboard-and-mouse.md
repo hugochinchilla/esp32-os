@@ -57,7 +57,13 @@ until he answers.
   open the radio listens hard, so a device shows at once. `tools/dbg.py
   bt` does the same from a PC.
 - **An icon in the tray** (the owner's request, 2026-11-19), left of the
-  network's: a keyboard under radio waves, grey when nothing is connected,
-  blue with a keyboard or mouse connected, a red cross when Bluetooth is
-  off. A click opens the Bluetooth program. The drawing is original: the
-  Bluetooth mark is a trademark and is not used.
+  network's. A click opens the Bluetooth program. The drawing (the
+  owner's decision, 2026-11-19) is the Bluetooth rune itself, hagall and
+  bjarkan bound into one sign, in blue with a white edge and no oval. His
+  reason: he read on the Bluetooth site that the trademark is the logo,
+  the rune inside its blue oval, and two runes of an alphabet drawn
+  together cannot be one. The agent could not check how far the mark
+  reaches and said so. Grey with a red cross when Bluetooth is off, a
+  green light with a keyboard or mouse connected. Not chosen: a keyboard
+  under radio waves (nobody reads it as Bluetooth); bjarkan alone on a
+  blue tile (close, but not the sign people know).

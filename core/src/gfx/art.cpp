@@ -1404,30 +1404,45 @@ const Bitmap &signal_icon_16(int bars, bool locked)
 
 namespace {
 
-// A keyboard with two radio waves over it (an original drawing: the
-// Bluetooth mark itself is a trademark and is not used). `waves`: the
-// colour of the waves; kClear: none, and a red cross in their place.
-constexpr Pixels<16> bluetooth_pixels(int waves)
+// The runes hagall and bjarkan bound into one sign (the initials of Harald
+// Bluetooth), blue, with no oval around it: the owner's choice, 2026-11-19,
+// after reading that the trademark is the sign in its blue oval. A white
+// edge carries it on a taskbar of any colour. `rune`: its colour. `dot`: a
+// green light in the corner (a device is connected). `cross`: a red cross
+// there (off).
+constexpr Pixels<16> bluetooth_pixels(int rune, bool dot, bool cross)
 {
     constexpr const char *rows[16] = {
-        "................", "................", ".....BBBBBB.....", "...BB......BB...",
-        "..B...BBBB...B..", ".....B....B.....", "................", ".......BB.......",
-        "................", "KKKKKKKKKKKKKKKK", "KWWWWWWWWWWWWWWK", "KWKWKWKWKWKWKWWK",
-        "KWWWWWWWWWWWWWWK", "KWKWKKKKKKKWKWWK", "KKKKKKKKKKKKKKKK", "................",
+        "................", ".......BB.......", ".......BBB......", ".......BBBB.....",
+        "..BB...BB.BB....", "...BB..BB..BB...", "....BB.BB.BB....", ".....BBBBB......",
+        ".....BBBBB......", "....BB.BB.BB....", "...BB..BB..BB...", "..BB...BB.BB....",
+        ".......BBBB.....", ".......BBB......", ".......BB.......", "................",
     };
+    constexpr const char *kDot[5] = {".KKK.", "KGGGK", "KGGGK", "KGGGK", ".KKK."};
     Pixels<16> out;
     for (int y = 0; y < 16; y++) {
         for (int x = 0; x < 16; x++) {
-            const char ch = rows[y][x];
-            out.p[y * 16 + x] = static_cast<uint8_t>(ch == 'K' ? kBlack : ch == 'W' ? kWhite : ch == 'B' ? waves : kClear);
+            bool beside = false; // next to a pixel of the rune: the white edge
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dx = -1; dx <= 1; dx++) {
+                    const int nx = x + dx, ny = y + dy;
+                    beside = beside || (nx >= 0 && nx < 16 && ny >= 0 && ny < 16 && rows[ny][nx] == 'B');
+                }
+            }
+            out.p[y * 16 + x] = static_cast<uint8_t>(rows[y][x] == 'B' ? rune : beside ? kWhite : kClear);
         }
     }
-    if (waves == kClear) {
-        for (int y = 0; y < 7; y++) {
-            for (int x = 0; x < 6; x++) {
-                if (kCross[y][x] == 'R') {
-                    out.p[(y + 1) * 16 + x + 5] = rgb(7, 0, 0);
-                }
+    for (int y = 0; y < 5 && dot; y++) {
+        for (int x = 0; x < 5; x++) {
+            if (kDot[y][x] != '.') {
+                out.p[(y + 10) * 16 + x + 11] = kDot[y][x] == 'K' ? kBlack : rgb(1, 7, 1);
+            }
+        }
+    }
+    for (int y = 0; y < 6 && cross; y++) {
+        for (int x = 0; x < 5; x++) {
+            if (kCross[y][x] == 'R') {
+                out.p[(y + 9) * 16 + x + 11] = rgb(7, 0, 0);
             }
         }
     }
@@ -1438,8 +1453,10 @@ constexpr Pixels<16> bluetooth_pixels(int waves)
 
 const Bitmap &bluetooth_icon_16(BluetoothIcon state)
 {
+    constexpr int blue = rgb(0, 2, 3);
     static constexpr Pixels<16> pixels[3] = {
-        bluetooth_pixels(kClear), bluetooth_pixels(kDarkGrey), bluetooth_pixels(rgb(0, 2, 3)),
+        bluetooth_pixels(kDarkGrey, false, true), bluetooth_pixels(blue, false, false),
+        bluetooth_pixels(blue, true, false),
     };
     static constexpr Bitmap bitmaps[3] = {
         {16, 16, pixels[0].p, kClear}, {16, 16, pixels[1].p, kClear}, {16, 16, pixels[2].p, kClear},

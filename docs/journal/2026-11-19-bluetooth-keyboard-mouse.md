@@ -302,3 +302,32 @@ Tested on the PC: the scenes check that the icon is there from the start,
 show it off and beside the network's, and open the window by a click on
 it; the fifteen pictures were drawn again with the icon in them and two
 were added. The firmware compiles and links; not run on the board.
+
+### The icon, drawn again
+
+The owner, on seeing the keyboard under waves: try a reinterpretation of
+the Bluetooth rune, close enough to the one everybody knows without being
+a copy.
+
+The mark is a bind rune: hagall and bjarkan, the initials of Harald
+Bluetooth, drawn as one sign, white in a blue oval. What makes it the mark
+is the binding (the two arms crossing to the left of the stem) and the
+oval. The icon keeps what is nobody's: bjarkan alone, the letter B of the
+old Norse alphabet, a stem with two pointed bows, white on a square blue
+tile. It reads as Bluetooth at a glance and has neither the arms nor the
+oval. Tried first without a tile, blue on the bar: it vanished on the blue
+taskbar of the Sky theme, so the tile stays. States: a grey tile with a
+red cross (off), the blue tile (on), a green light in its corner (a
+keyboard or mouse connected). This is a drawing choice, not legal advice;
+the project is not distributed.
+
+Minutes later the owner went further: he had read on the Bluetooth site
+that what is under trademark is the logo, the rune inside a blue oval, and
+reasoned that the rune in blue with no oval is only two letters of an
+alphabet drawn together. So the icon is now the bind rune itself, hagall
+and bjarkan, blue, with a white edge one pixel wide in place of any tile
+or oval (the edge is what keeps it visible on the blue bar of Sky and the
+dark one of Midnight). The agent could not check how far the mark reaches
+and recorded the choice as the owner's. Grey with a red cross when off, a
+green light in the corner when a keyboard or mouse is connected. The
+bjarkan-only tile lasted one build and was never pushed.

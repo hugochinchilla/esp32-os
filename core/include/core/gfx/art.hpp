@@ -73,8 +73,8 @@ const Bitmap &up_icon_16();   // folder toolbar: the folder that holds this one
 // small padlock (the network wants a password). bars < 0: no link, shown
 // as empty bars and a red cross.
 const Bitmap &signal_icon_16(int bars, bool locked = false);
-// Bluetooth: a keyboard with radio waves over it. Off: a cross for the
-// waves; On: grey waves, nothing connected; Connected: blue waves.
+// Bluetooth: its rune, blue, with no oval. Off: grey with a red cross; On:
+// blue, nothing connected; Connected: with a green light in the corner.
 enum class BluetoothIcon { Off, On, Connected };
 const Bitmap &bluetooth_icon_16(BluetoothIcon state = BluetoothIcon::Connected);
 
