@@ -129,7 +129,8 @@ is exactly what the owner's second message rules out.
 
 ## How it was tested
 
-On the PC: the 58 tests pass (57 before, and `program_exports`). The
+On the PC: the 59 tests pass (`program_exports` is new; Doom's came with
+the merge of `main`, where it had arrived meanwhile). The
 tests have the programs linked in, so they start them by name from
 `C:\Programs` as a user would; `test_loaded` loads the real program files
 of the PC with the PC's loader, as the Linux program does, and checks the
@@ -149,6 +150,12 @@ Defragmenter 11,132, Culebra 15,064, Cactus Patch 19,500, Chess 52,160.
 Not compiled: the Linux program and the web page (the cloud container has
 neither SDL2 nor Emscripten); their parts that need no window are the
 ones `test_loaded` and the linked tests cover. Not run on the board.
+
+Doom (item 81) was merged into `main` while this was built. It is a
+program file like the others on the board and in the Linux program, but it
+is not linked into the tests or the web page: its engine is C that stands
+in for the C library and can only live in a file of its own. The folder
+says so by having an `engine.txt`.
 
 ## What was learned
 

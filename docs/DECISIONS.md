@@ -136,6 +136,7 @@ The picture: signal, memory, painting, frame time.
 - [Missed video refills are logged](decisions/missed-video-refills.md) (2026-11-17, owner, decided): Missed refills are logged; `dbg.py tasks` stays although it can cause them
 - [Chosen for the frame budget](decisions/frame-budget.md) (2026-11-18, agent, to-confirm): The budget is one video frame, 16 800 us; how drawing is measured against it (backlog 63)
 - [Screen sizes: 640x480 and 800x600](decisions/screen-sizes.md) (2026-11-18, owner, decided): Display > Resolution changes the picture at once; a box asks to keep it, back after 15 s; 640x480 the default (backlog 68)
+- [A coarse screen, 320x240, for a game](decisions/coarse-screen.md) (2026-11-19, owner+agent, to-confirm): A window that has the whole screen may ask for 320x240: the 640x480 signal with the pixel clock halved and each line sent twice; Doom uses it (backlog 81)
 - [Chosen for the refills missed at 800x600](decisions/scanout-ahead.md) (2026-11-19, agent, to-confirm): 800x600 copies the frame's third piece to internal RAM in the vertical blank (8,000 bytes); 640x480 is left as it was (backlog 68)
 
 ### boot
@@ -186,6 +187,7 @@ Processes, tasks, signals, init, OS calls, memory.
 - [Bluetooth keyboard and mouse](decisions/bluetooth-keyboard-and-mouse.md) (2026-11-19, owner+agent, to-confirm): BLE HID host with NimBLE: pairs by itself when a keyboard or mouse is missing, no code, a switch in bluetooth.ini (backlog 51)
 - [The files of C: are copied when the board is flashed](decisions/files-copied-when-flashing.md) (2026-11-19, owner+agent, decided): The firmware carries no programs or pictures; tools/flash.py copies them and DOOM1.WAD to C: over the debug link, only what changed (backlog 77)
 - [The programs leave the firmware](decisions/programs-out-of-the-firmware.md) (2026-11-19, owner+agent, decided): The programs are files in C:\Programs on every machine; only the loader differs. The Task Manager stays in the firmware (backlog 82)
+- [The whole screen lent to a game](decisions/lent-screen.md) (2026-11-19, owner+agent, to-confirm): A window can borrow the whole screen: it writes the picture itself, gets every key raw and the mouse as movement; Ctrl+Alt+Del takes it back (backlog 81)
 
 ### storage
 
@@ -244,6 +246,7 @@ The programs and games, one decision each.
 - [The chess computer does not answer at once](decisions/chess-reply-pace.md) (2026-11-18, owner+agent, decided): Chess: the computer's move is shown no sooner than 250 to 350 ms after it began to think (backlog 67)
 - [The chess game](decisions/chess-game.md) (2026-11-18, owner, decided): Chess: own engine, moving by drag or click, piece sets, board colours, levels (backlog 50)
 - [The computer's chess piece lands](decisions/chess-landing.md) (2026-11-18, owner+agent, decided): The computer's piece drops 4 pixels onto its square and bounces once, 233 ms (backlog 64); details to confirm
+- [Doom](decisions/doom.md) (2026-11-19, owner+agent, to-confirm): Doom is a program file, doomgeneric's engine with the whole screen; the WAD is the player's, in C:\Programs; no sound yet (backlog 81)
 - [Sounds of the games and the Trash](decisions/game-sounds.md) (2026-11-19, owner+agent, to-confirm): Chess knocks on a move, warns the user of check, says checkmate; Culebra a berry and game over; the Trash crumples paper (backlog 70)
 - [The File manager's three views](decisions/file-manager-views.md) (2026-11-19, owner+agent, to-confirm): Icons, List and Details from the View menu, one way for every folder window (backlog 56)
 - [The Shut Down sequence](decisions/shut-down-sequence.md) (2026-11-19, owner+agent, decided): Shut Down closes the programs (ended after 20 s), fades the desktop, then to black, and shows the last screen on black (backlog 60)

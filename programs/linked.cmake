@@ -12,7 +12,10 @@ set(PROGRAMS_DIR ${CMAKE_CURRENT_LIST_DIR})
 add_library(programs_linked INTERFACE)
 file(GLOB program_dirs LIST_DIRECTORIES true ${PROGRAMS_DIR}/*)
 foreach(dir ${program_dirs})
-    if(NOT IS_DIRECTORY ${dir})
+    # Not Doom (the folder with an engine.txt): its engine is C that
+    # stands in for the C library, and can only be a file of its own. The
+    # web page does not have it.
+    if(NOT IS_DIRECTORY ${dir} OR EXISTS ${dir}/engine.txt)
         continue()
     endif()
     get_filename_component(name ${dir} NAME)

@@ -81,12 +81,13 @@ def main():
     for name in MOVED:
         if name not in files:
             continue
-        with open(os.path.join(folder, name), encoding="utf-8") as f:
+        shown = f"core/src/shell/{name}"
+        with open(os.path.join(root, shown), encoding="utf-8") as f:
             lines = strip_comments(f.read()).split("\n")
         for number, line in enumerate(lines, 1):
             for pattern, instead in FORBIDDEN:
                 if re.search(pattern, line):
-                    print(f"core/src/shell/{name}:{number}: {line.strip()}")
+                    print(f"{shown}:{number}: {line.strip()}")
                     print(f"    a program that has moved to the OS calls uses {instead}")
                     bad += 1
     # The programs kept in files (programs/) are compiled apart from the

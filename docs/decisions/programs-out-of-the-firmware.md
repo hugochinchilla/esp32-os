@@ -51,6 +51,10 @@ The rest is the agent's, to confirm:
   `C:\Programs` each time it starts (`host/program_files.hpp`), which is
   its `flash.py`. The web page and the PC's tests: the linked loader; the
   system writes their files itself as it starts, because nobody else can.
+- **Doom is not in the web page.** Its engine stands in for the C library
+  and cannot be linked into another program; `programs/linked.cmake`
+  leaves out a folder that has an `engine.txt`. The board and the Linux
+  program have it as a file like the rest.
 - **One list of programs** (`core/src/shell/programs.cpp`): the system's
   own few and the program files, in the order of their names. Start >
   Programs shows it; Run, the shell's `run` and `os::launch` start a

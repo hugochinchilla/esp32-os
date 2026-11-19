@@ -2,7 +2,7 @@
 # the debug tool.
 #   cmake -S host -B build/host && cmake --build build/host && ctest --test-dir build/host
 cmake_minimum_required(VERSION 3.24)
-project(esp32_os_host CXX)
+project(esp32_os_host C CXX) # C for the engine of programs/doom only
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -167,17 +167,21 @@ add_test(NAME decisions_index
 # Programs loaded from files (backlog 27). The sample program is built as a
 # shared library of the PC and loaded by the PC's own loader; the test
 # program lets it find the OS calls by name, as the firmware does.
-function(add_program name folder)
-    file(GLOB sources CONFIGURE_DEPENDS ${folder}/*.cpp)
-    add_library(${name}_app MODULE ${sources})
+function(add_program_from name out)
+    add_library(${name}_app MODULE ${ARGN})
     target_include_directories(${name}_app PRIVATE ../core/include ../core/src/shell)
     target_compile_options(${name}_app PRIVATE -fvisibility=hidden -fno-exceptions -fno-rtti)
     set_target_properties(${name}_app PROPERTIES PREFIX "" OUTPUT_NAME "${name}" SUFFIX ".so")
     # The program file: its header, then the code (tools/pack_app.sh).
     add_custom_command(TARGET ${name}_app POST_BUILD
-                       COMMAND ${CMAKE_COMMAND} -E make_directory ${ARGN}
+                       COMMAND ${CMAKE_COMMAND} -E make_directory ${out}
                        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../tools/pack_app.sh ${CMAKE_OBJCOPY}
-                               $<TARGET_FILE:${name}_app> ${ARGN}/${name}.app)
+                               $<TARGET_FILE:${name}_app> ${out}/${name}.app)
+endfunction()
+# A program that is its folder's *.cpp: all of them but Doom.
+function(add_program name folder out)
+    file(GLOB sources CONFIGURE_DEPENDS ${folder}/*.cpp)
+    add_program_from(${name} ${out} ${sources})
 endfunction()
 # Every program of programs/, as the Linux program has them: files in the
 # folder `programs` beside it, which it copies to C:\Programs when it
@@ -186,7 +190,8 @@ set(PROGRAM_FILES ${CMAKE_CURRENT_BINARY_DIR}/programs)
 set(program_targets "")
 file(GLOB program_dirs LIST_DIRECTORIES true ../programs/*)
 foreach(dir ${program_dirs})
-    if(IS_DIRECTORY ${dir})
+    # (A folder with an engine.txt has sources elsewhere too: Doom, below.)
+    if(IS_DIRECTORY ${dir} AND NOT EXISTS ${dir}/engine.txt)
         get_filename_component(name ${dir} NAME)
         add_program(${name} ${dir} ${PROGRAM_FILES})
         list(APPEND program_targets ${name}_app)
@@ -199,6 +204,26 @@ target_compile_options(chess_app PRIVATE -O2 -fno-sanitize=all)
 # Not a program of the system: the chess engine's measuring program for
 # board checks (tools/bench/chess_bench), built here so that it stays whole.
 add_program(chess_bench ../tools/bench/chess_bench ${CMAKE_CURRENT_BINARY_DIR})
+# Doom (backlog item 81): our two files and the engine of
+# third_party/doomgeneric, which is C, is given port.h in place of the C
+# library and is not ours to make free of warnings. Optimised and without
+# the checkers, as Chess is: a program file may be a megabyte.
+file(STRINGS ../programs/doom/engine.txt doom_engine)
+list(TRANSFORM doom_engine PREPEND ${CMAKE_CURRENT_SOURCE_DIR}/../)
+add_program_from(doom ${PROGRAM_FILES} ../programs/doom/doom.cpp ../programs/doom/port.c ${doom_engine})
+list(APPEND program_targets doom_app)
+target_include_directories(doom_app PRIVATE ../programs/doom ../third_party/doomgeneric)
+target_compile_options(doom_app PRIVATE -Os -fno-sanitize=all)
+set_source_files_properties(${doom_engine} ../programs/doom/port.c PROPERTIES COMPILE_OPTIONS
+                            "-w;-std=gnu99;-include;${CMAKE_CURRENT_SOURCE_DIR}/../programs/doom/port.h")
+# Without the game's data, which is not in the repository, the test checks
+# the program's window only; with it (-DDOOM_WAD=/path/to/DOOM1.WAD) it plays.
+set(DOOM_WAD "" CACHE FILEPATH "A Doom WAD file for the test of programs/doom")
+add_executable(test_doom tests/test_doom.cpp)
+target_link_libraries(test_doom PRIVATE core ${CMAKE_DL_LIBS} Threads::Threads)
+set_target_properties(test_doom PROPERTIES ENABLE_EXPORTS ON)
+add_dependencies(test_doom doom_app)
+add_test(NAME doom COMMAND test_doom ${PROGRAM_FILES}/doom.app ${DOOM_WAD})
 # What the board would refuse: a program that asks the system for a name
 # the firmware does not export to programs (tools/gen_exports.py).
 set(program_libraries "")
@@ -357,12 +382,12 @@ set_tests_properties(${all_tests} PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_le
 
 # The programs of programs/ are linked into every test and tool here, as
 # they are into the web page, so that C:\Programs has them and they can be
-# opened and looked into. Not into the two that load program files the way
+# opened and looked into. Not into those that load program files the way
 # the board and the Linux program do, nor into the mock-up.
 get_property(all_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
 foreach(target ${all_targets})
     get_target_property(type ${target} TYPE)
-    if(type STREQUAL "EXECUTABLE" AND NOT target MATCHES "^(test_loaded|chinchilla|chess_mockup)$")
+    if(type STREQUAL "EXECUTABLE" AND NOT target MATCHES "^(test_loaded|test_doom|chinchilla|chess_mockup)$")
         target_link_libraries(${target} PRIVATE programs_linked)
     endif()
 endforeach()

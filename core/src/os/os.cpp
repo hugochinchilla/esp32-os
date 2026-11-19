@@ -6,6 +6,7 @@
 
 #include <atomic>
 #include <cstdio>
+#include <cstring>
 #include <new>
 
 #include "core/msg/queue.hpp"
@@ -200,6 +201,16 @@ bool start_job(const job::Spec &spec)
 }
 
 void job_rest(uint32_t ms) { job::jobs().rest(ms); }
+void rest(uint32_t ms) { job::jobs().rest(ms); }
+
+void log(const char *text)
+{
+    const prog::InCall in_call;
+    if (text != nullptr) {
+        sys::log().write(text, strlen(text));
+        sys::log().write("\n", 1);
+    }
+}
 
 /* ---- Memory ------------------------------------------------------------------- */
 

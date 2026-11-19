@@ -353,6 +353,11 @@ public:
     bool caret_lit() const { return os::ui::caret_lit(number_); } // the lit half of the text cursor's blink
     // Asks for a part of the client area to be painted again.
     void redraw(const gfx::Rect &part) { os::ui::redraw(number_, part); }
+    // The whole screen for this window (os::ui::take_screen).
+    bool take_screen(os::ui::Screen &out, int coarse = 0) { return os::ui::take_screen(number_, out, coarse); }
+    bool has_screen() const { return os::ui::has_screen(number_); }
+    void give_screen_back() { os::ui::give_screen_back(number_); }
+    void screen_changed(const gfx::Rect &part) { os::ui::screen_changed(number_, part); }
 
     // What happens in the window. A button was pressed:
     virtual void command(Control /*which*/) {}
@@ -379,6 +384,9 @@ public:
     // The left button in a picture made with kMouse, in its coordinates;
     // from Down to Up they all go to the picture that was pressed.
     virtual void mouse(Control /*which*/, const wm::MouseMsg &) {}
+    // While the window has the whole screen: the mouse moved by this much,
+    // with these buttons held (bit 0 left, 1 right, 2 middle).
+    virtual void mouse_moved(int /*dx*/, int /*dy*/, int /*buttons*/) {}
     // The right button went down in a picture made with kMouse, or in an
     // icon view, at this point of it.
     virtual void right_click(Control /*which*/, int /*x*/, int /*y*/) {}
@@ -529,6 +537,9 @@ private:
             return true;
         case os::ui::What::Mouse:
             window->mouse(Control(window->number_, event.control), *event.mouse);
+            return true;
+        case os::ui::What::MouseMoved:
+            window->mouse_moved(event.x, event.y, event.index);
             return true;
         case os::ui::What::RightClick:
             window->right_click(Control(window->number_, event.control), event.x, event.y);

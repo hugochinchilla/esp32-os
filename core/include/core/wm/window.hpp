@@ -289,6 +289,10 @@ public:
     // Returns true if the key was used.
     virtual bool key(const KeyMsg &k);
     virtual void text(const char *utf8);
+    // Only while the whole screen is lent to this window (Wm::lend_screen):
+    // how far the mouse moved since the last call and which buttons are
+    // held (bit 0 left, bit 1 right, bit 2 middle). There is no pointer then.
+    virtual void mouse_moved(int /*dx*/, int /*dy*/, uint8_t /*buttons*/) {}
     // Called after the size changed (resizing, maximising).
     virtual void resized() {}
     // The close button, Alt+F4: return false to stay open (and ask first).
