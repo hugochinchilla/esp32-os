@@ -112,3 +112,12 @@ run on the board.
   Bluetooth (item 51) sends the same usage codes once that is merged.
 - The owner's word on the three choices above.
 - A Show Desktop button on the taskbar, if wanted.
+
+## Confirmed by the owner
+
+2026-11-19, later the same day. Asked whether the three choices were right
+(Alt+F4 with no window in the focus, a second logo+D bringing the windows
+back, the logo key acting on release), the owner answered "si, son
+correctas". The decision is now `decided`. The coordinator reports that the
+board checks passed; the board thread writes its own figures here when it
+merges.

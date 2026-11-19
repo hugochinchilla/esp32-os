@@ -163,9 +163,11 @@ template <class T> void open_one(const char *program)
     }
 }
 
-// The icon in the taskbar's tray (the network's signal). Kept while there
-// is no taskbar and shown when there is one again.
-void set_tray_icon(const gfx::Bitmap *icon, void (*click)(void *context), void *context);
+// An icon in the taskbar's tray: the network's signal next to the clock,
+// Bluetooth left of it. Kept while there is no taskbar and shown when
+// there is one again.
+constexpr int kTrayNetwork = 0, kTrayBluetooth = 1;
+void set_tray_icon(int place, const gfx::Bitmap *icon, void (*click)(void *context), void *context);
 // The taskbar's process (desktop.cpp): starts it if it is not running, as
 // after it ended too often to be restarted. False if it runs.
 bool start_taskbar_again();
@@ -176,6 +178,9 @@ sh::TerminalSession *open_session(ports::ByteSink &device, const char *&why);
 
 // Starts following the network, if there is one (network.cpp).
 void start_network();
+// Starts following the Bluetooth keyboards and mice, if there is a radio
+// for them (bluetooth_service.cpp).
+void start_bluetooth();
 
 // Centres a window of the given size in the work area.
 gfx::Rect centred(const wm::Wm &wm, int w, int h);

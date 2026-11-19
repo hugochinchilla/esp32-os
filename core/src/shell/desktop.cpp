@@ -294,6 +294,7 @@ void find_programs(void *)
 }
 void open_screen_saver(void *) { screen_saver_dialog(); }
 void network_panel(void *) { open_network(); }
+void bluetooth_panel(void *) { open_bluetooth(); }
 void open_display(void *) { display_dialog(); }
 void open_services(void *) { services_dialog(); }
 void open_run(void *) { run_dialog(); }
@@ -315,11 +316,12 @@ wm::MenuItem g_settings_items[] = {
     {"&Control Panel", nullptr, nullptr, nullptr, nullptr, wm::kMenuDisabled},
     {"&Taskbar...", nullptr, nullptr, nullptr, nullptr, wm::kMenuDisabled},
     {"&Network", &network_panel, nullptr, nullptr, nullptr, wm::kMenuDisabled},
+    {"&Bluetooth", &bluetooth_panel, nullptr, nullptr, nullptr, wm::kMenuDisabled},
     {"&Screen Saver...", &open_screen_saver, nullptr, nullptr, &gfx::saver_icon_16(), 0},
     {"&Display...", &open_display, nullptr, nullptr, &gfx::display_icon_16(), 0},
     {"Ser&vices...", &open_services, nullptr, nullptr, &gfx::services_icon_16(), 0},
 };
-wm::Menu g_settings = {g_settings_items, 6};
+wm::Menu g_settings = {g_settings_items, 7};
 wm::MenuItem g_start_items[5];
 wm::Menu g_start = {g_start_items, 5};
 
@@ -367,11 +369,14 @@ bool g_taskbar_up = false;
 // ends; the memory is counted as the taskbar's.
 desk::Taskbar *g_bar = nullptr;
 desk::Icons *g_desk = nullptr;
-// The tray icon is the network's to set (network.cpp), whether or not there
-// is a taskbar to show it at the moment.
-const gfx::Bitmap *g_tray_icon = nullptr;
-void (*g_tray_click)(void *context) = nullptr;
-void *g_tray_context = nullptr;
+// The tray icons are the network's and Bluetooth's to set (their
+// services), whether or not there is a taskbar to show them at the moment.
+struct TrayIcon {
+    const gfx::Bitmap *icon;
+    void (*click)(void *context);
+    void *context;
+};
+TrayIcon g_tray[desk::Taskbar::kMaxTray] = {};
 
 // Where the icons are (backlog item 41). The desktop keeps the places in
 // C:\.config\icons.ini: [system] by label, [files] by the file's name, each
@@ -1177,7 +1182,13 @@ void start_taskbar(void *)
         g_settings_items[2].icon = &gfx::network_icon_16();
         g_settings_items[2].flags = 0;
     }
-    g_bar->set_tray_icon(g_tray_icon, g_tray_click, g_tray_context);
+    if (bluetooth() != nullptr) {
+        g_settings_items[3].icon = &gfx::bluetooth_icon_16();
+        g_settings_items[3].flags = 0;
+    }
+    for (int i = 0; i < desk::Taskbar::kMaxTray; i++) {
+        g_bar->set_tray_icon(i, g_tray[i].icon, g_tray[i].click, g_tray[i].context);
+    }
     {
         fs::Ini ini;
         load_settings("icons", ini);
@@ -1200,14 +1211,15 @@ void start_taskbar(void *)
 
 } // namespace
 
-void set_tray_icon(const gfx::Bitmap *icon, void (*click)(void *context), void *context)
+void set_tray_icon(int place, const gfx::Bitmap *icon, void (*click)(void *context), void *context)
 {
     const prog::InCall in_call;
-    g_tray_icon = icon;
-    g_tray_click = click;
-    g_tray_context = context;
+    if (place < 0 || place >= desk::Taskbar::kMaxTray) {
+        return;
+    }
+    g_tray[place] = {icon, click, context};
     if (g_bar != nullptr) {
-        g_bar->set_tray_icon(icon, click, context);
+        g_bar->set_tray_icon(place, icon, click, context);
     }
 }
 
@@ -1292,6 +1304,7 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
     // the board that was time added to every start.
     os::start_timer(kInstallAfterUs, 0, [](void *) { install_programs(); }, nullptr);
     start_network();
+    start_bluetooth();
     // The taskbar, the Start menu and the icons are a process of their own
     // (backlog item 21), started by init at its line of startup.txt and
     // again whenever it ends (item 39). With the file already done, or with

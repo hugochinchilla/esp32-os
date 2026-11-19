@@ -2,7 +2,7 @@
 title: "Alt+F4 on the desktop and the logo key with D"
 date: 2026-11-19
 by: owner+agent
-status: to-confirm
+status: decided
 area: desktop
 summary: "Alt+F4 with no window in the focus opens Shut Down; logo+D minimises every window, again brings them back; the logo key acts when released (backlog 76)"
 ---
@@ -13,7 +13,8 @@ Backlog item 76; the story is in
 The owner's, 2026-11-19: Alt+F4 on the desktop opens the Shut Down dialog;
 the logo key with D minimises everything and shows the desktop.
 
-As built, the agent's readings, his to overrule:
+As built, the agent's readings. The owner confirmed all three on 2026-11-19
+("si, son correctas"), the day the board check passed:
 
 - **"On the desktop" is "no window has the focus"**: no window open, all of
   them minimised, or a click on the desktop, which already took the focus

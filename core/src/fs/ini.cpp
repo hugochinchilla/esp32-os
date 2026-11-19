@@ -173,6 +173,14 @@ bool Ini::set(const char *section, const char *key, const char *value)
     size_t vs, ve, se;
     bool sf;
     if (find(section, key, vs, ve, se, sf)) {
+        // A value that was empty ("key = "): the new one goes one space
+        // after the sign, wherever the line's own spaces ended.
+        if (vs == ve && vs > 0 && text_[vs - 1] == '=' && value[0] != 0) {
+            while (ve < size_ && space(text_[ve])) {
+                ve++;
+            }
+            return replace(vs, ve - vs, value) && replace(vs, 0, " ");
+        }
         return replace(vs, ve - vs, value);
     }
     char line[160];

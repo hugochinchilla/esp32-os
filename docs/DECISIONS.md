@@ -183,6 +183,7 @@ Processes, tasks, signals, init, OS calls, memory.
 - [Watchdog, crash record and error screen](decisions/watchdog-crash-record-error-screen.md) (2026-11-17, agent, to-confirm): Heartbeat watchdog, a crash record kept over the restart, and the error screen (backlog 7)
 - [Services are lines of the start-up file](decisions/services-start-up-file.md) (2026-11-18, owner, decided): `telnetd` and `vncd` are lines of init's start-up file; a Services dialog and commands edit them (backlog 62)
 - [Sound: the port, the beeper and the system's sounds](decisions/sound-port.md) (2026-11-18, owner+agent, to-confirm): A Sound port with two voices, samples and an emulated PC beeper; silent on the board, real on the PC and in the browser (backlog 58, 59)
+- [Bluetooth keyboard and mouse](decisions/bluetooth-keyboard-and-mouse.md) (2026-11-19, owner+agent, to-confirm): BLE HID host with NimBLE: pairs by itself when a keyboard or mouse is missing, no code, a switch in bluetooth.ini (backlog 51)
 
 ### storage
 
@@ -221,7 +222,7 @@ Window manager, menus, taskbar, themes, icons, pointer.
 - [Slow repaints: faster drawing first](decisions/faster-drawing-first.md) (2026-11-18, owner, decided): Large windows painted slowly (backlog 65): fix the drawing code first, measure, kept window pictures only if still needed
 - [The hourglass on demand](decisions/hourglass-on-demand.md) (2026-11-18, owner, decided): A program asks for the hourglass with `os::ui::set_hourglass`; it shows over its client area only (backlog 49)
 - [The mouse wheel](decisions/mouse-wheel.md) (2026-11-18, owner+agent, decided): The wheel scrolls what is under the pointer; how far, and which widgets take it (backlog 61)
-- [Alt+F4 on the desktop and the logo key with D](decisions/desktop-shortcuts.md) (2026-11-19, owner+agent, to-confirm): Alt+F4 with no window in the focus opens Shut Down; logo+D minimises every window, again brings them back; the logo key acts when released (backlog 76)
+- [Alt+F4 on the desktop and the logo key with D](decisions/desktop-shortcuts.md) (2026-11-19, owner+agent, decided): Alt+F4 with no window in the focus opens Shut Down; logo+D minimises every window, again brings them back; the logo key acts when released (backlog 76)
 
 ### programs
 

@@ -9,11 +9,13 @@
 
 #include "core/fs/memory_volume.hpp"
 #include "core/fs/samples.hpp"
+#include "core/input/bluetooth.hpp"
 #include "core/net/wifi.hpp"
 #include "core/proc/table.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/widgets.hpp"
 #include "core/wm/wm.hpp"
+#include "../fake_bluetooth.hpp"
 #include "../fake_wifi.hpp"
 #include "../host_adapters.hpp"
 
@@ -430,6 +432,7 @@ void test_dialogs()
         {"Display", "Display", &shell::display_dialog, 20}, // the window and nineteen controls (five more for the Resolution page)
         {"Screen Saver", "Screen Saver", &shell::screen_saver_dialog, 11}, // by number: the window and ten controls
         {"Network", "Network", &shell::open_network, 14},
+        {"Bluetooth", "Bluetooth", &shell::open_bluetooth, 12}, // the window and eleven controls
         {"Services", "Services", &shell::services_dialog, 8}, // the window and seven controls
         {"Shut Down", "Shut Down Chinchilla", &shell::shut_down_dialog, 6}, // by number (os::ui): the window and five controls
         {"Task Manager", "Task Manager", &shell::open_task_manager, 20},
@@ -657,6 +660,9 @@ int main()
     static host::MemoryKeyStore settings;
     static net::Manager wifi(radio, settings);
     shell::set_network(&wifi);
+    static host::FakeBluetooth bluetooth_radio;
+    static bt::Manager bluetooth(bluetooth_radio, &storage);
+    shell::set_bluetooth(&bluetooth);
     shell::start(desktop, system_, storage, memory);
     desktop.start();
     desktop.set_animations(false);

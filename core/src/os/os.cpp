@@ -25,6 +25,7 @@ Kit g_kit;
 uint32_t g_blocks = 0;
 uint32_t g_bytes = 0;
 net::Manager *g_network = nullptr;
+bt::Manager *g_bluetooth = nullptr;
 uint32_t g_saver_wait = 0; // seconds; 0: no screensaver is set
 
 // The screensaver: one object for good, a few words when it is not running
@@ -87,6 +88,11 @@ void install_network(net::Manager *wifi)
 {
     const prog::InCall in_call;
     g_network = wifi;
+}
+void install_bluetooth(bt::Manager *bluetooth)
+{
+    const prog::InCall in_call;
+    g_bluetooth = bluetooth;
 }
 void install_sound(ports::Sound *output)
 {
@@ -455,6 +461,12 @@ net::Manager *network()
 {
     const prog::InCall in_call;
     return g_network;
+}
+
+bt::Manager *bluetooth()
+{
+    const prog::InCall in_call;
+    return g_bluetooth;
 }
 
 /* ---- Terminal sessions ----------------------------------------------------------- */

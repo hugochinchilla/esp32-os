@@ -18,6 +18,7 @@
 
 #include "core/fs/fs.hpp"
 #include "core/fs/ini.hpp"
+#include "core/input/bluetooth.hpp"
 #include "core/job/job.hpp"
 #include "core/net/wifi.hpp"
 #include "core/ports.hpp"
@@ -202,6 +203,9 @@ bool launch(const char *program);
 // nullptr: this board has none. A program asks each time and does not keep
 // the pointer.
 net::Manager *network();
+// The Bluetooth service: the keyboards and mice connected, remembered and
+// in range. nullptr: this machine has none. Asked for each time, not kept.
+bt::Manager *bluetooth();
 
 /* ---- Terminal sessions ----------------------------------------------------------- */
 
@@ -333,6 +337,8 @@ void install(const Kit &kit);
 const Kit &installed_kit(); // for the other files of core/os
 // The Wi-Fi service, when the board has one (before or after install()).
 void install_network(net::Manager *wifi);
+// The Bluetooth service, when the machine has one (before or after install()).
+void install_bluetooth(bt::Manager *bluetooth);
 // The sound output, when the machine has one (before or after install()).
 // Without one, or with nullptr, the calls reach sound::silence().
 void install_sound(ports::Sound *output);

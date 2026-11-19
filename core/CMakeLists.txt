@@ -46,6 +46,8 @@ set(CORE_SRCS
     src/sound/mixer.cpp
     src/sound/sound.cpp
     src/init/init.cpp
+    src/input/bluetooth.cpp
+    src/input/hid.cpp
     src/os/os.cpp
     src/os/tcp.cpp
     src/os/ui.cpp
@@ -72,6 +74,8 @@ set(CORE_SRCS
     src/shell/apps.cpp
     src/shell/gallery.cpp
     src/shell/welcome.cpp
+    src/shell/bluetooth.cpp
+    src/shell/bluetooth_service.cpp
     src/shell/boot.cpp
     src/shell/browser.cpp
     src/shell/cactus_patch.cpp

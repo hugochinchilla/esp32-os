@@ -73,6 +73,8 @@ tools/dbg.py stats
 tools/dbg.py wifi scan                   # networks in range
 tools/dbg.py wifi connect "My network"   # asks for the password, not shown
 tools/dbg.py wifi                        # link, address, signal
+tools/dbg.py bt scan                     # Bluetooth keyboards and mice: connected, remembered, heard
+tools/dbg.py bt pair c4:9d:ed:01:02:03   # one that is in pairing mode
 ```
 
 Once the board has joined a Wi-Fi network, any VNC viewer can show and
