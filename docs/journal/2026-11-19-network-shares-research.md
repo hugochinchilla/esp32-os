@@ -75,7 +75,47 @@ libsmb2 in it has ever run anywhere.
   flash's 76 to 90 KB/s and reading from a share to the radio's 270 to
   400 KB/s, whatever carries the bytes.
 
+## The same evening: a client and a server, as optional programs
+
+The owner read the findings and wrote twice: "Puede ser un programa
+externo o ha de ser parte del firmware? Estaría bien que fuera un servicio
+opcional", and "Quiero que sea cliente y servidor, pueden ser dos
+programas". Recorded in
+[the decision](../decisions/network-shares.md); the document was reworked
+for it.
+
+What was found for the two questions:
+
+- **Optional costs nothing either way.** libsmb2 keeps 0.3 KB of static
+  RAM for the client and 1.6 KB for the server while unused; what costs
+  is a connection. A line each in the start-up file, off by default, as
+  `telnetd` and `vncd`.
+- **A program file is possible but three things are missing**: a program
+  file that is a service with no window, an OS call by which a program
+  provides a drive, and sockets for loaded programs. The last was made
+  exact by listing what libsmb2's archive asks for from outside itself:
+  50 names, among them `malloc` and its family, the BSD sockets,
+  `select` and `poll`. Program files get none of those today.
+- **The server was measured too**, two more builds: server alone (an
+  empty table of request functions) 2,037,504 bytes, 88,240 more than
+  today; client and server 2,088,848, 139,584 more. So two program files
+  carry most of the library twice (about 120 and 90 KB), because the
+  loader shares nothing between programs.
+- **The server side did not link under ESP-IDF as it is**: `gethostname`
+  is missing there. One function fixed it. A sign that this half has not
+  been run on an ESP32 before.
+- Not tried: building libsmb2 as a program file. Whether the loader
+  takes 120 KB of someone else's C is the first thing the board turn
+  would say.
+
+The recommendation became: SMB both ways, two programs (`netdrive`,
+`smbd`), as program files if a first board turn shows the loader takes
+the library and what RAM a connected share costs, inside the firmware
+otherwise.
+
 ## What is left
 
-Backlog item 80 stays `todo` until the owner chooses. The next step, if
-he takes the recommendation, is the board measurement.
+Backlog item 80 stays `todo`. The owner has still to say: program files
+or firmware, whether program files may have sockets, and the server's
+protocol. The next step, if he takes the recommendation, is the board
+measurement with a throwaway program file.

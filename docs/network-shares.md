@@ -2,8 +2,11 @@
 
 Research for backlog item 80 (the owner's idea, 2026-11-19: "carpetas
 compartidas en red con un protocolo tipo samba, si se puede, o algo mas
-ligero si no"). Nothing is built and nothing is decided here: this is the
-comparison the owner chooses from. The story of how it was made is in
+ligero si no"). Nothing is built here: this is the comparison the owner
+chooses from. What he has said since is in
+[the decision](decisions/network-shares.md): he wants a client and a
+server, as two programs, each an optional service, outside the firmware if
+that can be done. The story of how it was made is in
 [the journal](journal/2026-11-19-network-shares-research.md).
 
 ## The short answer
@@ -23,12 +26,19 @@ comparison the owner chooses from. The story of how it was made is in
   answer, and today that would stop every program's file access, C:
   included. That has to be changed first whatever protocol is chosen
   (see "What the file layer needs").
-- **Recommended:** the board as an SMB client with libsmb2, started with a
-  one-day board measurement of the RAM. If that measurement is bad, the
-  fallback is WebDAV with our own small client on the HTTP code the browser
-  already has. A server on the board (so that a PC sees C:) is a separate,
-  later question; if it is wanted, FTP is the cheap way and SMB the
-  expensive one.
+- **A server fits too.** libsmb2 has a server side. Linked alone it adds
+  88 KB; client and server together add 140 KB, because they share most
+  of the library.
+- **Both can be program files instead of parts of the firmware**, which
+  is what the owner asked. Three things the system does not have yet are
+  needed for that, all of them general (see "In the firmware or as
+  program files").
+- **Recommended:** an SMB client and an SMB server with libsmb2, two
+  programs, each started by a line of the start-up file as `telnetd` and
+  `vncd` are, the client first. Begin with one board turn that loads the
+  client as a file and measures its RAM. If that goes badly, the
+  fallbacks are the same code inside the firmware, and then WebDAV with
+  our own small client.
 
 ## What the board has to give
 
@@ -257,57 +267,175 @@ writes files).
 
 ## The board as a server
 
-The other direction: a PC opens the board's C:. It answers a different
-need (putting files on the board, the DOOM1.WAD problem) that item 77
-(files copied when flashing) and `dbg.py put` already cover in part.
+The other direction: a PC opens the board's C: as `\\chinchilla\c`. The
+owner wants it (2026-11-19: "quiero que sea cliente y servidor, pueden
+ser dos programas"). It also answers the DOOM1.WAD problem: a file is
+dragged to the board from the PC's own file manager.
 
 | | What a PC needs | Cost on the board | Notes |
 | --- | --- | --- | --- |
-| FTP server | Any FTP client; Windows Explorer and FileZilla | About 600 lines of ours as one more `inetd` service, as `telnetd` is | No password, or one in the clear, like telnet here. The cheap, period answer |
+| SMB server with libsmb2 | Nothing: Windows, macOS and Linux open `\\chinchilla` | **+88 KB of flash measured** alone, +19 KB beside the client; about 1,000 to 1,500 lines of ours that answer each request from our files | The real thing. See below |
+| FTP server | An FTP client; Windows Explorer and FileZilla | About 600 lines of ours | No password, or one in the clear, like telnet here. Cheap and of the period, but a program on the PC, not a drive |
 | WebDAV server | Finder, GNOME Files, Windows (deprecated) mount it as a drive | About 1,000 lines on the web server the remote screen has (`core/net/web.cpp`) | The clients are picky; each needs testing |
-| SMB server | Nothing: the board shows up as `\\chinchilla` | libsmb2 has a server side too (an example in its tree, password logins only). Much more code in use, long-lived connections, and Windows 11 insists on signing and a password | The real thing and by far the most work; not for a first step |
 
-All of them need the same care as any second writer of C:: the one lock,
-and files that programs have open.
+### An SMB server with libsmb2
+
+The library takes the connections, the logging in and the signing, and
+calls a table of our functions, one per request: connect to a share, open,
+close, read, write, list a folder, ask about a file, rename, remove. Its
+own example (`examples/smb2-server-sync.c`, 550 lines) serves a pretend
+disk; ours would answer from `fs::Storage`.
+
+**Measured here**, as the client was (compiled and linked, never run):
+
+| | Image | More than today |
+| --- | ---: | ---: |
+| Today | 1,949,264 | |
+| Client only | 2,069,552 | 120,288 |
+| Server only (an empty table of functions) | 2,037,504 | 88,240 |
+| Client and server | 2,088,848 | 139,584 |
+
+Static internal RAM: 1.6 KB more with the server. Our own functions that
+answer the requests are not in these figures (some 10 to 15 KB more).
+
+What to know before choosing it:
+
+- **It runs its own loop** (`smb2_serve_port` waits on its sockets and
+  returns when told to stop), so it is a task of its own with its own
+  stack, not one more service inside `inetd`. That fits "a program of its
+  own" and "only real tasks are listed".
+- **It did not link under ESP-IDF as it is**: `gethostname` is missing
+  there. One function of ours fixed it. Nobody seems to have run this
+  server on an ESP32 before us; the client is the well-trodden half.
+- **Windows 11 will want a name and a password.** Since 24H2 it signs
+  every connection and refuses guests, so the server needs one account
+  (a name and a password in its settings file). Linux and macOS can
+  connect as guests if the server allows it. The machine still has no
+  logins of its own; this is the share's password.
+- **Each kind of PC asks in its own way.** Windows Explorer, Finder and
+  GNOME Files each send requests the others do not (what a volume is
+  called, how much is free, alternate streams, change notices). Expect a
+  round of testing and fixing per kind of PC; start with the owner's.
+- **It is a second writer of C:.** The one lock already makes single
+  calls safe. A file a program has open while the PC replaces it, and the
+  six open files in the whole machine, need rules.
+- **Each connected PC costs RAM** for as long as it stays connected: a
+  context, its buffers, a socket. Two connections at most to start.
+- **Finding the board**: it already answers to `chinchilla.local`;
+  announcing `_smb._tcp` over mDNS puts it in Finder's and GNOME's
+  network lists. Windows' list needs WS-Discovery, which is more code;
+  typing `\\chinchilla` works without it.
+
+## In the firmware or as program files
+
+The owner's question, 2026-11-19: "puede ser un programa externo o ha de
+ser parte del firmware? Estaría bien que fuera un servicio opcional".
+
+**Optional is free either way.** libsmb2 keeps almost nothing while it is
+not used (0.3 KB of static RAM for the client, 1.6 KB for the server).
+What costs internal RAM is a connected share or a listening server, so a
+service that is off costs nothing that matters, built in or not. Each
+would be a line of the start-up file, off by default, with a tick box in
+Services and `service NAME start` and `stop`, exactly as `telnetd` and
+`vncd` ([decision](decisions/services-start-up-file.md)). Suggested
+names: `smbd` for the server, `netdrive` for the client.
+
+**It can be a program file**, as Chess and Culebra are (`.app`, loaded
+from `C:\Programs` into external RAM, item 27). What that buys: the
+firmware does not carry it, somebody who does not want it deletes a file,
+it can come from the store (item 78), and the LGPL library is a file of
+its own that can be replaced, which is the cleanest way to meet that
+licence. Three things are missing today, and none is special to SMB:
+
+| Missing | Today | What is needed |
+| --- | --- | --- |
+| A program with no window | A loaded program is started from the Start menu, has a window, and is unloaded when its last window closes | A kind of program file that init starts from a line of the start-up file and that stays until stopped: a service in a file. Screensavers as files (item 79) ask for nearly the same |
+| A program that provides a drive | Drives are mounted by the firmware at start-up; programs only use them | An OS call, `os::file::mount(letter, the drive's functions)` and `unmount`. The file layer then calls into the loaded file from other tasks, so stopping the service must first close what is open on the drive |
+| Sockets for a loaded program | A loaded program reaches only what the firmware exports by name: the OS calls and a short list of libc. Its network is `os::tcp`, four outgoing connections that never wait | libsmb2 asks for 50 names from outside itself (listed here by linking it): `malloc`, `calloc`, `realloc`, `free`, `strdup`, the BSD sockets (`socket`, `connect`, `bind`, `listen`, `accept`, `select`, `poll`, `read`, `write`, `close`, `getaddrinfo`, `setsockopt`...), `time`, a random number, and string functions that are mostly exported already. Either those are exported to program files (a new rule: today programs get OS calls only), or libsmb2's one socket file is rewritten on `os::tcp`, which the server cannot use because `os::tcp` does not listen |
+
+Three more things to know:
+
+- **Two files carry the library twice.** The loader has no libraries
+  shared between programs. Client and server as two files are about 120
+  and 90 KB on C: (and in external RAM while both run) against 140 KB as
+  one. That is cheap on a 9 MB drive and 8 MB of external RAM. One file
+  that does both is the other way; so is a shared library file, which
+  would be a new thing for the loader to learn.
+- **The firmware does not shrink until item 77 or 78.** Today the
+  programs that come with the system are carried inside the firmware and
+  copied to `C:\Programs` at start-up, so a bundled `.app` saves no
+  flash. Once files reach C: by the flash script (item 77, being built)
+  or the store (item 78), it does.
+- **Not known: whether the loader takes it.** The largest program file
+  today is Chess, 52 KB of our own C++. libsmb2 is 120 KB of somebody
+  else's C, built as position-independent code for the first time. The
+  loader's limits (1 MB a file) are far away, but only a try says
+  whether it loads and runs.
+
+The work that stays in the firmware in every case is the file layer's
+(a lock per drive, timeouts, the listing kept): a drive that can be slow
+is the system's business, not the driver's.
+
+| | In the firmware, a service line each | Program files |
+| --- | --- | --- |
+| Optional | Yes: off costs 0.3 to 1.6 KB of RAM, and 140 KB of flash always | Yes: off costs nothing; deleted costs nothing |
+| Works with what exists | Yes | After the three missing pieces above |
+| Extra work | None | About three days, all of it reusable (items 78 and 79 need the first piece, any later driver needs the second and third) |
+| Risk | Low | The loader and a large C library have not met |
+| Licence | LGPL part inside the firmware | LGPL part in a file of its own |
 
 ## Recommendation
 
-1. **SMB client with libsmb2, shown as a drive letter.** It is what the
-   owner asked for, it needs nothing installed on a Windows PC, a Mac or a
-   NAS, the flash cost is known and small (120 KB of 3 MB), and the
-   library is made for boards like this one.
-2. **Measure before building.** One board turn with a throwaway command
-   (`dbg.py` or the Terminal) that connects to a share, lists a folder and
-   reads a 1 MB file: free internal RAM and largest block before, during
-   and after; speed; `dbg.py misses`. It also needs a share to connect to
-   (see the questions). If the internal RAM is under about 30 KB, go on;
-   if not, try the library's memory in external RAM; if that fails, fall
-   back to WebDAV.
-3. **Then the file layer** (a lock per drive, timeouts, the listing kept,
+1. **SMB both ways with libsmb2**: `netdrive`, the client, which shows a
+   share as a drive letter, and `smbd`, the server, which shows C: to the
+   PCs. Two programs, each a line of the start-up file, off until ticked
+   in Services.
+2. **As program files, if the first board turn says they can be.** That
+   turn is the measurement the backlog asked for, done on a file from the
+   start: a throwaway program file with libsmb2 inside connects to a
+   share, lists a folder and reads 1 MB. It answers three things at once:
+   does the loader take the library, what internal RAM a connected share
+   costs (free and largest block before, during, after), and the speed,
+   with `dbg.py misses` after. It needs the sockets exported to program
+   files, and a share to connect to.
+3. **If the file does not load or run**, the same code goes inside the
+   firmware behind the same `mount` call, still two optional services,
+   and moves out later. **If the RAM is too much** (over about 30 KB),
+   try the library's memory in external RAM; if that fails, WebDAV with
+   our own client.
+4. **Then the file layer** (a lock per drive, timeouts, the listing kept,
    delete without the Trash), tested on the PC with a volume that is slow
-   and fails on purpose. This is most of the work and none of it depends
-   on the protocol.
-4. **Then the volume and "Map Network Drive"**, tested on the PC against a
-   Samba server, then on the board.
-5. **A server on the board is left for later**, as FTP if at all.
+   and fails on purpose. Most of the client's work, and none of it
+   depends on the protocol.
+5. **Then the client** with "Map Network Drive", tested on the PC against
+   a Samba server, then on the board.
+6. **Then the server**, tested from the owner's own PC first.
 
-Size: the backlog says L, and that still looks right: about a day for the
-measurement, two to three for the file layer, two to three for the volume
-and the program.
+Size: the backlog says L for the idea; with a server and program files it
+is two L items. Roughly: one day for the measurement, three for the
+pieces program files lack, two to three for the file layer, two to three
+for the client and its program, four to five for the server with a round
+of testing against each kind of PC.
 
 ## Questions for the owner
 
-1. SMB with libsmb2 as recommended, or one of the lighter ones?
-2. What would the board connect to: a Windows PC, a Linux laptop with
-   Samba, a NAS? It decides what the measurement and the tests run
-   against, and whether guests or a password come first.
-3. Is LGPL code in the firmware acceptable?
-4. Where is a share's password kept: NVS beside the Wi-Fi ones, or plain
-   text in `C:\.config\shares.ini`?
-5. Names longer than 63 characters: leave them out of listings, or widen
+Answered on 2026-11-19: client and server, two programs, optional
+services.
+
+1. Program files as recommended (with the firmware as the fallback), or
+   in the firmware from the start?
+2. May program files be given the sockets and `malloc` by name? It is a
+   change to the rule that programs ask through the OS calls only.
+3. Is the server SMB too, as recommended, or is FTP enough for that
+   direction?
+4. What would the board connect to, and what would connect to it: a
+   Windows PC, a Linux laptop with Samba, a NAS? It decides what the
+   measurement and the tests run against.
+5. Is LGPL code acceptable, in the firmware or in a file beside it?
+6. Where are passwords kept (a share's, and the server's own account):
+   NVS beside the Wi-Fi ones, or plain text in `C:\.config`?
+7. Names longer than 63 characters: leave them out of listings, or widen
    names and paths everywhere?
-6. Is the other direction (a PC opening the board's C:) wanted too, and
-   is FTP enough for it?
 
 ## Sources
 
@@ -324,7 +452,11 @@ and the program.
   <https://www.neowin.net/news/microsoft-deprecates-three-more-windows-features>.
 - An ESP-IDF WebDAV client that shows the method set is enough in
   practice, <https://github.com/nopnop2002/esp-idf-webdav-client>.
-- This repository: `core/include/core/ports.hpp`, `core/include/core/fs/fs.hpp`,
+- libsmb2's server side: `include/smb2/libsmb2.h` (`struct smb2_server`,
+  `smb2_serve_port`) and `examples/smb2-server-sync.c`.
+- This repository: `tools/gen_exports.py`, `tools/build_programs.sh`,
+  `docs/decisions/programs-loaded-from-files.md`,
+  `core/include/core/ports.hpp`, `core/include/core/fs/fs.hpp`,
   `core/src/fs/fs.cpp`, `core/src/shell/file_ops.cpp`,
   `core/src/shell/listing.cpp`, `core/include/core/www/http.hpp`,
   `core/include/core/os/tcp.hpp`, `firmware/os/sdkconfig.defaults`.

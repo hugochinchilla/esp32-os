@@ -199,6 +199,7 @@ File system, folders, the Trash, settings files, saving.
 - [Chosen for file dates](decisions/file-dates.md) (2026-11-17, agent, to-confirm): One date per file, when it was last written, in UTC seconds (backlog 24)
 - [The Trash is the File manager on C:\.trash](decisions/trash-is-the-file-manager.md) (2026-11-17, owner, decided): There is no Trash window: a File manager window that shows C:\.trash is the Trash
 - [Change notices from the file system](decisions/change-notices.md) (2026-11-18, owner+agent, decided): Storage says which folder changed; the desktop reads its folder only then, in a job, not every 2 s (backlog 66)
+- [Shared folders over the network](decisions/network-shares.md) (2026-11-19, owner, open): The owner wants an SMB-like client and a server, two programs, optional services, outside the firmware if possible; the rest is open (backlog 80)
 
 ### desktop
 
