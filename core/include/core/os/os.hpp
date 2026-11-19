@@ -202,8 +202,9 @@ bool shut_down();
 bool launch(const char *program, const char *argument = nullptr);
 // For a program that runs one copy at a time and can open one more thing
 // while it runs (another picture, another folder): `opened` is called, as
-// the program, when it is started again with an argument. Without it the
-// program's window only comes forward. Once, from its way in.
+// the program, when it is started again, with the argument it was started
+// with (nullptr: none). Without it the program's window only comes forward.
+// Once, from its way in.
 using OpenFn = void (*)(const char *argument);
 void accept_open(OpenFn opened);
 

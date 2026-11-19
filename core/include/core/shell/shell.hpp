@@ -171,10 +171,8 @@ bool save_settings(const char *program, const fs::Ini &ini);
 void open_browser(const char *address);
 // The Picture viewer with a picture (nullptr: asks for one).
 void open_picture(const char *path);
-// Tests: decode the picture shown to the end now. Timings of the last
-// picture (µs): decoding, opening to last row, longest timer slice.
-void finish_picture();
-const uint32_t *picture_timings();
+// Timings of the Picture viewer's last picture (µs): decoding, opening to
+// last row, longest timer slice (programs/test_hooks.hpp has the look).
 constexpr int kPictureTimings = 3;
 // The Terminal: a terminal emulator in a window, the device of a session
 // that runs as a process of its own (`sh`). Every call opens another one,

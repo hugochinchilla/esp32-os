@@ -32,7 +32,6 @@ MOVED = [
     "task_manager.cpp",
     "terminal.cpp",
     "trash.cpp",
-    "viewer.cpp",
     "welcome.cpp",
 ]
 

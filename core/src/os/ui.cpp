@@ -2081,6 +2081,17 @@ bool in_front(Window window)
     return w != nullptr && os::in_front(*w);
 }
 
+bool has_dialog(Window window)
+{
+    const prog::InCall in_call;
+    Behind *w = behind(window);
+    if (w == nullptr || os::blocker(*w) == nullptr) {
+        return false;
+    }
+    os::bring_forward(window);
+    return true;
+}
+
 bool take_screen(Window window, Screen &out, int coarse)
 {
     const prog::InCall in_call;

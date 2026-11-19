@@ -19,6 +19,11 @@ games::CactusField &cactus_patch_field();
 void cactus_patch_refresh();
 int cactus_patch_seconds();
 
+// The Picture viewer: decode the picture shown to the end now; the timings
+// of the last picture (shell::kPictureTimings of them).
+void finish_picture();
+const uint32_t *picture_timings();
+
 // Chess: the game in its window, whether the computer is thinking, the
 // side the user plays, the status line, and whose turn it is worked out
 // again after the game was changed directly.

@@ -260,7 +260,7 @@ bool run_file(const char *path, char *why, size_t capacity, const char *argument
                     opened = l.opened;
                 }
             }
-            if (opened != nullptr && argument != nullptr) {
+            if (opened != nullptr) {
                 const PathArg words(argument);
                 in_process(running, nullptr, [opened, words] { opened(words.get()); });
             }

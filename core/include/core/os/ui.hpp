@@ -119,6 +119,10 @@ void set_document(Window window, const char *path);
 // Another icon for the title bar and the taskbar (16x16; nullptr: none).
 void set_icon(Window window, const gfx::Bitmap *icon);
 bool in_front(Window window);                     // it is the window in use
+// True if a dialog is over the window (a file dialog, a question): the
+// window is brought forward, with its dialog. A program asks before it
+// opens a dialog of its own over it.
+bool has_dialog(Window window);
 // The size of the client area, as `w` and `h`.
 gfx::Rect client_size(Window window);
 // Another size for the client area. A window on the screen stays where it

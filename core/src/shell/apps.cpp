@@ -11,7 +11,6 @@ namespace shell {
 
 namespace {
 
-void open_viewer() { open_picture(nullptr); }
 void open_file_manager() { open_folder(nullptr); }
 
 // Each program with the function that gives its icon (icons are built on
@@ -27,7 +26,6 @@ constexpr uint32_t kRoomy = 8 * 1024;
 const Entry kApps[] = {
     {{"About Chinchilla", nullptr, &open_about, false, true}, &gfx::mascot_16},
     {{"File manager", nullptr, &open_file_manager, false, true, kRoomy}, &gfx::files_icon_16},
-    {{"Picture viewer", nullptr, &open_viewer, false, true, kRoomy}, &gfx::viewer_icon_16},
     {{"Task Manager", nullptr, &open_task_manager, false, true, kRoomy}, &gfx::tasks_icon_16},
     {{"Terminal", nullptr, &open_terminal, true}, &gfx::terminal_icon_16},
     // A page is read, laid out and fetched on its task, with addresses of

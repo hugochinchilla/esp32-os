@@ -25,6 +25,7 @@
 #include "core/shell/boot.hpp"
 #include "core/sys/log.hpp"
 #include "core/shell/shell.hpp"
+#include "../programs/test_hooks.hpp"
 #include "core/net/posix_dialer.hpp"
 #include "core/net/posix_tcp.hpp"
 #include "core/os/tcp.hpp"

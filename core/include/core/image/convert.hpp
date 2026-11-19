@@ -41,6 +41,8 @@ class Converter : public RowSink {
 public:
     static constexpr int kMaxWidth = 2048; // of the result
 
+    Converter(); // in the system's code, as the Decoder's
+
     // Its working memory (sums and error rows), once; false if none.
     bool ready(ports::Memory &memory);
     // Gives that memory back.

@@ -89,6 +89,8 @@ const DitherInfo &dither_info(Dither d)
     return kInfo[i >= 0 && i < kDitherCount ? i : 0];
 }
 
+Converter::Converter() = default;
+
 bool Converter::ready(ports::Memory &memory)
 {
     if (sums_ == nullptr) {

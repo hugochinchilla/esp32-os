@@ -16,8 +16,6 @@ const Bitmap &editor_icon_16(); // notepad and pencil
 const Bitmap &editor_icon_32();
 const Bitmap &files_icon_16(); // the File manager: an open folder with papers
 const Bitmap &files_icon_32();
-const Bitmap &viewer_icon_16(); // the Picture viewer: a painting on an easel
-const Bitmap &viewer_icon_32();
 const Bitmap &tasks_icon_16(); // the Task Manager
 const Bitmap &tasks_icon_32();
 const Bitmap &snake_icon_16(); // Culebra
