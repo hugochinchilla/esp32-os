@@ -494,6 +494,7 @@ void set_dither(image::Dither d)
 // started again with none: the window there is takes it, or asks which.
 void open_another(const char *path)
 {
+    app::bring_forward(g_window);
     if (ViewerWindow *viewer = app::program<ViewerWindow>(g_window)) {
         viewer->open_path(path);
     }

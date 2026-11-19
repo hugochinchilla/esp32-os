@@ -27,6 +27,7 @@ struct Loaded {
     void *module = nullptr;
     int32_t bytes = 0;               // counted as the process's memory
     os::OpenFn opened = nullptr;     // os::accept_open: it takes one more thing to open while it runs
+    os::file::ChangedFn watching = nullptr; // os::file::watch: it is told of the folders that change
     char *words = nullptr;           // its file's path and what it was asked to open: argv
     char *argv[3] = {};
     int result = 0;                  // what its way in returned
@@ -77,6 +78,7 @@ void sweep(void *)
         os::release(l.words);
         l.words = nullptr;
         l.opened = nullptr;
+        l.watching = nullptr;
         l.pid = proc::kNone;
         l.module = nullptr;
         l.bytes = 0;
@@ -106,6 +108,7 @@ void ended(proc::Pid pid, void *)
             os::release(l.words);
             l.words = nullptr;
             l.opened = nullptr;
+            l.watching = nullptr;
             ask_sweep();
         }
     }
@@ -142,6 +145,26 @@ void accept_open(os::OpenFn opened)
     for (Loaded &l : g_loaded) {
         if (l.module != nullptr && l.pid == pid) {
             l.opened = opened;
+        }
+    }
+}
+
+void watch_files(os::file::ChangedFn changed)
+{
+    const proc::Pid pid = os::self();
+    for (Loaded &l : g_loaded) {
+        if (l.module != nullptr && l.pid == pid) {
+            l.watching = changed;
+        }
+    }
+}
+
+void tell_watchers(const FolderKeys &changed)
+{
+    for (const Loaded &l : g_loaded) {
+        if (l.module != nullptr && !l.gone && l.watching != nullptr) {
+            const os::file::ChangedFn tell = l.watching;
+            in_process(l.pid, nullptr, [tell, changed] { tell(changed); });
         }
     }
 }
@@ -194,11 +217,52 @@ bool program_info(const char *path, app::FileInfo &info)
     return read == ports::FsError::Ok && got == sizeof(info) && app::is_program(info);
 }
 
+// A program that runs already may be all that is asked for: told from the
+// file's header alone, before the rest of it is read.
+static bool running_takes(const char *path, const app::FileInfo &info, const char *argument)
+{
+    char name[proc::Process::kNameSize];
+    process_name(path, info, name, sizeof(name));
+    // What it is asked to open may be on the screen already, in a window
+    // of this program: that window comes forward and nothing is loaded.
+    if (show_document(name, argument)) {
+        return true;
+    }
+    // One copy at a time unless the program says otherwise: opened again,
+    // it is told what to open if it takes that (os::accept_open) and
+    // brings forward the window it chooses; if it does not, its main
+    // window comes forward.
+    if (info.many != 0) {
+        return false;
+    }
+    const proc::Pid running = proc::table().find_by_name(name);
+    wm::Window *window = running != proc::kNone ? manager().main_window_of(running) : nullptr;
+    if (window == nullptr) {
+        return false;
+    }
+    os::OpenFn opened = nullptr;
+    for (const Loaded &l : g_loaded) {
+        if (l.module != nullptr && l.pid == running) {
+            opened = l.opened;
+        }
+    }
+    if (opened != nullptr) {
+        const PathArg words(argument);
+        in_process(running, nullptr, [opened, words] { opened(words.get()); });
+    } else {
+        os::activate(*window);
+    }
+    return true;
+}
+
 bool run_file(const char *path, char *why, size_t capacity, const char *argument)
 {
     const prog::InCall in_call;
     if (g_loader == nullptr) {
         return fail(why, capacity, "this machine cannot load programs");
+    }
+    if (program_info(path, g_info) && running_takes(path, g_info, argument)) {
+        return true;
     }
     Loaded *place = nullptr;
     for (Loaded &l : g_loaded) {
@@ -232,40 +296,6 @@ bool run_file(const char *path, char *why, size_t capacity, const char *argument
     const bool ours = read == ports::FsError::Ok && size > sizeof(info);
     if (ours) {
         memcpy(&info, image, sizeof(info));
-    }
-    // What it is asked to open may be on the screen already, in a window
-    // of this program: that window comes forward and nothing is loaded.
-    if (ours && app::is_program(info)) {
-        char name[proc::Process::kNameSize];
-        process_name(path, info, name, sizeof(name));
-        if (show_document(name, argument)) {
-            os::release(image);
-            return true;
-        }
-    }
-    // One copy at a time unless the program says otherwise: opened again,
-    // the one that runs comes forward, and is told what to open if it
-    // takes that (os::accept_open).
-    if (ours && app::is_program(info) && info.many == 0) {
-        char name[proc::Process::kNameSize];
-        process_name(path, info, name, sizeof(name));
-        const proc::Pid running = proc::table().find_by_name(name);
-        wm::Window *window = running != proc::kNone ? manager().main_window_of(running) : nullptr;
-        if (window != nullptr) {
-            os::release(image);
-            os::activate(*window);
-            os::OpenFn opened = nullptr;
-            for (const Loaded &l : g_loaded) {
-                if (l.module != nullptr && l.pid == running) {
-                    opened = l.opened;
-                }
-            }
-            if (opened != nullptr) {
-                const PathArg words(argument);
-                in_process(running, nullptr, [opened, words] { opened(words.get()); });
-            }
-            return true;
-        }
     }
     void *module = ours && app::is_program(info)
                        ? g_loader->load(static_cast<const uint8_t *>(image) + sizeof(info), size - sizeof(info), reason)

@@ -19,7 +19,6 @@ MOVED = [
     "colour_dialog.cpp",
     "dialogs.cpp",
     "display.cpp",
-    "file_manager.cpp",
     "file_ops.cpp",
     "bluetooth.cpp",
     "network.cpp",

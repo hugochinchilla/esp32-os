@@ -1443,8 +1443,9 @@ private:
 
 // Started again while it runs: the address it was asked for, in the window
 // that is open (none: the window as it is).
-void open_another(const char *address)
+static void open_another(const char *address)
 {
+    app::bring_forward(g_browser);
     if (address == nullptr) {
         return;
     }

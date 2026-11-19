@@ -18,7 +18,7 @@
 #include "core/wm/text_edit.hpp"
 #include "core/wm/widgets.hpp"
 #include "internal.hpp"
-#include "listing.hpp"
+#include "core/shell/listing.hpp"
 
 namespace shell {
 
@@ -784,11 +784,9 @@ void settle()
         desktop_changed();
     }
     if (keys.all || keys.count > 0) {
-        // The File manager's windows are the File manager's to touch.
-        const proc::Pid files = proc::table().find_by_name("File manager");
-        if (files != proc::kNone) {
-            in_process(files, nullptr, [keys] { refresh_folder_windows(keys); });
-        }
+        // A program that shows folders (the File manager) reads them
+        // again itself: its windows are its own to touch.
+        tell_watchers(keys);
     }
     if (msg::queue() != nullptr && !g_settle_wait) {
         g_settle_wait = os::start_timer(kSettleGapUs, 0, &settle_later, nullptr) != 0;
@@ -1198,6 +1196,7 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
         return found != nullptr && start_program(*found, argument, why, sizeof(why));
     };
     kit.accept_open = &accept_open;
+    kit.watch_files = &watch_files;
     os::install(kit);
     // The desktop is a process too: the Start menu, the icons and the
     // taskbar, and the dialogs they open. (It is the window server and the

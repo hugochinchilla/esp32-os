@@ -11,16 +11,14 @@
 
 #include "core/app/app.hpp"
 #include "core/gfx/art.hpp"
+#include "core/shell/files.hpp"
 #include "core/net/wifi.hpp"
 #include "core/sh/sh.hpp"
 #include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
-#include "internal.hpp"
-#include "listing.hpp"
+#include "art.hpp"
 
 namespace shell {
-
-static int program_kind(const char *path);
 
 namespace {
 
@@ -701,7 +699,7 @@ private:
         } else {
             const Listing::Item &it = listing_.item(i);
             char when[24], size[24];
-            sh::date_text(it.modified, network() != nullptr ? &network()->zone() : nullptr, when, sizeof(when));
+            sh::date_text(it.modified, os::network() != nullptr ? &os::network()->zone() : nullptr, when, sizeof(when));
             if (it.folder) {
                 snprintf(t, sizeof(t), "%s%s", when[0] != 0 ? "Folder, " : "Folder", when);
             } else {
@@ -722,7 +720,7 @@ private:
         columns_[1] = {"Size", 70, true, size_cells_};
         columns_[2] = {"Type", 72, false, kind_cells_};
         columns_[3] = {board ? "Free" : "Modified", 110, board, date_cells_};
-        const net::TimeZone *zone = network() != nullptr ? &network()->zone() : nullptr;
+        const net::TimeZone *zone = os::network() != nullptr ? &os::network()->zone() : nullptr;
         for (int i = 0; i < listing_.count(); i++) {
             const Listing::Item &it = listing_.item(i);
             small_[i] = listing_.icon(i, false);
@@ -743,12 +741,11 @@ private:
             char number[24];
             with_commas(it.size, number);
             snprintf(sizes_[i], sizeof(sizes_[i]), "%.13s", number);
-            static const char *const kKinds[] = {nullptr, "Text", "Picture", "Program", "Web page"};
-            const int kind = program_kind(it.name);
+            const char *kind = file_kind(it.name);
             char ext[8];
             fs::path::extension(it.name, ext, sizeof(ext));
-            if (kind != 0) {
-                snprintf(kinds_[i], sizeof(kinds_[i]), "%s", kKinds[kind]);
+            if (kind != nullptr) {
+                snprintf(kinds_[i], sizeof(kinds_[i]), "%s", kind);
             } else if (ext[0] != 0) {
                 for (char *c = ext; *c != 0; c++) {
                     *c = *c >= 'a' && *c <= 'z' ? static_cast<char>(*c - 32) : *c;
@@ -1034,7 +1031,10 @@ private:
 
 } // namespace
 
-void refresh_folder_windows(const FolderKeys &changed)
+// The system's word that folders changed (os::file::watch): the windows on
+// those folders, or inside them, read them again. Nobody calls this after
+// moving or deleting a file: the notice does.
+static void folders_changed(const os::file::Changes &changed)
 {
     for (FolderWindow *w = g_windows; w != nullptr; w = w->next_) {
         if (!w->on_screen() || w->folder()[0] == 0) {
@@ -1059,107 +1059,55 @@ void refresh_folder_windows(const FolderKeys &changed)
     }
 }
 
-// The Trash is the File manager on C:\.trash.
-void open_trash() { open_folder(kTrashFolder); }
-
-void open_folder(const char *path)
+// A folder in a window: the one that shows it comes forward, else it gets
+// a window of its own (nullptr: My Board, the drives). It is what the
+// program does when it starts and each time it is started again
+// (os::accept_open).
+static void open_another(const char *path)
 {
-    const PathArg p(path);
-    in_program("File manager", [p] {
-        const char *want = p.text;
-        // Already shown: bring that window forward.
-        int n = 0; // how many there are: each new one a step down and to the right
-        for (FolderWindow *w = g_windows; w != nullptr; w = w->next_) {
-            if (w->on_screen() && strcmp(w->folder(), want) == 0) {
-                w->refresh();
-                app::bring_forward(w->number());
-                return;
-            }
-            n++;
-        }
-        n %= 8;
-        // Every other folder gets a window of its own.
-        app::Look look;
-        look.title = "My Board";
-        look.x = 96 + n * 24;
-        look.y = 28 + n * 24;
-        look.width = 400;
-        look.height = 300;
-        look.icon = &gfx::folder_icon_16();
-        look.flags = app::kMenuBar;
-        const app::Number number = app::make<FolderWindow>(look);
-        if (number == app::kNone) {
-            no_memory_for("File manager");
+    const char *want = path != nullptr ? path : "";
+    // Already shown: bring that window forward.
+    int n = 0; // how many there are: each new one a step down and to the right
+    for (FolderWindow *w = g_windows; w != nullptr; w = w->next_) {
+        if (w->on_screen() && strcmp(w->folder(), want) == 0) {
+            w->refresh();
+            app::bring_forward(w->number());
             return;
         }
-        FolderWindow *use = app::program<FolderWindow>(number);
-        use->forget_history();
-        use->go_to(want, false);
-        app::show(number);
-    });
-}
-
-// What opens what, by extension: 1 the Editor, 2 the Picture viewer, 3 a
-// program that is loaded and run, 4 the web browser, 0 nothing.
-static int program_kind(const char *path)
-{
-    static const char *const kText[] = {"txt", "log", "ini", "md"};
-    static const char *const kPictures[] = {"bmp", "png", "jpg", "jpeg"};
-    if (is_program_file(path)) {
-        return 3;
+        n++;
     }
-    char ext[8];
-    fs::path::extension(path, ext, sizeof(ext));
-    for (const char *e : kText) {
-        if (strcmp(ext, e) == 0) {
-            return 1;
-        }
+    n %= 8;
+    // Every other folder gets a window of its own.
+    app::Look look;
+    look.title = "My Board";
+    look.x = 96 + n * 24;
+    look.y = 28 + n * 24;
+    look.width = 400;
+    look.height = 300;
+    look.icon = &gfx::folder_icon_16();
+    look.flags = app::kMenuBar;
+    const app::Number number = app::make<FolderWindow>(look);
+    if (number == app::kNone) {
+        message_box("File manager", "There is not enough memory to open the folder.");
+        return;
     }
-    for (const char *e : kPictures) {
-        if (strcmp(ext, e) == 0) {
-            return 2;
-        }
-    }
-    if (strcmp(ext, "htm") == 0 || strcmp(ext, "html") == 0) {
-        return 4;
-    }
-    return 0;
-}
-
-bool has_program_for(const char *path) { return program_kind(path) != 0; }
-
-bool open_file(const char *path)
-{
-    switch (program_kind(path)) {
-    case 1:
-        open_in_editor(path);
-        return true;
-    case 2:
-        open_picture(path);
-        return true;
-    case 3: {
-        // A program in a file: loaded and run.
-        static char text[200];
-        char why[120];
-        if (!run_file(path, why, sizeof(why))) {
-            snprintf(text, sizeof(text), "'%s' could not be run:\n%s.", fs::path::name(path), why);
-            message_box("Run", text);
-        }
-        return true;
-    }
-    case 4:
-        start_program("Vizcacha", path);
-        return true;
-    default:
-        break;
-    }
-    char ext[8];
-    fs::path::extension(path, ext, sizeof(ext));
-    static char text[160];
-    snprintf(text, sizeof(text), "There is no program for %s%s files yet.", ext[0] ? "." : "",
-             ext[0] ? ext : "these");
-    message_box(fs::path::name(path), text);
-    return false;
+    FolderWindow *use = app::program<FolderWindow>(number);
+    use->forget_history();
+    use->go_to(want, false);
+    app::show(number);
 }
 
 } // namespace shell
+
+// One copy, with a window for each folder. On a task of its own where the
+// machine has them: the file system's code runs on its stack too.
+APP_INFO(app::file_info("File manager", 8 * 1024, art::kSmall, art::kSmallInks, art::kLarge, art::kLargeInks));
+
+// argv[1], if there is one, is the folder to show; without it My Board.
+APP_MAIN(int argc, char **argv)
+{
+    os::accept_open(&shell::open_another);
+    os::file::watch(&shell::folders_changed);
+    shell::open_another(argc > 1 ? argv[1] : nullptr);
+    return 0;
+}

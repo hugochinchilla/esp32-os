@@ -17,6 +17,87 @@
 
 namespace shell {
 
+// A folder in the File manager, which is a program file (nullptr: My
+// Board). It opens a window for it, or brings forward the one that shows
+// it.
+void open_folder(const char *path)
+{
+    start_program("File manager", path);
+}
+
+// The Trash is the File manager on C:\.trash.
+void open_trash() { open_folder(kTrashFolder); }
+
+// What opens what, by extension: 1 the Editor, 2 the Picture viewer, 3 a
+// program that is loaded and run, 4 the web browser, 0 nothing.
+static int program_kind(const char *path)
+{
+    static const char *const kText[] = {"txt", "log", "ini", "md"};
+    static const char *const kPictures[] = {"bmp", "png", "jpg", "jpeg"};
+    if (is_program_file(path)) {
+        return 3;
+    }
+    char ext[8];
+    fs::path::extension(path, ext, sizeof(ext));
+    for (const char *e : kText) {
+        if (strcmp(ext, e) == 0) {
+            return 1;
+        }
+    }
+    for (const char *e : kPictures) {
+        if (strcmp(ext, e) == 0) {
+            return 2;
+        }
+    }
+    if (strcmp(ext, "htm") == 0 || strcmp(ext, "html") == 0) {
+        return 4;
+    }
+    return 0;
+}
+
+bool has_program_for(const char *path) { return program_kind(path) != 0; }
+
+const char *file_kind(const char *path)
+{
+    static const char *const kKinds[] = {nullptr, "Text", "Picture", "Program", "Web page"};
+    return kKinds[program_kind(path)];
+}
+
+bool open_file(const char *path)
+{
+    switch (program_kind(path)) {
+    case 1:
+        open_in_editor(path);
+        return true;
+    case 2:
+        open_picture(path);
+        return true;
+    case 3: {
+        // A program in a file: loaded and run.
+        static char text[200];
+        char why[120];
+        if (!run_file(path, why, sizeof(why))) {
+            snprintf(text, sizeof(text), "'%s' could not be run:\n%s.", fs::path::name(path), why);
+            message_box("Run", text);
+        }
+        return true;
+    }
+    case 4:
+        start_program("Vizcacha", path);
+        return true;
+    default:
+        break;
+    }
+    char ext[8];
+    fs::path::extension(path, ext, sizeof(ext));
+    static char text[160];
+    snprintf(text, sizeof(text), "There is no program for %s%s files yet.", ext[0] ? "." : "",
+             ext[0] ? ext : "these");
+    message_box(fs::path::name(path), text);
+    return false;
+}
+
+
 namespace {
 
 bool open_path(const char *full, char *why, size_t capacity)

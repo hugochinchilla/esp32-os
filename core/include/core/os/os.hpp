@@ -289,6 +289,21 @@ int open_files(proc::Pid pid = proc::kNone);
 Error read_file(const char *path, void *data, size_t capacity, size_t &size);
 Error write_file(const char *path, const void *data, size_t size);
 
+// The folders that changed since the program was last told: their keys
+// (fs::path::key), or `all` when there were more than fit.
+struct Changes {
+    uint32_t key[8] = {};
+    int count = 0;
+    bool all = false;
+    // True if `folder` may be one of them.
+    bool has(const char *folder) const;
+};
+// For a program that shows folders: `changed` is called, as the program,
+// a moment after files or folders were made, written, renamed or removed
+// by anyone. Once, from its way in; it ends with the program.
+using ChangedFn = void (*)(const Changes &changed);
+void watch(ChangedFn changed);
+
 } // namespace file
 
 /* ---- Files on the clipboard --------------------------------------------------- */
@@ -359,6 +374,7 @@ struct Kit {
     bool (*shut_down)() = nullptr; // starts Shut Down: programs close, the picture fades, the last screen
     bool (*launch)(const char *program, const char *argument) = nullptr; // a program, by name
     void (*accept_open)(OpenFn opened) = nullptr;
+    void (*watch_files)(file::ChangedFn changed) = nullptr;
     sh::TerminalSession *(*open_session)(ports::ByteSink &device, const char *&why) = nullptr;
 };
 // What the calls work with. The desktop hands it in when it starts.

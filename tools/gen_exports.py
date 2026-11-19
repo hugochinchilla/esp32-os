@@ -29,7 +29,7 @@ import sys
 
 # From the core library: by name.
 CORE = [
-    r"^_ZN2os",  # the OS calls: os::, os::ui::, os::file::...
+    r"^_ZNK?2os",  # the OS calls: os::, os::ui::, os::file::...
     r"^_ZN5shell(11message_box|3ask|16open_file_dialog|16save_file_dialog|12input_dialog|13colour_dialog)E",
     r"^_ZN5shell(13load_settings|13save_settings)E",  # a program's own settings file
     r"^_ZNK?2fs3Ini",  # the settings file's sections and keys
@@ -38,10 +38,17 @@ CORE = [
     r"^_ZNK?2sh15TerminalSession",  # the Terminal's session: what is typed goes in, the size, the hang-up
     r"^_ZN3msg4postE",  # a message to a process, from another task (the Terminal's session writes from its own)
     r"^_ZN3gfx(5shown|7nearest)E",  # a colour of the screen from red, green and blue, and back
+    # What the File manager asks for (core/shell/files.hpp): the Trash, the
+    # file commands and the listing of a folder, which the desktop uses too.
+    r"^_ZNK?5shell7Listing",
+    r"^_ZN5shell(8in_trash|9trashable|11empty_trash|12trash_origin|18restore_from_trash|14move_to_folder)E",
+    r"^_ZN5shell(13delete_asking|10copy_files|9can_paste|11paste_files|9open_file|9file_kind)E",
+    r"^_ZN2sh9date_textE",  # a file's date in words, in the board's time zone
     r"^_ZNK?5image",  # the picture decoders and the conversion to the board's colours
 ]
 # Variables of the core library, by name: few, and each for a reason.
 CORE_DATA = [
+    r"^_ZN5shell7Listing11show_hiddenE$",  # View > Show hidden files: one setting for every listing
     r"^_ZN3gfx7g_themeE$",  # the theme in use: gfx::face() and the like read it in the program's own code
 ]
 # From the core library: every function of these files.

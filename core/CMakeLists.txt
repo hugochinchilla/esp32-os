@@ -77,7 +77,6 @@ set(CORE_SRCS
     src/shell/display.cpp
     src/shell/colour_dialog.cpp
     src/shell/dialogs.cpp
-    src/shell/file_manager.cpp
     src/shell/file_ops.cpp
     src/shell/trash.cpp
     src/shell/listing.cpp

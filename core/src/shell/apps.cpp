@@ -11,8 +11,6 @@ namespace shell {
 
 namespace {
 
-void open_file_manager() { open_folder(nullptr); }
-
 // Each program with the function that gives its icon (icons are built on
 // first use, so the table is filled once).
 struct Entry {
@@ -25,7 +23,6 @@ struct Entry {
 constexpr uint32_t kRoomy = 8 * 1024;
 const Entry kApps[] = {
     {{"About Chinchilla", nullptr, &open_about, false, true}, &gfx::mascot_16},
-    {{"File manager", nullptr, &open_file_manager, false, true, kRoomy}, &gfx::files_icon_16},
     {{"Task Manager", nullptr, &open_task_manager, false, true, kRoomy}, &gfx::tasks_icon_16},
     // A page is read, laid out and fetched on its task, with addresses of
     // 600 bytes on the stack at several depths. ponytail: a first figure,

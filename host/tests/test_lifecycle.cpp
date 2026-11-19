@@ -606,6 +606,7 @@ void test_no_memory()
     shell::start_program("Picture viewer");
     shell::start_program("Terminal");
     shell::start_program("Vizcacha");
+    shell::open_folder(nullptr); // My Board
     shell::open_trash();
     shell::display_dialog();
     shell::screen_saver_dialog();
