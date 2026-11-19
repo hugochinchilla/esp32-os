@@ -10,6 +10,7 @@ set(CORE_SRCS
     src/fs/ini.cpp
     src/fs/memory_volume.cpp
     src/fs/sample_pictures.cpp
+    src/fs/samples.cpp
     src/games/cactus.cpp
     src/games/chess.cpp
     src/games/snake.cpp

@@ -4,7 +4,7 @@ date: 2026-11-17
 by: owner
 status: decided
 area: system
-summary: "Native code loaded from C:, with no protection; the file format and the loader (backlog 27)"
+summary: "Native code loaded from C:, with no protection; the file format and the loader (backlog 27). How the files get there was replaced by backlog 77"
 ---
 
 # Programs loaded from files
@@ -55,7 +55,9 @@ The rest is the agent's, to confirm:
   the menu left alone. In the File manager a `.app` has one picture for
   the kind, not each program's own (the listing keeps no pixels).
 
-- **Programs that come with the system are carried in the firmware and
+- (Replaced on 2026-11-19 by [The files of C: are copied when the board is
+  flashed](files-copied-when-flashing.md), backlog 77; kept as the record.)
+  **Programs that come with the system are carried in the firmware and
   installed** (the owner's choice on a card, 2026-11-17: "Dentro del
   firmware, se instalan"): the firmware build makes `programs/*` into
   `.app` files and carries them as data; at start-up the system writes to

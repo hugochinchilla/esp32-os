@@ -15,31 +15,24 @@ add_custom_command(
     COMMENT "Exports for loaded programs")
 target_sources(${COMPONENT_LIB} PRIVATE ${exports_c})
 
-# The programs that come with the system (backlog item 27; the owner's
-# choice, 2026-11-17): programs/* built into .app files with this build's
-# compiler, checked against the table of exports above, and carried in the
-# firmware as data. The system puts them in C:\Programs at start-up.
+# The programs kept in files (backlog item 27): programs/* built into .app
+# files with this build's compiler and checked against the table of exports
+# above. The firmware does not carry them (backlog item 77): tools/flash.py
+# copies build/programs/*.app to C:\Programs after it has written the
+# firmware.
 set(programs_dir "${CMAKE_BINARY_DIR}/programs")
-set(bundle_c "${CMAKE_CURRENT_BINARY_DIR}/bundle.c")
+set(programs_stamp "${programs_dir}/built.stamp")
 set(repo "${CMAKE_CURRENT_LIST_DIR}/../../..")
-file(GLOB program_folders LIST_DIRECTORIES true "${repo}/programs/*")
-set(program_files "")
-foreach(folder ${program_folders})
-    if(IS_DIRECTORY ${folder})
-        get_filename_component(program ${folder} NAME)
-        list(APPEND program_files "${programs_dir}/${program}.app")
-    endif()
-endforeach()
-file(GLOB_RECURSE program_sources "${repo}/programs/*.cpp" "${repo}/programs/*.hpp"
-     "${repo}/core/include/core/app/*.hpp" "${repo}/core/include/core/os/*.hpp")
+file(GLOB_RECURSE program_sources "${repo}/programs/*.cpp" "${repo}/programs/*.hpp" "${repo}/programs/*.c"
+     "${repo}/programs/*.h" "${repo}/core/include/core/app/*.hpp" "${repo}/core/include/core/os/*.hpp")
 add_custom_command(
-    OUTPUT ${bundle_c} ${program_files}
+    OUTPUT ${programs_stamp}
     COMMAND ${CMAKE_COMMAND} -E env PROGRAMS_OUT=${programs_dir} CXX=${CMAKE_CXX_COMPILER} NM=${CMAKE_NM}
             STRIP=${CMAKE_STRIP} OBJCOPY=${CMAKE_OBJCOPY} READELF=${CMAKE_READELF}
             ${repo}/tools/build_programs.sh ${CMAKE_BINARY_DIR}
-    COMMAND ${python} ${repo}/tools/gen_bundle.py --out ${bundle_c} ${program_files}
-    DEPENDS __idf_core ${program_sources} ${repo}/tools/build_programs.sh ${repo}/tools/gen_bundle.py
+    COMMAND ${CMAKE_COMMAND} -E touch ${programs_stamp}
+    DEPENDS __idf_core ${program_sources} ${repo}/tools/build_programs.sh
             ${repo}/tools/pack_app.sh ${repo}/tools/program.ld ${repo}/tools/check_program_elf.py
             ${repo}/tools/gen_exports.py
-    COMMENT "Programs that come with the system")
-target_sources(${COMPONENT_LIB} PRIVATE ${bundle_c})
+    COMMENT "Programs kept in files")
+add_custom_target(programs ALL DEPENDS ${programs_stamp})

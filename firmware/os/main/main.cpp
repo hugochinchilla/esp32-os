@@ -869,8 +869,8 @@ void ui_task(void *)
         ports::DirEntry first;
         if (formatted || storage.entry("C:\\", 0, first) == ports::FsError::NotFound) {
             const int64_t samples_start = esp_timer_get_time();
-            fs::add_samples(storage, 'C');
-            ESP_LOGI(TAG, "C: new, sample files written in %lld ms",
+            fs::add_first_files(storage, 'C');
+            ESP_LOGI(TAG, "C: new, first files written in %lld ms",
                      (esp_timer_get_time() - samples_start) / 1000);
         }
         ESP_LOGI(TAG, "C: mounted in %lld ms%s", (esp_timer_get_time() - mount_start) / 1000,
@@ -1382,10 +1382,6 @@ extern "C" void app_main(void)
     static ElfLoader programs;
     if (programs.begin()) {
         shell::set_loader(&programs);
-        // Those that come with the system go to C:\Programs when it starts.
-        static_assert(sizeof(chinchilla_bundled) == sizeof(shell::BundledProgram), "one layout, two names");
-        shell::set_bundled_programs(reinterpret_cast<const shell::BundledProgram *>(chinchilla_bundle),
-                                    static_cast<int>(chinchilla_bundle_count), chinchilla_bundle_stamp);
     }
 
     ESP_LOGI(TAG, "starting video on core 1");

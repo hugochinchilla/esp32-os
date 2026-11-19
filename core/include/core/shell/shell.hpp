@@ -239,19 +239,9 @@ bool program_info(const char *path, app::FileInfo &info);
 // `why` in plain words, if it could not be loaded or did not start.
 bool run_file(const char *path, char *why, size_t capacity);
 
-// Programs that come with the system (the owner's choice, 2026-11-17): the
-// firmware carries their files as data and puts them in C:\Programs, where
-// the Start menu finds them. `stamp` names this set of files: it changes
-// when any of them does. Hand them in before start().
-struct BundledProgram {
-    const char *file; // "hello.app"
-    const uint8_t *data;
-    uint32_t size;
-};
-void set_bundled_programs(const BundledProgram *list, int count, const char *stamp);
-// Writes those that are not in C:\Programs, or are there from another set;
-// start() does it. Returns how many files it wrote, -1 if one could not be.
-int install_programs();
+// Where the programs kept in files live. The computer puts them there when
+// the board is flashed (tools/flash.py, backlog item 77); the Start menu
+// lists what it finds.
 constexpr char kProgramsFolder[] = "C:\\Programs";
 
 } // namespace shell

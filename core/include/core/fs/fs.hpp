@@ -164,7 +164,12 @@ private:
     int count_ = 0;
 };
 
-// Folders and text files for a new RAM disk, so there is something to see.
+// Folders and a few text files for a new drive, so there is something to
+// see. All a new C: gets from the firmware on the board; the rest is copied
+// by the computer when the board is flashed (tools/flash.py).
+void add_first_files(Storage &storage, char drive);
+// The same and the sample pictures (core/fs/samples.hpp), for where nothing
+// is copied afterwards: the PC programs, the browser version, the tests.
 void add_samples(Storage &storage, char drive);
 
 } // namespace fs
