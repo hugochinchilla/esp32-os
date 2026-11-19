@@ -52,6 +52,7 @@ RUNTIME = """
 memcpy memmove memset memcmp memchr
 strlen strcmp strncmp strcpy strncpy strcat strncat strchr strrchr strstr strcasecmp strncasecmp
 snprintf vsnprintf sscanf strtol strtoul atoi abs labs qsort
+isalnum isalpha isdigit isspace isxdigit isupper islower tolower toupper strcspn strspn
 _Znwj _Znaj _ZdlPv _ZdlPvj _ZdaPv _ZdaPvj
 __cxa_pure_virtual __cxa_guard_acquire __cxa_guard_release
 __divdi3 __udivdi3 __moddi3 __umoddi3 __muldi3 __ashldi3 __lshrdi3 __ashrdi3
