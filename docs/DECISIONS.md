@@ -238,7 +238,7 @@ The programs and games, one decision each.
 - [The computer's chess piece lands](decisions/chess-landing.md) (2026-11-18, owner+agent, decided): The computer's piece drops 4 pixels onto its square and bounces once, 233 ms (backlog 64); details to confirm
 - [Sounds of the games and the Trash](decisions/game-sounds.md) (2026-11-19, owner+agent, to-confirm): Chess knocks on a move, warns the user of check, says checkmate; Culebra a berry and game over; the Trash crumples paper (backlog 70)
 - [The File manager's three views](decisions/file-manager-views.md) (2026-11-19, owner+agent, to-confirm): Icons, List and Details from the View menu, one way for every folder window (backlog 56)
-- [The Shut Down sequence](decisions/shut-down-sequence.md) (2026-11-19, owner+agent, to-confirm): Shut Down closes the programs (ended after 20 s), fades the desktop, then to black, and shows the last screen on black (backlog 60)
+- [The Shut Down sequence](decisions/shut-down-sequence.md) (2026-11-19, owner+agent, decided): Shut Down closes the programs (ended after 20 s), fades the desktop, then to black, and shows the last screen on black (backlog 60)
 
 ### console
 

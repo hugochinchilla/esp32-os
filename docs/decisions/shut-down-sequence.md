@@ -2,13 +2,14 @@
 title: "The Shut Down sequence"
 date: 2026-11-19
 by: owner+agent
-status: to-confirm
+status: decided
 area: programs
 summary: "Shut Down closes the programs (ended after 20 s), fades the desktop, then to black, and shows the last screen on black (backlog 60)"
 ---
 
 Backlog item 60; the story is in
-`docs/journal/2026-11-19-shut-down-sequence.md`. PC only so far. Pictures:
+`docs/journal/2026-11-19-shut-down-sequence.md`. Checked on the board in
+batch 21. Pictures:
 `host/tests/pictures/38a-shut-down-fading.png` to `38-power-down.png`.
 
 The owner's, 2026-11-18: in order, close all the programs (let them wait,
@@ -17,7 +18,10 @@ background colour (the icons and the taskbar disappear); then the "safe to
 turn off" screen, its background full black. The melody of item 59 belongs
 to it.
 
-As built, the agent's readings, each his to confirm or overrule:
+As built, the agent's readings. The owner confirmed all of them on
+2026-11-19, after the board check and a recording of the fade ("Parece que
+está todo bien así"), knowing that programs with no question to ask have
+closed by the time a Cancel calls Shut Down off:
 
 - **The 20 seconds count from the moment Shut Down is chosen, questions
   included.** A "Save changes?" nobody answers is ended with its program at
