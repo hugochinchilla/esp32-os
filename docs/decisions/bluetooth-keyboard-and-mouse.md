@@ -28,8 +28,11 @@ until he answers.
   mode nearby can be taken; it is forgotten with `dbg.py bt forget` (and
   from the Bluetooth program once there is one).
 - **A switch.** `[bluetooth] enabled` in the same file, on by default, read
-  at start-up. Off: the stack is not started and takes no memory, and
-  Wi-Fi has the radio to itself as before. On: the two take turns at the
+  at start-up. Off: the stack is not started and Wi-Fi has the radio to
+  itself as before. Measured on the board (2026-11-19): on costs 58 KB of
+  internal RAM, off still 21 KB, the controller's code that sits in
+  internal RAM whether it runs or not; only a firmware built without
+  Bluetooth costs nothing. On: the two take turns at the
   radio. ESP-IDF v5.5 does not ask for Wi-Fi's power saving to be turned on
   for this (older versions did), so it stays off as decided in the Wi-Fi
   milestone; what the sharing costs the remote screen is to be measured.
