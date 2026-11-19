@@ -732,6 +732,16 @@ int main()
     while (desktop.active() != nullptr) {
         desktop.close(*desktop.active());
     }
+    // Alt+F4 with no window in the focus opens the Shut Down dialog, once;
+    // there it closes the dialog, as it closes any window.
+    key(wm::key::F4, 4);
+    CHECK(strcmp(title(), "Shut Down Chinchilla") == 0 && desktop.window_count() == 1);
+    key(wm::key::F4, 4);
+    CHECK(desktop.active() == nullptr && desktop.window_count() == 0);
+    // With a window in the focus it closes that window and asks nothing.
+    shell::open_folder("C:\\Documents");
+    key(wm::key::F4, 4);
+    CHECK(desktop.active() == nullptr && desktop.window_count() == 0);
     test_editor();
     test_file_manager();
     test_trash_view();

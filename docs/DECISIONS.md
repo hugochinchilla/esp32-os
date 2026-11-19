@@ -223,6 +223,7 @@ Window manager, menus, taskbar, themes, icons, pointer.
 - [Slow repaints: faster drawing first](decisions/faster-drawing-first.md) (2026-11-18, owner, decided): Large windows painted slowly (backlog 65): fix the drawing code first, measure, kept window pictures only if still needed
 - [The hourglass on demand](decisions/hourglass-on-demand.md) (2026-11-18, owner, decided): A program asks for the hourglass with `os::ui::set_hourglass`; it shows over its client area only (backlog 49)
 - [The mouse wheel](decisions/mouse-wheel.md) (2026-11-18, owner+agent, decided): The wheel scrolls what is under the pointer; how far, and which widgets take it (backlog 61)
+- [Alt+F4 on the desktop and the logo key with D](decisions/desktop-shortcuts.md) (2026-11-19, owner+agent, decided): Alt+F4 with no window in the focus opens Shut Down; logo+D minimises every window, again brings them back; the logo key acts when released (backlog 76)
 
 ### programs
 

@@ -155,7 +155,8 @@ In the window:
   of the window as `chinchilla-001.bmp`, `-002` and so on in the folder the
   program was started from.
 - Ctrl+Alt+End is Chinchilla's Ctrl+Alt+Del (Linux keeps the real one), and
-  Ctrl+Esc opens the Start menu if the desktop keeps the Super key.
+  Ctrl+Esc opens the Start menu if the desktop keeps the Super key (which
+  also means Super+D, Chinchilla's "show the desktop", may not arrive).
 - Keys type what a US keyboard would: the core has no other layouts yet,
   the same as on the board.
 - Closing the window shuts Chinchilla down: programs are asked to close, so

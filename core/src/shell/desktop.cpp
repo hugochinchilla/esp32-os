@@ -326,7 +326,7 @@ wm::MenuItem g_start_items[5];
 wm::Menu g_start = {g_start_items, 5};
 
 void launch_app(void *context) { launch(*static_cast<const App *>(context)); }
-void shut_down(void *) { shut_down_dialog(); }
+void shut_down(void *) { shut_down_dialog(); } // the Start menu's entry, and Alt+F4 on the desktop
 
 struct NotYet {
     const char *title;
@@ -1294,6 +1294,7 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
     }
 
     wm.set_attention_key(&attention_key, nullptr);
+    wm.set_leave_key(&shut_down, nullptr);
     move_old_documents();
     welcome_file();
     install_screen_saver();
