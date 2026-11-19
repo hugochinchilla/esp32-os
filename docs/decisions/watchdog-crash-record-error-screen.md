@@ -35,7 +35,9 @@ tested on the PC, compiled for the board; not yet run on the board.
   once. It names the program (from the process table, when the failing task
   is the UI task), the task, running or waiting, the uptime, and for a crash
   the reason, the addresses and up to 16 return addresses. For a hang it
-  does not say where the program was stuck. Nothing is written to flash at
+  said nothing about where the program was stuck; since 2026-11-19 it says
+  what the task was doing and, when the task was waiting, its chain of
+  calls (`screenshot-requests.md`, backlog 75). Nothing is written to flash at
   the moment of the crash. With no record, an abnormal reset reason from the
   chip (brownout, hardware watchdog) is reported instead.
 - **The error screen** is a full screen at the next start, before the

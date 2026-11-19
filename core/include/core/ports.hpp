@@ -467,6 +467,7 @@ enum class Fault : uint8_t {
     BadPointer = 1, // a write through a null pointer
     Abort = 2,      // abort()
     Slow = 3,       // the calling task spins for five seconds, then carries on
+    Wait = 4,       // the calling task waits for something that never comes
 };
 
 class System {

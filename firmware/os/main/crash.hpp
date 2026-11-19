@@ -21,6 +21,10 @@ const sys::CrashRecord *crash_last();
 // record and restarts. limit_ms 0: no watchdog.
 void watchdog_start(const char *name, uint32_t limit_ms);
 void watchdog_beat();
+// What the watched task is about to do, in a few words that last (a string
+// constant). A hang's record says it: which part of the loop never came
+// back. One store; call it as often as the loop changes what it does.
+void watchdog_doing(const char *what);
 
 // A fault on purpose, in the calling task (tools/dbg.py fault). Does not
 // return.

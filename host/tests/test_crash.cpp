@@ -91,6 +91,11 @@ void test_watchdog()
     dog.beat(-1, 1);
     dog.beat(ui, 9000);
     CHECK(dog.overdue(9000, waited) == shell && waited == 8000);
+    // What the task said it was doing is kept for the record.
+    CHECK(strcmp(dog.doing(0), "") == 0 && strcmp(dog.doing(9), "") == 0);
+    dog.doing(0, "a screenshot");
+    dog.doing(9, "nobody");
+    CHECK(strcmp(dog.doing(0), "a screenshot") == 0 && strcmp(dog.doing(1), "") == 0);
     CHECK(dog.watch("c", 1, 0) == 2 && dog.watch("d", 1, 0) == 3 && dog.watch("e", 1, 0) == sys::Watchdog::kNobody);
 
     // The setting: seconds to milliseconds, within limits; 0 and below: off.
@@ -165,6 +170,17 @@ void test_words()
     r.core = sys::CrashRecord::kNoCore;
     sys::crash_details(r, t, sizeof(t), "\n");
     CHECK(strstr(t, "Program : none\nTask    : ui, waiting (on no core)\n") != nullptr);
+    // A hang that knows what the task was doing and where it waited.
+    sys::crash_text(r.reason, sizeof(r.reason), "the debug link: sending a screenshot");
+    r.trace[0] = 0x42001234;
+    r.trace[1] = 0x4037ABCD;
+    r.trace_count = 2;
+    sys::crash_details(r, t, sizeof(t), "\n");
+    CHECK(strstr(t, "Uptime  : 0 h 12 min 34 s\n"
+                    "Doing   : the debug link: sending a screenshot\n"
+                    "Trace   : 0x42001234 0x4037ABCD\n") != nullptr);
+    r.reason[0] = 0;
+    r.trace_count = 0;
     sys::crash_headline(r, t, sizeof(t));
     CHECK(strcmp(t, "The desktop stopped responding (no program was running).") == 0);
     sys::crash_text(r.task, sizeof(r.task), "shell");

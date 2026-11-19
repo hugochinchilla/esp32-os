@@ -80,8 +80,22 @@ public:
              ports::Pointer &pointer, ports::InputSink &input, ports::System &system,
              const char *firmware_name);
 
-    // Bytes received from the PC, in any size of pieces.
+    // Bytes received from the PC, in any size of pieces. Every request in
+    // them is answered before this returns, except a screenshot.
     void feed(const uint8_t *data, size_t size);
+
+    // Sends the screenshot that was asked for, if one was; returns whether
+    // it did. The loop calls this after it has fed everything that had
+    // arrived. A screenshot is the one answer that takes long (0.2 to 1 s
+    // of the caller's time on the board, as fast as the serial line takes
+    // it), so it is not sent from inside feed(): of several requests that
+    // waited, only the last is answered. The computer sends a new one only
+    // when it has given the one before up, and answering each in turn kept
+    // the board behind for good, and the desktop's loop silent until the
+    // watchdog restarted it (docs/journal/2026-11-19-screenshot-backlog.md).
+    bool answer_waiting();
+    // Screenshot requests never answered because a later one was waiting.
+    uint32_t shots_given_up() const { return shots_given_up_; }
 
     // Announces the board after start-up.
     void send_hello();
@@ -163,6 +177,11 @@ private:
     bool idle_seen_ = false;  // line_idle() was called since the last byte
     uint32_t idle_since_ = 0;
     uint32_t console_bytes_ = 0;
+
+    bool shot_waiting_ = false; // a screenshot request not yet answered
+    uint8_t shot_seq_ = 0;
+    uint8_t shot_flags_ = 0;
+    uint32_t shots_given_up_ = 0;
 
     bool overflow_ = false;
     size_t rx_size_ = 0;

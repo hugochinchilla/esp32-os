@@ -280,5 +280,6 @@ The debug tool, the PC and browser builds, deployment.
 - [Chosen for the desktop program](decisions/desktop-program.md) (2026-11-17, agent, to-confirm): Chinchilla as an SDL2 program on the PC, `host/desktop/main.cpp` (backlog 32)
 - [The PC tool reads the port on a thread](decisions/pc-tool-reads-port-on-thread.md) (2026-11-17, agent, to-confirm): `tools/dbg.py` reads the serial port on a thread of its own so that console text is not lost (backlog 14b)
 - [The relay is deployed from GitHub](decisions/relay-deployed-from-github.md) (2026-11-18, owner+agent, decided): The web version's relay goes to Cloudflare from a GitHub workflow
+- [Chosen for screenshot requests that wait](decisions/screenshot-requests.md) (2026-11-19, agent, to-confirm): The debug link answers only the last screenshot request that waited, one per loop round; a hang's record says what the task was doing (backlog 75)
 
 <!-- decisions:end -->

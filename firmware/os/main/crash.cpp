@@ -12,6 +12,8 @@
 #include "esp_cpu_utils.h"
 #include "esp_debug_helpers.h"
 #include "esp_log.h"
+#include "esp_memory_utils.h"
+#include "esp_private/freertos_debug.h"
 #include "esp_private/panic_internal.h"
 #include "esp_private/system_internal.h"
 #include "esp_system.h"
@@ -80,6 +82,43 @@ void fill_process(sys::CrashRecord &r, TaskHandle_t task)
     }
 }
 
+// The chain of calls of a task that is waiting, read from what the kernel
+// saved on its stack when it was switched out (as ESP-IDF's
+// esp_backtrace_print_all_tasks does): where it called the kernel and from
+// where. Not for a task that is running: its saved frame is an old one.
+// Returns how many addresses it wrote.
+int waiting_trace(TaskHandle_t task, uint32_t *out, int room)
+{
+    TaskSnapshot_t snapshot = {};
+    if (room <= 0 || vTaskGetSnapshot(task, &snapshot) != pdTRUE || snapshot.pxTopOfStack == nullptr) {
+        return 0;
+    }
+    const auto *saved = reinterpret_cast<const XtExcFrame *>(snapshot.pxTopOfStack);
+    esp_backtrace_frame_t frame = {};
+    frame.pc = saved->pc;
+    frame.sp = saved->a1;
+    frame.next_pc = saved->a0;
+    if (!esp_stack_ptr_is_sane(frame.sp) || !esp_ptr_executable(reinterpret_cast<void *>(esp_cpu_process_stack_pc(frame.pc)))) {
+        return 0;
+    }
+    int count = 0;
+    out[count++] = esp_cpu_process_stack_pc(frame.pc);
+    while (count < room && frame.next_pc != 0 && esp_backtrace_get_next_frame(&frame)) {
+        out[count++] = esp_cpu_process_stack_pc(frame.pc);
+    }
+    return count;
+}
+
+bool running_somewhere(TaskHandle_t task)
+{
+    for (int core = 0; core < portNUM_PROCESSORS; core++) {
+        if (xTaskGetCurrentTaskHandleForCore(core) == task) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // Once a second, on the timer task (priority 22, above everything of ours
 // and below Wi-Fi): a few loads and a compare while all is well.
 void supervise(void *)
@@ -103,13 +142,32 @@ void supervise(void *)
         }
     }
     fill_process(r, s_task);
+    // What the task said it had begun (watchdog_doing), and never finished.
+    sys::crash_text(r.reason, sizeof(r.reason), s_dog.doing(slot));
     sys::crash_seal(r);
     s_written = true;
     skip_bios_once();
+    // Where it waits, if it waits. The record above is complete without
+    // this: should reading the other task's stack go wrong, the panic that
+    // follows leaves it alone. The task may wake while its stack is read
+    // (then the addresses are worthless, so they are dropped).
+    if (r.core == sys::CrashRecord::kNoCore) {
+        static uint32_t trace[sys::CrashRecord::kTraceSize];
+        const int count = waiting_trace(s_task, trace, sys::CrashRecord::kTraceSize);
+        if (count > 0 && !running_somewhere(s_task)) {
+            memcpy(r.trace, trace, sizeof(uint32_t) * static_cast<size_t>(count));
+            r.trace_count = static_cast<uint8_t>(count);
+            sys::crash_seal(r);
+        }
+    }
 
     char line[160];
     sys::crash_headline(r, line, sizeof(line));
-    ESP_LOGE(TAG, "watchdog: %s Silent for %u ms. Restarting.", line, static_cast<unsigned>(waited));
+    ESP_LOGE(TAG, "watchdog: %s Silent for %u ms, doing: %s. Restarting.", line, static_cast<unsigned>(waited),
+             r.reason[0] != 0 ? r.reason : "not said");
+    for (int i = 0; i < r.trace_count; i++) {
+        ESP_LOGE(TAG, "watchdog: waiting at 0x%08lx", static_cast<unsigned long>(r.trace[i]));
+    }
     uart_wait_tx_done(UART_NUM_0, pdMS_TO_TICKS(200));
     // As esp_restart(), without the shutdown handlers: they stop Wi-Fi and
     // the like politely, and may wait for ever on something the stuck task
@@ -175,6 +233,8 @@ void watchdog_start(const char *name, uint32_t limit_ms)
 
 void watchdog_beat() { s_dog.beat(s_slot, now_ms()); }
 
+void watchdog_doing(const char *what) { s_dog.doing(s_slot, what); }
+
 void crash_fault(ports::Fault kind)
 {
     switch (kind) {
@@ -196,6 +256,12 @@ void crash_fault(ports::Fault kind)
         }
         return;
     }
+    case ports::Fault::Wait:
+        // Asleep for ever, as a program that waits for a lock or a reply
+        // that never comes: the hang whose record has the chain of calls.
+        while (true) {
+            vTaskDelay(portMAX_DELAY);
+        }
     case ports::Fault::BadPointer: {
         volatile uint32_t *const nowhere = nullptr;
         *nowhere = 0xC41C4111; // StoreProhibited
