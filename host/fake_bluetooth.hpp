@@ -16,6 +16,7 @@ public:
     bool off = false;             // no radio
     bool refuse = false;          // connect() fails at once
     bool scanning = false;
+    bt::Listen listening = bt::Listen::Off;
     // links() calls until a connection becomes Ready by itself, as what it
     // advertised it was; 0: the test moves it along by hand.
     int ready_polls = 0;
@@ -75,7 +76,11 @@ public:
     void drop(uint8_t last) { drop(address(last)); }
 
     bool on() override { return !off; }
-    void scan(bool want) override { scanning = want; }
+    void listen(bt::Listen how) override
+    {
+        listening = how;
+        scanning = how != bt::Listen::Off;
+    }
     int found(bt::Found *out, int max) override
     {
         int n = 0;

@@ -198,5 +198,8 @@ What it costs, measured:
   the names of NimBLE's errors as text. The firmware is 9.8 KB smaller for
   it (1,933,712 bytes on the same base). How much internal RAM it gives
   back is for the next turn to measure; I expect a few KB, not tens.
-- The laptop's build with main merged was 1,975,648 bytes, 97.2% of the
-  slot.
+- The laptop's build of 72c018e with main merged was 1,975,648 bytes,
+  97.2% of the slot; the cloud's build of the same commit was 1,943,520
+  (main had grown in between, and the two builds differ). After the trim
+  and with main of 01:10 merged the cloud's build is 1,937,600 bytes,
+  compiled and linked, not run.

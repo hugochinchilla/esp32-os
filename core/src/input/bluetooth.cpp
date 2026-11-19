@@ -327,7 +327,8 @@ void Manager::tick(uint64_t now_us)
     }
     if (!on_) {
         link_count_ = found_count_ = 0;
-        scanning_ = attempting_ = false;
+        listening_ = Listen::Off;
+        attempting_ = false;
         return;
     }
 
@@ -381,15 +382,22 @@ void Manager::tick(uint64_t now_us)
     for (int i = 0; i < remembered_count_; i++) {
         absent = absent || !is_linked(remembered_[i].address);
     }
-    const bool want = link_count_ < kMaxLinks && (listing_ || absent || (auto_pair_ && kinds_ready() != kBothKinds));
-    if (want != scanning_) {
-        scanning_ = want;
-        radio_.scan(want);
+    Listen want = Listen::Off;
+    if (link_count_ < kMaxLinks) {
+        if (listing_) {
+            want = Listen::Search;
+        } else if (absent || (auto_pair_ && kinds_ready() != kBothKinds)) {
+            want = Listen::Background;
+        }
+    }
+    if (want != listening_) {
+        listening_ = want;
+        radio_.listen(want);
         changed = true;
     }
 
     Found heard[kMaxFound] = {};
-    int heard_count = scanning_ ? radio_.found(heard, kMaxFound) : 0;
+    int heard_count = scanning() ? radio_.found(heard, kMaxFound) : 0;
     heard_count = heard_count < 0 ? 0 : (heard_count > kMaxFound ? kMaxFound : heard_count);
     changed = changed || heard_count != found_count_;
     for (int i = 0; i < heard_count && !changed; i++) {

@@ -41,10 +41,13 @@ constexpr uint16_t kHidService = 0x1812, kReport = 0x2A4D, kReportMap = 0x2A4B;
 constexpr uint16_t kReportReference = 0x2908, kClientConfig = 0x2902;
 const ble_uuid16_t kHidServiceUuid = {{BLE_UUID_TYPE_16}, kHidService};
 
-// Listening 30 ms in every 100, so that Wi-Fi keeps most of the radio; a
-// device that calls advertises every 20 to 100 ms and is heard within a
-// second or two. To measure on the board.
-constexpr uint16_t kScanInterval = 160, kScanWindow = 48; // of 0.625 ms
+// Listening takes the radio from Wi-Fi: at 30 ms in every 100 a full
+// update of the remote screen took 3.3 to 3.7 s instead of 2.0 (board
+// batch 19). So in the background it is 20 ms in every 200; a device that
+// calls advertises every 20 to 100 ms for many seconds and is still heard
+// within a few. The 30 in 100 is kept for when somebody is waiting.
+constexpr uint16_t kBackgroundInterval = 320, kBackgroundWindow = 32; // of 0.625 ms
+constexpr uint16_t kSearchInterval = 160, kSearchWindow = 48;
 constexpr int32_t kConnectMs = 10000;
 // A device not heard for this long is no longer listed.
 constexpr int64_t kHeardUs = 8 * 1000000ll;
@@ -217,9 +220,13 @@ public:
 
     bool on() override { return started_; }
 
-    void scan(bool want) override
+    void listen(bt::Listen how) override
     {
-        scan_wanted_ = want;
+        const bool restart = how != listen_ && how != bt::Listen::Off && listen_ != bt::Listen::Off;
+        listen_ = how;
+        if (restart && synced_ && ble_gap_disc_active()) {
+            ble_gap_disc_cancel(); // started again below, at the other pace
+        }
         apply_scan();
     }
 
@@ -392,11 +399,12 @@ private:
         if (!synced_) {
             return;
         }
-        const bool want = scan_wanted_ && !connecting_;
+        const bt::Listen how = listen_;
+        const bool want = how != bt::Listen::Off && !connecting_;
         if (want && !ble_gap_disc_active()) {
             ble_gap_disc_params params = {};
-            params.itvl = kScanInterval;
-            params.window = kScanWindow;
+            params.itvl = how == bt::Listen::Search ? kSearchInterval : kBackgroundInterval;
+            params.window = how == bt::Listen::Search ? kSearchWindow : kBackgroundWindow;
             params.passive = 0;           // asks each device for its name
             params.filter_duplicates = 0; // heard again and again, so we know it is still there
             const int rc = ble_gap_disc(own_address_type_, BLE_HS_FOREVER, &params, &on_gap, nullptr);
@@ -792,7 +800,7 @@ private:
     SemaphoreHandle_t mutex_ = nullptr;
     MergedInput input_;
     volatile bool started_ = false, synced_ = false;
-    volatile bool scan_wanted_ = false;
+    volatile bt::Listen listen_ = bt::Listen::Off;
     volatile bool connecting_ = false; // (mutex to change)
     uint8_t own_address_type_ = 0;
     Heard heard_[kMaxHeard] = {};
@@ -810,7 +818,7 @@ Radio &Radio::self() { return *s_radio; }
 class NoRadio : public bt::Port {
 public:
     bool on() override { return false; }
-    void scan(bool) override {}
+    void listen(bt::Listen) override {}
     int found(bt::Found *, int) override { return 0; }
     bool connect(const bt::Address &) override { return false; }
     void disconnect(const bt::Address &) override {}

@@ -62,13 +62,21 @@ struct Link {
     uint8_t kinds; // hid::Kind bits, from its report layout once Ready
 };
 
+// How hard the radio listens for advertising devices. Listening takes
+// radio time away from Wi-Fi, so it is done thinly unless somebody waits.
+enum class Listen : uint8_t {
+    Off,
+    Background, // a device that calls is heard within a few seconds
+    Search,     // a list is on show, or an attempt was asked for: heard at once
+};
+
 // The radio.
 class Port {
 public:
     // False when there is no radio or it did not start.
     virtual bool on() = 0;
-    // Listening for advertising devices, until told to stop.
-    virtual void scan(bool on) = 0;
+    // Listening for advertising devices, until told otherwise.
+    virtual void listen(Listen how) = 0;
     // Those heard in the last few seconds (at most `max`).
     virtual int found(Found *out, int max) = 0;
     // Starts connecting: the device appears in links() from this call on,
@@ -125,7 +133,8 @@ public:
     bool auto_pair() const { return auto_pair_; }
 
     bool on() const { return on_; }
-    bool scanning() const { return scanning_; }
+    bool scanning() const { return listening_ != Listen::Off; }
+    Listen listening() const { return listening_; }
     int link_count() const { return link_count_; }
     const Link &link(int index) const { return links_[index]; }
     int found_count() const { return found_count_; }
@@ -172,7 +181,7 @@ private:
     Avoided avoided_[kMaxAvoided] = {};
 
     bool on_ = false;
-    bool scanning_ = false;
+    Listen listening_ = Listen::Off;
     bool listing_ = false;
     bool auto_pair_ = true;
     uint32_t changes_ = 0;

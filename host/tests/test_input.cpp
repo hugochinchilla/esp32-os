@@ -277,6 +277,7 @@ void test_pairs_by_itself()
     m.start(now);
     // Nothing connected: it listens.
     CHECK(m.on() && m.scanning() && radio.scanning && m.auto_pair());
+    CHECK(radio.listening == bt::Listen::Background); // thinly: nobody is waiting
     // Not in pairing mode, or not a keyboard or mouse: left alone.
     radio.advertise(0x10, "Somebody's keyboard", hid::kKeyboard, false);
     radio.advertise(0x11, "A thermometer", 0, true, false);
@@ -312,7 +313,7 @@ void test_pairs_by_itself()
     // A list on show listens again; asked for by name, the third connects.
     m.set_listing(true);
     m.tick(now += kSecond);
-    CHECK(m.scanning() && m.found_count() == 3);
+    CHECK(m.scanning() && m.found_count() == 3 && radio.listening == bt::Listen::Search);
     CHECK(m.pair(host::FakeBluetooth::address(0x03)));
     CHECK(!m.pair(host::FakeBluetooth::address(0x10))); // one attempt at a time
     radio.ready(0x03, hid::kKeyboard);
@@ -326,7 +327,7 @@ void test_pairs_by_itself()
     // in pairing mode now) it is connected again.
     radio.drop(0x01);
     m.tick(now += kSecond);
-    CHECK(m.link_count() == 2 && m.scanning());
+    CHECK(m.link_count() == 2 && m.scanning() && radio.listening == bt::Listen::Background);
     radio.advertise(0x01, "Keys", hid::kKeyboard, false);
     m.tick(now += kSecond);
     CHECK(radio.connects == 4 && radio.link(0x01) != nullptr);
