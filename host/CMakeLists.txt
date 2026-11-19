@@ -94,6 +94,8 @@ add_test(NAME pictures
          COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/check_pictures.py $<TARGET_FILE:render_scenes>)
 add_test(NAME dbg_tool
          COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/test_dbg_sim.py $<TARGET_FILE:sim>)
+add_test(NAME flash_tool
+         COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/test_flash_sim.py $<TARGET_FILE:sim>)
 
 add_executable(test_net tests/test_net.cpp)
 target_link_libraries(test_net PRIVATE core)

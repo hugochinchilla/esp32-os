@@ -176,7 +176,7 @@ Processes, tasks, signals, init, OS calls, memory.
 - [Open files are handles the system keeps](decisions/file-handles.md) (2026-11-17, agent, to-confirm): Open files are numbers; the system keeps the table and closes what a dead process held (backlog 37)
 - [Our static objects in external RAM](decisions/static-objects-in-external-ram.md) (2026-11-17, owner, decided): The core's static objects live in external RAM (`extram_bss`); what stays internal
 - [Program lifecycle](decisions/program-lifecycle.md) (2026-11-17, agent, to-confirm): Windows are made when they open and destroyed when they close; `make_window`, `one`, `open_one` (backlog 19, 34)
-- [Programs loaded from files](decisions/programs-loaded-from-files.md) (2026-11-17, owner, decided): Native code loaded from C:, with no protection; the file format and the loader (backlog 27)
+- [Programs loaded from files](decisions/programs-loaded-from-files.md) (2026-11-17, owner, decided): Native code loaded from C:, with no protection; the file format and the loader (backlog 27). How the files get there was replaced by backlog 77
 - [Programs on tasks of their own](decisions/programs-on-own-tasks.md) (2026-11-17, owner+agent, decided): Each program runs on its own task and the server waits for it, with a limit; "not responding" (backlog 26)
 - [The OS calls](decisions/os-calls.md) (2026-11-17, owner+agent, decided): Programs ask the system through a thin C++ layer, `core/os/os.hpp`; numbered calls come later (backlog 20, 37)
 - [The settings tools ask through the OS calls](decisions/settings-tools-os-calls.md) (2026-11-17, agent, to-confirm): Display, Screen Saver, Network and Shut Down are programs that ask through new OS calls (backlog 20)
@@ -184,6 +184,7 @@ Processes, tasks, signals, init, OS calls, memory.
 - [Services are lines of the start-up file](decisions/services-start-up-file.md) (2026-11-18, owner, decided): `telnetd` and `vncd` are lines of init's start-up file; a Services dialog and commands edit them (backlog 62)
 - [Sound: the port, the beeper and the system's sounds](decisions/sound-port.md) (2026-11-18, owner+agent, to-confirm): A Sound port with two voices, samples and an emulated PC beeper; silent on the board, real on the PC and in the browser (backlog 58, 59)
 - [Bluetooth keyboard and mouse](decisions/bluetooth-keyboard-and-mouse.md) (2026-11-19, owner+agent, to-confirm): BLE HID host with NimBLE: pairs by itself when a keyboard or mouse is missing, no code, a switch in bluetooth.ini (backlog 51)
+- [The files of C: are copied when the board is flashed](decisions/files-copied-when-flashing.md) (2026-11-19, owner+agent, decided): The firmware carries no programs or pictures; tools/flash.py copies them and DOOM1.WAD to C: over the debug link, only what changed (backlog 77)
 - [The whole screen lent to a game](decisions/lent-screen.md) (2026-11-19, owner+agent, to-confirm): A window can borrow the whole screen: it writes the picture itself, gets every key raw and the mouse as movement; Ctrl+Alt+Del takes it back (backlog 81)
 
 ### storage
@@ -200,6 +201,7 @@ File system, folders, the Trash, settings files, saving.
 - [Chosen for file dates](decisions/file-dates.md) (2026-11-17, agent, to-confirm): One date per file, when it was last written, in UTC seconds (backlog 24)
 - [The Trash is the File manager on C:\.trash](decisions/trash-is-the-file-manager.md) (2026-11-17, owner, decided): There is no Trash window: a File manager window that shows C:\.trash is the Trash
 - [Change notices from the file system](decisions/change-notices.md) (2026-11-18, owner+agent, decided): Storage says which folder changed; the desktop reads its folder only then, in a job, not every 2 s (backlog 66)
+- [Shared folders over the network](decisions/network-shares.md) (2026-11-19, owner, open): An SMB client and a server, two optional services, in the firmware now behind a mount call and program files later; details open (backlog 80)
 
 ### desktop
 

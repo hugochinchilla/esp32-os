@@ -671,8 +671,9 @@ class Board:
             if len(data) >= size or len(body) <= 4:
                 return bytes(data[:size])
 
-    def put(self, path, data):
-        """Writes a file on the board (replacing it)."""
+    def put(self, path, data, progress=None):
+        """Writes a file on the board (replacing it). `progress`, if given,
+        is called with (bytes sent, bytes in all) after each piece."""
         p = self._path(path)
         chunk = MAX_REQUEST - 8 - len(p)
         offset = 0
@@ -681,6 +682,8 @@ class Board:
             flags = 1 if offset == 0 else 0
             self.request(FILE_WRITE, struct.pack("<IBB", offset, flags, len(p)) + p + piece)
             offset += len(piece)
+            if progress is not None:
+                progress(offset, len(data))
             if offset >= len(data):
                 return
 
