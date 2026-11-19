@@ -20,10 +20,8 @@ games::CactusField &cactus_patch_field();
 void cactus_patch_refresh();
 int cactus_patch_seconds();
 
-// The Picture viewer: decode the picture shown to the end now; the timings
-// of the last picture (shell::kPictureTimings of them).
+// The Picture viewer: decode the picture shown to the end now.
 void finish_picture();
-const uint32_t *picture_timings();
 
 // The Terminal: the grid of the one the keyboard goes to, else of any
 // that is open (nullptr: none is).

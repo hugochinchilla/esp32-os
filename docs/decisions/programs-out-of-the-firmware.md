@@ -75,6 +75,28 @@ The rest is the agent's, to confirm:
   `tools/gen_exports.py --pc` on the PC's program files, so a program that
   asks the system for a name the firmware does not export fails there.
 
+- **Opening something in a program that is already running** (step 2).
+  A program that runs many copies (the Editor) says which file each
+  window has (`os::ui::set_document`); asked for a file that one of them
+  has, the system brings that window forward and starts nothing. A
+  program that runs one copy (the Picture viewer) hands the system a
+  function (`os::accept_open`) that is called with the new argument when
+  it is started again. Not done: a message the running copy would have to
+  wait for, which needs the argument kept somewhere between the two.
+- **The Terminal's grid goes with it.** `tty::Screen` was used by the
+  Terminal alone, so its source is part of `programs/terminal`; its
+  header stays where the tests find it. The session (the TTY and the
+  shell) is the system's and stays, reached with `os::open_session`.
+- **Three Terminals, counted by their processes.** A program file has no
+  memory of its own between copies, so each Terminal counts the others
+  in the process list. The fourth is a process for as long as its "Three
+  Terminals are open already" is on the screen.
+- **The decoders of pictures stay in the firmware** (the desktop's
+  background uses them); the Picture viewer asks for them by name
+  (`image::`). The quick launch's three pictures (File manager, Editor,
+  Terminal) stay in the firmware's art too, so the taskbar draws them
+  without reading a file.
+
 What it costs: with an empty C: the desktop has the Start menu, Settings,
 Run, About, Welcome and the Task Manager, and nothing else until
 `tools/flash.py --files-only` has run. An update over the network still

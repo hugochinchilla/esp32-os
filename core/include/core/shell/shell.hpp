@@ -171,9 +171,6 @@ bool save_settings(const char *program, const fs::Ini &ini);
 void open_browser(const char *address);
 // The Picture viewer with a picture (nullptr: asks for one).
 void open_picture(const char *path);
-// Timings of the Picture viewer's last picture (µs): decoding, opening to
-// last row, longest timer slice (programs/test_hooks.hpp has the look).
-constexpr int kPictureTimings = 3;
 // What a terminal session needs to run on a task of its own (core/sh/
 // terminal_session.hpp). The machine hands in a few (one per Terminal that
 // may be open at once), before any Terminal opens. With none, or without

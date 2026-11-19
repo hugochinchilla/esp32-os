@@ -92,9 +92,6 @@ const image::Dither kDithers[image::kDitherCount] = {
 
 void set_dither(image::Dither d);
 
-// Timings of the last picture, kept after its window has gone (see
-// picture_timings()).
-uint32_t g_timings[kPictureTimings] = {};
 
 class ViewerWindow : public app::Window {
 public:
@@ -338,7 +335,7 @@ private:
         show(shown_, w, h);
         started_us_ = os::now_us();
         busy_us_ = 0;
-        g_timings[0] = g_timings[1] = g_timings[2] = 0;
+        memset(os::counters(), 0, os::kCounters * sizeof(uint32_t));
         timer_ = os::start_timer(0, kTickUs, &ViewerWindow::slice, this);
         set_status("Loading...");
     }
@@ -359,8 +356,8 @@ private:
         }
         const uint32_t spent = static_cast<uint32_t>(os::now_us() - start);
         v->busy_us_ += spent;
-        if (spent > g_timings[2]) {
-            g_timings[2] = spent;
+        if (spent > os::counters()[2]) {
+            os::counters()[2] = spent;
         }
         const int after = v->converter_.rows_done();
         if (after > before) {
@@ -375,8 +372,8 @@ private:
             return;
         }
         if (v->decoder_.done()) {
-            g_timings[0] = v->busy_us_;
-            g_timings[1] = static_cast<uint32_t>(os::now_us() - v->started_us_);
+            os::counters()[0] = v->busy_us_;
+            os::counters()[1] = static_cast<uint32_t>(os::now_us() - v->started_us_);
             v->stop();
             char text[120];
             snprintf(text, sizeof(text), "%s   %d x %d   %s%s", fs::path::name(v->path_), v->info_.width,
@@ -507,7 +504,7 @@ void open_another(const char *path)
 #ifdef APP_LINKED
 // For the tests and the simulated board, which have the program linked
 // into them (programs/test_hooks.hpp): decode the picture shown to the end
-// now, and the timings of the last picture.
+// now.
 void finish_picture()
 {
     if (ViewerWindow *viewer = app::program<ViewerWindow>(os::main_window(os::find("Picture viewer")))) {
@@ -515,7 +512,6 @@ void finish_picture()
     }
 }
 
-const uint32_t *picture_timings() { return g_timings; }
 #endif
 
 } // namespace shell

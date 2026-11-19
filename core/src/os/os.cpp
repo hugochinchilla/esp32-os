@@ -468,6 +468,12 @@ void accept_open(OpenFn opened)
     }
 }
 
+uint32_t *counters()
+{
+    static uint32_t figures[kCounters] = {};
+    return figures;
+}
+
 bool launch(const char *program, const char *argument)
 {
     const prog::InCall in_call;

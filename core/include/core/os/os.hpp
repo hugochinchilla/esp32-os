@@ -200,6 +200,13 @@ bool shut_down();
 // comes forward instead. False: there is none of that name, or it did not
 // start.
 bool launch(const char *program, const char *argument = nullptr);
+// A few figures a program leaves for whoever measures it, read over the
+// debug link (`tools/dbg.py counters`) and kept after the program has
+// gone. They are the system's, one set: the Picture viewer writes the
+// timings of its last picture there (µs: decoding, opening to last row,
+// longest timer slice).
+constexpr int kCounters = 3;
+uint32_t *counters();
 // For a program that runs one copy at a time and can open one more thing
 // while it runs (another picture, another folder): `opened` is called, as
 // the program, when it is started again, with the argument it was started
