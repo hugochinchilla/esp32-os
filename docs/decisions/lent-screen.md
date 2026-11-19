@@ -58,4 +58,6 @@ The rest is the agent's, to confirm:
   `os::log` (a line for `dmesg`) and `os::rest` (gives the processor away
   for a while, from the program's own code).
 - The screen is lent at whatever size it has. A game that wants another
-  size centres its picture.
+  size centres its picture. Since the same evening a program may ask for
+  a coarse picture of 320x240 instead ("A coarse screen, 320x240, for a
+  game", `coarse-screen.md`).

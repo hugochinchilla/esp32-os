@@ -242,11 +242,17 @@ public:
     // when the screen's mode changes, on Ctrl+Alt+Del, which then opens
     // what it always opens, and on the logo key, which minimises the
     // window: the window finds out with screen_lent_to().
-    uint8_t *lend_screen(Window &to);
+    // `coarse`: the window would rather have a picture of 320x240 that the
+    // screen makes large by itself (ports::Display::set_coarse), if this
+    // screen has one; lent_width() and lent_height() say what it got. The
+    // desktop keeps its own size meanwhile and is painted again afterwards.
+    uint8_t *lend_screen(Window &to, bool coarse = false);
     void return_screen();
     Window *screen_lent_to() const { return lent_; }
     int screen_width() const { return width_; }
     int screen_height() const { return height_; }
+    int lent_width() const { return display_.width(); }
+    int lent_height() const { return display_.height(); }
     // The first part of the same, for a picture that fades away (Shut
     // Down): the screen is taken, and what it shows stays as it is until
     // fade_step() changes it or take_over() names who paints it.
@@ -618,6 +624,7 @@ private:
     bool repeating_ = false; // handle_key() is answering a held key
     ScreenFn screen_fn_ = nullptr;
     void *screen_context_ = nullptr;
+    bool lent_coarse_ = false;       // and the screen shows the coarse picture for it
     Window *lent_ = nullptr;         // who has the whole screen on loan (lend_screen)
     int lent_x_ = 0, lent_y_ = 0;    // where a mouse that reports places was last
     // The desktop fading in (start()).

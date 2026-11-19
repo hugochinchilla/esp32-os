@@ -339,6 +339,48 @@ int main(int argc, char **argv)
         CHECK(loader.loaded == 0 && t.count() == processes && os::blocks_out() == blocks);
         save(pictures, "doom-9-ended");
         CHECK(display.pixels()[5 * 640 + 5] == desktop_corner);
+
+        // On a screen that has the coarse picture (the board's 320x240,
+        // which the monitor's signal makes large) the game takes it and
+        // draws a pixel for a pixel, 320x200 in the middle of it.
+        display.offer_coarse();
+        CHECK(shell::run_file("C:\\Programs\\doom.app", why, sizeof(why)));
+        wait(10000);
+        wait(200000);
+        tics(40);
+        CHECK(desktop.screen_lent_to() != nullptr && display.coarse());
+        CHECK(display.width() == 320 && display.height() == 240);
+        CHECK(desktop.screen_width() == 640 && desktop.screen_height() == 480); // the desktop keeps its size
+        {
+            bool seen[256] = {};
+            int count = 0, outside = 0;
+            const uint8_t *p = display.pixels();
+            for (int y = 0; y < 240; y++) {
+                for (int x = 0; x < 320; x++) {
+                    const uint8_t c = p[y * 320 + x];
+                    if (y < 20 || y >= 220) {
+                        outside += c != 0;
+                    } else if (!seen[c]) {
+                        seen[c] = true;
+                        count++;
+                    }
+                }
+            }
+            CHECK(count > 20 && outside == 0); // the title picture, black above and below
+        }
+        save(pictures, "doom-10-coarse");
+        // The logo key: the desktop is back at its own size, painted.
+        desktop.key(wm::key::LeftGui, true);
+        desktop.key(wm::key::LeftGui, false);
+        wait(10000);
+        wait(200000);
+        CHECK(desktop.screen_lent_to() == nullptr && !display.coarse() && display.width() == 640);
+        CHECK(display.pixels()[5 * 640 + 5] == desktop_corner);
+        save(pictures, "doom-11-desktop-after-coarse");
+        CHECK(os::signal(t.find_by_name("Doom"), proc::Signal::Kill) == proc::Sent::Ok);
+        wait(10000);
+        wait(200000);
+        CHECK(loader.loaded == 0 && t.count() == processes && os::blocks_out() == blocks);
     }
     if (failures != 0 || !pictures.empty()) {
         print_log();

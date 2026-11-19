@@ -37,8 +37,23 @@ public:
             modes_[0].frame_us = 16800;
         }
     }
-    int width() const override { return modes_[mode_].width; }
-    int height() const override { return modes_[mode_].height; }
+    int width() const override { return coarse_ ? 320 : modes_[mode_].width; }
+    int height() const override { return coarse_ ? 240 : modes_[mode_].height; }
+    // The board's coarse picture (ports::Display::set_coarse), for the tests
+    // that ask for it: the PC's own windows do not show it yet.
+    void offer_coarse() { offers_coarse_ = true; }
+    bool set_coarse(bool on) override
+    {
+        if (!offers_coarse_) {
+            return false;
+        }
+        if (on != coarse_) {
+            coarse_ = on;
+            std::fill(pixels_.begin(), pixels_.end(), 0);
+        }
+        return true;
+    }
+    bool coarse() const override { return coarse_; }
     // The same memory in every mode, as on the board: only the row length
     // changes.
     uint8_t *pixels() override { return pixels_.data(); }
@@ -59,6 +74,7 @@ private:
     ports::VideoMode modes_[2];
     int mode_count_;
     int mode_ = 0;
+    bool offers_coarse_ = false, coarse_ = false;
     std::vector<uint8_t> pixels_;
 };
 

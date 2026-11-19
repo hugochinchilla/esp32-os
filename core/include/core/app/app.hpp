@@ -354,7 +354,7 @@ public:
     // Asks for a part of the client area to be painted again.
     void redraw(const gfx::Rect &part) { os::ui::redraw(number_, part); }
     // The whole screen for this window (os::ui::take_screen).
-    bool take_screen(os::ui::Screen &out) { return os::ui::take_screen(number_, out); }
+    bool take_screen(os::ui::Screen &out, bool coarse = false) { return os::ui::take_screen(number_, out, coarse); }
     bool has_screen() const { return os::ui::has_screen(number_); }
     void give_screen_back() { os::ui::give_screen_back(number_); }
     void screen_changed(const gfx::Rect &part) { os::ui::screen_changed(number_, part); }

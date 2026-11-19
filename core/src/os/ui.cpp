@@ -2081,7 +2081,7 @@ bool in_front(Window window)
     return w != nullptr && os::in_front(*w);
 }
 
-bool take_screen(Window window, Screen &out)
+bool take_screen(Window window, Screen &out, bool coarse)
 {
     const prog::InCall in_call;
     out = {};
@@ -2090,12 +2090,12 @@ bool take_screen(Window window, Screen &out)
     if (w == nullptr || wm == nullptr) {
         return false;
     }
-    out.pixels = wm->lend_screen(*w);
+    out.pixels = wm->lend_screen(*w, coarse);
     if (out.pixels == nullptr) {
         return false;
     }
-    out.width = wm->screen_width();
-    out.height = wm->screen_height();
+    out.width = wm->lent_width();
+    out.height = wm->lent_height();
     return true;
 }
 

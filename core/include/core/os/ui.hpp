@@ -145,7 +145,12 @@ struct Screen {
     int width = 0, height = 0;
 };
 // False: the window is not on the screen, or the screen is not free.
-bool take_screen(Window window, Screen &out);
+// `coarse`: the program would rather draw 320x240 and have the screen make
+// it large, which costs the program nothing (on the board, the monitor's
+// signal with every pixel twice as wide and every line sent twice). Not
+// every screen can: `out` says what the program got, the coarse picture or
+// the screen as it was.
+bool take_screen(Window window, Screen &out, bool coarse = false);
 bool has_screen(Window window);
 void give_screen_back(Window window);
 // Which part the program has changed, for whoever watches the screen from

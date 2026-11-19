@@ -757,6 +757,53 @@ void test_lent_screen()
     CHECK(!os::ui::take_screen(number, screen) && screen.pixels == nullptr);
 }
 
+// A program may ask for the coarse picture with the screen: it gets it
+// where the screen has one, and the screen as it is where it has not. The
+// desktop keeps its size all the while and is painted again afterwards.
+void test_lent_coarse_screen()
+{
+    const proc::Pid pid = os::spawn("Game");
+    app::Number number = app::kNone;
+    {
+        const os::As as(pid);
+        app::Look look;
+        look.title = "Game";
+        number = app::open<Game>(look);
+    }
+    wait(10000);
+    auto &g = *static_cast<Game *>(os::ui::state(number));
+    const uint8_t desk = display.pixels()[3 * 640 + 3];
+    static int changes;
+    changes = 0;
+    desktop.set_mode_listener([](void *) { changes++; }, nullptr);
+
+    os::ui::Screen screen;
+    CHECK(g.take_screen(screen, true) && screen.width == 640 && screen.height == 480); // this screen has none
+    CHECK(!display.coarse() && changes == 0);
+    g.give_screen_back();
+    wait(10000);
+
+    display.offer_coarse();
+    CHECK(g.take_screen(screen, true) && screen.pixels == display.pixels());
+    CHECK(screen.width == 320 && screen.height == 240 && display.coarse() && changes == 1);
+    CHECK(display.width() == 320 && desktop.screen_width() == 640 && desktop.screen_height() == 480);
+    CHECK(screen.pixels[0] == 0 && screen.pixels[239 * 320 + 319] == 0); // it starts black
+    memset(screen.pixels, 0xFF, 320 * 240);
+    desktop.invalidate({0, 0, 640, 480});
+    wait(20000);
+    CHECK(screen.pixels[100 * 320 + 100] == 0xFF); // nothing of the desktop is painted over it
+    // Given back: the screen is the desktop's again, at its own size.
+    g.give_screen_back();
+    wait(20000);
+    CHECK(!g.has_screen() && !display.coarse() && display.width() == 640 && changes == 2);
+    CHECK(display.pixels()[3 * 640 + 3] == desk);
+    // Not asked for, not given.
+    CHECK(g.take_screen(screen) && screen.width == 640 && !display.coarse());
+    g.close();
+    wait(20000);
+    desktop.set_mode_listener(nullptr, nullptr);
+}
+
 void test_late_before_its_first_window()
 {
     static host::ThreadTasks tasks;
@@ -987,6 +1034,7 @@ int main()
     test_programs_give_back();
     test_ui();
     test_lent_screen();
+    test_lent_coarse_screen();
     test_programs_on_tasks();
     test_late_before_its_first_window();
     test_not_responding(); // before the last one, which ends with the screen taken by Shut Down

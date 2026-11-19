@@ -10,7 +10,12 @@
 extern "C" {
 #endif
 
-#define VGA_MODES 2 /* all of them */
+#define VGA_MODES 2 /* all of those a screen can be set to */
+/* A third, 320x240, for a program that has the whole screen: the signal of
+ * 640x480 with every pixel twice as wide and every line sent twice. It is
+ * not counted by vga_mode_count(); vga_set_mode() takes it at any time and
+ * needs no more memory than the picture already has. */
+#define VGA_MODE_COARSE 2
 
 typedef struct {
     uint16_t width, height;

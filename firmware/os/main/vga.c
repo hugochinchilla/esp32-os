@@ -2,7 +2,9 @@
  * VGA output through the LCD peripheral. The settings of the first mode are
  * the ones proven with firmware/vga-test on the bench: 25.000 MHz pixel
  * clock and bounce buffers (see docs/DECISIONS.md, "Found on the bench").
- * The second mode, 800x600, is backlog item 68.
+ * The second mode, 800x600, is backlog item 68. The third, 320x240, is for a
+ * program that has the whole screen (Doom, backlog item 81): to the monitor
+ * it is 640x480 still, see `repeat` below.
  *
  * We own the single framebuffer and fill the bounce buffers ourselves, so a
  * line hook (the mouse pointer) can be mixed in on the way out.
@@ -59,10 +61,20 @@ typedef struct {
      * to 50 are not ready in time. 640x480 has 320 us for 6,400 bytes and
      * missed nothing, so it is left as it was. */
     bool ahead;
+    /* How many times each line of the picture is sent (1, or 2). A monitor
+     * takes no signal of 240 lines: it wants the 525 lines of 640x480, 31.5
+     * kHz of them. So the coarse mode sends that very signal with the pixel
+     * clock halved, which makes every pixel twice as wide and is nothing
+     * the monitor can see, and sends each line twice, which the refill
+     * does as it copies. It is what a VGA card did with the 320x200 of the
+     * games of its day. `height` is the picture's; the signal has `repeat`
+     * times as many lines. */
+    uint8_t repeat;
 } vga_mode_t;
 static const vga_mode_t s_modes[] = {
-    {640, 480, 25000000, 16, 96, 48, 10, 2, 33, false, false}, /* 800 x 525 in all, 59.52 Hz */
-    {800, 600, 40000000, 40, 128, 88, 1, 4, 23, true, true},   /* 1056 x 628 in all, 60.32 Hz */
+    {640, 480, 25000000, 16, 96, 48, 10, 2, 33, false, false, 1}, /* 800 x 525 in all, 59.52 Hz */
+    {800, 600, 40000000, 40, 128, 88, 1, 4, 23, true, true, 1},   /* 1056 x 628 in all, 60.32 Hz */
+    {320, 240, 12500000, 8, 48, 24, 10, 2, 33, false, false, 2},  /* 400 x 525 in all, 59.52 Hz */
 };
 #define MODE_COUNT ((int)(sizeof(s_modes) / sizeof(s_modes[0])))
 #define BOUNCE_LINES 10
@@ -80,7 +92,8 @@ static int s_mode;
 static int s_modes_used = 1;     /* vga_start(modes) */
 static size_t s_picture_bytes;   /* the memory behind s_framebuffer */
 static int s_width = 640, s_height = 480;
-static int s_frame_bytes = 640 * 480;
+static int s_frame_bytes = 640 * 480; /* of the signal: the picture's, times s_repeat */
+static int s_repeat = 1;
 static uint32_t s_period_cycles;
 static volatile uint32_t s_frames;
 static vga_line_hook_t s_line_hook;
@@ -123,11 +136,24 @@ static IRAM_ATTR bool on_bounce_empty(esp_lcd_panel_handle_t panel, void *bounce
     const int32_t late = steady ? (int32_t)(interval - PERIOD_CYCLES) : 0;
     if (s_ahead_ready && pos_px == 2 * len_bytes) {
         memcpy(bounce_buf, s_ahead, len_bytes); /* copied in the blank, see below */
+    } else if (s_repeat == 2) {
+        /* Each line of the picture twice: the first copy from the picture,
+         * the second from the first, which is in internal RAM. A bounce
+         * buffer holds an even number of lines and starts on an even one. */
+        const int width = s_width;
+        const uint8_t *from = s_framebuffer + pos_px / 2;
+        uint8_t *to = bounce_buf;
+        for (int done = 0; done < len_bytes; done += 2 * width) {
+            memcpy(to, from, (size_t)width);
+            memcpy(to + width, to, (size_t)width);
+            from += width;
+            to += 2 * width;
+        }
     } else {
         memcpy(bounce_buf, s_framebuffer + pos_px, len_bytes);
     }
     s_ahead_ready = false;
-    vga_line_hook_t hook = s_line_hook;
+    vga_line_hook_t hook = s_repeat == 1 ? s_line_hook : NULL; /* no pointer on a coarse picture */
     if (hook) {
         hook(bounce_buf, pos_px, len_bytes);
     }
@@ -144,7 +170,7 @@ static IRAM_ATTR bool on_bounce_empty(esp_lcd_panel_handle_t panel, void *bounce
      * is not timed as a refill: nothing waits for it. */
     const bool ahead = s_ahead != NULL && pos_px == len_bytes && s_frame_bytes >= 3 * len_bytes;
     if (!ahead) {
-        Cache_Start_DCache_Preload((uint32_t)(s_framebuffer + next), len_bytes, 0);
+        Cache_Start_DCache_Preload((uint32_t)(s_framebuffer + next / s_repeat), len_bytes / s_repeat, 0);
     }
     const uint32_t end = esp_cpu_get_cycle_count();
     const uint32_t fill = end - start;
@@ -198,7 +224,7 @@ static IRAM_ATTR bool on_vsync(esp_lcd_panel_handle_t panel,
 static uint32_t frame_us(const vga_mode_t *m)
 {
     const uint64_t h = m->width + m->h_front + m->h_sync + m->h_back;
-    const uint64_t v = m->height + m->v_front + m->v_sync + m->v_back;
+    const uint64_t v = m->height * m->repeat + m->v_front + m->v_sync + m->v_back;
     return (uint32_t)(h * v * 1000000 / m->pixel_clock_hz);
 }
 
@@ -210,7 +236,8 @@ static void start_mode(int index)
     s_mode = index;
     s_width = m->width;
     s_height = m->height;
-    s_frame_bytes = m->width * m->height;
+    s_repeat = m->repeat;
+    s_frame_bytes = m->width * m->height * m->repeat;
     /* One bounce buffer of picture with its share of the blanking. */
     s_period_cycles = (uint32_t)((uint64_t)BOUNCE_LINES * (m->width + m->h_front + m->h_sync + m->h_back) *
                                  (CYCLES_PER_US * 1000000ULL) / m->pixel_clock_hz);
@@ -229,7 +256,7 @@ static void start_mode(int index)
         .timings = {
             .pclk_hz = m->pixel_clock_hz,
             .h_res = m->width,
-            .v_res = m->height,
+            .v_res = m->height * m->repeat,
             .hsync_pulse_width = m->h_sync,
             .hsync_back_porch = m->h_back,
             .hsync_front_porch = m->h_front,
@@ -297,7 +324,7 @@ void vga_start(int modes)
 
 void vga_set_mode(int index)
 {
-    if (index < 0 || index >= s_modes_used || index == s_mode) {
+    if (index < 0 || (index >= s_modes_used && index != VGA_MODE_COARSE) || index == s_mode) {
         return;
     }
     /* The panel goes with its interrupt, its DMA channel and its two bounce

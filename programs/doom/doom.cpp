@@ -148,6 +148,24 @@ public:
         // whole: the screen's own memory is slow to write a byte at a time.
         uint8_t upper[kDoomW * 2], lower[kDoomW * 2];
         uint8_t *out = screen_.pixels + top_ * screen_.width + left_;
+        if (scale_ == 1) {
+            // The coarse picture: a pixel for a pixel, and the same four
+            // tables laid over squares of four of the game's own pixels.
+            for (int y = 0; y < kDoomH; y++) {
+                const uint8_t *in = pixels + y * kDoomW;
+                const uint8_t *even = table_[(y & 1) * 2], *odd = table_[(y & 1) * 2 + 1];
+                for (int x = 0; x < kDoomW; x += 2) {
+                    upper[x] = even[in[x]];
+                    upper[x + 1] = odd[in[x + 1]];
+                }
+                memcpy(out, upper, kDoomW);
+                out += screen_.width;
+            }
+            screen_changed({left_, top_, kDoomW, kDoomH});
+            pictures_++;
+            picture_us_ += static_cast<uint32_t>(os::now_us()) - began;
+            return;
+        }
         for (int y = 0; y < kDoomH; y++) {
             const uint8_t *in = pixels + y * kDoomW;
             for (int x = 0; x < kDoomW; x++) {
@@ -224,12 +242,16 @@ private:
     // Takes the screen and lets the engine run. False: the screen is not free.
     bool play()
     {
-        if (!take_screen(screen_)) {
+        // The coarse picture if this screen has one: 320x240 that the
+        // screen makes large by itself, so that the engine's 320x200 go
+        // out as they are. Otherwise this program makes each pixel four.
+        if (!take_screen(screen_, true)) {
             return false;
         }
         playing_ = true;
-        left_ = (screen_.width - kDoomW * 2) / 2;
-        top_ = (screen_.height - kDoomH * 2) / 2;
+        scale_ = screen_.width >= kDoomW * 2 && screen_.height >= kDoomH * 2 ? 2 : 1;
+        left_ = (screen_.width - kDoomW * scale_) / 2;
+        top_ = (screen_.height - kDoomH * scale_) / 2;
         memset(screen_.pixels, 0, static_cast<size_t>(screen_.width) * static_cast<size_t>(screen_.height));
         screen_changed({0, 0, screen_.width, screen_.height});
         port_show_again();
@@ -325,6 +347,7 @@ private:
     bool playing_ = false; // and has the screen
     os::ui::Screen screen_;
     int left_ = 0, top_ = 0;
+    int scale_ = 2; // 1: the screen is the coarse picture, a pixel for a pixel
     uint8_t table_[4][256] = {};
     int files_[os::file::kMaxOpenEach] = {};
     uint32_t pictures_ = 0, ticks_ = 0, tick_us_ = 0, picture_us_ = 0, longest_us_ = 0, late_ = 0;

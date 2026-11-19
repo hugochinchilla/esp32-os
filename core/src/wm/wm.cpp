@@ -2447,7 +2447,7 @@ void Wm::take_over(ScreenFn paint, void *context)
     update();
 }
 
-uint8_t *Wm::lend_screen(Window &to)
+uint8_t *Wm::lend_screen(Window &to, bool coarse)
 {
     if (lent_ == &to) {
         return display_.pixels();
@@ -2459,6 +2459,12 @@ uint8_t *Wm::lend_screen(Window &to)
     lent_ = &to;
     lent_x_ = pointer_x_;
     lent_y_ = pointer_y_;
+    if (coarse && display_.set_coarse(true)) {
+        lent_coarse_ = true;
+        if (mode_fn_ != nullptr) {
+            mode_fn_(mode_context_); // whoever watches the screen from afar: it has another size
+        }
+    }
     return display_.pixels();
 }
 
@@ -2469,6 +2475,13 @@ void Wm::return_screen()
     }
     lent_ = nullptr;
     screen_fn_ = nullptr;
+    if (lent_coarse_) {
+        lent_coarse_ = false;
+        display_.set_coarse(false);
+        if (mode_fn_ != nullptr) {
+            mode_fn_(mode_context_);
+        }
+    }
     // Keys held when the screen went were never seen let go by anyone else.
     buttons_ = 0;
     swallow_button_ = false;
