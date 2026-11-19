@@ -160,3 +160,22 @@ compiled here (the container has no SDL).
 - The owner's word on the choices of section 3.
 - The board check, and the step time measured there.
 - Restart still asks nobody and closes nothing; not part of this item.
+
+## On the board (2026-11-19, 667bb62)
+
+App-flashed on the 3 MB layout (`esp32-os.bin` 1,757,968 bytes, +2.4 KB on
+main). With nothing open the fade of the icons and taskbar and then of the
+desktop to black takes about 1.4 s from Enter; the last screen has pixel value 0
+in all four corners, the stars, the sleeping mascot and both lines, no windows
+and no pointer, and keys and the mouse change nothing there; Ctrl+Alt+Del
+restarts. With `notes.txt` changed and Culebra open, Culebra and the folder
+close at once and the Editor's "Save changes?" stays (still there after 5 s);
+Alt+N lets the fade and the last screen follow by themselves; Escape keeps the
+Editor with its text and the desktop alive after 30 s. With nobody answering
+the question is still shown at 15 s and the last screen is up by 26 s, and
+`notes.txt` (209 bytes) and `C:\crash.txt` (4,384) are unchanged. At 800x600
+the last screen fills the 800x600 picture (it is not a box on black) with the
+corners at 0. A fade step takes about 20 ms at 640x480 (299,000 pixels) and 31
+to 38 ms at 800x600 (about 470,000), one every 60 ms, with no missed refill; a
+viewer on the remote screen ends on the last screen. The owner then confirmed
+the six design choices.
