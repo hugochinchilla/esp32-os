@@ -157,3 +157,46 @@ Three layers, the first two portable.
 The owner answered the first choice: pairing by itself when a keyboard or a
 mouse is missing, with a window for the rest. The switch and pairing with
 no code are still his to confirm.
+
+## The first run on the board (batch 19, part A)
+
+Commit 72c018e, no device tried yet (that part waits for the owner with a
+keyboard or mouse). It started in 73 ms with no restarts, heard seven
+devices in the room, and both switches worked. No missed refills. The
+benchmark had 37 pieces over budget, as main has.
+
+What it costs, measured:
+
+| | main | Bluetooth listening | `enabled = false` |
+| --- | --- | --- | --- |
+| Free internal RAM | 189,147 | 130,971 (58 KB less) | 21 KB less than main |
+| Largest free internal block | 114,688 | 57,344 | |
+| Free external RAM | | 204 KB less | 170 KB less |
+| After the benchmark: free internal, lowest, largest block | 148,331, , 73,728 | 90,179, 49,452, 31,744 | |
+
+- The backlog's estimate was 50 to 100 KB of internal RAM: it is 58.
+- **The switch gives back 37 of the 58 KB, not all.** The link map says
+  why: the Bluetooth controller's library keeps 12.4 KB of its code in
+  internal RAM whether it runs or not (interrupt code; ESP-IDF offers no
+  setting for it on the ESP32-S3), and it, the radio's and the
+  coexistence libraries add a few KB of static data. Only a firmware
+  built without Bluetooth gets those back.
+- The external RAM is the firmware itself: its code runs from external RAM
+  (`CONFIG_SPIRAM_XIP_FROM_PSRAM`), so 200 KB more program is 200 KB less
+  external RAM, on or off.
+- The stack of NimBLE's task had 1,300 bytes left of 4,096 before any
+  device had connected. Too little: 6,144 now.
+- A full update of the remote screen took 3.3 to 3.7 s against 2.0 s on
+  main, with nothing paired, so with the radio listening 30 ms in every
+  100 all the time. Listening is now of two kinds: thinly in the
+  background (20 ms in every 200), and as before only while a list is on
+  show or `dbg.py bt scan` runs. With a keyboard and a mouse both
+  connected it does not listen at all.
+- Trimmed from the controller, none of it used by a host of keyboards:
+  room for two of its six connections or advertisers (828 bytes each), the
+  list of devices already reported, advertising, the radio test mode; and
+  the names of NimBLE's errors as text. The firmware is 9.8 KB smaller for
+  it (1,933,712 bytes on the same base). How much internal RAM it gives
+  back is for the next turn to measure; I expect a few KB, not tens.
+- The laptop's build with main merged was 1,975,648 bytes, 97.2% of the
+  slot.
