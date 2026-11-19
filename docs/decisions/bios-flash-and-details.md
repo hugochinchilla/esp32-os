@@ -4,7 +4,7 @@ date: 2026-11-17
 by: owner
 status: decided
 area: boot
-summary: "The BIOS takes 1 MB from C:; two update slots of 1.94 MB; C: is 11 MB"
+summary: "The BIOS takes 1 MB from C:; two update slots, C: after them. The sizes were changed by \"App slots of 3 MB\""
 ---
 
 # BIOS stage: flash and details
@@ -20,3 +20,7 @@ BIOS is built.
 Taken as recommended, the owner did not object (to confirm): the BIOS's
 settings live in NVS, not `boot.ini`; the BIOS shows the crash screen;
 an OS image received over serial is a later step.
+
+Changed on 2026-11-19 by [App slots of 3 MB](app-slots-3-mb.md): the slots
+are 3 MB, `otadata` is at 0xf0000 inside the BIOS's megabyte (the `bios`
+partition is 896 KB), and C: is 9 MB from 0x700000.

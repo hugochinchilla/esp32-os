@@ -203,3 +203,33 @@ What it costs, measured:
   (main had grown in between, and the two builds differ). After the trim
   and with main of 01:10 merged the cloud's build is 1,937,600 bytes,
   compiled and linked, not run.
+
+## The second run (batch 20, part A again)
+
+Commit e63159e over main, still with no device: the owner has not yet said
+whether he has a Bluetooth LE keyboard or mouse, so part B waits.
+
+| | main | listening (batch 19) | listening (now) | `enabled = false` |
+| --- | --- | --- | --- | --- |
+| Free internal RAM | 189,095 | 130,971 | 133,683 | 169,919 |
+| Largest free internal block | 114,688 | 57,344 | 59,392 | 94,208 |
+| Unused stack of `nimble_host` | | 1,300 | 3,940 | |
+| Unused stack of `btController` | | 2,096 | 2,096 | |
+
+- The trim of the controller gave back 2.7 KB of internal RAM, as little
+  as expected: on costs 55 KB now, off 19 KB.
+- The stack of NimBLE's task is no longer a worry before a device is
+  tried; real use is still to measure.
+- The remote screen: the Wi-Fi was slow that day, so the figures are not
+  those of batch 19. A full update took 11 s on main, 15 to 20 s with
+  Bluetooth listening in the background, 12 to 14 s with pairing by itself
+  off (so not listening, but the radio on), 6 to 14 s with `enabled =
+  false`. Still about 1.6 times slower while listening, though listening
+  is a fifth of what it was; on a day like that the figures do not say
+  whether the thinner listening helped. To measure again on a normal day,
+  and with a keyboard and a mouse both connected, when it does not listen
+  at all.
+- No missed refills. `dbg.py bt scan` heard two devices.
+- The app slots are 3 MB since PR 79 was merged in the same batch, so the
+  firmware (1,968,768 bytes on the laptop) fills about 63% of its slot
+  and the worry of the first run is gone.

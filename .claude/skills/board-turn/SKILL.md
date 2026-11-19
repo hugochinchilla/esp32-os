@@ -55,9 +55,20 @@ exported; it must print "0 name(s) missing"), output in `build/programs/`.
 Which layout the board is on decides the command. Read the partition table
 offsets in `build/flash_args` first.
 
-- **BIOS layout** (the board's layout since PR 40 merged, 2026-11-17: bootloader
-  0x0, table 0x8000, BIOS 0x10000, ota_0 0x100000, ota_1 0x2f0000, otadata
-  0x4e0000, C: 0x500000): app only, `python3 tools/dbg.py boot fast-next` then
+- **3 MB layout** (`main` since backlog item 71, 2026-11-19: bootloader 0x0,
+  table 0x8000, BIOS 0x10000, otadata 0xf0000, ota_0 0x100000, ota_1 0x400000,
+  C: 0x700000). The commands are those of the BIOS layout below, except that a
+  full cable flash must write only 0x0, 0x8000, 0xf0000, 0x100000. `ota_0`
+  starts at the same place in both layouts, so `app-flash` of a branch cut
+  before item 71 still works on a board with this layout; a full `flash` of
+  such a branch does not (it would put the old table back): merge `main` in
+  first, as step 1 says. After an update over the network the board may run
+  from `ota_1` (the BIOS's "Boot device" line says which): `app-flash` writes
+  `ota_0` only, so it would not be started. Finish a turn that did OTA checks
+  with a full `idf.py flash` (it rewrites `otadata`, so `ota_0` is started again).
+- **BIOS layout** (the board's layout from PR 40, 2026-11-17, until item 71:
+  bootloader 0x0, table 0x8000, BIOS 0x10000, ota_0 0x100000, ota_1 0x2f0000,
+  otadata 0x4e0000, C: 0x500000): app only, `python3 tools/dbg.py boot fast-next` then
   in `firmware/os`: `idf.py -p /dev/ttyACM0 app-flash`. A full cable flash
   (`idf.py -p /dev/ttyACM0 flash` there) must write only 0x0, 0x8000, 0x100000,
   0x4e0000; the BIOS itself is written with `sh tools/flash-bios.sh

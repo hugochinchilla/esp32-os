@@ -16,7 +16,8 @@ Step 2 of backlog item 46, compiled but not run on the board
 (`docs/journal/2026-11-17-bios-second-stage.md`).
 
 - The BIOS is the app partition `bios` (subtype `test`, 960 KB at 0x10000);
-  C: is 11 MB; `nvs` did not move.
+  C: is 11 MB; `nvs` did not move. (Since 2026-11-19 the partition is 896 KB
+  and C: is 9 MB: [App slots of 3 MB](app-slots-3-mb.md).)
 - Our bootloader file starts the BIOS at every start unless a word in the
   reserved RTC memory asks for the OS. The BIOS writes the word and
   restarts. With no good BIOS image in the flash the OS starts as before.

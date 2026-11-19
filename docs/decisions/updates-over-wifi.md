@@ -4,7 +4,7 @@ date: 2026-11-17
 by: agent
 status: to-confirm
 area: network
-summary: "Two app slots of 1.94 MB and `otadata`; how an update arrives and is confirmed (backlog 25)"
+summary: "Two app slots and `otadata` (3 MB each since \"App slots of 3 MB\"); how an update arrives and is confirmed (backlog 25)"
 ---
 
 # Chosen for updates over Wi-Fi
@@ -28,3 +28,6 @@ the agent under the owner's "dejo a tu criterio" of 2026-11-16.
   confirming at once; confirming by hand.
 - **Off unless `[update] enabled = true` in `C:\.config\network.ini`.**
   No password, by the owner's rule. Rejected: always on.
+
+Changed on 2026-11-19 by [App slots of 3 MB](app-slots-3-mb.md): the slots
+are 3 MB each and C: moved to 0x700000.
