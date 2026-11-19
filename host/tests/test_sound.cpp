@@ -414,10 +414,18 @@ void test_system_sounds()
     test_culebra_sounds(out);
     out.played.resize(4);
 
-    // Shut Down: the closing melody, once, with the last screen.
-    CHECK(shell::power_down() && shell::powered_down());
+    // Shut Down: the closing melody, once, as the picture begins to fade
+    // (backlog item 60); it plays over the fade and the last screen.
+    CHECK(shell::power_down() && out.played.size() == 4);
+    clock_.now += 1000;
+    desktop.tick();
+    CHECK(desktop.taken_over() && !shell::powered_down());
     CHECK(out.played.size() == 5 && out.played[4] == kClose);
-    CHECK(shell::power_down());
+    for (int i = 0; i < 40 && !shell::powered_down(); i++) {
+        clock_.now += 60000;
+        desktop.tick();
+    }
+    CHECK(shell::powered_down() && shell::power_down());
     CHECK(out.played.size() == 5);
 
     // The output taken away again: silence.

@@ -66,11 +66,17 @@ void ask(const char *title, const char *text, const char *const *buttons, int co
 // The Shut Down dialog: Shut Down, Restart (through the System port) or
 // Cancel.
 void shut_down_dialog();
-// Shut Down: asks every program to close, then hands the screen to the
-// power-down screen for good (Ctrl+Alt+Del there restarts). Returns false,
-// with nothing shut down, when a program has a question open instead.
+// Shut Down, a sequence that runs on the desktop's timer from here (backlog
+// item 60): every program is asked to close and the system waits for those
+// that ask a question first; what is still open after kCloseWaitUs is
+// ended. Then the desktop fades to black and the power-down screen shows
+// for good (Ctrl+Alt+Del there restarts). A program that is asked and says
+// no (Cancel in "Save changes?") calls it off. Returns true: it has begun,
+// or was under way already.
 bool power_down();
-bool powered_down();
+constexpr uint32_t kCloseWaitUs = 20000000;
+bool shutting_down(); // begun, and neither called off nor at the last screen yet
+bool powered_down();  // the last screen shows
 // The Task Manager (also Ctrl+Alt+Del): opens it or brings it to the front.
 void open_task_manager();
 
