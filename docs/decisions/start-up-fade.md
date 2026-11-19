@@ -27,6 +27,9 @@ As built, the agent's readings, each his to confirm or overrule:
   and one word away (`Wm::Arrival::FromPicture`): the splash fades into the
   colour in seven steps first, which mirrors Shut Down's two fades and
   adds 420 ms to every start. Put to the owner with both previews.
+  **Confirmed by the owner, 2026-11-19**, once the splash was gone: "Ya
+  esta bien así, de negro al background y luego fade". The other readings
+  below are still his to confirm.
 - **The desktop comes up when everything that starts with the system has
   been started**: init has read its start-up file, so the taskbar, the
   icons and any window a line of that file opened come up together. The
