@@ -13,16 +13,17 @@ Backlog item 56, `docs/journal/2026-11-19-file-manager-views.md`. The owner
 asked for a list and a list with details beside the icons, which stay, and a
 switcher under the View menu. That much is decided. He was asked how the
 List is laid out, with the first of three recommended, and the work went
-ahead on it while the answer was pending; everything else below is the
-agent's choice and his to overrule.
+ahead on it while the answer was pending; he chose the first, columns as
+Windows 98's, on 2026-11-19. Everything else below is the agent's choice
+and his to overrule.
 
 - **View > Icons, List, Details**, the one in use ticked, over Show hidden
   files. The tick is the menu's ordinary one: menus have no round mark.
-- **The List** (asked, pending): small pictures with the names beside them,
+- **The List** (the owner's choice, decided): small pictures with the names beside them,
   filled down the columns, going on to the right with a scroll bar along the
   bottom, as Windows 98's List. Every column is as wide as the longest name
   asks, and no wider than 220 pixels: a longer name is cut with "...". Not
-  recommended: one column that goes on down (it is the Details without the
+  chosen: one column that goes on down (it is the Details without the
   details, and shows 8 files in the default window where columns show 16 or more);
   rows filled from left to right (Windows 98's Small Icons: names are read
   across, which is slower to scan than down).
