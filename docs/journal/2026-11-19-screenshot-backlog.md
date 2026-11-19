@@ -170,7 +170,10 @@ was there), so no version change.
   and a ping in one piece: the ping answered at once, one picture, for the
   last; a request split over two feeds); `test_crash.cpp` (the note, the
   new lines). All PC tests pass.
-- Firmware: not compiled yet at this commit.
+- Firmware: compiles and links in the cloud (ESP-IDF v5.5, `idf.py build`,
+  no warning from the changed files). `waiting_trace` follows what ESP-IDF
+  does for a task that is not running; whether the addresses it gives are
+  right can only be seen on the board (`dbg.py fault wait`).
 - Not run on the board. Asked of the board turn: the batch-23 runs again
   (Bricks, the capture tool from the restart, fast and through the BIOS:
   no hang, and the tool gets screenshots within a few seconds), `fault
