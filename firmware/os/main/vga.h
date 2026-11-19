@@ -16,6 +16,9 @@ extern "C" {
  * not counted by vga_mode_count(); vga_set_mode() takes it at any time and
  * needs no more memory than the picture already has. */
 #define VGA_MODE_COARSE 2
+/* And a fourth, 640x240: the pixel clock of 640x480 and each line sent
+ * twice. Taken like the third. */
+#define VGA_MODE_TALL 3
 
 typedef struct {
     uint16_t width, height;

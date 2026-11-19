@@ -778,13 +778,13 @@ void test_lent_coarse_screen()
     desktop.set_mode_listener([](void *) { changes++; }, nullptr);
 
     os::ui::Screen screen;
-    CHECK(g.take_screen(screen, true) && screen.width == 640 && screen.height == 480); // this screen has none
+    CHECK(g.take_screen(screen, 320) && screen.width == 640 && screen.height == 480); // this screen has none
     CHECK(!display.coarse() && changes == 0);
     g.give_screen_back();
     wait(10000);
 
     display.offer_coarse();
-    CHECK(g.take_screen(screen, true) && screen.pixels == display.pixels());
+    CHECK(g.take_screen(screen, 320) && screen.pixels == display.pixels());
     CHECK(screen.width == 320 && screen.height == 240 && display.coarse() && changes == 1);
     CHECK(display.width() == 320 && desktop.screen_width() == 640 && desktop.screen_height() == 480);
     CHECK(screen.pixels[0] == 0 && screen.pixels[239 * 320 + 319] == 0); // it starts black

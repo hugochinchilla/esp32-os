@@ -382,6 +382,11 @@ int main(int argc, char **argv)
         CHECK(desktop.screen_lent_to() != nullptr && display.coarse() && screen_sum() != dithered);
         save(pictures, "doom-10b-coarse-plain");
         f12();
+        CHECK(desktop.screen_lent_to() != nullptr && display.coarse() && display.width() == 640 &&
+              display.height() == 240);
+        CHECK(display.pixels()[30 * 640 + 300] != 0 || display.pixels()[120 * 640 + 300] != 0);
+        save(pictures, "doom-10b2-tall");
+        f12();
         CHECK(desktop.screen_lent_to() != nullptr && !display.coarse() && display.width() == 640);
         CHECK(colours() > 20 && display.pixels()[5 * 640 + 5] == 0);
         save(pictures, "doom-10c-fourfold");

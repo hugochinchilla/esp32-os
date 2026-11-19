@@ -2081,7 +2081,7 @@ bool in_front(Window window)
     return w != nullptr && os::in_front(*w);
 }
 
-bool take_screen(Window window, Screen &out, bool coarse)
+bool take_screen(Window window, Screen &out, int coarse)
 {
     const prog::InCall in_call;
     out = {};

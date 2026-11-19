@@ -280,24 +280,27 @@ public:
         vga_mode_info(index, &m);
         return {static_cast<int16_t>(m.width), static_cast<int16_t>(m.height), m.pixel_clock_hz, m.frame_us};
     }
-    int mode() const override { return coarse_ ? mode_before_ : vga_mode(); }
+    int mode() const override { return coarse_ != 0 ? mode_before_ : vga_mode(); }
     // The coarse picture is a mode of the driver that is not on the list:
     // the same wait as any change of mode, and to the monitor the same
     // signal as 640x480.
-    bool set_coarse(bool on) override
+    bool set_coarse(int width) override
     {
-        if (on == coarse_) {
+        if (width != 0 && width != 320 && width != 640) {
+            return false;
+        }
+        if (width == coarse_) {
             return true;
         }
-        const int before = vga_mode();
-        if (!switch_to(on ? VGA_MODE_COARSE : mode_before_)) {
+        const int before = coarse_ != 0 ? mode_before_ : vga_mode();
+        if (!switch_to(width == 320 ? VGA_MODE_COARSE : width == 640 ? VGA_MODE_TALL : before)) {
             return false;
         }
         mode_before_ = before;
-        coarse_ = on;
+        coarse_ = width;
         return true;
     }
-    bool coarse() const override { return coarse_; }
+    bool coarse() const override { return coarse_ != 0; }
     // The UI task waits here while the signal stops and starts again (a few
     // milliseconds; the monitor then takes its own time to show a picture).
     bool set_mode(int index) override
@@ -305,7 +308,7 @@ public:
         if (index < 0 || index >= vga_mode_count()) {
             return false;
         }
-        if (coarse_) {
+        if (coarse_ != 0) {
             return false; // the window manager takes the screen back first
         }
         if (index == vga_mode()) {
@@ -315,7 +318,7 @@ public:
     }
 
 private:
-    bool coarse_ = false;
+    int coarse_ = 0; // the coarse picture's width, 0: none
     int mode_before_ = 0;
 
     bool switch_to(int index)

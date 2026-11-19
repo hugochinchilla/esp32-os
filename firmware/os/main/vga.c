@@ -75,6 +75,7 @@ static const vga_mode_t s_modes[] = {
     {640, 480, 25000000, 16, 96, 48, 10, 2, 33, false, false, 1}, /* 800 x 525 in all, 59.52 Hz */
     {800, 600, 40000000, 40, 128, 88, 1, 4, 23, true, true, 1},   /* 1056 x 628 in all, 60.32 Hz */
     {320, 240, 12500000, 8, 48, 24, 10, 2, 33, false, false, 2},  /* 400 x 525 in all, 59.52 Hz */
+    {640, 240, 25000000, 16, 96, 48, 10, 2, 33, false, false, 2}, /* 800 x 525 in all: 640x480 with tall lines */
 };
 #define MODE_COUNT ((int)(sizeof(s_modes) / sizeof(s_modes[0])))
 #define BOUNCE_LINES 10
@@ -324,7 +325,7 @@ void vga_start(int modes)
 
 void vga_set_mode(int index)
 {
-    if (index < 0 || (index >= s_modes_used && index != VGA_MODE_COARSE) || index == s_mode) {
+    if (index < 0 || (index >= s_modes_used && index != VGA_MODE_COARSE && index != VGA_MODE_TALL) || index == s_mode) {
         return;
     }
     /* The panel goes with its interrupt, its DMA channel and its two bounce

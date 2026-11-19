@@ -128,14 +128,14 @@ public:
     // the screen is laid out again. False: nothing changed.
     virtual bool set_mode(int index) { return index == mode(); }
 
-    // A coarse picture, 320x240, in place of the mode in use, for a program
-    // that has the whole screen and draws few pixels fast (wm::Wm::
-    // lend_screen). While it is on, width(), height() and pixels() answer
+    // A coarse picture in place of the mode in use, for a program that has
+    // the whole screen and draws few pixels fast (wm::Wm::lend_screen):
+    // `width` 320 for 320x240, 640 for 640x240 (lines twice as tall only),
+    // 0 to go back. While it is on, width(), height() and pixels() answer
     // for it, the picture starts black, and mode() still names the mode it
-    // will go back to; set_coarse(false) goes back, black again. It is not
-    // one of the modes a screen is set to. False: this screen has none, and
-    // nothing changed.
-    virtual bool set_coarse(bool /*on*/) { return false; }
+    // will go back to. It is not one of the modes a screen is set to.
+    // False: this screen has no such picture, and nothing changed.
+    virtual bool set_coarse(int /*width*/) { return false; }
     virtual bool coarse() const { return false; }
 
 protected:
