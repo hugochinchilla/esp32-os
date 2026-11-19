@@ -49,6 +49,36 @@ def main():
     try:
         board = dbg.Board(sim.stdout.readline().strip(), timeout=5.0)
         dbg.wait_for_desktop(board)
+        # Ready is "C: answers", not "a window is open": the wait does not
+        # ask for the windows at all (board batch 26: with none open, the
+        # copy never started).
+        flash.wait_for_drive(board, timeout=10, settle_ms=0)
+
+        class Mute:  # a board that is still restarting, then answers
+            def __init__(self):
+                self.asked = 0
+
+            def ls(self, folder):
+                self.asked += 1
+                if self.asked < 3:
+                    raise dbg.DebugError("no answer from the board")
+                return []
+
+            def stats(self):
+                return {"uptime_ms": 5000}
+
+            def windows(self):
+                raise AssertionError("asked for the windows")
+
+        mute = Mute()
+        flash.wait_for_drive(mute, timeout=10)
+        assert mute.asked == 3
+        try:
+            mute.asked = -1000
+            flash.wait_for_drive(mute, timeout=1)
+            raise AssertionError("waited for ever")
+        except flash.FlashError:
+            pass
         hello, card, big = b"\x7fELF hello" * 40, b"PNG" * 700, bytes(range(256)) * 1200  # 307,200 bytes
         first = [want("C:\\Programs\\hello.app", hello), want("C:\\pictures\\card.png", card),
                  want("C:\\Programs\\DATA.BIN", big)]

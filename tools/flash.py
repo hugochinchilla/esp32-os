@@ -10,7 +10,8 @@
 
 The firmware does not carry the programs kept in files, the sample pictures
 or anything else that lives on C: (backlog item 77). After the firmware is
-written and the desktop is up, this copies them over the debug link:
+written and C: answers (a few seconds after the reset), this copies them
+over the debug link:
 
   build/programs/*.app            ->  C:\\Programs
   the sample pictures             ->  C:\\pictures     (tools/gen_pictures.py)
@@ -242,6 +243,26 @@ def sync(board, wanted, keep=(), say=print):
     return sent, deleted, total
 
 
+def wait_for_drive(board, timeout=90, settle_ms=3000, say=print):
+    """Waits until the board takes files: C: answers over the debug link and
+    the system has been up for `settle_ms`, so the copy does not fall on the
+    desktop's own start. Not dbg.wait_for_desktop: that waits for a window,
+    and a desktop with none open is as ready as any (board batch 26)."""
+    end = time.monotonic() + timeout
+    problem = "no answer"
+    while time.monotonic() < end:
+        try:
+            board.ls("C:\\")
+            up = board.stats()["uptime_ms"]
+            if up >= settle_ms:
+                return
+            time.sleep((settle_ms - up) / 1000.0)
+        except dbg.DebugError as e:
+            problem = str(e)
+            time.sleep(0.5)
+    raise FlashError("the board did not take files after %d s (%s)" % (timeout, problem))
+
+
 def flash_plan(build_dir):
     """[(offset, file)] and esptool's settings from the build, refused if it
     would write anywhere but the four allowed places."""
@@ -303,7 +324,10 @@ def main(argv=None):
             return 0
         board = dbg.Board(args.port, timeout=20.0)
         try:
-            dbg.wait_for_desktop(board, timeout=90)
+            board.timeout = 2.0  # short while it starts; long for the writes
+
+            wait_for_drive(board)
+            board.timeout = 20.0
             start = time.monotonic()
             # A WAD on the board stays when this run was told to leave it.
             sent, deleted, total = sync(board, wanted, keep=(WAD["to"],))

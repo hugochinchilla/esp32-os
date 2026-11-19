@@ -157,3 +157,24 @@ Smaller choices, the agent's, to confirm:
 On the card he chose the first option, "Copiar por el enlace de
 depuración": what was built stands. The smaller choices listed above are
 still the agent's, to confirm.
+
+## What the board found (batch 26, b48bd76), and the fix
+
+The tool waited for the desktop with `dbg.wait_for_desktop`, which waits
+for a window to be open. The simulator starts with two windows; the board
+starts with none, so the tool gave up after 90 s ("the desktop did not
+start") and copied nothing unless someone opened a window first. The PC
+test could not see it for that reason. Now `flash.wait_for_drive` waits
+for C: to answer over the debug link and for the system to have been up 3
+s, and never asks for the windows; the test has a board that would fail
+if it did.
+
+The rest passed with a window open: only the four addresses written
+(1,726,624 bytes in 25.4 s), 9 files (252,771 bytes) copied in 17.7 s, a
+second run 0 files in 1.5 s, a deleted `hello.app` copied again, programs
+and pictures open, a start with no programs on C: is fine. 4,196,020
+bytes with `dbg.py put`: 339 s (12 KB/s), read back identical in 184 s, no
+refill missed. So the WAD costs five to six minutes, once. Each 1 KB
+request opens, writes and closes the file; keeping it open between
+requests, or larger requests, is where that time would come down. Not
+done here.
