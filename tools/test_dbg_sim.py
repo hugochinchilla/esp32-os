@@ -13,6 +13,24 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import dbg  # noqa: E402
 
 
+def steady(picture, width=640, height=480):
+    """The picture with the taskbar's clock blanked (`Taskbar::clock_rect`
+    in core/src/desk/taskbar.cpp). Two pictures taken at different moments
+    are compared through this: the minute changes when it likes, and the
+    longer the test runs, as it does beside other tests, the more likely
+    between the two (backlog item 69)."""
+    rows = bytearray(picture)
+    for y in range(height - 24, height - 2):
+        rows[y * width + width - 62:y * width + width - 2] = bytes(60)
+    return bytes(rows)
+
+
+def shot(board):
+    """What is in the picture's memory (no pointer), without the clock."""
+    width, height, picture = board.screenshot(pointer=False)
+    return steady(picture, width, height)
+
+
 def main():
     pc_folder = tempfile.mkdtemp()  # drive D: of the simulator
     sim = subprocess.Popen([sys.argv[1], pc_folder], stdout=subprocess.PIPE, text=True)
@@ -33,13 +51,14 @@ def main():
 
         # Moving the pointer changes the picture there and at the new place,
         # but not the picture in memory.
-        _, _, bare = board.screenshot(pointer=False)
+        bare = shot(board)
         assert bare[240 * 640 + 320] != 0x00
         board.mouse(100, 50, absolute=True)
         _, _, moved = board.screenshot()
         assert moved[240 * 640 + 320] != 0x00
         assert moved[50 * 640 + 100] == 0x00
-        assert board.screenshot(pointer=False)[2] == bare
+        assert shot(board) == bare
+        moved = steady(moved)
         differ = [i for i in range(640 * 480) if moved[i] != bare[i]]
         assert differ and all(100 <= i % 640 < 112 and 50 <= i // 640 < 69 for i in differ)
         board.mouse(5, 5)  # relative
@@ -54,7 +73,7 @@ def main():
 
         # The paint bench names every kind of drawing and both windows, and
         # leaves the picture as it was.
-        _, _, before = board.screenshot(pointer=False)
+        before = shot(board)
         lines = board.paint_bench().splitlines()
         assert lines[0].startswith("paint bench: 480 x 300 = 144000 pixels"), lines
         names = [line.rsplit(" ", 1)[0] for line in lines[1:15]]
@@ -66,7 +85,7 @@ def main():
         assert lines[15].startswith("window Welcome to Chinchill: ") and " menu " in lines[15], lines
         assert lines[16].startswith("window About Chinchilla: "), lines
         assert lines[17].startswith("everything again ") and len(lines) == 18, lines
-        assert board.screenshot(pointer=False)[2] == before
+        assert shot(board) == before
 
         # Drag About by its title bar with mouse events.
         grab_x, grab_y = about["x"] + 150, about["y"] + 10
@@ -79,9 +98,9 @@ def main():
         assert (moved_about["x"], moved_about["y"]) == (about["x"] - 100, about["y"] - 80), moved_about
 
         # What is on the screen equals a full repaint: nothing stale.
-        _, _, before = board.screenshot(pointer=False)
+        before = shot(board)
         assert board.repaint() >= 0
-        _, _, after = board.screenshot(pointer=False)
+        after = shot(board)
         assert before == after
         # The title bar moved with the window (dark blue at its left end).
         assert after[(moved_about["y"] + 8) * 640 + moved_about["x"] + 5] != after[(about["y"] + 8) * 640 + about["x"] + 5]
@@ -242,13 +261,13 @@ def main():
         board = dbg.Board(port, timeout=2.0)
         # The error screen after a crash, drawn on request (the simulator
         # shows a made-up report), and the desktop back afterwards.
-        before = board.screenshot(pointer=False)[2]
+        before = shot(board)
         board.boot_screen("crash")
-        crash = board.screenshot(pointer=False)[2]
+        crash = shot(board)
         assert crash != before and crash[:640 * 16] == bytes(640 * 16), "the error screen is black at the top"
         assert sum(1 for p in crash if p != 0) > 2000
         board.repaint()
-        assert board.screenshot(pointer=False)[2] == before
+        assert shot(board) == before
         # The screen's modes (backlog item 68): two, the first in use. A
         # change is made just after the reply; the screenshot and the info
         # are then of the new size, and the taskbar is at its bottom.
@@ -257,12 +276,13 @@ def main():
         assert (modes[0]["frame_us"], modes[1]["frame_us"]) == (16800, 16579), modes
         assert board.video_modes(1)[0] == 1
         width, height, wide = board.screenshot(pointer=False)
+        wide = steady(wide, width, height)
         assert (width, height, len(wide)) == (800, 600, 800 * 600)
         assert (board.info()["width"], board.info()["height"]) == (800, 600)
         assert wide[590 * 800 + 400] == before[470 * 640 + 320], "the taskbar's face at the bottom of both"
         assert board.frames()["budget_us"] == 16579
         board.repaint()
-        assert board.screenshot(pointer=False)[2] == wide, "nothing stale after the change"
+        assert shot(board) == wide, "nothing stale after the change"
         try:
             board.video_modes(7)
             refused = False
@@ -274,7 +294,7 @@ def main():
         assert "* 1: 800 x 600, 60.32 frames a second" in out.stdout and "  0: 640 x 480, 59.52" in out.stdout, out
         board = dbg.Board(port, timeout=2.0)
         assert board.video_modes(0)[0] == 0
-        assert board.screenshot(pointer=False)[2] == before, "and back, the picture is what it was"
+        assert shot(board) == before, "and back, the picture is what it was"
         # A fault on purpose: the simulator answers and carries on (a PC
         # does not crash to order); a PID that is not running is refused.
         board.fault("hang")
