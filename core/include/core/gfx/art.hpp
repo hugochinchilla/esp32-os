@@ -39,7 +39,6 @@ const Bitmap &welcome_icon_32();
 const Bitmap &power_icon_16(); // Shut Down
 const Bitmap &power_icon_32();
 const Bitmap &run_icon_16();
-const Bitmap &browser_icon_16(); // the web browser: a globe
 const Bitmap &run_icon_32();
 const Bitmap &service_icon_16(); // a process with no window
 const Bitmap &service_icon_32();

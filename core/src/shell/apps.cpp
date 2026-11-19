@@ -30,7 +30,6 @@ const Entry kApps[] = {
     // A page is read, laid out and fetched on its task, with addresses of
     // 600 bytes on the stack at several depths. ponytail: a first figure,
     // to be trimmed with what the board measures.
-    {{"Vizcacha", nullptr, &open_browser_home, false, true, 12 * 1024}, &gfx::browser_icon_16},
     {{"Welcome", nullptr, &open_welcome, false, true}, &gfx::welcome_icon_16},
 };
 constexpr int kAppCount = sizeof(kApps) / sizeof(kApps[0]);

@@ -37,6 +37,7 @@ CORE = [
     r"^_ZN2fs10error_textE",  # a file error in plain words
     r"^_ZNK?2sh15TerminalSession",  # the Terminal's session: what is typed goes in, the size, the hang-up
     r"^_ZN3msg4postE",  # a message to a process, from another task (the Terminal's session writes from its own)
+    r"^_ZN3gfx(5shown|7nearest)E",  # a colour of the screen from red, green and blue, and back
     r"^_ZNK?5image",  # the picture decoders and the conversion to the board's colours
 ]
 # Variables of the core library, by name: few, and each for a reason.

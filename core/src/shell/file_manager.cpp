@@ -1148,7 +1148,7 @@ bool open_file(const char *path)
         return true;
     }
     case 4:
-        open_browser(path);
+        start_program("Vizcacha", path);
         return true;
     default:
         break;

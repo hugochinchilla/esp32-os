@@ -16,7 +16,6 @@ import sys
 # Programs (files of core/src/shell) that use only the OS calls.
 MOVED = [
     "about.cpp",
-    "browser.cpp",
     "colour_dialog.cpp",
     "dialogs.cpp",
     "display.cpp",

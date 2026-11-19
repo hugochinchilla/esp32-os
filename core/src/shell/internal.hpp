@@ -192,8 +192,6 @@ void start_bluetooth();
 // Centres a window of the given size in the work area.
 gfx::Rect centred(const wm::Wm &wm, int w, int h);
 
-// The web browser (browser.cpp): its Start menu entry.
-void open_browser_home();
 
 // Puts the desktop background in place with its settings (display.cpp).
 void install_display();

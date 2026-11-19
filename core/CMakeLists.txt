@@ -38,9 +38,6 @@ set(CORE_SRCS
     src/net/viewer_page.cpp
     src/net/web.cpp
     src/net/wifi.cpp
-    src/www/html.cpp
-    src/www/http.cpp
-    src/www/url.cpp
     src/sound/beeps.cpp
     src/sound/mixer.cpp
     src/sound/sound.cpp
@@ -76,7 +73,6 @@ set(CORE_SRCS
     src/shell/bluetooth.cpp
     src/shell/bluetooth_service.cpp
     src/shell/boot.cpp
-    src/shell/browser.cpp
     src/shell/desktop.cpp
     src/shell/display.cpp
     src/shell/colour_dialog.cpp

@@ -1077,24 +1077,6 @@ const Bitmap &run_icon_16()
     return bitmap;
 }
 
-const Bitmap &browser_icon_16()
-{
-    static constexpr const char *rows[16] = {
-        "....KKKKKKKK....", "..KKBBGGBBBBKK..", ".KBBGGGGBBBBBBK.", ".KBGGGGGGBBBBBK.",
-        "KBBGGGGGBBBBGGBK", "KBBBGGGBBBBGGGBK", "KBBBBGBBBBBGGGBK", "KBBBBBBBBBBBGGBK",
-        "KBBBBBBGGBBBBBBK", "KBBBBBGGGGBBBBBK", "KBBBBBGGGGGBBBBK", ".KBBBBBGGGBBBBK.",
-        ".KBBBBBBGGBBBBK.", "..KKBBBBBBBBKK..", "....KKKKKKKK....", "................",
-    };
-    static constexpr Ink inks[] = {
-        {'K', rgb(0, 0, 0)},
-        {'B', rgb(1, 3, 3)},
-        {'G', rgb(1, 5, 1)},
-    };
-    static constexpr Pixels<16> pixels = paint<16>(rows, inks);
-    static constexpr Bitmap bitmap = {16, 16, pixels.p, kClear};
-    return bitmap;
-}
-
 const Bitmap &service_icon_32()
 {
     static constexpr const char *rows[32] = {

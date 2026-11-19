@@ -292,10 +292,10 @@ void test_programs_give_back()
 {
     const uint32_t blocks = os::blocks_out(), bytes = os::bytes_out();
     int opened = 0;
-    for (int i = 0; i < shell::app_count(); i++) {
-        const shell::App &app = shell::app(i);
+    for (int i = 0; i < shell::program_count(); i++) {
+        const shell::Program &app = shell::program(i); // the system's own and the files alike
         wm::Window *before = desktop.active();
-        shell::launch(app);
+        shell::start_program(app.name);
         wait(10000);
         wm::Window *w = desktop.active();
         if (w == nullptr || w == before) {
