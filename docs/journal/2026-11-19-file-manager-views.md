@@ -119,3 +119,31 @@ Details being dragged from; anything on the board.
   (every line is a picture and four texts), and that nothing is missed.
 - Not asked for and not built: sorting by a column, pulling a column wider,
   a small blank-sheet picture.
+
+## On the board (2026-11-19, 6aba9c5)
+
+App-flashed on the BIOS layout (firmware 1,755,600 bytes). Icons as before; the
+View menu lists Icons (ticked), List, Details, a line and Show hidden files.
+List: names beside small pictures in columns; a click on a name picks it alone
+with its size and date in the status bar; Down and Up move the pick. Details:
+Name, Size, Type and Modified, the date whole ("2026-11-17 21:19"), the pick
+carried over from the List; a double click on a folder's line opens it and
+Backspace goes back up. A folder with 45 small files made for the check
+(`C:\Documents\many`, deleted afterwards; no folder of the system has that
+many): in Details a scroll bar down the side, the titles stay, two wheel
+notches moved six lines, End goes to the last line; in List a scroll bar along
+the bottom, End goes to the last name, a wheel notch moves a column. In
+Details Ctrl+click picked two more names and a rectangle pulled from the empty
+part right of the names over three lines picked those three (dotted rectangle
+shown); a right click on one gave Cut, Copy and Delete. The view is one choice
+for all folder windows: My Board and the Trash opened in Details too (My Board
+with Size and Free for the drive), `files.ini` held `mode = details`, a fast
+reboot and Documents opened in Details, and View > Icons wrote `mode = icons`.
+
+Measurements, with one folder window on the 45-file folder: End, Home, End,
+Home and three wheel notches down and up painted 16, 14 and 16 pieces in
+Details, List and Icons, with none over the frame budget (longest piece 9.9,
+10.6 and 6.6 ms). `repaint` of the whole screen with that window: Details
+24.9 ms, List 26.3 ms, Icons 22.4 ms. Free RAM with the window open: 180,579
+internal and 5,925,768 external (idle desktop without it: 189,127 and
+5,956,108). No missed refill; `dbg.py misses` is 0.
