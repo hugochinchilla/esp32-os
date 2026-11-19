@@ -181,6 +181,8 @@ net::Manager *network();
 // start(). The shell then keeps the manager running.
 void set_bluetooth(bt::Manager *bluetooth);
 bt::Manager *bluetooth();
+// The Bluetooth program: devices connected, remembered and in range, Pair, Forget.
+void open_bluetooth();
 // The Network panel: networks in range, connect, forget.
 void open_network();
 

@@ -2,8 +2,10 @@
 // item 51): the manager is driven four times a second, so a device that
 // was paired is connected again when it calls, and a new one in pairing
 // mode is taken when the machine has no keyboard or no mouse. Not a
-// program: it has no window.
+// program: the window that shows the devices is (bluetooth.cpp), and it
+// asks for the service through os::bluetooth().
 #include "core/input/bluetooth.hpp"
+#include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
 #include "internal.hpp"
 
@@ -17,7 +19,11 @@ void bluetooth_tick(void *) { g_bluetooth->tick(manager().now_us()); }
 
 } // namespace
 
-void set_bluetooth(bt::Manager *bluetooth) { g_bluetooth = bluetooth; }
+void set_bluetooth(bt::Manager *bluetooth)
+{
+    g_bluetooth = bluetooth;
+    os::install_bluetooth(bluetooth);
+}
 bt::Manager *bluetooth() { return g_bluetooth; }
 
 void start_bluetooth()

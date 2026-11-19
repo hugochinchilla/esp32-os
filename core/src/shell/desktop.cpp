@@ -294,6 +294,7 @@ void find_programs(void *)
 }
 void open_screen_saver(void *) { screen_saver_dialog(); }
 void network_panel(void *) { open_network(); }
+void bluetooth_panel(void *) { open_bluetooth(); }
 void open_display(void *) { display_dialog(); }
 void open_services(void *) { services_dialog(); }
 void open_run(void *) { run_dialog(); }
@@ -315,11 +316,12 @@ wm::MenuItem g_settings_items[] = {
     {"&Control Panel", nullptr, nullptr, nullptr, nullptr, wm::kMenuDisabled},
     {"&Taskbar...", nullptr, nullptr, nullptr, nullptr, wm::kMenuDisabled},
     {"&Network", &network_panel, nullptr, nullptr, nullptr, wm::kMenuDisabled},
+    {"&Bluetooth", &bluetooth_panel, nullptr, nullptr, nullptr, wm::kMenuDisabled},
     {"&Screen Saver...", &open_screen_saver, nullptr, nullptr, &gfx::saver_icon_16(), 0},
     {"&Display...", &open_display, nullptr, nullptr, &gfx::display_icon_16(), 0},
     {"Ser&vices...", &open_services, nullptr, nullptr, &gfx::services_icon_16(), 0},
 };
-wm::Menu g_settings = {g_settings_items, 6};
+wm::Menu g_settings = {g_settings_items, 7};
 wm::MenuItem g_start_items[5];
 wm::Menu g_start = {g_start_items, 5};
 
@@ -1176,6 +1178,9 @@ void start_taskbar(void *)
         g_icons[2] = {"Network", &gfx::network_icon_32(), &network_panel, nullptr};
         g_settings_items[2].icon = &gfx::network_icon_16();
         g_settings_items[2].flags = 0;
+    }
+    if (bluetooth() != nullptr) {
+        g_settings_items[3].flags = 0;
     }
     g_bar->set_tray_icon(g_tray_icon, g_tray_click, g_tray_context);
     {

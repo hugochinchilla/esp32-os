@@ -25,8 +25,8 @@ until he answers.
   asked (the first device needs the debug link or the remote screen); by
   itself only in the first minutes after power-on (a keyboard bought later
   needs a restart to be found). The cost: somebody else's device in pairing
-  mode nearby can be taken; it is forgotten with `dbg.py bt forget` (and
-  from the Bluetooth program once there is one).
+  mode nearby can be taken; it is forgotten from the Bluetooth program
+  or with `dbg.py bt forget`.
 - **A switch.** `[bluetooth] enabled` in the same file, on by default, read
   at start-up. Off: the stack is not started and Wi-Fi has the radio to
   itself as before. Measured on the board (2026-11-19): on costs 58 KB of
@@ -51,6 +51,8 @@ until he answers.
 - **Three connections** at most: a keyboard, a mouse and one more.
 - Bluetooth LE only: the ESP32-S3 has no Bluetooth Classic, so a keyboard
   or mouse that speaks only that will not be found.
-- There is no window for it yet: `tools/dbg.py bt` lists, pairs and
-  forgets. A Bluetooth program (its own process, as every settings tool)
-  follows once the radio has been tried on the board.
+- **The Bluetooth program** (Start > Settings > Bluetooth; its own
+  process, as every settings tool): the devices connected, remembered and
+  in range, Pair, Forget, and the two switches as tick boxes. While it is
+  open the radio listens hard, so a device shows at once. `tools/dbg.py
+  bt` does the same from a PC.

@@ -27,6 +27,7 @@ MOVED = [
     "file_manager.cpp",
     "file_ops.cpp",
     "gallery.cpp",
+    "bluetooth.cpp",
     "network.cpp",
     "run.cpp",
     "screensaver.cpp",

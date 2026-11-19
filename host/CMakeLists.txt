@@ -219,6 +219,11 @@ add_test(NAME msg COMMAND test_msg)
 add_executable(test_input tests/test_input.cpp)
 target_link_libraries(test_input PRIVATE core)
 add_test(NAME input COMMAND test_input)
+add_executable(render_bt_scenes tests/render_bt_scenes.cpp)
+target_link_libraries(render_bt_scenes PRIVATE core)
+add_test(NAME bt_pictures
+         COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/check_pictures.py $<TARGET_FILE:render_bt_scenes>)
+set_tests_properties(bt_pictures PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
 
 # The TTY (backlog item 12), with a session on a thread of its own.
 add_executable(test_tty tests/test_tty.cpp)

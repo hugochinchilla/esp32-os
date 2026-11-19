@@ -418,7 +418,14 @@ void Manager::tick(uint64_t now_us)
 
 /* ---- What the user asks for ------------------------------------------------------ */
 
-bool Manager::pair(const Address &address) { return begin(address, true, last_tick_); }
+bool Manager::pair(const Address &address)
+{
+    if (!begin(address, true, last_tick_)) {
+        return false;
+    }
+    tick(last_tick_); // it is among the links from now on, for whoever asks
+    return true;
+}
 
 void Manager::forget(const Address &address)
 {

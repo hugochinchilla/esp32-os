@@ -147,7 +147,7 @@ Three layers, the first two portable.
   the picture with Wi-Fi and Bluetooth both busy, the remote screen's lag,
   and above all whether a real keyboard and a real mouse pair and work.
 - The Bluetooth program: a window with the devices, Pair, Forget and the
-  two switches. After the board turn.
+  two switches. (Built later, below.)
 - Not done: a code at pairing, the battery level of a device, the lights of
   a keyboard (Caps Lock), keyboards of other layouts than US (as for every
   input today), turning Bluetooth on and off without a restart.
@@ -233,3 +233,45 @@ whether he has a Bluetooth LE keyboard or mouse, so part B waits.
 - The app slots are 3 MB since PR 79 was merged in the same batch, so the
   firmware (1,968,768 bytes on the laptop) fills about 63% of its slot
   and the worry of the first run is gone.
+
+## The Bluetooth program
+
+The owner chose pairing by itself "with a window for the rest", so the
+window was built without waiting for a real device: nothing in it depends
+on what part B will find.
+
+Start > Settings > Bluetooth opens a program of its own (process
+"Bluetooth", `core/src/shell/bluetooth.cpp`), as every settings tool: made
+when it opens, nothing kept while closed, only OS calls (a new one,
+`os::bluetooth()`, hands out the service). It shows two lines of state
+(which of keyboard and mouse are connected), one list with the devices
+connected, then those remembered and not connected, then those in range
+that say they are a keyboard or a mouse, a Pair button for the last kind
+and a Forget button for the others, and two tick boxes: pairing by itself,
+and Bluetooth on from the next start. A pairing asked for there that fails
+is told in a box. While the window is open the radio listens hard
+(`set_listing`), so a device put in pairing mode shows at once; closed,
+listening goes back to thin or off.
+
+Options for the list: one list with the state in words (chosen: one thing
+to pick from, and Pair or Forget follows what is picked); two lists, "my
+devices" and "in range", as phones have (not chosen: twice the room in a
+396 by 320 window for mostly one or two rows each). Turning Bluetooth off
+at once from the box was not built: the stack cannot give its memory back
+without a restart, so the box says "from the next start".
+
+Two faults found by the picture test and fixed. The box "Could not pair"
+came up right after Pair was pressed, because the manager only learnt of
+the new connection at its next tick: `Manager::pair` now follows the radio
+before it returns. And the box came up again when a keyboard paired
+earlier went to sleep: the window now stops watching an attempt once the
+device is remembered.
+
+Tested on the PC: `render_bt_scenes` drives the window through the Start
+menu, pairs with the button, lets a mouse pair by itself, drops a
+keyboard, fails a pairing, forgets, flips both boxes and checks the file
+each time; fifteen pictures, the window in every theme. The lifecycle
+test opens and closes it as the other tools (twelve blocks open, none
+closed). The firmware compiles and links in the cloud (1,943,264 bytes,
+5.7 KB more than without the window); the window has not run on
+the board.

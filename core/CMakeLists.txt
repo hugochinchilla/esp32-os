@@ -76,6 +76,7 @@ set(CORE_SRCS
     src/shell/apps.cpp
     src/shell/gallery.cpp
     src/shell/welcome.cpp
+    src/shell/bluetooth.cpp
     src/shell/bluetooth_service.cpp
     src/shell/boot.cpp
     src/shell/browser.cpp
