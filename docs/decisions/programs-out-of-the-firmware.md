@@ -91,6 +91,12 @@ The rest is the agent's, to confirm:
   memory of its own between copies, so each Terminal counts the others
   in the process list. The fourth is a process for as long as its "Three
   Terminals are open already" is on the screen.
+- **Vizcacha takes the HTML, HTTP and address code with it** (step 3):
+  `core/src/www` was the browser's alone. Its headers stay in
+  `core/include` for the tests.
+- **A program's figures for the debug link are the system's**
+  (`os::counters()`): the firmware cannot read a variable of a program
+  that is a file.
 - **The decoders of pictures stay in the firmware** (the desktop's
   background uses them); the Picture viewer asks for them by name
   (`image::`). The quick launch's three pictures (File manager, Editor,
