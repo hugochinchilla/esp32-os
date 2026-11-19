@@ -110,3 +110,10 @@ step take there, and whether a refill is missed, are for the board turn.
 - The board turn: timing of the steps, missed refills, 800x600, the
   remote screen.
 - The owner's answer on A or B, and on the other readings.
+
+## Added the same day: the firmware compiles
+
+The firmware of this branch compiles and links in the cloud container
+(ESP-IDF v5.5, `tools/setup-cloud-idf.sh`). It has still not run on the
+board. The request for the board turn is
+`board-requests/item-74-start-up-fade.md` in the project files.
