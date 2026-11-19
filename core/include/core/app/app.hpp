@@ -247,7 +247,8 @@ public:
     void menu(wm::Menu &menu) const { os::ui::menu_under(window_, number_, menu); }
 };
 
-// Icons in a grid with their names under them: what a folder holds.
+// What a folder holds: icons in a grid with their names under them, or a
+// list of small ones, or a line each with details.
 class IconView : public Control {
 public:
     using Control::Control;
@@ -257,6 +258,14 @@ public:
         os::ui::set_items(window_, number_, names, count, icons);
     }
     void reset() const { os::ui::reset_view(window_, number_); } // nothing picked, back at the top
+    // Icons, a List or Details; the small pictures and the columns the
+    // last two show (the program's tables, as the others).
+    void set_mode(os::ui::ViewMode mode) const { os::ui::set_view_mode(window_, number_, mode); }
+    void set_small_icons(const gfx::Bitmap *const *icons) const { os::ui::set_small_icons(window_, number_, icons); }
+    void set_columns(const os::ui::Column *columns, int count) const
+    {
+        os::ui::set_columns(window_, number_, columns, count);
+    }
     int selected() const { return os::ui::selected(window_, number_); } // the one picked last; -1: none
     void select(int index) const { os::ui::select(window_, number_, index); } // it alone; tells of it (changed)
     int item_at(int x, int y) const { return os::ui::item_at(window_, number_, x, y); } // in its coordinates

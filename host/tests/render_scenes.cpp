@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "core/init/init.hpp"
+#include "core/os/os.hpp"
 #include "core/fs/memory_volume.hpp"
 #include "core/shell/boot.hpp"
 #include "core/shell/defrag.hpp"
@@ -1335,6 +1336,131 @@ int main(int argc, char **argv)
             check(!desktop.menu_open(), "Escape closes the desktop's menu");
             click(ix, iy);
             check(desktop.window_count() == 0 && gfx::theme_index() == 0, "a click after Escape did what the menu entry does");
+        }
+    }
+
+    // The File manager's three views (backlog item 56): Icons, List and
+    // Details, from the View menu; one way for every folder window, kept in
+    // files.ini. A folder of its own: Box, six files of different kinds and
+    // twenty more, so that the List goes on to the right and the Details
+    // go on down.
+    {
+        const auto check = [&](bool ok, const char *what) {
+            if (!ok) {
+                printf("Views: %s\n", what);
+                failures++;
+            }
+        };
+        const auto kept = [&](const char *mode) {
+            fs::Ini ini;
+            char value[16] = "";
+            return shell::load_settings("files", ini) && ini.get("view", "mode", value, sizeof(value)) &&
+                   strcmp(value, mode) == 0;
+        };
+        const auto view = [&](int item) {
+            key(wm::key::A + 21, true); // Alt+V
+            for (int i = 0; i < item; i++) {
+                key(wm::key::Down);
+            }
+            key(wm::key::Enter);
+        };
+        const auto title_is = [&](const char *title) {
+            return desktop.active() != nullptr && strcmp(desktop.active()->title(), title) == 0;
+        };
+        const auto in_views = [&](const char *name) { return there((std::string("C:\\Views\\") + name).c_str()); };
+        storage.make_folder("C:\\Views");
+        storage.make_folder("C:\\Views\\Box");
+        const std::string text(4000, 'x');
+        for (const char *name : {"a longer name here.txt", "data.bin", "game.app", "notes.txt", "page.htm", "photo.png"}) {
+            storage.write_file((std::string("C:\\Views\\") + name).c_str(), text.data(), strlen(name) * 100);
+        }
+        for (int i = 1; i <= 20; i++) {
+            char name[40];
+            snprintf(name, sizeof(name), "C:\\Views\\song%02d.txt", i);
+            storage.write_file(name, text.data(), static_cast<size_t>(i) * 7);
+        }
+        while (desktop.active() != nullptr) {
+            desktop.close(*desktop.active());
+        }
+        shell::open_folder("C:\\Views");
+        const gfx::Rect c = desktop.active()->client();
+        // Where the entries are: line `row` of column `column` of the List,
+        // line `row` of the Details (under the titles).
+        const int list_x = c.x + 4 + 30, list_y = c.y + 64 + 4 + 9;
+        const int details_x = c.x + 2 + 30, details_y = c.y + 64 + 2 + 18 + 9;
+
+        key(wm::key::A + 21, true);
+        save("80-folder-view-menu"); // Icons is ticked
+        key(wm::key::Down);
+        key(wm::key::Enter);
+        check(kept("list"), "List is kept in files.ini");
+        save("81-folder-list");
+        // A click on a name picks it; the arrows go down the column and
+        // across to the next; Delete throws away the one they came to.
+        click(list_x, list_y + 2 * 18); // data.bin, the third
+        key(wm::key::Down);              // game.app
+        save("82-folder-list-picked");
+        key(wm::key::Delete);
+        check(title_is("Confirm File Delete"), "Delete asks, in the List");
+        key(wm::key::Enter);
+        check(!in_views("game.app") && in_views("data.bin"), "the arrows did not go down the List's column");
+        click(list_x, list_y); // Box, the first
+        key(wm::key::Right);   // the first of the next column
+        key(wm::key::End);     // the last: the List goes to the right for it
+        save("83-folder-list-end");
+
+        // Details: what was picked stays picked and in view.
+        view(2);
+        check(kept("details"), "Details is kept in files.ini");
+        save("84-folder-details-end");
+        key(wm::key::Delete);
+        key(wm::key::Enter);
+        check(!in_views("song20.txt") && in_views("song19.txt"), "what was picked did not stay through the change of view");
+        key(wm::key::Home);
+        save("85-folder-details");
+        // A double click on a folder's line goes into it; a click beside
+        // the name, on the size, picks nothing.
+        double_click(details_x, details_y);
+        check(title_is("Box"), "a double click on the first line did not open Box");
+        key(wm::key::Backspace);
+        check(title_is("Views"), "Backspace goes up");
+        click(details_x, details_y + 3 * 18); // notes.txt, the fourth now
+        click(c.x + 180, details_y + 5 * 18); // the size of photo.png
+        key(wm::key::Delete);
+        check(title_is("Views"), "a click on a size picked the entry");
+        click(details_x, details_y + 3 * 18);
+        key(wm::key::Down); // page.htm
+        key(wm::key::Delete);
+        key(wm::key::Enter);
+        check(!in_views("page.htm") && in_views("notes.txt"), "the arrows did not go down the Details");
+        key(wm::key::A, false, true); // Ctrl+A
+        save("86-folder-details-all");
+
+        // Every folder window shows the same way: another one, My Board
+        // (how much each drive holds and has free) and the Trash.
+        shell::open_folder("");
+        save("87-my-board-details");
+        desktop.close(*desktop.active());
+        shell::open_folder("C:\\.trash");
+        save("88-trash-details");
+        desktop.close(*desktop.active());
+        // In every theme, both.
+        for (int theme = 1; theme < gfx::theme_count(); theme++) {
+            os::set_theme(theme);
+            save((std::string("89-details-theme-") + gfx::theme_at(theme).key).c_str());
+        }
+        view(1);
+        for (int theme = 1; theme < gfx::theme_count(); theme++) {
+            os::set_theme(theme);
+            save((std::string("89-list-theme-") + gfx::theme_at(theme).key).c_str());
+        }
+        os::set_theme(0);
+        // Icons again, as the scenes after this one expect.
+        view(0);
+        check(kept("icons"), "Icons is kept in files.ini");
+        save("89-folder-icons-again");
+        while (desktop.active() != nullptr) {
+            desktop.close(*desktop.active());
         }
     }
 

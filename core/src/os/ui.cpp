@@ -391,22 +391,32 @@ private:
     int lit_ = 0;
 };
 
-// Icons in a grid with their names under them, 76 x 66 per entry: a
-// folder's contents. Several can be picked (backlog item 55): Ctrl+click,
-// Shift+click, a rectangle pulled from an empty place, Ctrl+A. A scroll bar
-// comes when they do not fit.
+// What a folder holds, shown one of three ways (backlog item 56). Icons: a
+// grid of pictures with their names under them, 76 x 66 per entry, filled
+// along the rows. List: small pictures with the names beside them, filled
+// down the columns, which are as wide as the longest name asks. Details: one
+// entry per line under a row of titles, with the program's columns (size,
+// kind, date) beside the name. Several can be picked (backlog item 55):
+// Ctrl+click, Shift+click, a rectangle pulled from an empty place, Ctrl+A.
+// A scroll bar comes when they do not fit: down the side, or along the
+// bottom for the List, which goes on to the right.
 class IconView : public wm::Widget {
 public:
     using Callback = void (*)(IconView &view, void *context);
     static constexpr int kCellW = 76, kCellH = 66;
+    static constexpr int kLine = 18;        // a line of the List and of the Details
+    static constexpr int kHeader = 18;      // the titles over the Details
+    static constexpr int kListWidest = 220; // a column of the List; longer names are cut
     // ponytail: entries past this cannot be picked; a folder shows 160.
     static constexpr int kMaxPicked = 256;
 
     IconView(const gfx::Rect &r, Callback on_open, Callback on_select, Callback on_drag, void *context)
         : Widget(r), on_open_(on_open), on_select_(on_select), on_drag_(on_drag), context_(context),
-          bar_({0, 0, wm::ScrollBar::kThickness, 10}, true, &IconView::scrolled, this)
+          bar_({0, 0, wm::ScrollBar::kThickness, 10}, true, &IconView::scrolled, this),
+          across_({0, 0, 10, wm::ScrollBar::kThickness}, false, &IconView::scrolled, this)
     {
         bar_.set_parent(this);
+        across_.set_parent(this);
     }
     ~IconView() = default;
     // The entries: the program's own tables, which must stay valid. What is
@@ -429,7 +439,35 @@ public:
         band_ = false;
         pressed_ = false;
         collapse_ = -1;
+        measure();
         layout();
+    }
+    // The 16 x 16 pictures the List and the Details show, and the columns
+    // of the Details: the program's tables too.
+    void set_small_icons(const gfx::Bitmap *const *icons)
+    {
+        small_ = icons;
+        invalidate();
+    }
+    void set_columns(const Column *columns, int count)
+    {
+        columns_ = columns;
+        column_count_ = count < 0 ? 0 : count;
+        invalidate();
+    }
+    // The same entries another way: what is picked stays, and is in view.
+    void set_mode(ViewMode mode)
+    {
+        if (mode == mode_) {
+            return;
+        }
+        mode_ = mode;
+        first_ = 0;
+        band_ = false;
+        pressed_ = false;
+        collapse_ = -1;
+        layout();
+        show(selected_);
     }
     // The one picked last, or -1.
     int selected() const { return selected_; }
@@ -438,9 +476,26 @@ public:
     // The entry whose picture or name is at a point of the view, or -1.
     int item_at(int x, int y) const
     {
-        const int col = (x - 2 - 10) / kCellW, row = (y - 2 - 8) / kCellH;
-        const int i = (row + top_row_) * columns() + col;
-        if (x < 12 || y < 10 || col >= columns() || i >= count_) {
+        int i;
+        if (mode_ == ViewMode::List) {
+            const int row = (y - 4) / kLine;
+            if (x < 4 || y < 4 || row >= list_rows_) {
+                return -1;
+            }
+            i = ((x - 4) / list_w_ + first_) * list_rows_ + row;
+        } else if (mode_ == ViewMode::Details) {
+            if (y < 2 + kHeader) {
+                return -1;
+            }
+            i = (y - 2 - kHeader) / kLine + first_;
+        } else {
+            const int col = (x - 2 - 10) / kCellW, row = (y - 2 - 8) / kCellH;
+            if (x < 12 || y < 10 || col >= columns()) {
+                return -1;
+            }
+            i = (row + first_) * columns() + col;
+        }
+        if (i >= count_) {
             return -1;
         }
         gfx::Rect icon, label;
@@ -477,26 +532,57 @@ public:
         anchor_ = -1;
         highlight_ = -1;
         band_ = false;
-        top_row_ = 0;
+        first_ = 0;
         layout();
     }
     void layout()
     {
-        bar_.rect = {rect.w - 2 - wm::ScrollBar::kThickness, 2, wm::ScrollBar::kThickness, rect.h - 4};
-        const int rows = (count_ + columns() - 1) / columns();
-        bar_.set_range(rows > visible_rows() ? rows - visible_rows() : 0, visible_rows());
-        bar_.set_value_quietly(top_row_);
+        const int t = wm::ScrollBar::kThickness;
+        bar_.rect = {rect.w - 2 - t, 2, t, rect.h - 4};
+        across_.rect = {2, rect.h - 2 - t, rect.w - 4, t};
+        int lines; // rows of the grid, columns of the List, lines of the Details
+        if (mode_ == ViewMode::List) {
+            // As many to a column as fit; fewer when the bar takes its strip.
+            const int w = 20 + widest_ + 12;
+            list_w_ = w > kListWidest ? kListWidest : w;
+            list_rows_ = (rect.h - 4 - 4) / kLine;
+            list_rows_ = list_rows_ < 1 ? 1 : list_rows_;
+            if ((count_ + list_rows_ - 1) / list_rows_ > visible_lines()) {
+                list_rows_ = (rect.h - 4 - 4 - t) / kLine;
+                list_rows_ = list_rows_ < 1 ? 1 : list_rows_;
+            }
+            lines = (count_ + list_rows_ - 1) / list_rows_;
+        } else if (mode_ == ViewMode::Details) {
+            lines = count_;
+        } else {
+            lines = (count_ + columns() - 1) / columns();
+        }
+        const int visible = visible_lines();
+        wm::ScrollBar &b = bar();
+        b.set_range(lines > visible ? lines - visible : 0, visible);
+        first_ = first_ > b.maximum() ? b.maximum() : first_;
+        b.set_value_quietly(first_);
         invalidate();
     }
+    // The grid of icons: how many across.
     int columns() const
     {
         const int c = (rect.w - 4 - wm::ScrollBar::kThickness - 8) / kCellW;
         return c < 1 ? 1 : c;
     }
-    int visible_rows() const
+    // How many whole lines show: rows of the grid, columns of the List,
+    // lines of the Details. What the scroll bar counts in.
+    int visible_lines() const
     {
-        const int r = (rect.h - 4 - 10) / kCellH;
-        return r < 1 ? 1 : r;
+        int n;
+        if (mode_ == ViewMode::List) {
+            n = (rect.w - 4 - 4) / list_w_;
+        } else if (mode_ == ViewMode::Details) {
+            n = (rect.h - 4 - kHeader) / kLine;
+        } else {
+            n = (rect.h - 4 - 10) / kCellH;
+        }
+        return n < 1 ? 1 : n;
     }
 
     void paint(gfx::Canvas &c) override
@@ -506,61 +592,43 @@ public:
         const gfx::Rect area = view_area();
         c.fill(area, gfx::paper());
         gfx::Canvas inner = c.sub(area);
-        const int cols = columns();
-        for (int i = top_row_ * cols; i < count_; i++) {
-            const int row = i / cols - top_row_, col = i % cols;
-            if (row > visible_rows()) {
-                break;
-            }
-            const int x = 10 + col * kCellW, y = 8 + row * kCellH;
-            const gfx::Bitmap *icon = icons_[i];
-            const bool chosen = picked_.get(i) || i == highlight_;
-            if (chosen) {
-                inner.blit_selected(*icon, x + 22, y, gfx::rgb(0, 0, 2));
-            } else {
-                inner.blit(*icon, x + 22, y);
-            }
-            // The name under it, on two lines if it must (broken at a space
-            // when there is one), cut with "..." beyond that.
-            char lines[2][48];
-            split_name(names_[i], lines);
-            for (int l = 0; l < 2 && lines[l][0] != 0; l++) {
-                const int tw = gfx::Canvas::text_width(lines[l]);
-                const int tx = x + 38 - tw / 2, ty = y + 36 + l * 12;
-                if (chosen) {
-                    inner.fill_rgb({tx - 1, ty - 1, tw + 2, 13}, gfx::theme().select);
-                }
-                inner.text(tx, ty, lines[l], chosen ? gfx::theme().select_ink : gfx::ink());
-            }
+        if (mode_ == ViewMode::Icons) {
+            paint_icons(inner);
+        } else {
+            paint_lines(inner, area);
         }
         // The rectangle being pulled: dotted, over the entries.
         const gfx::Rect band = band_rect();
         if (band_ && (band.w > 2 || band.h > 2)) {
             inner.focus_rect({band.x - area.x, band.y - area.y, band.w, band.h});
         }
-        if (bar_.maximum() > 0) {
-            gfx::Canvas bc = c.sub(bar_.rect);
-            bar_.paint(bc);
+        const wm::ScrollBar &b = bar();
+        if (b.maximum() > 0) {
+            gfx::Canvas bc = c.sub(b.rect);
+            bar().paint(bc);
         }
     }
 
     bool wants_mouse() const override { return true; }
     bool focusable() const override { return true; }
-    // A row of icons for each notch: the rows are tall.
+    // A row of icons for each notch: the rows are tall. A column of the
+    // List, which has no other way to go; three lines of the Details.
     bool wheel(const wm::WheelMsg &m) override
     {
-        if (bar_.maximum() > 0 && m.down != 0) {
-            bar_.set_value(bar_.value() + m.down);
+        wm::ScrollBar &b = bar();
+        if (b.maximum() > 0 && m.down != 0) {
+            b.set_value(b.value() + m.down * (mode_ == ViewMode::Details ? 3 : 1));
         }
         return true;
     }
     void mouse(const wm::MouseMsg &m) override
     {
+        wm::ScrollBar &b = bar();
         if (m.kind == wm::MouseKind::Down) {
-            in_bar_ = bar_.maximum() > 0 && bar_.rect.contains(m.x, m.y);
+            in_bar_ = b.maximum() > 0 && b.rect.contains(m.x, m.y);
         }
         if (in_bar_) {
-            bar_.mouse({m.kind, m.x - bar_.rect.x, m.y - bar_.rect.y});
+            b.mouse({m.kind, m.x - b.rect.x, m.y - b.rect.y});
             invalidate();
             return;
         }
@@ -600,6 +668,9 @@ public:
             band_ = false;
             outline_dirty(band_rect());
         }
+        if (mode_ == ViewMode::Details && m.y < 2 + kHeader) {
+            return; // the titles: nothing is picked or let go by them
+        }
         if (i < 0) {
             // An empty place: a rectangle starts there. What was picked
             // goes, unless Ctrl is held: then the rectangle adds to it.
@@ -608,8 +679,8 @@ public:
             }
             band_base_ = picked_;
             band_ = true;
-            band_x0_ = band_x1_ = clamp_x(m.x);
-            band_y0_ = band_y1_ = clamp_y(m.y) + top_row_ * kCellH;
+            band_x0_ = band_x1_ = clamp_x(m.x) + scroll_x();
+            band_y0_ = band_y1_ = clamp_y(m.y) + scroll_y();
             return;
         }
         if (shift && anchor_ >= 0 && anchor_ < count_) {
@@ -640,7 +711,6 @@ public:
         if (!k.pressed) {
             return false;
         }
-        const int cols = columns();
         if ((k.mods & wm::kCtrl) && wm::key::letter(k.usage) == 'a') {
             Bits all;
             for (int i = 0; i < count_ && i < kMaxPicked; i++) {
@@ -649,21 +719,37 @@ public:
             set_picked(all, selected_ >= 0 ? selected_ : all.first());
             return true;
         }
-        // Where an arrow goes from the one picked last. With Shift what is
-        // picked stretches from where it started to there.
+        // Where an arrow goes from the one picked last: to the entry shown
+        // beside it or under it, which each view places its own way. With
+        // Shift what is picked stretches from where it started to there.
         int to;
         switch (k.usage) {
         case wm::key::Left:
-            to = selected_ < 0 ? 0 : selected_ - 1;
+            if (mode_ == ViewMode::Details) {
+                return false;
+            }
+            to = selected_ < 0 ? 0 : (mode_ == ViewMode::List ? step(-list_rows_) : selected_ - 1);
             break;
         case wm::key::Right:
-            to = selected_ + 1;
+            if (mode_ == ViewMode::Details) {
+                return false;
+            }
+            if (mode_ != ViewMode::List) {
+                to = selected_ + 1;
+            } else if (selected_ < 0) {
+                to = 0;
+            } else if (selected_ + list_rows_ < count_) {
+                to = selected_ + list_rows_;
+            } else {
+                // The last column is shorter: to its end, if there is one.
+                to = (count_ - 1) / list_rows_ > selected_ / list_rows_ ? count_ - 1 : selected_;
+            }
             break;
         case wm::key::Up:
-            to = selected_ < 0 ? 0 : (selected_ - cols >= 0 ? selected_ - cols : selected_);
+            to = selected_ < 0 ? 0 : step(mode_ == ViewMode::Icons ? -columns() : -1);
             break;
         case wm::key::Down:
-            to = selected_ < 0 ? 0 : (selected_ + cols < count_ ? selected_ + cols : selected_);
+            to = selected_ < 0 ? 0 : step(mode_ == ViewMode::Icons ? columns() : 1);
             break;
         case wm::key::Home:
             to = 0;
@@ -735,11 +821,28 @@ private:
             snprintf(lines[1], sizeof(lines[1]), "%.*s...", static_cast<int>(r - second), second);
         }
     }
+    // A text as it fits in `width` pixels of a line: whole, or cut with
+    // "..." (byte offsets, as names are UTF-8). Returns how wide it is.
+    static int fit(const char *text, int width, char (&out)[80])
+    {
+        const int whole = gfx::Canvas::text_width(text);
+        if (whole <= width) {
+            snprintf(out, sizeof(out), "%.76s", text);
+            return whole;
+        }
+        const int keep = width / 6 - 3;
+        const char *p = text;
+        for (int k = 0; k < keep && *p != 0; k++) {
+            gfx::next_latin1(p);
+        }
+        snprintf(out, sizeof(out), "%.*s...", static_cast<int>(p - text > 76 ? 76 : p - text), text);
+        return gfx::Canvas::text_width(out);
+    }
 
     static void scrolled(wm::ScrollBar &bar, void *context)
     {
         auto *v = static_cast<IconView *>(context);
-        v->top_row_ = bar.value();
+        v->first_ = bar.value();
         v->invalidate();
     }
 
@@ -773,29 +876,179 @@ private:
         bool operator==(const Bits &o) const { return memcmp(words, o.words, sizeof(words)) == 0; }
     };
 
+    // The bar of the view as it is now: along the bottom for the List.
+    wm::ScrollBar &bar() { return mode_ == ViewMode::List ? across_ : bar_; }
+    const wm::ScrollBar &bar() const { return mode_ == ViewMode::List ? across_ : bar_; }
+    // How far the view has gone, in pixels.
+    int scroll_x() const { return mode_ == ViewMode::List ? first_ * list_w_ : 0; }
+    int scroll_y() const
+    {
+        return mode_ == ViewMode::List ? 0 : first_ * (mode_ == ViewMode::Details ? kLine : kCellH);
+    }
+    // The widest name, for the columns of the List.
+    void measure()
+    {
+        widest_ = 0;
+        for (int i = 0; i < count_; i++) {
+            const int w = gfx::Canvas::text_width(names_[i]);
+            widest_ = w > widest_ ? w : widest_;
+        }
+    }
+    // `by` entries on from the one picked last, or where it is if that
+    // would leave the entries.
+    int step(int by) const
+    {
+        const int to = selected_ + by;
+        return to >= 0 && to < count_ ? to : selected_;
+    }
+    // The Details: how wide the name's column is. It takes what the others
+    // leave, and never less than its own width says.
+    int name_width() const
+    {
+        int others = 0;
+        for (int k = 1; k < column_count_; k++) {
+            others += columns_[k].width;
+        }
+        const int least = column_count_ > 0 ? columns_[0].width : 0;
+        const int left = view_area().w - others;
+        return left > least ? left : least;
+    }
+    // How many pixels a name has on its line.
+    int name_room() const
+    {
+        return mode_ == ViewMode::Details ? name_width() - 28 : list_w_ - 20 - 12;
+    }
+
     // Where the entries are shown, inside the sunken edge and beside the bar.
     gfx::Rect view_area() const
     {
-        return {2, 2, rect.w - 4 - (bar_.maximum() > 0 ? wm::ScrollBar::kThickness : 0), rect.h - 4};
+        const int t = bar().maximum() > 0 ? wm::ScrollBar::kThickness : 0;
+        if (mode_ == ViewMode::List) {
+            return {2, 2, rect.w - 4, rect.h - 4 - t};
+        }
+        return {2, 2, rect.w - 4 - t, rect.h - 4};
+    }
+    // The place of an entry now (widget coordinates): its square of the
+    // grid, its line of a column, its line under the titles.
+    gfx::Rect cell(int i) const
+    {
+        if (mode_ == ViewMode::List) {
+            return {4 + (i / list_rows_ - first_) * list_w_, 4 + (i % list_rows_) * kLine, list_w_, kLine};
+        }
+        if (mode_ == ViewMode::Details) {
+            return {2, 2 + kHeader + (i - first_) * kLine, view_area().w, kLine};
+        }
+        const int cols = columns();
+        return {12 + (i % cols) * kCellW, 10 + (i / cols - first_) * kCellH, kCellW, kCellH};
     }
     // Where the picture and the name of an entry are now (widget
     // coordinates): what a click and the rectangle go by.
     void parts(int i, gfx::Rect &icon, gfx::Rect &label) const
     {
-        const int cols = columns();
-        const int x = 12 + (i % cols) * kCellW, y = 10 + (i / cols - top_row_) * kCellH;
-        icon = {x + 22, y, 32, 35};
+        const gfx::Rect at = cell(i);
+        if (mode_ != ViewMode::Icons) {
+            const int whole = gfx::Canvas::text_width(names_[i]), room = name_room();
+            icon = {at.x + 2, at.y + 1, 16, 16};
+            label = {at.x + 20, at.y + 1, (whole < room ? whole : room) + 4, 16};
+            return;
+        }
+        icon = {at.x + 22, at.y, 32, 35};
         char lines[2][48];
         split_name(names_[i], lines);
         const int w0 = gfx::Canvas::text_width(lines[0]), w1 = gfx::Canvas::text_width(lines[1]);
         const int tw = w0 > w1 ? w0 : w1;
-        label = {x + 38 - tw / 2 - 1, y + 35, tw + 2, lines[1][0] != 0 ? 25 : 13};
+        label = {at.x + 38 - tw / 2 - 1, at.y + 35, tw + 2, lines[1][0] != 0 ? 25 : 13};
     }
     void invalidate_item(int i)
     {
         if (i >= 0 && i < count_) {
-            const int cols = columns();
-            invalidate_part({12 + (i % cols) * kCellW, 10 + (i / cols - top_row_) * kCellH, kCellW, kCellH});
+            invalidate_part(cell(i));
+        }
+    }
+
+    // The grid. `inner` starts at the view's area, two pixels in.
+    void paint_icons(gfx::Canvas &inner)
+    {
+        const int cols = columns();
+        for (int i = first_ * cols; i < count_; i++) {
+            const int row = i / cols - first_, col = i % cols;
+            if (row > visible_lines()) {
+                break;
+            }
+            const int x = 10 + col * kCellW, y = 8 + row * kCellH;
+            const gfx::Bitmap *icon = icons_[i];
+            const bool chosen = picked_.get(i) || i == highlight_;
+            if (chosen) {
+                inner.blit_selected(*icon, x + 22, y, gfx::rgb(0, 0, 2));
+            } else {
+                inner.blit(*icon, x + 22, y);
+            }
+            // The name under it, on two lines if it must (broken at a space
+            // when there is one), cut with "..." beyond that.
+            char lines[2][48];
+            split_name(names_[i], lines);
+            for (int l = 0; l < 2 && lines[l][0] != 0; l++) {
+                const int tw = gfx::Canvas::text_width(lines[l]);
+                const int tx = x + 38 - tw / 2, ty = y + 36 + l * 12;
+                if (chosen) {
+                    inner.fill_rgb({tx - 1, ty - 1, tw + 2, 13}, gfx::theme().select);
+                }
+                inner.text(tx, ty, lines[l], chosen ? gfx::theme().select_ink : gfx::ink());
+            }
+        }
+    }
+    // The List and the Details: a small picture and the name on a line,
+    // and in the Details the other columns after it, under their titles.
+    void paint_lines(gfx::Canvas &inner, const gfx::Rect &area)
+    {
+        const bool details = mode_ == ViewMode::Details;
+        char text[80];
+        for (int i = details ? first_ : first_ * list_rows_; i < count_; i++) {
+            const gfx::Rect at = cell(i);
+            if (at.x >= area.x + area.w || at.y >= area.y + area.h) {
+                break;
+            }
+            gfx::Rect icon, label;
+            parts(i, icon, label);
+            const bool chosen = picked_.get(i) || i == highlight_;
+            if (small_ != nullptr && small_[i] != nullptr) {
+                if (chosen) {
+                    inner.blit_selected(*small_[i], icon.x - area.x, icon.y - area.y, gfx::rgb(0, 0, 2));
+                } else {
+                    inner.blit(*small_[i], icon.x - area.x, icon.y - area.y);
+                }
+            }
+            fit(names_[i], name_room(), text);
+            if (chosen) {
+                inner.fill_rgb({label.x - area.x, label.y - area.y, label.w, label.h}, gfx::theme().select);
+            }
+            inner.text(label.x - area.x + 2, label.y - area.y + 2, text,
+                       chosen ? gfx::theme().select_ink : gfx::ink());
+            int x = name_width();
+            for (int k = 1; details && k < column_count_; x += columns_[k].width, k++) {
+                const Column &col = columns_[k];
+                if (col.cells == nullptr || col.cells[i] == nullptr) {
+                    continue;
+                }
+                const int tw = fit(col.cells[i], col.width - 12, text);
+                inner.text(col.right ? x + col.width - 6 - tw : x + 6, at.y - area.y + 3, text, gfx::ink());
+            }
+        }
+        if (!details) {
+            return;
+        }
+        // The titles, over whatever has scrolled under them: a raised strip
+        // each, and one more for what is left of the width.
+        int x = 0;
+        for (int k = 0; k < column_count_; k++) {
+            const int w = k == 0 ? name_width() : columns_[k].width;
+            inner.button({x, 0, w, kHeader}, gfx::ButtonLook::Raised);
+            const int tw = fit(columns_[k].title, w - 12, text);
+            inner.text(columns_[k].right ? x + w - 6 - tw : x + 6, 3, text, gfx::ink());
+            x += w;
+        }
+        if (x < area.w) {
+            inner.button({x, 0, area.w - x, kHeader}, gfx::ButtonLook::Raised);
         }
     }
     // Scrolls so that an entry is in view.
@@ -804,10 +1057,11 @@ private:
         if (i < 0) {
             return;
         }
-        const int row = i / columns();
-        const int top = row < top_row_ ? row : (row >= top_row_ + visible_rows() ? row - visible_rows() + 1 : top_row_);
-        if (top != top_row_) {
-            top_row_ = top;
+        const int line = mode_ == ViewMode::List ? i / list_rows_ : (mode_ == ViewMode::Details ? i : i / columns());
+        const int visible = visible_lines();
+        const int top = line < first_ ? line : (line >= first_ + visible ? line - visible + 1 : first_);
+        if (top != first_) {
+            first_ = top;
             layout();
         }
     }
@@ -840,7 +1094,8 @@ private:
     }
 
     // The rectangle: pulled from (x0, y0) to (x1, y1), which are places in
-    // the whole grid, so that the wheel can turn while it is pulled.
+    // the whole of what is shown, so that the wheel can turn while it is
+    // pulled.
     int clamp_x(int x) const
     {
         const gfx::Rect a = view_area();
@@ -849,14 +1104,15 @@ private:
     int clamp_y(int y) const
     {
         const gfx::Rect a = view_area();
-        return y < a.y ? a.y : (y >= a.y + a.h ? a.y + a.h - 1 : y);
+        const int top = a.y + (mode_ == ViewMode::Details ? kHeader : 0);
+        return y < top ? top : (y >= a.y + a.h ? a.y + a.h - 1 : y);
     }
     gfx::Rect band_rect() const // widget coordinates
     {
         const int x = band_x0_ < band_x1_ ? band_x0_ : band_x1_, y = band_y0_ < band_y1_ ? band_y0_ : band_y1_;
         const int w = band_x0_ < band_x1_ ? band_x1_ - band_x0_ : band_x0_ - band_x1_;
         const int h = band_y0_ < band_y1_ ? band_y1_ - band_y0_ : band_y0_ - band_y1_;
-        return {x, y - top_row_ * kCellH, w + 1, h + 1};
+        return {x - scroll_x(), y - scroll_y(), w + 1, h + 1};
     }
     void outline_dirty(const gfx::Rect &r)
     {
@@ -868,17 +1124,22 @@ private:
     void pull_band(int x, int y)
     {
         outline_dirty(band_rect());
-        band_x1_ = clamp_x(x);
-        band_y1_ = clamp_y(y) + top_row_ * kCellH;
+        band_x1_ = clamp_x(x) + scroll_x();
+        band_y1_ = clamp_y(y) + scroll_y();
         const gfx::Rect band = band_rect();
         outline_dirty(band);
-        // What it touches, by picture or by name, on top of what was there.
+        // What it touches, by picture or by name, on top of what was there:
+        // of the grid only the rows it crosses are looked at.
         Bits next = band_base_;
-        const int cols = columns();
-        int first = (band.y - 10) / kCellH + top_row_, last = (band.y + band.h - 10) / kCellH + top_row_;
-        first = first < 0 ? 0 : first;
+        int from = 0, to = count_;
+        if (mode_ == ViewMode::Icons) {
+            const int cols = columns();
+            const int first = (band.y - 10) / kCellH + first_, last = (band.y + band.h - 10) / kCellH + first_;
+            from = (first < 0 ? 0 : first) * cols;
+            to = (last + 1) * cols < count_ ? (last + 1) * cols : count_;
+        }
         int lead = -1;
-        for (int i = first * cols; i < count_ && i < (last + 1) * cols; i++) {
+        for (int i = from; i < to; i++) {
             gfx::Rect icon, label;
             parts(i, icon, label);
             if (band.overlaps(icon) || band.overlaps(label)) {
@@ -894,7 +1155,14 @@ private:
 
     const char *const *names_ = nullptr;
     const gfx::Bitmap *const *icons_ = nullptr;
+    const gfx::Bitmap *const *small_ = nullptr; // the List's and the Details'
+    const Column *columns_ = nullptr;           // the Details'; the first is the name's
+    int column_count_ = 0;
     int count_ = 0;
+    ViewMode mode_ = ViewMode::Icons;
+    int widest_ = 0;    // the longest name, in pixels
+    int list_w_ = 80;   // the List: a column's width
+    int list_rows_ = 1; // and how many entries go down one
     Callback on_open_, on_select_, on_drag_;
     void *context_;
     bool pressed_ = false; // a picked entry is held: moved, it is dragged
@@ -907,9 +1175,9 @@ private:
     bool band_ = false;  // a rectangle is being pulled
     int band_x0_ = 0, band_y0_ = 0, band_x1_ = 0, band_y1_ = 0;
     Bits band_base_;     // what was picked when it started (Ctrl held)
-    int top_row_ = 0;
+    int first_ = 0;      // the first row, column (List) or line (Details) in view
     bool in_bar_ = false;
-    wm::ScrollBar bar_;
+    wm::ScrollBar bar_, across_;
 };
 
 
@@ -1477,6 +1745,30 @@ Control icon_view(Window window, const gfx::Rect &place)
     return w != nullptr ? w->make<IconView>(Kind::IconView, place, &Behind::icon_opened, &Behind::icon_picked,
                                             &Behind::icon_dragged, w)
                         : kNoControl;
+}
+
+void set_view_mode(Window window, Control control, ViewMode mode)
+{
+    const prog::InCall in_call;
+    if (auto *v = control_of<IconView>(window, control, Kind::IconView)) {
+        v->set_mode(mode);
+    }
+}
+
+void set_small_icons(Window window, Control control, const gfx::Bitmap *const *icons)
+{
+    const prog::InCall in_call;
+    if (auto *v = control_of<IconView>(window, control, Kind::IconView)) {
+        v->set_small_icons(icons);
+    }
+}
+
+void set_columns(Window window, Control control, const Column *columns, int count)
+{
+    const prog::InCall in_call;
+    if (auto *v = control_of<IconView>(window, control, Kind::IconView)) {
+        v->set_columns(columns, count);
+    }
 }
 
 void reset_view(Window window, Control control)
