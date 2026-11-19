@@ -224,6 +224,26 @@ forget NAME` do the rest. `wifi connect` asks for the password at a prompt
 that does not show it (or reads it with `--password-stdin`); it is never a
 command-line argument, so it does not end up in the shell's history.
 
+
+## Bluetooth keyboards and mice
+
+Request type 0x21. The first payload byte says what. An address travels as
+its six bytes, the most significant first, and a byte that is 1 for a random
+address and 0 for a public one; a name as a length byte and the bytes. Kinds
+are bits: 1 keyboard, 2 mouse.
+
+| Byte | Command | Rest of the request | Reply |
+| --- | --- | --- | --- |
+| 0 | List | | flags (bit 0 the radio is on, bit 1 listening, bit 2 pairing by itself), kinds that are ready, then three lists, each a count and its entries. Connected: address, state (0 connecting, 1 pairing, 2 reading its reports, 3 ready), kinds, name. Heard: address, signal in dBm (signed), kinds, flags (bit 0 says it is a keyboard or mouse, bit 1 in pairing mode, bit 2 remembered), name. Remembered: address, kinds, connected (0 or 1), name. Entries that would not fit the reply are left out |
+| 1 | Pair | address | 1 if the attempt started; follow it with List |
+| 2 | Forget | address | |
+| 3 | Pairing by itself | 0 or 1 | |
+| 4 | Listen | 0 or 1 | keeps the board listening although nothing is missing, as while a list is on show |
+
+`tools/dbg.py bt` shows the lists; `bt scan` listens for a few seconds
+first; `bt pair ADDRESS`, `bt forget ADDRESS` and `bt auto on|off` do the
+rest. The six bytes of an address are enough when the device is in a list.
+
 ## Windows
 
 The Windows reply lists the windows from the bottom of the stack to the top:

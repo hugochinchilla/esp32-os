@@ -11,6 +11,9 @@
 namespace net {
 class Manager;
 }
+namespace bt {
+class Manager;
+}
 
 namespace dbg {
 
@@ -50,6 +53,7 @@ enum FrameType : uint8_t {
     kPaintBench = 0x18,   // text: how long each kind of drawing and each window takes (Wm::paint_bench)
     kVideoMode = 0x19,    // the screen's modes; with an argument, changes to that one
     kWifi = 0x20,       // Wi-Fi: status, scan, list, connect, disconnect, forget
+    kBluetooth = 0x21,  // Bluetooth keyboards and mice: list, pair, forget, pairing by itself, listening
     // Sent by the board without being asked.
     kLog = 0x70,
     kHello = 0x71,
@@ -118,6 +122,8 @@ public:
     }
     // Optional: Wi-Fi, for the kWifi commands.
     void set_network(net::Manager *wifi) { wifi_ = wifi; }
+    // Optional: Bluetooth keyboards and mice, for the kBluetooth commands.
+    void set_bluetooth(bt::Manager *bluetooth) { bluetooth_ = bluetooth; }
     // More numbers for the end of the stats reply (programs' own timings).
     void set_counters(const uint32_t *values, int count)
     {
@@ -159,6 +165,7 @@ private:
     void file_command(uint8_t type, uint8_t seq, const uint8_t *args, size_t size);
     void file_error(uint8_t type, uint8_t seq, ports::FsError e);
     void wifi_command(uint8_t seq, const uint8_t *args, size_t size);
+    void bluetooth_command(uint8_t seq, const uint8_t *args, size_t size);
 
     ports::ByteSink &out_;
     ports::Lock &lock_;
@@ -170,6 +177,7 @@ private:
     ports::Desktop *desktop_ = nullptr;
     fs::Storage *storage_ = nullptr;
     net::Manager *wifi_ = nullptr;
+    bt::Manager *bluetooth_ = nullptr;
 
     ports::ByteSink *console_ = nullptr;
     ports::Clock *clock_ = nullptr;

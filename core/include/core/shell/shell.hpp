@@ -27,6 +27,9 @@ class Desktop;
 namespace net {
 class Manager;
 }
+namespace bt {
+class Manager;
+}
 
 namespace desk {
 class Taskbar;
@@ -180,6 +183,12 @@ const games::Snake &culebra_game();
 // from the network. Without it, Network says it is not available.
 void set_network(net::Manager *wifi);
 net::Manager *network();
+// Bluetooth keyboards and mice, if the machine has the radio: call before
+// start(). The shell then keeps the manager running.
+void set_bluetooth(bt::Manager *bluetooth);
+bt::Manager *bluetooth();
+// The Bluetooth program: devices connected, remembered and in range, Pair, Forget.
+void open_bluetooth();
 // The Network panel: networks in range, connect, forget.
 void open_network();
 

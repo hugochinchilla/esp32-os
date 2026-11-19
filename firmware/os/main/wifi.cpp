@@ -127,7 +127,9 @@ public:
             return false;
         }
         // No power saving: with it, a remote screen's clicks lag by 100 to
-        // 300 ms. The board is mains powered.
+        // 300 ms. The board is mains powered. With Bluetooth on (backlog
+        // item 51) ESP-IDF v5.5 accepts this too: Wi-Fi is then active
+        // only in its own share of the radio's time, whatever is set here.
         esp_wifi_set_ps(WIFI_PS_NONE);
         esp_wifi_get_mac(WIFI_IF_STA, mac_);
         Guard g(mutex_);

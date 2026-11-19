@@ -27,6 +27,7 @@ MOVED = [
     "file_manager.cpp",
     "file_ops.cpp",
     "gallery.cpp",
+    "bluetooth.cpp",
     "network.cpp",
     "run.cpp",
     "screensaver.cpp",
@@ -44,6 +45,7 @@ MOVED = [
 # way down to the power-off screen), and what the programs share.
 SYSTEM = [
     "apps.cpp",
+    "bluetooth_service.cpp",
     "boot.cpp",
     "desktop.cpp",
     "listing.cpp",

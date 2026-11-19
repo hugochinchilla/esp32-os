@@ -73,7 +73,7 @@ Rect Taskbar::button(int index) const
     if (index < 0) {
         return {2, ty + 4, kStartW, 22};
     }
-    const int room = bar.w - kClockW - 6 - buttons_x() - (tray_icon_ != nullptr ? kTrayW : 0);
+    const int room = bar.w - kClockW - 6 - buttons_x() - tray_count() * kTrayW;
     const int shown = wm_.taskbar_count();
     int w = kButtonW;
     if (shown > 0 && shown * (kButtonW + kButtonGap) > room) {
@@ -107,23 +107,43 @@ Rect Taskbar::clock_rect() const
     return {bar.w - kClockW - 2, bar.y + 4, kClockW, 22};
 }
 
-Rect Taskbar::tray_icon_rect() const
+int Taskbar::tray_count() const
 {
-    const Rect clock = clock_rect();
-    return tray_icon_ != nullptr ? Rect{clock.x - kTrayW, clock.y, kTrayW, clock.h} : Rect{};
+    int count = 0;
+    for (const Tray &t : tray_) {
+        count += t.icon != nullptr ? 1 : 0;
+    }
+    return count;
 }
 
-void Taskbar::set_tray_icon(const gfx::Bitmap *icon, void (*click)(void *context), void *context)
+Rect Taskbar::tray_icon_rect(int place) const
 {
-    tray_click_ = click;
-    tray_context_ = context;
-    if (icon == tray_icon_) {
+    if (place < 0 || place >= kMaxTray || tray_[place].icon == nullptr) {
+        return {};
+    }
+    int before = 0; // icons between this one and the clock
+    for (int i = 0; i < place; i++) {
+        before += tray_[i].icon != nullptr ? 1 : 0;
+    }
+    const Rect clock = clock_rect();
+    return {clock.x - kTrayW * (before + 1), clock.y, kTrayW, clock.h};
+}
+
+void Taskbar::set_tray_icon(int place, const gfx::Bitmap *icon, void (*click)(void *context), void *context)
+{
+    if (place < 0 || place >= kMaxTray) {
         return;
     }
-    // A first or a last icon moves the window buttons: the whole bar.
-    const bool whole = (icon == nullptr) != (tray_icon_ == nullptr);
-    tray_icon_ = icon;
-    wm_.invalidate(whole ? wm_.taskbar() : tray_icon_rect());
+    Tray &t = tray_[place];
+    t.click = click;
+    t.context = context;
+    if (icon == t.icon) {
+        return;
+    }
+    // An icon more or less moves the window buttons: the whole bar.
+    const bool whole = (icon == nullptr) != (t.icon == nullptr);
+    t.icon = icon;
+    wm_.invalidate(whole ? wm_.taskbar() : tray_icon_rect(place));
 }
 
 void Taskbar::news(wm::PanelNews what)
@@ -148,11 +168,13 @@ void Taskbar::mouse(const wm::MouseMsg &m)
     switch (m.kind) {
     case wm::MouseKind::Down: {
         held_ = false;
-        if (tray_icon_ != nullptr && tray_icon_rect().contains(m.x, m.y)) {
-            if (tray_click_ != nullptr) {
-                tray_click_(tray_context_);
+        for (int i = 0; i < kMaxTray; i++) {
+            if (tray_icon_rect(i).contains(m.x, m.y)) { // empty without an icon
+                if (tray_[i].click != nullptr) {
+                    tray_[i].click(tray_[i].context);
+                }
+                return;
             }
-            return;
         }
         const int index = index_at(m.x, m.y);
         if (index == -1) {
@@ -287,16 +309,17 @@ void Taskbar::paint(const gfx::RectList &clip)
     }
 
     // The clock, 12-hour as in the target picture. Bevelled: in a dent,
-    // with the tray icon if there is one.
+    // with the tray icons if there are any.
     const Rect clock = clock_rect();
-    if (tray_icon_ != nullptr) {
-        const Rect icon = tray_icon_rect();
-        if (!flat) {
-            c.dent({icon.x, clock.y, kTrayW + kClockW, clock.h});
+    if (!flat) {
+        const int tray = tray_count() * kTrayW;
+        c.dent({clock.x - tray, clock.y, tray + kClockW, clock.h});
+    }
+    for (int i = 0; i < kMaxTray; i++) {
+        if (tray_[i].icon != nullptr) {
+            const Rect icon = tray_icon_rect(i);
+            c.blit(*tray_[i].icon, icon.x + 3, icon.y + 3);
         }
-        c.blit(*tray_icon_, icon.x + 3, icon.y + 3);
-    } else if (!flat) {
-        c.dent(clock);
     }
     int h, m, s;
     wm_.get_time(h, m, s);

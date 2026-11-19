@@ -36,6 +36,7 @@
 #include "core/net/web.hpp"
 #include "core/net/wifi.hpp"
 #include "core/proc/table.hpp"
+#include "fake_bluetooth.hpp"
 #include "fake_wifi.hpp"
 #include "folder_volume.hpp"
 #include "core/wm/wm.hpp"
@@ -201,6 +202,17 @@ int main(int argc, char **argv)
     static net::Manager wifi(radio, settings);
     shell::set_network(&wifi);
     protocol.set_network(&wifi);
+
+    // A pretend Bluetooth radio too, for `dbg.py bt`. Nothing in the air is
+    // in pairing mode, so nothing is paired until the tool asks.
+    static host::FakeBluetooth bluetooth_radio;
+    bluetooth_radio.ready_polls = 3;
+    bluetooth_radio.advertise(0x01, "Teclado Chinchilla", hid::kKeyboard, false);
+    bluetooth_radio.advertise(0x02, "Raton sin cola", hid::kMouse, false);
+    bluetooth_radio.advertise(0x03, "Termometro", 0, false, false);
+    static bt::Manager bluetooth(bluetooth_radio, &storage);
+    shell::set_bluetooth(&bluetooth);
+    protocol.set_bluetooth(&bluetooth);
 
     // The remote screen, for a VNC viewer on this computer. As on the board
     // it runs on a task of its own, the services loop: the viewer's keys and

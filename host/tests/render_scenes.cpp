@@ -585,7 +585,7 @@ int main(int argc, char **argv)
     clock_.now += wm::Wm::kSubmenuDelayUs;
     desktop.tick();
     save("37a-settings-menu");
-    centre_of(desktop.popup_item(1, 3), x, y); // Screen Saver...
+    centre_of(desktop.popup_item(1, 4), x, y); // Screen Saver...
     click(x, y);
     save("37b-screen-saver-dialog");
     const char *const savers[3] = {"37c-saver-starfield", "37d-saver-chinchillas", "37e-saver-curves"};
@@ -968,7 +968,7 @@ int main(int argc, char **argv)
         mouse(x, y, 0);
         clock_.now += wm::Wm::kSubmenuDelayUs;
         desktop.tick();
-        centre_of(desktop.popup_item(1, 5), x, y); // Services...
+        centre_of(desktop.popup_item(1, 6), x, y); // Services...
         click(x, y);
         check(desktop.active() != nullptr && strcmp(desktop.active()->title(), "Services") == 0, "the dialog opens");
         save("60-services-dialog");
