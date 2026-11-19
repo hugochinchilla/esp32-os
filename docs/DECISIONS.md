@@ -179,7 +179,7 @@ Processes, tasks, signals, init, OS calls, memory.
 - [Watchdog, crash record and error screen](decisions/watchdog-crash-record-error-screen.md) (2026-11-17, agent, to-confirm): Heartbeat watchdog, a crash record kept over the restart, and the error screen (backlog 7)
 - [Services are lines of the start-up file](decisions/services-start-up-file.md) (2026-11-18, owner, decided): `telnetd` and `vncd` are lines of init's start-up file; a Services dialog and commands edit them (backlog 62)
 - [Sound: the port, the beeper and the system's sounds](decisions/sound-port.md) (2026-11-18, owner+agent, to-confirm): A Sound port with two voices, samples and an emulated PC beeper; silent on the board, real on the PC and in the browser (backlog 58, 59)
-- [Bluetooth keyboard and mouse](decisions/bluetooth-keyboard-and-mouse.md) (2026-11-19, agent, to-confirm): BLE HID host with NimBLE: pairs by itself when a keyboard or mouse is missing, no code, a switch in bluetooth.ini (backlog 51)
+- [Bluetooth keyboard and mouse](decisions/bluetooth-keyboard-and-mouse.md) (2026-11-19, owner+agent, to-confirm): BLE HID host with NimBLE: pairs by itself when a keyboard or mouse is missing, no code, a switch in bluetooth.ini (backlog 51)
 
 ### storage
 

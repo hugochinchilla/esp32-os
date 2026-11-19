@@ -151,3 +151,9 @@ Three layers, the first two portable.
 - Not done: a code at pairing, the battery level of a device, the lights of
   a keyboard (Caps Lock), keyboards of other layouts than US (as for every
   input today), turning Bluetooth on and off without a restart.
+
+## Later the same day
+
+The owner answered the first choice: pairing by itself when a keyboard or a
+mouse is missing, with a window for the rest. The switch and pairing with
+no code are still his to confirm.

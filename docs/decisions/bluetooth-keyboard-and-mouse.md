@@ -1,7 +1,7 @@
 ---
 title: "Bluetooth keyboard and mouse"
 date: 2026-11-19
-by: agent
+by: owner+agent
 status: to-confirm
 area: system
 summary: "BLE HID host with NimBLE: pairs by itself when a keyboard or mouse is missing, no code, a switch in bluetooth.ini (backlog 51)"
@@ -11,10 +11,12 @@ summary: "BLE HID host with NimBLE: pairs by itself when a keyboard or mouse is 
 
 Journal: `docs/journal/2026-11-19-bluetooth-keyboard-mouse.md`. Backlog item 51.
 
-Put to the owner as options on 2026-11-19; built on the recommended one
+Put to the owner as options on 2026-11-19. He chose the first, how a new
+device is paired, the same day (pairing by itself when one is missing, and
+a window for the rest). The others are built on the recommended option
 until he answers.
 
-- **How a new device is paired.** When no keyboard is connected (or no
+- **How a new device is paired** (the owner's choice). When no keyboard is connected (or no
   mouse), the board pairs by itself a device of that kind that is in
   pairing mode; a device that was paired is connected again whenever it
   calls. `auto_pair` in `C:\.config\bluetooth.ini` turns the first half
