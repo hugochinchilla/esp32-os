@@ -151,6 +151,7 @@ Flash layout, the BIOS stage, start-up screens.
 - [Chosen for the BIOS's text screen](decisions/bios-text-screen.md) (2026-11-17, agent, to-confirm): One grid of 80 by 30 cells mirrored to serial as plain text (backlog 46, step 1)
 - [The BIOS's first screen](decisions/bios-first-screen.md) (2026-11-17, owner, decided): The BIOS shows a first screen until 7 s after the reset, because the monitor takes that long
 - [App slots of 3 MB](decisions/app-slots-3-mb.md) (2026-11-19, owner, decided): Two update slots of 3 MB, `otadata` at 0xf0000, the BIOS partition 896 KB, C: 9 MB from 0x700000 (backlog 71)
+- [The desktop fades in at start-up](decisions/start-up-fade.md) (2026-11-19, owner+agent, to-confirm): After the splash the screen shows the desktop's plain colour, rests 300 ms, and the desktop comes up in seven steps; not on a fast start (backlog 74)
 
 ### system
 

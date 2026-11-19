@@ -650,7 +650,9 @@ void Machine::start()
     tm local = {};
     localtime_r(&now, &local);
     screen_.set_time(local.tm_hour, local.tm_min, local.tm_sec);
-    screen_.start();
+    // The desktop fades in out of its plain colour (backlog item 74); a
+    // fast start shows it at once.
+    screen_.start(boot.fastboot || options_.fast ? wm::Wm::Arrival::AtOnce : wm::Wm::Arrival::FromColour);
     dirty_ = true;
 }
 

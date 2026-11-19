@@ -965,6 +965,8 @@ void ui_task(void *)
         [](const char *what, char *why, size_t capacity, void *) { return shell::run_text(what, "C:\\", why, capacity); },
         nullptr);
     static uint32_t first_paint_us = 0;
+    static bool fast_start = false;
+    fast_start = boot.fastboot;
 
     // "desktop": the window manager, the taskbar and the icons. Started even
     // if the file leaves it out.
@@ -988,7 +990,10 @@ void ui_task(void *)
             os::install_dialer(&dialer);
             shell::start(desktop, system, storage, memory);
             protocol.set_counters(shell::picture_timings(), shell::kPictureTimings);
-            desktop.start();
+            // The plain desktop first, and what is on it fades in once
+            // this task is in its loop (backlog item 74); a fast start
+            // shows it all at once, and the figure below is that painting.
+            desktop.start(fast_start ? wm::Wm::Arrival::AtOnce : wm::Wm::Arrival::FromColour);
             first_paint_us = desktop.last_update_us();
             return true;
         },
