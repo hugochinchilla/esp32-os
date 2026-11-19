@@ -284,8 +284,8 @@ private:
         char text[96];
         const uint32_t n = pictures_ > 0 ? pictures_ : 1, t = ticks_ > 0 ? ticks_ : 1;
         snprintf(text, sizeof(text), "doom: %u.%u pictures/s, a round %u us, of it %u us to the screen",
-                 static_cast<unsigned>(pictures_ * 10 / (kReportUs / 100000) / 10),
-                 static_cast<unsigned>(pictures_ * 10 / (kReportUs / 100000) % 10), static_cast<unsigned>(tick_us_ / t),
+                 static_cast<unsigned>(pictures_ * 10 / (kReportUs / 1000000) / 10),
+                 static_cast<unsigned>(pictures_ * 10 / (kReportUs / 1000000) % 10), static_cast<unsigned>(tick_us_ / t),
                  static_cast<unsigned>(picture_us_ / n));
         os::log(text);
         pictures_ = ticks_ = tick_us_ = picture_us_ = 0;
