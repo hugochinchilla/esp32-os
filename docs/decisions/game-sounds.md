@@ -21,13 +21,11 @@ move, the kalimba coming down for checkmate and the two kalimba notes for a
 berry (as first built); the electric piano note that droops an octave for
 game over; the quick, darker scrunch of 0.42 s for the Trash. Check as first
 built "suena alegre": it is for when the player is put in check and must
-sound like an alert.
+sound like an alert. Of three new candidates that warn he picked e: the
+piece's knock, then two kalimba notes falling a tritone.
 
 Still the agent's, waiting for him:
 
-- **The check sound** is a second pick: the piece's knock, then the same
-  high wooden note twice (candidate d of three new ones, d to f, in
-  `look/sounds/games/`).
 - **Check sounds only when the user is put in check.** A check the user
   gives the computer sounds as any move: a warning for one's own good move
   would be the wrong way round. (His words can also be read as the same

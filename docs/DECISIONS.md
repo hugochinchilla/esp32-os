@@ -145,10 +145,11 @@ Flash layout, the BIOS stage, start-up screens.
 - [Start-up timing](decisions/start-up-timing.md) (2026-11-16, owner, decided): How long the self-test and the splash stay on screen (`monitor_wait_ms`, `splash_ms`), and what the self-test shows
 - [A BIOS stage in its own partition](decisions/bios-stage.md) (2026-11-17, owner, decided): The self-test is a BIOS, a small firmware in its own partition that restarts into the OS
 - [BIOS screen font](decisions/bios-screen-font.md) (2026-11-17, owner, decided): The BIOS screen is true text, 80 by 30 characters in Spleen 8x16
-- [BIOS stage: flash and details](decisions/bios-flash-and-details.md) (2026-11-17, owner, decided): The BIOS takes 1 MB from C:; two update slots of 1.94 MB; C: is 11 MB
+- [BIOS stage: flash and details](decisions/bios-flash-and-details.md) (2026-11-17, owner, decided): The BIOS takes 1 MB from C:; two update slots, C: after them. The sizes were changed by "App slots of 3 MB"
 - [Chosen for the BIOS firmware](decisions/bios-firmware.md) (2026-11-17, agent, to-confirm): The `bios` app partition and how our bootloader starts it (backlog 46, step 2)
 - [Chosen for the BIOS's text screen](decisions/bios-text-screen.md) (2026-11-17, agent, to-confirm): One grid of 80 by 30 cells mirrored to serial as plain text (backlog 46, step 1)
 - [The BIOS's first screen](decisions/bios-first-screen.md) (2026-11-17, owner, decided): The BIOS shows a first screen until 7 s after the reset, because the monitor takes that long
+- [App slots of 3 MB](decisions/app-slots-3-mb.md) (2026-11-19, owner, decided): Two update slots of 3 MB, `otadata` at 0xf0000, the BIOS partition 896 KB, C: 9 MB from 0x700000 (backlog 71)
 
 ### system
 
@@ -262,7 +263,7 @@ Wi-Fi, remote screen, telnet, updates.
 - [Remote screen access](decisions/remote-screen-access.md) (2026-11-16, owner, decided): VNC (5900) and the web page (80) run whenever Wi-Fi is on, with no password
 - [Chosen for telnet](decisions/telnet.md) (2026-11-17, owner+agent, to-confirm): Telnet on port 23, no password, on by default (the owner's decision); the rest is the agent's (backlog 17)
 - [Chosen for the viewer's system keys](decisions/viewer-system-keys.md) (2026-11-17, owner, decided): The web viewer has buttons for Alt+Tab, Alt+F4, Ctrl+Alt+Del and the logo key
-- [Chosen for updates over Wi-Fi](decisions/updates-over-wifi.md) (2026-11-17, agent, to-confirm): Two app slots of 1.94 MB and `otadata`; how an update arrives and is confirmed (backlog 25)
+- [Chosen for updates over Wi-Fi](decisions/updates-over-wifi.md) (2026-11-17, agent, to-confirm): Two app slots and `otadata` (3 MB each since "App slots of 3 MB"); how an update arrives and is confirmed (backlog 25)
 - [noVNC from a CDN: dropped](decisions/novnc-dropped.md) (2026-11-17, owner, decided): The `/novnc` page was removed; our own viewer at `/` is enough. Keeps the record of what was built
 - [Wi-Fi transmit power](decisions/wifi-transmit-power.md) (2026-11-18, owner, decided): Default 20 dBm, `tx_power_dbm` in network.ini; a board without the supply capacitor sets 2
 

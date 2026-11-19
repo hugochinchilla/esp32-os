@@ -51,7 +51,13 @@ Not done: nothing here ran on the board. The change since the board check
 is three recordings the board does not carry and one condition in
 `chess.cpp` that picks between two calls which do nothing there.
 
-## 4. What is left
+## 4. The check sound, picked
 
-The owner to hear check d to f, and to say whether a check he gives should
-sound too.
+The next morning the owner heard d to f and answered "jaque E": the knock
+and two kalimba notes falling a tritone. `chess_check.pcm` is now that one
+(0.92 s). He said nothing against the warning sounding only for the user,
+which stays the agent's choice, to confirm.
+
+## 5. What is left
+
+Nothing but that confirmation. All six sounds are the owner's picks.

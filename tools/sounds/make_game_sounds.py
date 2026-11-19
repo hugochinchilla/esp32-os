@@ -264,12 +264,12 @@ CANDIDATES = [
 ]
 
 # What the build plays: docs/sounds/<file>.pcm, in the order of sound::Id
-# after the system's five. The owner's picks of 2026-11-19 (the move, the
-# berry and checkmate as first built; game over b; the paper c), but for
-# check, which is the agent's pick of the second three and waits for him.
+# after the system's five. All six are the owner's picks of 2026-11-19: the
+# move, the berry and checkmate as first built; game over b; the paper c;
+# check e, of the second three.
 FINAL = [
     ("chess_move", move_a, -14.0),
-    ("chess_check", check_d, -12.0),
+    ("chess_check", check_e, -12.0),
     ("chess_mate", mate_a, -12.0),
     ("snake_eat", eat_a, -14.0),
     ("snake_over", over_b, -12.0),
