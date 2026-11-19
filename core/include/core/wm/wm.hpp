@@ -140,6 +140,7 @@ public:
         desktop_pid_ = desktop;
     }
     proc::Table *processes() const { return procs_; }
+    proc::Pid desktop_pid() const { return desktop_pid_; }
     // The panels of the desktop shell. `owner` is the process the panel is
     // called as. nullptr takes the panel away: its place shows the
     // background and takes no clicks. Windows stay as they are, and so does
@@ -205,6 +206,17 @@ public:
     using ScreenFn = void (*)(gfx::Canvas &c, void *context);
     void take_over(ScreenFn paint, void *context);
     bool taken_over() const { return screen_fn_ != nullptr; }
+    // The first part of the same, for a picture that fades away (Shut
+    // Down): the screen is taken, and what it shows stays as it is until
+    // fade_step() changes it or take_over() names who paints it.
+    void hold_screen();
+    // On a taken screen: every pixel moves one level of red and of green,
+    // and one of blue if `blue`, towards what the plain desktop shows at
+    // its place (`to_backdrop`) or towards the colour `to`. In place: there
+    // is no second picture to mix from. Blue has half the levels, so a fade
+    // of seven steps asks for it on the even ones. False: nothing changed,
+    // the picture is there.
+    bool fade_step(bool to_backdrop, gfx::Colour to, bool blue);
     // Time the UI task has spent handling input, timers and painting since
     // start-up, in µs (wraps): the desktop's share of the processor.
     uint32_t busy_us() const { return busy_us_; }

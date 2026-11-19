@@ -2138,6 +2138,11 @@ void Wm::update()
         const Rect screen = {0, 0, width_, height_};
         Canvas c(display_.pixels(), width_, height_, dirty_, screen);
         screen_fn_(c, screen_context_);
+        if (damage_fn_ != nullptr) {
+            for (int i = 0; i < dirty_.size(); i++) {
+                damage_fn_(dirty_[i], damage_context_);
+            }
+        }
         const long area = dirty_.area();
         dirty_.clear();
         last_update_us_ = clock_.micros() - start;
@@ -2184,6 +2189,19 @@ Wm::Work::~Work()
 
 void Wm::take_over(ScreenFn paint, void *context)
 {
+    hold_screen();
+    screen_fn_ = paint;
+    screen_context_ = context;
+    invalidate({0, 0, width_, height_});
+    update();
+}
+
+void Wm::hold_screen()
+{
+    if (screen_fn_ != nullptr) {
+        return;
+    }
+    stop_screen_saver();
     close_menus();
     if (outline_shown_) {
         set_outline(outline_, false);
@@ -2193,11 +2211,87 @@ void Wm::take_over(ScreenFn paint, void *context)
     stop_timer(repeat_timer_);
     repeat_timer_ = 0;
     repeat_usage_ = 0;
+    update(); // what was still to be painted: the picture is whole when it is kept
     pointer_.set_visible(false);
-    screen_fn_ = paint;
-    screen_context_ = context;
-    invalidate({0, 0, width_, height_});
-    update();
+    // Whoever asks for painting from here on (a clock, a late program) gets
+    // none.
+    screen_fn_ = [](Canvas &, void *) {};
+    screen_context_ = nullptr;
+}
+
+namespace {
+
+// One level of each channel from `from` towards `to`.
+gfx::Colour nearer(gfx::Colour from, gfx::Colour to, bool blue)
+{
+    int r = from >> 5, g = (from >> 2) & 7, b = from & 3;
+    const int tr = to >> 5, tg = (to >> 2) & 7, tb = to & 3;
+    r += (tr > r) - (tr < r);
+    g += (tg > g) - (tg < g);
+    if (blue) {
+        b += (tb > b) - (tb < b);
+    }
+    return gfx::rgb(static_cast<unsigned>(r), static_cast<unsigned>(g), static_cast<unsigned>(b));
+}
+
+} // namespace
+
+bool Wm::fade_step(bool to_backdrop, gfx::Colour to, bool blue)
+{
+    if (screen_fn_ == nullptr) {
+        return false;
+    }
+    const uint32_t start = clock_.micros();
+    // The plain desktop repeats every 8 pixels both ways: its pattern is 8
+    // by 8 and the dither of its colours 4 by 4, both laid from the
+    // screen's corner. One tile of it says what belongs anywhere.
+    uint8_t tile[64];
+    if (to_backdrop) {
+        gfx::RectList all;
+        all.add({0, 0, 8, 8});
+        Canvas c(tile, 8, 8, all, {0, 0, 8, 8});
+        fill_backdrop(c, {0, 0, 8, 8});
+    } else {
+        memset(tile, to, sizeof(tile));
+    }
+    // For one colour everywhere, the answer for each of the 256 a pixel may
+    // have; for the desktop most pixels are there already, and the others
+    // are worked out one by one.
+    uint8_t next[256];
+    for (int i = 0; i < 256; i++) {
+        next[i] = nearer(static_cast<gfx::Colour>(i), to, blue);
+    }
+    uint8_t *pixels = display_.pixels();
+    int top = height_, bottom = -1;
+    for (int y = 0; y < height_; y++) {
+        uint8_t *row = pixels + static_cast<size_t>(y) * width_;
+        const uint8_t *want = tile + (y & 7) * 8;
+        bool changed = false;
+        for (int x = 0; x < width_; x++) {
+            const uint8_t have = row[x], target = want[x & 7];
+            if (have == target) {
+                continue;
+            }
+            const uint8_t now = to_backdrop ? nearer(have, target, blue) : next[have];
+            if (now != have) {
+                row[x] = now;
+                changed = true;
+            }
+        }
+        if (changed) {
+            top = y < top ? y : top;
+            bottom = y;
+        }
+    }
+    if (bottom < 0) {
+        return false;
+    }
+    if (damage_fn_ != nullptr) {
+        damage_fn_({0, top, width_, bottom - top + 1}, damage_context_);
+    }
+    const uint32_t took = clock_.micros() - start;
+    frames_.painted(took, static_cast<uint32_t>(width_) * static_cast<uint32_t>(bottom - top + 1));
+    return true;
 }
 
 uint32_t Wm::repaint_all()
