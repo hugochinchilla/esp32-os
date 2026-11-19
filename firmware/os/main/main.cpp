@@ -746,6 +746,7 @@ void boot_idle(void *context)
     const int got = uart_read_bytes(kDebugUart, buffer, sizeof(buffer), 0);
     if (got > 0) {
         static_cast<dbg::Protocol *>(context)->feed(buffer, static_cast<size_t>(got));
+        static_cast<dbg::Protocol *>(context)->answer_waiting();
     }
 }
 
@@ -758,6 +759,7 @@ void boot_nap(void *context)
     const int got = uart_read_bytes(kDebugUart, buffer, sizeof(buffer), 1);
     if (got > 0) {
         static_cast<dbg::Protocol *>(context)->feed(buffer, static_cast<size_t>(got));
+        static_cast<dbg::Protocol *>(context)->answer_waiting();
     }
 }
 
@@ -1279,6 +1281,7 @@ void ui_task(void *)
             ESP_LOGW(TAG, "this version is confirmed: it starts from now on");
         }
         bool more = false;
+        watchdog_doing("the debug link's requests");
         for (int reads = 0;; reads++) {
             if (reads == kSerialReads) {
                 more = true;
@@ -1291,12 +1294,23 @@ void ui_task(void *)
             }
             protocol.feed(buffer, static_cast<size_t>(got));
         }
+        // A screenshot is the one long answer (0.2 to 1 s here, as fast as
+        // the serial line takes it), so at most one is sent per round and
+        // only for the last request that waited. Answering every request as
+        // it was read kept this loop from coming round for 16 s and more
+        // when the computer asked faster than the board could send
+        // (docs/journal/2026-11-19-screenshot-backlog.md).
+        watchdog_doing("a screenshot for the debug link");
+        more |= protocol.answer_waiting();
         {
             // Measured against the video frame, as the desktop's own work is.
+            watchdog_doing("messages from other tasks");
             const wm::Wm::Work piece(desktop, sys::Frames::kMessage);
             more |= inbox.deliver(); // what other tasks asked the UI task to do
         }
+        watchdog_doing("the desktop's timers and painting");
         desktop.tick();          // timers (caret, key repeat, clock), then any painting
+        watchdog_doing("asleep until the next event");
         uint32_t sleep_us = 0;
         if (!more) {
             sleep_us = desktop.idle_us();

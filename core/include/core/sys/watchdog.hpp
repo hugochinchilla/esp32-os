@@ -43,6 +43,20 @@ public:
         }
     }
 
+    // What the watched task is about to do, in a few words (`what` is not
+    // copied: a string that lasts). Kept for the crash record, so that a
+    // hang says which part of the loop never came back.
+    void doing(int slot, const char *what)
+    {
+        if (slot >= 0 && slot < count_) {
+            watched_[slot].doing.store(what, std::memory_order_relaxed);
+        }
+    }
+    const char *doing(int slot) const
+    {
+        return slot >= 0 && slot < count_ ? watched_[slot].doing.load(std::memory_order_relaxed) : "";
+    }
+
     // The first slot whose beat is older than its limit, kNobody if all are
     // on time. `waited_ms` gets how long it has been silent. The clock may
     // wrap (49 days in milliseconds); a beat that arrives between the
@@ -69,6 +83,7 @@ private:
         const char *name = "";
         uint32_t limit_ms = 0;
         std::atomic<uint32_t> last_ms{0};
+        std::atomic<const char *> doing{""};
     };
     Watched watched_[kMaxWatched];
     int count_ = 0;

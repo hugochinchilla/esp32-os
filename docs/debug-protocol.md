@@ -87,7 +87,7 @@ and the same sequence number. Every reply payload starts with a status byte:
 | 0x12 | Boot screen | One byte: 0 the self-test again, 2 nothing shown but the next start is a fast one, once, 3 the error screen after a crash (the crash reported at this start, or a made-up one) | None. Repaint brings the desktop back |
 | 0x13 | Memory report | None | Text: heaps and video timing (task stacks are in Tasks, which holds the kernel lock about 0.8 ms per call) |
 | 0x14 | Tasks | None | The kernel's tasks, see below. Unknown command when the firmware keeps no run-time statistics |
-| 0x15 | Fault | Kind (1): 0 hang (the UI task spins for ever), 1 a write through a null pointer, 2 abort, 3 slow (busy for five seconds, then it carries on; nothing fails). Then optionally a PID (2) to charge it to | None. The board replies, then fails on purpose: the watchdog or the panic handler writes the crash record and restarts it, and the next start shows the error screen. Bad arguments for a PID that is not running |
+| 0x15 | Fault | Kind (1): 0 hang (the UI task spins for ever), 1 a write through a null pointer, 2 abort, 3 slow (busy for five seconds, then it carries on; nothing fails), 4 wait (the task sleeps for ever: a hang whose record has the chain of calls). Then optionally a PID (2) to charge it to | None. The board replies, then fails on purpose: the watchdog or the panic handler writes the crash record and restarts it, and the next start shows the error screen. Bad arguments for a PID that is not running |
 | 0x16 | Log read | From (8): bytes since start, 0 for the oldest text kept | Where the next piece starts (8), then up to 1000 bytes of the system log (what `dmesg` prints). Text pushed out of the 16 KB ring meanwhile is skipped. `tools/dbg.py dmesg` prints it all |
 | 0x17 | Frames | Optional flags (1): bit 0 starts the count again after the reply | What the desktop counted against one video frame (`core/sys/frames.hpp`): budget in µs, pieces of work, pieces that painted, pieces over budget, pieces with a timer a frame or more late, the longest piece, the latest timer (4 each); all the pieces added up in µs (8); eight counts of pieces by length (4 each: under 1, 2, 4, 8 ms, under the budget, under 2 and 4 budgets, longer); how many slow pieces follow (1, at most 16, oldest first), each: when in ms since start-up, total, painting, pixels painted, in timers, the longest single thing, timer lateness (4 each), that thing's PID (2), the work (1: 0 key, 1 mouse, 2 text, 3 tick, 4 message), what the thing was (1: 0 nothing, 1 timer, 2 a window's painting, 3 a panel's). `tools/dbg.py frames` prints it and exits 1 if any piece was over budget |
 | 0x18 | Paint bench | None | Text: the time in µs of each kind of drawing over the same 480 x 300 pixels of the screen (the shortest of three), of lines drawn from top to bottom, of copying memory to the screen, and of each open window painted alone: frame, menu bar and inside (`Wm::paint_bench`, `core/src/wm/paint_bench.cpp`). The board draws over its screen for about a second, paints everything again and then replies. `tools/dbg.py paintbench` prints it |
@@ -124,6 +124,14 @@ After the Screenshot reply, the board sends the picture as numbered Picture
 data frames and finishes with Picture end. They carry the request's sequence
 number. The tool checks the chunk numbers, the size and the CRC-32, and asks
 again if anything is wrong.
+
+The board answers a Screenshot request once it has read every byte that
+had arrived, and only the last one if several waited: the others get no
+reply. A computer that gave a request up and asked again therefore gets the
+answer to its newest request, not a queue of pictures it no longer waits
+for (`docs/decisions/screenshot-requests.md`). A screenshot takes the
+desktop's task for as long as the serial line takes the bytes, 0.2 s for a
+plain desktop and 0.8 s for one with the Bricks pattern.
 
 Encoding 1 is a run-length code. Each token starts with a control byte:
 
