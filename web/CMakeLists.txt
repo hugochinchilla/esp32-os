@@ -29,6 +29,9 @@ add_subdirectory(../core core)
 # stay warnings: a new one in core/ must not stop the page from being
 # published. They show in the build's output, to be tidied in core/.
 target_compile_options(core PRIVATE -Wno-error)
+# A page cannot load code from a file: the programs of programs/ are linked
+# into it, and its C:\Programs gets a file for each (core/app/linked.hpp).
+include(../programs/linked.cmake)
 
 # The system's sounds, compiled in (the board does not get them).
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/system_sounds.cpp
@@ -40,7 +43,7 @@ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/system_sounds.cpp
             ../docs/sounds/snake_eat.pcm ../docs/sounds/snake_over.pcm ../docs/sounds/crumple.pcm)
 add_executable(chinchilla ../host/desktop/main.cpp ${CMAKE_CURRENT_BINARY_DIR}/system_sounds.cpp)
 target_compile_options(chinchilla PRIVATE -Wall -Wextra -Werror)
-target_link_libraries(chinchilla PRIVATE core idbfs.js)
+target_link_libraries(chinchilla PRIVATE core programs_linked idbfs.js)
 # How the page reaches the web (host/desktop/web_dialer.hpp): the address of
 # the relay, web/relay/worker.js put on Cloudflare. Empty: programs are told
 # there is no network, unless the page is opened with "?relay=https://...".

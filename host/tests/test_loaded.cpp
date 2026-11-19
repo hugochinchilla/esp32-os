@@ -18,6 +18,7 @@
 #include "core/shell/shell.hpp"
 #include "core/wm/wm.hpp"
 #include "../dl_loader.hpp"
+#include "../program_files.hpp"
 #include "../host_adapters.hpp"
 
 static int failures = 0;
@@ -59,11 +60,12 @@ const char *title() { return desktop.active() != nullptr ? desktop.active()->tit
 int main(int argc, char **argv)
 {
     setvbuf(stdout, nullptr, _IONBF, 0); // a crash must not swallow the failures before it
-    if (argc < 5) {
-        printf("usage: test_loaded hello.app culebra.app cactus_patch.app chess.app\n");
+    if (argc < 2) {
+        printf("usage: test_loaded <the folder of the program files the build made>\n");
         return 2;
     }
-    std::ifstream file(argv[1], std::ios::binary);
+    const std::string folder = argv[1];
+    std::ifstream file(folder + "/hello.app", std::ios::binary);
     const std::vector<char> program((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
     CHECK(!program.empty());
 
@@ -193,8 +195,9 @@ int main(int argc, char **argv)
     desktop.close_menus();
     CHECK(t.count() == processes);
 
-    // The two games in the form the board has them in: a file each, with
-    // the name and the pictures of the built-in ones, one copy at a time.
+    // The games: a file each, with the name and the pictures the system's
+    // own art has for them, one copy at a time.
+    static const char *const kFiles[3] = {"/culebra.app", "/cactus_patch.app", "/chess.app"};
     static const char *const kNames[3] = {"Culebra", "Cactus Patch", "Chess"};
     static const char *const kPaths[3] = {"C:\\Programs\\culebra.app", "C:\\Programs\\cactus_patch.app",
                                           "C:\\Programs\\chess.app"};
@@ -203,7 +206,7 @@ int main(int argc, char **argv)
     for (int game = 0; game < 3; game++) {
         const char *const name = kNames[game];
         const char *const path = kPaths[game];
-        std::ifstream in(argv[2 + game], std::ios::binary);
+        std::ifstream in(folder + kFiles[game], std::ios::binary);
         const std::vector<char> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
         CHECK(!bytes.empty() && storage.write_file(path, bytes.data(), bytes.size()) == ports::FsError::Ok);
         CHECK(shell::program_info(path, info) && strcmp(info.title, name) == 0);
@@ -260,6 +263,28 @@ int main(int argc, char **argv)
     wait(10000);
     CHECK(!t.alive(threaded) && tasks.ended == 1 && prog::runner().tasks() == 0 && loader.loaded == 0);
     prog::runner().set_tasks(nullptr, nullptr, 0);
+
+    // What the Linux program does as it starts (host/program_files.hpp):
+    // the program files the build made are copied to C:\Programs, where
+    // they changed, and the system then has every program of programs/ to
+    // start by its name.
+    CHECK(host::install_program_files(storage, folder.c_str(), shell::kProgramsFolder) >= 4);
+    CHECK(host::install_program_files(storage, folder.c_str(), shell::kProgramsFolder) == 0);
+    CHECK(storage.write_file("C:\\Programs\\hello.app", "old", 3) == ports::FsError::Ok);
+    CHECK(host::install_program_files(storage, folder.c_str(), shell::kProgramsFolder) == 1);
+    CHECK(host::install_program_files(storage, "/no/such/folder", shell::kProgramsFolder) == 0);
+    for (const char *name : {"Hello", "Culebra", "Cactus Patch", "Chess"}) {
+        const shell::Program *found = shell::find_program(name);
+        CHECK(found != nullptr && found->built_in == nullptr && found->path != nullptr);
+    }
+    CHECK(shell::find_program("cule", true) != nullptr && shell::find_program("c", true) == nullptr);
+    CHECK(os::launch("Culebra"));
+    wait(10000);
+    CHECK(loader.loaded == 1 && strcmp(title(), "Culebra") == 0);
+    desktop.close(*desktop.active());
+    wait(10000);
+    wait(10000);
+    CHECK(loader.loaded == 0 && t.count() == processes);
 
     if (failures == 0) {
         printf("loaded: all passed\n");

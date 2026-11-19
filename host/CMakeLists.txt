@@ -1,7 +1,7 @@
 # PC build: unit tests for the core, picture tests and a simulated board for
 # the debug tool.
 #   cmake -S host -B build/host && cmake --build build/host && ctest --test-dir build/host
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.24)
 project(esp32_os_host CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -175,26 +175,35 @@ function(add_program name folder)
     set_target_properties(${name}_app PROPERTIES PREFIX "" OUTPUT_NAME "${name}" SUFFIX ".so")
     # The program file: its header, then the code (tools/pack_app.sh).
     add_custom_command(TARGET ${name}_app POST_BUILD
+                       COMMAND ${CMAKE_COMMAND} -E make_directory ${ARGN}
                        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../tools/pack_app.sh ${CMAKE_OBJCOPY}
-                               $<TARGET_FILE:${name}_app> ${CMAKE_CURRENT_BINARY_DIR}/${name}.app)
+                               $<TARGET_FILE:${name}_app> ${ARGN}/${name}.app)
 endfunction()
-add_program(hello ../programs/hello)
-add_program(culebra ../programs/culebra)
-add_program(cactus_patch ../programs/cactus_patch)
-add_program(chess ../programs/chess)
-# With the engine in it: optimised, as the engine is in the core, and
+# Every program of programs/, as the Linux program has them: files in the
+# folder `programs` beside it, which it copies to C:\Programs when it
+# starts (host/program_files.hpp).
+set(PROGRAM_FILES ${CMAKE_CURRENT_BINARY_DIR}/programs)
+set(program_targets "")
+file(GLOB program_dirs LIST_DIRECTORIES true ../programs/*)
+foreach(dir ${program_dirs})
+    if(IS_DIRECTORY ${dir})
+        get_filename_component(name ${dir} NAME)
+        add_program(${name} ${dir} ${PROGRAM_FILES})
+        list(APPEND program_targets ${name}_app)
+    endif()
+endforeach()
+# With the engine in it: optimised, as the engine is in the tests, and
 # without the checkers, which would make the file larger than the megabyte
-# a program may be (the same source is checked as part of the core).
+# a program may be (the same source is checked as part of the tests).
 target_compile_options(chess_app PRIVATE -O2 -fno-sanitize=all)
 # Not a program of the system: the chess engine's measuring program for
 # board checks (tools/bench/chess_bench), built here so that it stays whole.
-add_program(chess_bench ../tools/bench/chess_bench)
+add_program(chess_bench ../tools/bench/chess_bench ${CMAKE_CURRENT_BINARY_DIR})
 add_executable(test_loaded tests/test_loaded.cpp)
 target_link_libraries(test_loaded PRIVATE core ${CMAKE_DL_LIBS} Threads::Threads)
 set_target_properties(test_loaded PROPERTIES ENABLE_EXPORTS ON)
-add_dependencies(test_loaded hello_app culebra_app cactus_patch_app chess_app)
-add_test(NAME loaded COMMAND test_loaded ${CMAKE_CURRENT_BINARY_DIR}/hello.app ${CMAKE_CURRENT_BINARY_DIR}/culebra.app
-         ${CMAKE_CURRENT_BINARY_DIR}/cactus_patch.app ${CMAKE_CURRENT_BINARY_DIR}/chess.app)
+add_dependencies(test_loaded ${program_targets})
+add_test(NAME loaded COMMAND test_loaded ${PROGRAM_FILES})
 # The serial console on the debug link's wire (backlog 14).
 add_executable(test_console tests/test_console.cpp)
 target_link_libraries(test_console PRIVATE core)
@@ -298,11 +307,16 @@ if(SDL2_FOUND)
                 ../docs/sounds/chess_move.pcm ../docs/sounds/chess_check.pcm ../docs/sounds/chess_mate.pcm
                 ../docs/sounds/snake_eat.pcm ../docs/sounds/snake_over.pcm ../docs/sounds/crumple.pcm)
     add_executable(chinchilla desktop/main.cpp ${CMAKE_CURRENT_BINARY_DIR}/system_sounds.cpp)
+    # It loads the programs from files (programs/*.app beside it): they
+    # find the OS calls in it by name, so all of the core is kept and its
+    # names are left for the PC's loader to see.
+    set_target_properties(chinchilla PROPERTIES ENABLE_EXPORTS ON)
+    add_dependencies(chinchilla ${program_targets})
     if(TARGET SDL2::SDL2)
-        target_link_libraries(chinchilla PRIVATE core SDL2::SDL2)
+        target_link_libraries(chinchilla PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,core> ${CMAKE_DL_LIBS} SDL2::SDL2)
     else()
         target_include_directories(chinchilla PRIVATE ${SDL2_INCLUDE_DIRS})
-        target_link_libraries(chinchilla PRIVATE core ${SDL2_LIBRARIES})
+        target_link_libraries(chinchilla PRIVATE $<LINK_LIBRARY:WHOLE_ARCHIVE,core> ${CMAKE_DL_LIBS} ${SDL2_LIBRARIES})
     endif()
     # It starts with no screen at all (SDL's "dummy" video), runs for a
     # moment on a new, empty C: and saves what its window shows.

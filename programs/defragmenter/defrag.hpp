@@ -75,9 +75,7 @@ private:
     int changed_count_ = 0;
 };
 
-// The Defragmenter window (opens it, or brings it to the front) and its
-// disk, for tests.
-void open_defragmenter();
+// The Defragmenter's disk while it is open, for the tests (APP_LINKED).
 const DefragModel &defragmenter_disk();
 constexpr uint32_t kDefragStepUs = 30000;
 

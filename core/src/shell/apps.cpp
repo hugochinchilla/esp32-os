@@ -4,7 +4,6 @@
 
 #include "core/prog/prog.hpp"
 #include "core/gfx/art.hpp"
-#include "core/shell/defrag.hpp"
 #include "core/shell/shell.hpp"
 #include "internal.hpp"
 
@@ -28,7 +27,6 @@ struct Entry {
 constexpr uint32_t kRoomy = 8 * 1024;
 const Entry kApps[] = {
     {{"About Chinchilla", nullptr, &open_about, false, true}, &gfx::mascot_16},
-    {{"Defragmenter", nullptr, &open_defragmenter, false, true, kRoomy}, &gfx::defrag_icon_16},
     {{"Editor", nullptr, &open_editor, true, true, kRoomy}, &gfx::editor_icon_16},
     {{"File manager", nullptr, &open_file_manager, false, true, kRoomy}, &gfx::files_icon_16},
     {{"Picture viewer", nullptr, &open_viewer, false, true, kRoomy}, &gfx::viewer_icon_16},
@@ -39,7 +37,6 @@ const Entry kApps[] = {
     // to be trimmed with what the board measures.
     {{"Vizcacha", nullptr, &open_browser_home, false, true, 12 * 1024}, &gfx::browser_icon_16},
     {{"Welcome", nullptr, &open_welcome, false, true}, &gfx::welcome_icon_16},
-    {{"Widget gallery", nullptr, &open_gallery, false, true}, &gfx::gallery_icon_16},
 };
 constexpr int kAppCount = sizeof(kApps) / sizeof(kApps[0]);
 

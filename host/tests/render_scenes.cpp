@@ -12,7 +12,7 @@
 #include "core/os/os.hpp"
 #include "core/fs/memory_volume.hpp"
 #include "core/shell/boot.hpp"
-#include "core/shell/defrag.hpp"
+#include "../../programs/defragmenter/defrag.hpp"
 #include "core/desk/desk.hpp"
 #include "core/shell/shell.hpp"
 #include "../../programs/test_hooks.hpp"
@@ -559,7 +559,7 @@ int main(int argc, char **argv)
     while (desktop.active() != nullptr) {
         desktop.close(*desktop.active());
     }
-    shell::open_defragmenter();
+    shell::start_program("Defragmenter");
     save("35-defragmenter");
     key(wm::key::Enter); // Start
     for (int i = 0; i < 601; i++) {

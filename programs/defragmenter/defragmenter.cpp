@@ -4,7 +4,8 @@
 
 #include "core/app/app.hpp"
 #include "core/gfx/art.hpp"
-#include "core/shell/defrag.hpp"
+#include "art.hpp"
+#include "defrag.hpp"
 #include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
 #include "internal.hpp"
@@ -411,29 +412,37 @@ private:
     app::Picture legend_;
 };
 
-app::Number g_window = app::kNone; // the one there may be: a number, dead once it has closed
-
 } // namespace
 
-void open_defragmenter()
+#ifdef APP_LINKED
+// For the tests, which have the program linked into them, while the
+// Defragmenter is open.
+const DefragModel &defragmenter_disk()
 {
-    const AsProgram as("Defragmenter");
-    if (app::bring_forward(g_window)) {
-        return;
-    }
-    app::Look look;
-    look.title = "Defragmenter";
-    look.width = DefragWindow::kClientW;
-    look.height = DefragWindow::kClientH;
-    look.icon = &gfx::defrag_icon_16();
-    look.flags = app::kDialog | app::kClientSize; // fixed size, only the close button
-    g_window = app::open<DefragWindow>(look);
-    if (g_window == app::kNone) {
-        no_memory_for("Defragmenter");
-    }
+    return app::program<DefragWindow>(os::main_window(os::find("Defragmenter")))->disk();
 }
-
-// For the tests, while the Defragmenter is open.
-const DefragModel &defragmenter_disk() { return app::program<DefragWindow>(g_window)->disk(); }
+#endif
 
 } // namespace shell
+
+// The Defragmenter is a program kept in a file (backlog item 27): not part
+// of the system.
+APP_INFO(app::file_info("Defragmenter", 0, art::kSmall, art::kSmallInks, art::kLarge, art::kLargeInks));
+
+namespace {
+// The window's icon: the header's own pixels are not in memory with the
+// program, so they are made again here from the same rows.
+constexpr app::Icon16 kWindowIcon = app::icon16(art::kSmall, art::kSmallInks);
+} // namespace
+
+APP_MAIN(int, char **)
+{
+    static const gfx::Bitmap icon = {16, 16, kWindowIcon.pixels, app::kClearInk};
+    app::Look look;
+    look.title = "Defragmenter";
+    look.width = shell::DefragWindow::kClientW;
+    look.height = shell::DefragWindow::kClientH;
+    look.icon = &icon;
+    look.flags = app::kDialog | app::kClientSize; // fixed size, only the close button
+    return app::open<shell::DefragWindow>(look) != app::kNone ? 0 : 1;
+}

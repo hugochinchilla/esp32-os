@@ -705,61 +705,6 @@ const Bitmap &terminal_icon_16()
     return bitmap;
 }
 
-const Bitmap &defrag_icon_32()
-{
-    static constexpr const char *rows[32] = {
-        "................................", "...............KKKKK............",
-        "....KKKKK......KWWWK............", "....KBBBK......KWWWK............",
-        "....KBBBK......KWWWK....KKKKK...", "....KBBBK......KKKKK....KBBBK...",
-        "....KKKKKKKKKK..........KBBBK...", ".........KWWWK..........KBBBK...",
-        ".........KWWWK..........KKKKK...", ".........KWWWK..................",
-        ".........KKKKK..................", "................................",
-        "....KKKKKKKKKKKKKKKKKKKKKKKKK...", "....KWWWKKWWWKKWWWKKBBBKKBBBK...",
-        "....KWWWKKWWWKKWWWKKBBBKKBBBK...", "....KWWWKKWWWKKWWWKKBBBKKBBBK...",
-        "....KKKKKKKKKKKKKKKKKKKKKKKKK...", "................................",
-        "..KKKKKKKKKKKKKKKKKKKKKKKKKKKK..", "..KSSSSSSSSSSSSSSSSSSSSSSSSSSK..",
-        "..KSRRRRRRRRRRRRRRRRRRRRRRRRYKY.", "..KSRRRRRRRRRRRRRRRRRRRRRRRRYKY.",
-        "..KSRRRRRRRRRRRRRRRRRRRRRRRRYKY.", "..KSRRYYYYYYYYYYYYYYRRROOORRYKY.",
-        "..KSRRSSSSSSSSSSSSSSRRROOORRYKY.", "..KSRRRRRRRRRRRRRRRRRRRRRRRRYKY.",
-        "..KSRRRRRRRRRRRRRRRRRRRRRRRRYKY.", "..KSYYYYYYYYYYYYYYYYYYYYYYYYYKY.",
-        "..KKKKKKKKKKKKKKKKKKKKKKKKKKKKY.", "....YYYYYYYYYYYYYYYYYYYYYYYYYYY.",
-        "................................", "................................",
-    };
-    static constexpr Ink inks[] = {
-        {'K', rgb(0, 0, 0)},
-        {'W', rgb(1, 3, 3)},
-        {'B', rgb(7, 0, 0)},
-        {'S', rgb(7, 7, 3)},
-        {'R', rgb(5, 5, 2)},
-        {'Y', rgb(2, 2, 1)},
-        {'O', rgb(4, 7, 1)},
-    };
-    static constexpr Pixels<32> pixels = paint<32>(rows, inks);
-    static constexpr Bitmap bitmap = {32, 32, pixels.p, kClear};
-    return bitmap;
-}
-
-const Bitmap &defrag_icon_16()
-{
-    static constexpr const char *rows[16] = {
-        "..........KKKK..", "...KKKK...KWWK..", "...KBBK...KWWK..", "...KBBK...KKKK..",
-        "...KKKK.........", "................", ".KKKKKKKKKKKKK..", ".KWWKWWKBBKBBK..",
-        ".KWWKWWKBBKBBK..", ".KKKKKKKKKKKKK..", ".KKKKKKKKKKKKKK.", ".KSSSSSSSSSSSSK.",
-        ".KRRRRRRRRRRYRK.", ".KRRRRRRRRRRRRK.", ".KKKKKKKKKKKKKK.", "................",
-    };
-    static constexpr Ink inks[] = {
-        {'K', rgb(0, 0, 0)},
-        {'W', rgb(1, 3, 3)},
-        {'B', rgb(7, 0, 0)},
-        {'S', rgb(7, 7, 3)},
-        {'R', rgb(5, 5, 2)},
-        {'Y', rgb(4, 7, 1)},
-    };
-    static constexpr Pixels<16> pixels = paint<16>(rows, inks);
-    static constexpr Bitmap bitmap = {16, 16, pixels.p, kClear};
-    return bitmap;
-}
-
 const Bitmap &snake_icon_32()
 {
     static constexpr Pixels<32> pixels = paint<32>(game_art::kSnake32, game_art::kSnake32Inks);
@@ -1080,59 +1025,6 @@ const Bitmap &welcome_icon_16()
         {'W', rgb(7, 7, 3)},
         {'B', rgb(2, 2, 1)},
         {'S', rgb(1, 3, 3)},
-    };
-    static constexpr Pixels<16> pixels = paint<16>(rows, inks);
-    static constexpr Bitmap bitmap = {16, 16, pixels.p, kClear};
-    return bitmap;
-}
-
-const Bitmap &gallery_icon_32()
-{
-    static constexpr const char *rows[32] = {
-        "................................", "................................",
-        "................................", "..KKKKKKKKKKKKKKKKKKKKKKKKKKK...",
-        "..KWWWWWWWWWWWWBBBBBBBBBBBBBK...", "..KWWWWWWWWWWWWBBBBBBBBBSSSBKR..",
-        "..KWWWWWWWWWWWWBBBBBBBBBSSSBKR..", "..KWWWWWWWWWWWWBBBBBBBBBBBBBKR..",
-        "..KSSSSSSSSSSSSSSSSSSSSSSSSSKR..", "..KSSSSSSSSSSSSSSSSSSSSSSSSSKR..",
-        "..KSSSSSSSSSSSSSSSSSSSSSSSSSKR..", "..KSSKKKKKKKSSSSSSSSSSSSSSSSKR..",
-        "..KSSKYYYYKKSSSSSSSSSSSSSSSSKR..", "..KSSKYYYKKKSSRRRRRRRRRRRRSSKR..",
-        "..KSSKKYKKYKSSSSSSSSSSSSSSSSKR..", "..KSSKKKKYYKSSRRRRRRRRRSSSSSKR..",
-        "..KSSKYKYYYKSSSSSSSSSSSSSSSSKR..", "..KSSKKKKKKKSSSSSSSSSSSSSSSSKR..",
-        "..KSSSSSSSSSSSSSSSSSSSSSSSSSKR..", "..KSSSSSSSSSSSSSSSSSSSSSSSSSKR..",
-        "..KSSKKKKKKKKKKKKSSSSKKSSSSSKR..", "..KSSKYYYYYYYYYYKSSSKYYKSSSSKR..",
-        "..KSSKSSSSSSSSSRKSSKYKKYKSSSKR..", "..KSSKSSSSSSSSSRKSSKYKKYKSSSKR..",
-        "..KSSKSRRRRRRRRRKSSSKYYKSSSSKR..", "..KSSKKKKKKKKKKKKSSSSKKSSSSSKR..",
-        "..KSSSSSSSSSSSSSSSSSSSSSSSSSKR..", "..KKKKKKKKKKKKKKKKKKKKKKKKKKKR..",
-        "....RRRRRRRRRRRRRRRRRRRRRRRRRR..", "................................",
-        "................................", "................................",
-    };
-    static constexpr Ink inks[] = {
-        {'K', rgb(0, 0, 0)},
-        {'W', rgb(0, 0, 2)},
-        {'B', rgb(1, 3, 3)},
-        {'S', rgb(5, 5, 2)},
-        {'R', rgb(2, 2, 1)},
-        {'Y', rgb(7, 7, 3)},
-    };
-    static constexpr Pixels<32> pixels = paint<32>(rows, inks);
-    static constexpr Bitmap bitmap = {32, 32, pixels.p, kClear};
-    return bitmap;
-}
-
-const Bitmap &gallery_icon_16()
-{
-    static constexpr const char *rows[16] = {
-        "................", ".KKKKKKKKKKKKKK.", ".KWWWWWWWWWWWWK.", ".KWWWWWWWWWWWWK.",
-        ".KBBBBBBBBBBBBK.", ".KBKKKKKBBBBBBK.", ".KBKSSKKBRRRRBK.", ".KBKKSKKBBBBBBK.",
-        ".KBKSKSKBRRRRBK.", ".KBKKKKKBBBBBBK.", ".KBKKKKKKKKKKBK.", ".KBKSSSSSSSSKBK.",
-        ".KBKBBBBBBBBKBK.", ".KBKKKKKKKKKKBK.", ".KKKKKKKKKKKKKK.", "................",
-    };
-    static constexpr Ink inks[] = {
-        {'K', rgb(0, 0, 0)},
-        {'W', rgb(0, 0, 2)},
-        {'B', rgb(5, 5, 2)},
-        {'S', rgb(7, 7, 3)},
-        {'R', rgb(2, 2, 1)},
     };
     static constexpr Pixels<16> pixels = paint<16>(rows, inks);
     static constexpr Bitmap bitmap = {16, 16, pixels.p, kClear};

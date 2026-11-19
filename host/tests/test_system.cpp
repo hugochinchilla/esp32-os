@@ -5,7 +5,7 @@
 #include <string>
 
 #include "core/fs/memory_volume.hpp"
-#include "core/shell/defrag.hpp"
+#include "../../programs/defragmenter/defrag.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/wm.hpp"
 #include "../host_adapters.hpp"
@@ -149,7 +149,7 @@ void test_defragmenter_window()
     ports::VolumeInfo info_before = {}, info_after = {};
     storage.volume('C')->info(info_before);
 
-    shell::open_defragmenter();
+    shell::start_program("Defragmenter");
     CHECK(strcmp(title(), "Defragmenter") == 0);
     // The window, and the pretend disk in it, exist only while it is open.
     const auto disk = []() -> const shell::DefragModel & { return shell::defragmenter_disk(); };
@@ -179,9 +179,9 @@ void test_defragmenter_window()
     CHECK(memory.in_use() == blocks - 10); // the window and its nine controls;
     CHECK(proc::table().find_by_name("Defragmenter") == proc::kNone);
     wait(20 * shell::kDefragStepUs);
-    CHECK(memory.in_use() == blocks - 10); // the window and its nine controls;
+    CHECK(memory.in_use() == blocks - 11); // the window, its nine controls and its arguments
     // Opened again it starts from the scrambled disk.
-    shell::open_defragmenter();
+    shell::start_program("Defragmenter");
     CHECK(disk().moves() == 0 && !disk().done());
     key(wm::key::Enter); // Start
     for (int i = 0; i < 100000 && !disk().done(); i++) {

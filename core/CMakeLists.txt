@@ -72,13 +72,11 @@ set(CORE_SRCS
     src/shell/about.cpp
     src/shell/apps.cpp
     src/shell/programs.cpp
-    src/shell/gallery.cpp
     src/shell/welcome.cpp
     src/shell/bluetooth.cpp
     src/shell/bluetooth_service.cpp
     src/shell/boot.cpp
     src/shell/browser.cpp
-    src/shell/defrag.cpp
     src/shell/desktop.cpp
     src/shell/display.cpp
     src/shell/colour_dialog.cpp

@@ -46,6 +46,8 @@
 #ifdef __EMSCRIPTEN__
 #include "web_dialer.hpp"
 #else
+#include "../dl_loader.hpp"
+#include "../program_files.hpp"
 #include "core/net/posix_dialer.hpp"
 #endif
 
@@ -572,6 +574,19 @@ void Machine::start()
     if (storage_.entry("C:\\", 0, first) == ports::FsError::NotFound) {
         fs::add_samples(storage_, 'C');
     }
+    // The programs are files in C:\Programs, as on the board. Here the
+    // build made them beside this program (programs/*.app) and they are
+    // copied each time it starts, where they changed: what tools/flash.py
+    // does for the board. The web page has them linked into it instead and
+    // writes a file for each by itself (core/app/linked.hpp).
+#ifndef __EMSCRIPTEN__
+    {
+        const std::string from = host::program_files_folder();
+        if (from.empty() || host::install_program_files(storage_, from.c_str(), shell::kProgramsFolder) < 0) {
+            fprintf(stderr, "chinchilla: could not copy the programs from %s to C:\\Programs\n", from.c_str());
+        }
+    }
+#endif
 
     // The start-up screens, as on the board, with the settings of
     // C:\.config\boot.ini; a key or a click skips them. There is no
@@ -615,6 +630,12 @@ void Machine::start()
         [](void *self) {
             auto *m = static_cast<Machine *>(self);
             shell::start(m->screen_, m->system_, m->storage_, m->memory_);
+#ifndef __EMSCRIPTEN__
+            // Program files are shared libraries of the PC, joined to this
+            // program by the PC's own loader.
+            static host::DlLoader loader;
+            shell::set_loader(&loader);
+#endif
             return true;
         },
         this, true);

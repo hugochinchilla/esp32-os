@@ -239,7 +239,6 @@ void drop_in_trash(const char *path);
 void open_trash();
 void open_about();   // about.cpp
 void open_welcome(); // welcome.cpp
-void open_gallery(); // gallery.cpp
 // The folders that changed, as fs::Storage's notices told (desktop.cpp):
 // their keys (fs::path::key), or `all` when there were more than fit.
 struct FolderKeys {
