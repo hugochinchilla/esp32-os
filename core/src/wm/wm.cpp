@@ -828,6 +828,7 @@ void Wm::minimize(Window &w)
     }
     w.was_maximized_ = w.state_ == WindowState::Maximized;
     w.state_ = WindowState::Minimized;
+    w.put_away_ = false;
     invalidate(w.frame_);
     tell_panels(PanelNews::Windows);
     if (active_ == &w) {
@@ -844,6 +845,7 @@ void Wm::restore(Window &w)
     if (w.wm_ != this) {
         return;
     }
+    w.put_away_ = false;
     if (w.state_ == WindowState::Minimized) {
         w.state_ = w.was_maximized_ ? WindowState::Maximized : WindowState::Normal;
         invalidate(w.frame_);
@@ -903,6 +905,43 @@ void Wm::cycle_windows()
     if (count_ >= 2) {
         activate(*stack_[0]);
     }
+}
+
+void Wm::show_desktop()
+{
+    if (system_modal() != nullptr) {
+        return;
+    }
+    close_menus();
+    if (topmost_visible() != nullptr) {
+        for (int i = 0; i < count_; i++) {
+            Window &w = *stack_[i];
+            // (A window it put away before, still down, stays its own.)
+            if (visible(w)) {
+                w.put_away_ = true;
+                w.was_maximized_ = w.state_ == WindowState::Maximized;
+                w.state_ = WindowState::Minimized;
+                invalidate(w.frame_);
+            }
+        }
+        active_ = nullptr;
+    } else {
+        // Nothing has come back since: the windows put away return, the
+        // stack as it was, and the top one takes the focus.
+        for (int i = 0; i < count_; i++) {
+            Window &w = *stack_[i];
+            if (w.put_away_) {
+                w.put_away_ = false;
+                w.state_ = w.was_maximized_ ? WindowState::Maximized : WindowState::Normal;
+                invalidate(w.frame_);
+            }
+        }
+        if (Window *top = topmost_visible()) {
+            activate(*top);
+        }
+    }
+    tell_panels(PanelNews::Windows);
+    update_pointer_shape();
 }
 
 void Wm::set_start_menu(Menu *menu, const char *banner)
@@ -1098,7 +1137,9 @@ void Wm::key_repeat(void *self)
     Wm &wm = *static_cast<Wm *>(self);
     if (wm.repeat_usage_ != 0) {
         wm.caret_moved();
+        wm.repeating_ = true;
         wm.handle_key(wm.repeat_usage_, true);
+        wm.repeating_ = false;
     }
 }
 
@@ -1127,6 +1168,14 @@ void Wm::handle_key(uint16_t usage, bool pressed)
     }
     if (bit != 0) {
         mods_ = pressed ? (mods_ | bit) : (mods_ & ~bit);
+    }
+    // The logo key alone is the Start key, and it acts when it comes up:
+    // only then is it known that no other key went with it.
+    const bool logo_up = bit == kGui && !pressed && logo_alone_;
+    if (bit == kGui) {
+        logo_alone_ = pressed;
+    } else if (pressed) {
+        logo_alone_ = false;
     }
     if (pressed && usage == key::Delete && (mods_ & kCtrl) && (mods_ & kAlt)) {
         // Ctrl+Alt+Del belongs to the shell, whatever has the focus. It
@@ -1159,13 +1208,17 @@ void Wm::handle_key(uint16_t usage, bool pressed)
     }
     const KeyMsg k = {usage, pressed, mods_};
     bool used = false;
-    if (pressed) {
-        const bool start_key = bit == kGui || (usage == key::Escape && (mods_ & kCtrl));
-        if (start_key) {
-            if (start_menu_open()) {
-                close_menus();
-            } else {
-                open_start_menu();
+    if (logo_up || (pressed && usage == key::Escape && (mods_ & kCtrl))) {
+        if (start_menu_open()) {
+            close_menus();
+        } else {
+            open_start_menu();
+        }
+        used = true;
+    } else if (pressed) {
+        if ((mods_ & kGui) && key::letter(usage) == 'd') {
+            if (!repeating_) {
+                show_desktop();
             }
             used = true;
         } else if (menu_open()) {
@@ -1176,6 +1229,9 @@ void Wm::handle_key(uint16_t usage, bool pressed)
                 if (active_->close_requested()) {
                     close(*active_);
                 }
+            } else if (active_ == nullptr && leave_ != nullptr && !repeating_ && system_modal() == nullptr) {
+                // Nothing to close but the desktop itself.
+                leave_(leave_context_);
             }
             used = true;
         } else if ((mods_ & kAlt) && usage == key::Tab) {

@@ -321,6 +321,7 @@ private:
     Rect restore_;               // frame before maximising
     WindowState state_ = WindowState::Normal;
     bool was_maximized_ = false; // state to return to from minimised
+    bool put_away_ = false;      // minimised by Wm::show_desktop(), which brings it back
     bool resizable_ = true;
     bool dialog_ = false;
     bool modal_ = false;
