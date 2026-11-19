@@ -494,6 +494,12 @@ public:
             static_cast<unsigned>(scan.histogram[2]), static_cast<unsigned>(scan.histogram[3]),
             static_cast<unsigned>(scan.histogram[4]), static_cast<unsigned>(scan.histogram[5]));
         add("  last long gap before the refill at pixel %u\n", static_cast<unsigned>(scan.last_gap_pos));
+        // Kept short: the whole report must fit one reply (1024 bytes).
+        add("  top of the frame, longest fills:");
+        for (int i = 0; i < VGA_SCAN_PLACES; i++) {
+            add(" %u", static_cast<unsigned>(scan.max_fill_at[i] / CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ));
+        }
+        add(" us; copy ahead %u us\n", static_cast<unsigned>(scan.max_ahead_cycles / CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ));
         {
             uint32_t late = 0, missed = 0, worst = 0;
             int shown = 0;
