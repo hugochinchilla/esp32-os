@@ -1410,13 +1410,14 @@ namespace {
 // edge carries it on a taskbar of any colour. `rune`: its colour. `dot`: a
 // green light in the corner (a device is connected). `cross`: a red cross
 // there (off).
+constexpr bool kBluetoothEdge = true;
 constexpr Pixels<16> bluetooth_pixels(int rune, bool dot, bool cross)
 {
     constexpr const char *rows[16] = {
-        "................", ".......BB.......", ".......BBB......", ".......BBBB.....",
-        "..BB...BB.BB....", "...BB..BB..BB...", "....BB.BB.BB....", ".....BBBBB......",
-        ".....BBBBB......", "....BB.BB.BB....", "...BB..BB..BB...", "..BB...BB.BB....",
-        ".......BBBB.....", ".......BBB......", ".......BB.......", "................",
+        "................", ".......B........", ".......BB.......", ".......B.B......",
+        "...B...B..B.....", "....B..B.B......", ".....B.BB.......", "......BB........",
+        "......BB........", ".....B.BB.......", "....B..B.B......", "...B...B..B.....",
+        ".......B.B......", ".......BB.......", ".......B........", "................",
     };
     constexpr const char *kDot[5] = {".KKK.", "KGGGK", "KGGGK", "KGGGK", ".KKK."};
     Pixels<16> out;
@@ -1429,7 +1430,7 @@ constexpr Pixels<16> bluetooth_pixels(int rune, bool dot, bool cross)
                     beside = beside || (nx >= 0 && nx < 16 && ny >= 0 && ny < 16 && rows[ny][nx] == 'B');
                 }
             }
-            out.p[y * 16 + x] = static_cast<uint8_t>(rows[y][x] == 'B' ? rune : beside ? kWhite : kClear);
+            out.p[y * 16 + x] = static_cast<uint8_t>(rows[y][x] == 'B' ? rune : beside && kBluetoothEdge ? kWhite : kClear);
         }
     }
     for (int y = 0; y < 5 && dot; y++) {
