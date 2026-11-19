@@ -24,6 +24,12 @@ const char *name(Id id)
     case Id::Alert: return "alert";
     case Id::Error: return "error";
     case Id::Bell: return "bell";
+    case Id::ChessMove: return "chess_move";
+    case Id::ChessCheck: return "chess_check";
+    case Id::ChessMate: return "chess_mate";
+    case Id::SnakeEat: return "snake_eat";
+    case Id::SnakeOver: return "snake_over";
+    case Id::Crumple: return "crumple";
     }
     return "";
 }

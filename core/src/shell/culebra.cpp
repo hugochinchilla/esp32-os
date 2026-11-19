@@ -415,6 +415,10 @@ private:
         if (w.game_.step()) {
             w.score_ += kPoints[w.speed_];
             w.show_score();
+            os::play_sound(sound::Id::SnakeEat);
+        }
+        if (w.game_.state() == Snake::State::Over) {
+            os::play_sound(sound::Id::SnakeOver); // in place of the last berry's, if there was one
         }
         for (int i = 0; i < w.game_.changed_count(); i++) {
             w.board_.redraw(cell_rect(w.game_.changed_col(i), w.game_.changed_row(i)));
