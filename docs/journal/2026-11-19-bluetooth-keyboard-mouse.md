@@ -341,3 +341,31 @@ edge, or no edge and always blue. The Bluetooth service picks the tray's
 picture from the theme (a bar written in a light ink is a dark bar) and
 again when the theme changes. The program's own icon keeps the edge: it
 sits on the blue title bar and in menus.
+
+## The first real mouse: the pointer jumped
+
+The third board turn was the first with the owner's own Bluetooth keyboard
+and mouse, and they paired and worked. His words on the mouse: it does not
+feel fluid; it never stops, but it seems to jump large distances between
+repaints. The board counted 150 to 160 movements a second, mostly 10 ms
+apart, with gaps of 40 to 50 ms, about three frames.
+
+The cause was in the adapter: the connection was asked for with NimBLE's
+own pace (`ble_gap_connect` with no parameters), which lets a device
+speak every 30 to 50 ms. A mouse makes 125 reports a second, so it handed
+them over four or five at a time, and the adding-up on the way to the UI
+task turned each handful into one long step. The connection is now asked
+for at 7.5 to 11.25 ms, with no skipped turns. A device may still ask for
+another pace afterwards, and is given it; the log now says the pace at
+connection and at every change, so the board check can read what each
+device really runs at.
+
+Options: 7.5 to 11.25 ms for every device (chosen: one rule, and a
+keyboard gains too); the fast pace for mice only and a slow one for
+keyboards, to leave Wi-Fi more air (not chosen yet: to decide with the
+remote screen's figures once both are connected). Not touched: listening
+in the background, which also takes radio time while a remembered device
+is away, and the Wi-Fi sharing; they are to look at if gaps remain.
+
+The firmware compiles and links (1,948,320 bytes). Not run on the board:
+the pace a real mouse accepts is exactly what the next turn measures.

@@ -49,6 +49,11 @@ const ble_uuid16_t kHidServiceUuid = {{BLE_UUID_TYPE_16}, kHidService};
 constexpr uint16_t kBackgroundInterval = 320, kBackgroundWindow = 32; // of 0.625 ms
 constexpr uint16_t kSearchInterval = 160, kSearchWindow = 48;
 constexpr int32_t kConnectMs = 10000;
+// How often a connected device may speak: every 7.5 to 11.25 ms (units of
+// 1.25 ms). NimBLE's own choice is 30 to 50 ms, and a mouse then hands over
+// its 125 reports a second four or five at a time: the pointer jumped
+// every third frame (the board, 2026-11-19).
+constexpr uint16_t kLinkIntervalMin = 6, kLinkIntervalMax = 9;
 // A device not heard for this long is no longer listed.
 constexpr int64_t kHeardUs = 8 * 1000000ll;
 
@@ -282,7 +287,16 @@ public:
         }
         // Not while listening: the radio does one or the other.
         ble_gap_disc_cancel();
-        const int rc = ble_gap_connect(own_address_type_, &peer, kConnectMs, nullptr, &on_gap,
+        ble_gap_conn_params link = {};
+        link.scan_itvl = 0x0010; // NimBLE's own, while it looks for the device
+        link.scan_window = 0x0010;
+        link.itvl_min = kLinkIntervalMin;
+        link.itvl_max = kLinkIntervalMax;
+        link.latency = BLE_GAP_INITIAL_CONN_LATENCY;
+        link.supervision_timeout = BLE_GAP_INITIAL_SUPERVISION_TIMEOUT; // 2.56 s
+        link.min_ce_len = BLE_GAP_INITIAL_CONN_MIN_CE_LEN;
+        link.max_ce_len = BLE_GAP_INITIAL_CONN_MAX_CE_LEN;
+        const int rc = ble_gap_connect(own_address_type_, &peer, kConnectMs, &link, &on_gap,
                                        reinterpret_cast<void *>(static_cast<intptr_t>(slot)));
         if (rc != 0) {
             ESP_LOGW(TAG, "connect did not start: %d", rc);
@@ -518,6 +532,17 @@ private:
         ble_gap_terminate(c.handle, BLE_ERR_REM_USER_CONN_TERM);
     }
 
+    // The pace of a connection, in the log: the board check reads it.
+    void log_pace(uint16_t handle, const char *when)
+    {
+        ble_gap_conn_desc d = {};
+        if (ble_gap_conn_find(handle, &d) == 0) {
+            ESP_LOGI(TAG, "%s: every %u us, may skip %u, lost after %u ms", when,
+                     static_cast<unsigned>(d.conn_itvl) * 1250u, static_cast<unsigned>(d.conn_latency),
+                     static_cast<unsigned>(d.supervision_timeout) * 10u);
+        }
+    }
+
     static int on_gap(ble_gap_event *event, void *arg)
     {
         Radio &r = self();
@@ -540,6 +565,7 @@ private:
             }
             if (up) {
                 ESP_LOGI(TAG, "%s: connected", c.link.name[0] != 0 ? c.link.name : "device");
+                r.log_pace(c.handle, "connected");
                 const int rc = ble_gap_security_initiate(c.handle);
                 if (rc != 0 && rc != BLE_HS_EALREADY) {
                     r.give_up(c, "security did not start");
@@ -550,6 +576,13 @@ private:
             r.apply_scan();
             return 0;
         }
+        case BLE_GAP_EVENT_CONN_UPDATE:
+            // The device asked for another pace and got it (asking is its
+            // right, and it is granted as asked: NimBLE's default).
+            if (event->conn_update.status == 0) {
+                r.log_pace(event->conn_update.conn_handle, "pace changed");
+            }
+            return 0;
         case BLE_GAP_EVENT_DISCONNECT: {
             Conn *c = r.by_handle(event->disconnect.conn.conn_handle);
             if (c != nullptr) {
