@@ -25,11 +25,9 @@ Backlog item 77. [Journal](../journal/2026-11-19-files-copied-when-flashing.md).
   `--wad FILE` is given. It is not in the repository: it may be passed on
   unchanged but is not freely licensed.
 
-The rest is the agent's, to confirm (put to the owner on a card,
-2026-11-19, built on the recommended option, answer pending):
-
 - **Copied over the debug link after the firmware is written, only what
-  changed.** `C:\system\installed.txt` lists what the tool copied (16 hex
+  changed** (the owner's choice on a card, 2026-11-19: "Copiar por el
+  enlace de depuración"). `C:\system\installed.txt` lists what the tool copied (16 hex
   digits of the SHA-256, the size, the path). A file is sent when it is not
   in the list with that mark, or is not on the board with that size. A file
   in the list that left the set is deleted. Nothing else on C: is touched.
@@ -37,6 +35,8 @@ The rest is the agent's, to confirm (put to the owner on a card,
   every flash wipes the settings and the documents, and the laptop needs a
   tool to build the image); both, with the image behind `--fresh` (two ways
   to keep working and to test).
+The rest is the agent's, to confirm:
+
 - **What the firmware still writes on a new C:** the folders (`Documents`,
   `pictures`, `system`) and the text files, under 1 KB in all
   (`fs::add_first_files`). The tool makes `C:\Programs`. The PC programs, the browser version and the

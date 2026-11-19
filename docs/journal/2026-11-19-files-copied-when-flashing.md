@@ -144,7 +144,6 @@ Smaller choices, the agent's, to confirm:
 
 ## What is left
 
-- The owner's answer on how the files travel (the card).
 - The board turn: flash with the tool, time the copies, check that a
   second run sends nothing and that the programs open.
 - An update over the network does not bring the programs (the decision
@@ -152,3 +151,9 @@ Smaller choices, the agent's, to confirm:
   for it.
 - Doom (backlog 81) merges onto this: `programs/doom` puts the WAD in the
   set with no further change.
+
+## The owner's answer (2026-11-19)
+
+On the card he chose the first option, "Copiar por el enlace de
+depuración": what was built stands. The smaller choices listed above are
+still the agent's, to confirm.
