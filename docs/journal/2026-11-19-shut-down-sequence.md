@@ -1,8 +1,8 @@
 # The Shut Down sequence
 
-2026-11-19. Backlog item 60. Built and tested on the PC. The firmware's
-state (compiled or not) is in the pull request; nothing here has run on the
-board.
+2026-11-19. Backlog item 60. Built and tested on the PC. The firmware was
+compiled and linked in the cloud container (ESP-IDF v5.5); nothing here
+has run on the board.
 
 ## 1. What was asked
 
@@ -137,7 +137,7 @@ On the PC: 54 of 54 tests, and the gate (`tools/gate.sh`).
 - `test_sound`: the melody is asked for once, when the fade begins.
 - Pictures `38a` to `38d` and `38-power-down`.
 
-Not tested: the firmware on the board. One step of the fade reads and
+Not tested: the firmware on the board (it compiles and links). One step of the fade reads and
 writes the whole picture (307 200 pixels, 480 000 at 800 x 600) on the
 desktop's task; how long that takes on the board, and whether a step every
 60 ms is kept, is for the board turn to measure. The PC program was not
