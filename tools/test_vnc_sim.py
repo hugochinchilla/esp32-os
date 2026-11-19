@@ -24,6 +24,24 @@ import dbg  # noqa: E402
 RAW, ZRLE, CURSOR = 0, 16, -239
 
 
+def steady(picture, width=640, height=480):
+    """The picture with the taskbar's clock blanked (`Taskbar::clock_rect`
+    in core/src/desk/taskbar.cpp), as in test_dbg_sim.py and for the same
+    reason: the minute changes when it likes, and two pictures taken at
+    different moments are compared through this. Takes a screenshot (bytes)
+    or a viewer's pixels (a list), and gives back the same kind."""
+    rows = list(picture)
+    for y in range(height - 24, height - 2):
+        rows[y * width + width - 62:y * width + width - 2] = [0] * 60
+    return bytes(rows) if isinstance(picture, (bytes, bytearray)) else rows
+
+
+def shot_of(board):
+    """What is in the picture's memory (no pointer), without the clock."""
+    width, height, picture = board.screenshot(pointer=False)
+    return steady(picture, width, height)
+
+
 class Viewer:
     """Just enough of a VNC viewer: 8, 16 or 32 bits a pixel, Raw and ZRLE."""
 
@@ -151,6 +169,14 @@ class Viewer:
                     values.append(palette[(row[at // 8] >> (8 - bits - at % 8)) & ((1 << bits) - 1)])
         for i, v in enumerate(values):
             self.pixels[(y0 + i // w) * self.width + x0 + i % w] = v
+
+    def steady(self):
+        """The pixels it has, without the clock (see `steady`)."""
+        return steady(self.pixels, self.width, self.height)
+
+    def picture(self):
+        """The same as bytes, to compare with `shot_of` (8 bits a pixel)."""
+        return bytes(self.steady())
 
     def close(self):
         self.sock.close()
@@ -317,7 +343,7 @@ def check_web(board, port, web, shot):
     v.set_encodings([ZRLE, RAW, CURSOR])
     v.request(0)
     v.update()
-    assert bytes(v.pixels) == shot, "the picture through the WebSocket differs"
+    assert v.picture() == shot, "the picture through the WebSocket differs"
     assert v.colour_map[0xFF] == (65535, 65535, 65535) and v.cursor is not None
     # A ping is answered with its own text.
     v.sock.frame(9, b"are you there")
@@ -327,9 +353,9 @@ def check_web(board, port, web, shot):
     v.request(0)
     v.update()
     assert v.sock.pongs == [b"are you there"], v.sock.pongs
-    assert bytes(v.pixels) == shot
+    assert v.picture() == shot
     check_system_keys(board, v, page)
-    _, _, shot = board.screenshot(pointer=False)
+    shot = shot_of(board)
 
     # One viewer at a time, whichever door it came through.
     plain = Viewer(port)
@@ -356,7 +382,7 @@ def check_web(board, port, web, shot):
     again.set_encodings([RAW])
     again.request(0)
     again.update()
-    assert bytes(again.pixels) == shot
+    assert again.picture() == shot
     # An unmasked frame is against the rules: the connection ends.
     again.sock.sock.sendall(b"\x82\x01\x00")
     settle(board)
@@ -370,10 +396,13 @@ def check_web(board, port, web, shot):
 
 def caught_up(v, board, tries=10):
     """True once the viewer's picture equals the screenshot, asking for
-    more updates while there are changes it has not had yet."""
+    more updates while there are changes it has not had yet. An update is
+    sent as soon as something changed, which can be before the painting
+    that a click or a key started is finished, and is more often so when
+    the computer is busy with other tests."""
     for _ in range(tries):
-        _, _, shot = board.screenshot(pointer=False)
-        if bytes(v.pixels) == shot:
+        shot = shot_of(board)
+        if v.picture() == shot:
             return True
         v.request(1)
         v.update()
@@ -416,7 +445,7 @@ def main():
         board = dbg.Board(sim.stdout.readline().strip(), timeout=2.0)
         dbg.wait_for_desktop(board)  # after the start-up screens, as on the board
         board.animations(False)
-        _, _, shot = board.screenshot(pointer=False)
+        shot = shot_of(board)
 
         # 1. The screen's own format (8 bits), compressed: byte for byte.
         v = Viewer(port)
@@ -427,24 +456,26 @@ def main():
         v.update()
         while None in v.pixels:  # a full screen comes in one update
             raise AssertionError("part of the screen was not sent")
-        assert bytes(v.pixels) == shot, "the viewer's picture differs from the screenshot"
+        assert v.picture() == shot, "the viewer's picture differs from the screenshot"
         # The pointer's shape came too: the arrow, 12 wide, hotspot at its tip.
         assert v.cursor is not None and v.cursor[:2] == (0, 0) and v.cursor[2] >= 8, v.cursor[:4]
         first_rects = v.rects
 
         # 2. Nothing changed: an incremental request gets no answer yet.
+        # The one thing that changes by itself is the clock, when a minute
+        # ends: an update is right then, if the clock is all it changes.
         v.request(1)
         settle(board)
-        v.sock.settimeout(0.3)
-        try:
-            v.sock.recv(1)
-            raise AssertionError("an update came with nothing changed")
-        except socket.timeout:
-            pass
-        v.sock.settimeout(5)
+        if select.select([v.sock], [], [], 0.3)[0]:
+            had = list(v.pixels)
+            v.update()
+            assert v.pixels != had, "an update came with nothing changed"
+            assert v.steady() == steady(had), "an update came with nothing changed but the clock"
 
         # 3. A click from the viewer: About's OK button closes it; only the
-        # changed part comes, and the picture is right again.
+        # changed part comes, and the picture is right again. The first
+        # update can be the button pressed in and no more, so the viewer
+        # asks again until it has caught up.
         about = board.windows()[1]
         assert about["title"] == "About Chinchilla"
         ok_x, ok_y = about["x"] + about["w"] - 50, about["y"] + about["h"] - 28
@@ -455,9 +486,8 @@ def main():
         assert [w["title"] for w in board.windows()] == ["Welcome to Chinchilla"]
         before = v.rects
         v.update()
+        assert caught_up(v, board)
         assert 0 < v.rects - before < first_rects, (v.rects - before, first_rects)
-        _, _, shot = board.screenshot(pointer=False)
-        assert bytes(v.pixels) == shot
 
         # 4. Keys from the viewer: the logo key opens the Start menu, Escape
         # closes it. The first update can come before the key's painting is
@@ -504,10 +534,10 @@ def main():
                 v.update()
                 updates += 1
         assert updates >= 3, updates
-        _, _, shot = board.screenshot(pointer=False)
+        shot = shot_of(board)
         v.request(0)
         v.update()
-        assert bytes(v.pixels) == shot
+        assert v.picture() == shot
         stats = board.stats()
         assert stats["receive_errors"] == 0
         v.close()
@@ -521,7 +551,7 @@ def main():
             v.request(0)
             v.update()
             seen = {}
-            for mine, theirs in zip(shot, v.pixels):
+            for mine, theirs in zip(shot, v.steady()):
                 assert seen.setdefault(mine, theirs) == theirs
             assert seen[0xFF] == 0xFFFFFF and seen[0x00] == 0
             assert v.cursor is None  # it did not ask for the pointer shape
@@ -533,17 +563,19 @@ def main():
         v.set_encodings([ZRLE])
         v.request(0)
         v.update()
-        assert all(v.pixels[i] == wide[shot[i]] << 8 for i in range(0, len(shot), 97))
+        mine = v.steady()
+        assert all(mine[i] == wide[shot[i]] << 8 for i in range(0, len(shot), 97))
         v.close()
         v = Viewer(port, b"RFB 003.003\n")
         v.set_format(16, 16, 1, (31, 63, 31), (11, 5, 0))
         v.set_encodings([RAW])
         v.request(0)
         v.update()
+        mine = v.steady()
         for i in range(0, len(shot), 53):
             r, g, b = wide[shot[i]] >> 16, wide[shot[i]] >> 8 & 255, wide[shot[i]] & 255
             want = ((r * 31 + 127) // 255) << 11 | ((g * 63 + 127) // 255) << 5 | (b * 31 + 127) // 255
-            assert v.pixels[i] == want, (i, v.pixels[i], want)
+            assert mine[i] == want, (i, mine[i], want)
         v.close()
         # A colour map (old 8-bit viewers), protocol 3.7.
         v = Viewer(port, b"RFB 003.007\n")
@@ -551,7 +583,7 @@ def main():
         v.set_encodings([RAW])
         v.request(0)
         v.update()
-        assert bytes(v.pixels) == shot and v.colour_map[0xFF] == (65535, 65535, 65535)
+        assert v.picture() == shot and v.colour_map[0xFF] == (65535, 65535, 65535)
         assert all(v.colour_map[c][0] >> 8 == wide[c] >> 16 for c in wide)
 
         # 7. A second viewer takes over; the first is closed. Nonsense from
@@ -571,7 +603,7 @@ def main():
         third.set_encodings([ZRLE])
         third.request(0)
         third.update()
-        assert bytes(third.pixels) == shot
+        assert third.picture() == shot
         third.close()
         check_web(board, port, web, shot)
         assert board.ping() < 1.0
