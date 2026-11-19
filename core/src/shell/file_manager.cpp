@@ -1,5 +1,7 @@
 // The File manager: a window on a folder, in the look of the target picture
 // (toolbar, address bar, icon view, status bar), and My Board (the drives).
+// What a folder holds shows as icons, as a list or as a list with details
+// (View menu; backlog item 56).
 // The Trash is the same window on C:\.trash: there it has Restore and Empty
 // Trash as well, and Delete is for good (the owner, 2026-11-17: one program,
 // so that whatever the folder view gains the Trash gains too).
@@ -17,6 +19,8 @@
 #include "listing.hpp"
 
 namespace shell {
+
+static int program_kind(const char *path);
 
 namespace {
 
@@ -135,6 +139,25 @@ void large_icons(const Listing &listing, const gfx::Bitmap **icons)
     }
 }
 
+// How the folder windows show what they hold: one way for all of them, kept
+// in C:\.config\files.ini and read when the first of them opens.
+os::ui::ViewMode g_mode = os::ui::ViewMode::Icons;
+constexpr const char *kModeNames[] = {"icons", "list", "details"};
+
+void read_mode()
+{
+    fs::Ini ini;
+    char name[12] = "";
+    load_settings("files", ini);
+    ini.get("view", "mode", name, sizeof(name));
+    g_mode = os::ui::ViewMode::Icons;
+    for (int m = 0; m < 3; m++) {
+        if (strcmp(name, kModeNames[m]) == 0) {
+            g_mode = static_cast<os::ui::ViewMode>(m);
+        }
+    }
+}
+
 // The folder windows that exist: as many as there is memory for (the
 // owner's decision, 2026-11-17). Each is made when it opens and gone once it
 // has closed; they are a chain through the windows themselves, which each
@@ -191,7 +214,22 @@ public:
         edit_items_[0] = {"Cu&t", &FolderWindow::cut, this, nullptr, nullptr, 0};
         edit_items_[1] = {"&Copy", &FolderWindow::copy, this, nullptr, nullptr, 0};
         edit_items_[2] = {"&Paste", &FolderWindow::paste_here, this, nullptr, nullptr, 0};
-        view_items_[0] = {"Show &hidden files", &FolderWindow::toggle_hidden, this, nullptr, nullptr, 0};
+        view_items_[0] = {"&Icons", &FolderWindow::as_icons, this, nullptr, nullptr, 0};
+        view_items_[1] = {"&List", &FolderWindow::as_list, this, nullptr, nullptr, 0};
+        view_items_[2] = {"&Details", &FolderWindow::as_details, this, nullptr, nullptr, 0};
+        view_items_[3] = {nullptr, nullptr, nullptr, nullptr, nullptr, wm::kMenuSeparator};
+        view_items_[4] = {"Show &hidden files", &FolderWindow::toggle_hidden, this, nullptr, nullptr, 0};
+        for (int i = 0; i < Listing::kMax; i++) {
+            size_cells_[i] = sizes_[i];
+            kind_cells_[i] = kinds_[i];
+            date_cells_[i] = dates_[i];
+        }
+        // The first folder window reads how they all show; the others
+        // show as the ones there are.
+        if (g_windows == nullptr) {
+            read_mode();
+        }
+        view_.set_mode(g_mode);
         // Joins the list its destructor leaves: without it no folder window
         // was found again, to be refreshed or brought forward.
         next_ = g_windows;
@@ -203,6 +241,7 @@ public:
     }
 
     const char *folder() const { return folder_; }
+    void show_as(os::ui::ViewMode mode) { view_.set_mode(mode); }
 
     void go_to(const char *folder, bool remember)
     {
@@ -426,8 +465,11 @@ public:
     {
         // In the Trash everything is shown, hidden names too: they count as much.
         const bool trash = in_trash(folder_);
-        view_items_[0].flags = trash ? wm::kMenuChecked | wm::kMenuDisabled
+        view_items_[4].flags = trash ? wm::kMenuChecked | wm::kMenuDisabled
                                      : (Listing::show_hidden ? wm::kMenuChecked : 0);
+        for (int m = 0; m < 3; m++) {
+            view_items_[m].flags = static_cast<int>(g_mode) == m ? wm::kMenuChecked : 0;
+        }
         const bool at_board = folder_[0] == 0;
         // Open and Rename are for one; the others for all that is picked.
         const bool one = view_.selected_count() == 1;
@@ -509,6 +551,9 @@ public:
         back_.set_enabled(history_count_ > 0);
         up_.set_enabled(folder_[0] != 0);
         large_icons(listing_, icons_);
+        details();
+        view_.set_small_icons(small_);
+        view_.set_columns(columns_, 4);
         view_.set_items(listing_.names(), listing_.count(), icons_);
         status();
     }
@@ -666,6 +711,63 @@ private:
         }
         objects_.set_text(t);
     }
+    // What the List and the Details show of each entry: its small picture,
+    // and the texts of the columns. A file's size in bytes, what kind it
+    // is, when it was last written; of a drive how much it holds and how
+    // much of that is free.
+    void details()
+    {
+        const bool board = folder_[0] == 0;
+        columns_[0] = {"Name", 110, false, nullptr};
+        columns_[1] = {"Size", 70, true, size_cells_};
+        columns_[2] = {"Type", 72, false, kind_cells_};
+        columns_[3] = {board ? "Free" : "Modified", 110, board, date_cells_};
+        const net::TimeZone *zone = network() != nullptr ? &network()->zone() : nullptr;
+        for (int i = 0; i < listing_.count(); i++) {
+            const Listing::Item &it = listing_.item(i);
+            small_[i] = listing_.icon(i, false);
+            sizes_[i][0] = dates_[i][0] = 0;
+            if (board) {
+                ports::VolumeInfo info = {};
+                os::file::drive_info(listing_.drive(i), info);
+                amount(info.total_bytes, sizes_[i], sizeof(sizes_[i]));
+                amount(info.free_bytes, dates_[i], sizeof(dates_[i]));
+                snprintf(kinds_[i], sizeof(kinds_[i]), "%s", info.keeps_files ? "Drive" : "RAM disk");
+                continue;
+            }
+            sh::date_text(it.modified, zone, dates_[i], sizeof(dates_[i]));
+            if (it.folder) {
+                snprintf(kinds_[i], sizeof(kinds_[i]), "Folder");
+                continue;
+            }
+            char number[24];
+            with_commas(it.size, number);
+            snprintf(sizes_[i], sizeof(sizes_[i]), "%.13s", number);
+            static const char *const kKinds[] = {nullptr, "Text", "Picture", "Program", "Web page"};
+            const int kind = program_kind(it.name);
+            char ext[8];
+            fs::path::extension(it.name, ext, sizeof(ext));
+            if (kind != 0) {
+                snprintf(kinds_[i], sizeof(kinds_[i]), "%s", kKinds[kind]);
+            } else if (ext[0] != 0) {
+                for (char *c = ext; *c != 0; c++) {
+                    *c = *c >= 'a' && *c <= 'z' ? static_cast<char>(*c - 32) : *c;
+                }
+                snprintf(kinds_[i], sizeof(kinds_[i]), "%s file", ext);
+            } else {
+                snprintf(kinds_[i], sizeof(kinds_[i]), "File");
+            }
+        }
+    }
+    // How much a drive holds: "16 MB", "512 KB".
+    static void amount(uint64_t bytes, char *out, int capacity)
+    {
+        if (bytes >= 10u * 1024 * 1024) {
+            snprintf(out, capacity, "%u MB", static_cast<unsigned>(bytes >> 20));
+        } else {
+            snprintf(out, capacity, "%u KB", static_cast<unsigned>(bytes >> 10));
+        }
+    }
     // Thousands apart, as the shell's dir shows them.
     static void with_commas(uint32_t number, char (&out)[24])
     {
@@ -682,6 +784,25 @@ private:
     }
     static void close_action(void *context) { static_cast<FolderWindow *>(context)->close(); }
     static void refresh_action(void *context) { static_cast<FolderWindow *>(context)->refresh(); }
+    // Icons, a List or Details: every folder window changes, and the next
+    // ones open the same way. Kept in C:\.config\files.ini.
+    static void as_icons(void *) { show_all_as(os::ui::ViewMode::Icons); }
+    static void as_list(void *) { show_all_as(os::ui::ViewMode::List); }
+    static void as_details(void *) { show_all_as(os::ui::ViewMode::Details); }
+    static void show_all_as(os::ui::ViewMode mode)
+    {
+        if (mode == g_mode) {
+            return;
+        }
+        g_mode = mode;
+        fs::Ini ini;
+        load_settings("files", ini);
+        ini.set("view", "mode", kModeNames[static_cast<int>(mode)]);
+        save_settings("files", ini);
+        for (FolderWindow *w = g_windows; w != nullptr; w = w->next_) {
+            w->show_as(mode);
+        }
+    }
     // Kept in C:\.config\files.ini.
     static void toggle_hidden(void *context)
     {
@@ -878,6 +999,12 @@ private:
     int drop_failed_ = 0;     // of the files being dropped here, how many could not be moved
     Listing listing_;
     const gfx::Bitmap *icons_[Listing::kMax] = {};
+    // For the List and the Details: the small pictures, and the columns
+    // with the text of each entry in them (details()).
+    const gfx::Bitmap *small_[Listing::kMax] = {};
+    char sizes_[Listing::kMax][14], kinds_[Listing::kMax][14], dates_[Listing::kMax][18];
+    const char *size_cells_[Listing::kMax], *kind_cells_[Listing::kMax], *date_cells_[Listing::kMax];
+    os::ui::Column columns_[4] = {};
     int width_ = 100; // of the client area
     app::IconView view_;
     ToolButton back_, up_;
@@ -891,8 +1018,8 @@ private:
     wm::Menu file_ = {file_items_, 9};
     wm::MenuItem edit_items_[3];
     wm::Menu edit_ = {edit_items_, 3};
-    wm::MenuItem view_items_[1];
-    wm::Menu view_menu_ = {view_items_, 1};
+    wm::MenuItem view_items_[5];
+    wm::Menu view_menu_ = {view_items_, 5};
     const wm::MenuBarEntry entries_[3] = {{"&File", &file_}, {"&Edit", &edit_}, {"&View", &view_menu_}};
     const wm::MenuBar bar_ = {entries_, 3};
     // The right-click menu, filled in each time it opens, and the folder
