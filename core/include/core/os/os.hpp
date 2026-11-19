@@ -309,6 +309,16 @@ bool fact(ports::Fact which, uint32_t &value, char *text, size_t capacity);
 // How long the UI task has worked since start-up, in µs (wraps).
 uint32_t busy_us();
 
+// A line for the system's log, which `dmesg` shows (16 KB are kept): what a
+// program has to say when it has no window to say it in. A line end is
+// added.
+void log(const char *text);
+// From a program's own code, wherever it runs: gives the processor away
+// for about `ms`, so that the rest of the machine gets its turn while the
+// program waits for the clock (a game between two pictures). On a machine
+// without tasks it returns at once.
+void rest(uint32_t ms);
+
 /* ---- Sound --------------------------------------------------------------------- */
 
 // One of the system's sounds (core/sound/sound.hpp), from its start. It

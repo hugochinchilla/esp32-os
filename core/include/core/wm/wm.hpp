@@ -218,6 +218,20 @@ public:
     using ScreenFn = void (*)(gfx::Canvas &c, void *context);
     void take_over(ScreenFn paint, void *context);
     bool taken_over() const { return screen_fn_ != nullptr; }
+    // Lends the whole screen to one window (a full-screen game; backlog
+    // item 81): nothing is painted by the window manager, the pointer goes,
+    // and every key, the modifiers too, goes to the window's key() as it
+    // is pressed and let go; the mouse reaches it as movement
+    // (Window::mouse_moved). Returns the picture, one RRRGGGBB byte per
+    // pixel, width() by height(); nullptr if the screen is not free to
+    // lend. The loan ends with return_screen(), when the window closes,
+    // when the screen's mode changes and on Ctrl+Alt+Del, which then opens
+    // what it always opens: the window finds out with screen_lent_to().
+    uint8_t *lend_screen(Window &to);
+    void return_screen();
+    Window *screen_lent_to() const { return lent_; }
+    int screen_width() const { return width_; }
+    int screen_height() const { return height_; }
     // The first part of the same, for a picture that fades away (Shut
     // Down): the screen is taken, and what it shows stays as it is until
     // fade_step() changes it or take_over() names who paints it.
@@ -583,6 +597,8 @@ private:
     void *attention_context_ = nullptr;
     ScreenFn screen_fn_ = nullptr;
     void *screen_context_ = nullptr;
+    Window *lent_ = nullptr;         // who has the whole screen on loan (lend_screen)
+    int lent_x_ = 0, lent_y_ = 0;    // where a mouse that reports places was last
     // The desktop fading in (start()).
     enum class Arriving : uint8_t { No, Picture, Rest, Rising };
     Arriving arrive_stage_ = Arriving::No;

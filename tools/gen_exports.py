@@ -46,6 +46,7 @@ __divdi3 __udivdi3 __moddi3 __umoddi3 __muldi3 __ashldi3 __lshrdi3 __ashrdi3
 __adddf3 __subdf3 __muldf3 __divdf3 __floatsidf __floatunsidf __fixdfsi __fixunsdfsi
 __extendsfdf2 __truncdfsf2 __eqdf2 __nedf2 __ltdf2 __ledf2 __gtdf2 __gedf2
 __floatdidf __floatdisf __fixdfdi __fixsfdi
+setjmp longjmp __errno __bswapsi2 __divsf3
 """.split()
 
 

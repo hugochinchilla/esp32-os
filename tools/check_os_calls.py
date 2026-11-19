@@ -41,6 +41,13 @@ MOVED = [
     "welcome.cpp",
 ]
 
+# Programs kept elsewhere that are held to the same: from the repository's
+# root. (The engine of programs/doom is not ours and asks for nothing by
+# itself: all it asks goes through this one file.)
+MOVED_ELSEWHERE = [
+    "programs/doom/doom.cpp",
+]
+
 # Not programs: the desktop itself, what it keeps running (the network, the
 # way down to the power-off screen), and what the programs share.
 SYSTEM = [
@@ -81,15 +88,16 @@ def main():
         if name not in files:
             print(f"{name}: listed in tools/check_os_calls.py but not in core/src/shell")
             bad += 1
-    for name in MOVED:
-        if name not in files:
+    for name in MOVED + MOVED_ELSEWHERE:
+        if name not in files and name not in MOVED_ELSEWHERE:
             continue
-        with open(os.path.join(folder, name), encoding="utf-8") as f:
+        shown = name if name in MOVED_ELSEWHERE else f"core/src/shell/{name}"
+        with open(os.path.join(root, shown), encoding="utf-8") as f:
             lines = strip_comments(f.read()).split("\n")
         for number, line in enumerate(lines, 1):
             for pattern, instead in FORBIDDEN:
                 if re.search(pattern, line):
-                    print(f"core/src/shell/{name}:{number}: {line.strip()}")
+                    print(f"{shown}:{number}: {line.strip()}")
                     print(f"    a program that has moved to the OS calls uses {instead}")
                     bad += 1
     programs = [f for f in files if f not in SYSTEM]

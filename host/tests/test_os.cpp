@@ -622,6 +622,126 @@ template <class F> bool soon(F &&f)
 host::ThreadEvent slow_start_gate;
 app::Number slow_start_number = app::kNone;
 
+// The whole screen lent to one window (backlog item 81): a game that fills
+// it. Keys reach it as they are, the mouse as movement, nothing is painted
+// around it, and the screen comes back by the program's wish, by
+// Ctrl+Alt+Del or when the window closes.
+class Game : public app::Window {
+public:
+    bool key(const wm::KeyMsg &k) override
+    {
+        keys++;
+        last = k;
+        return true;
+    }
+    void mouse_moved(int dx, int dy, int buttons) override
+    {
+        moved_x += dx;
+        moved_y += dy;
+        held = buttons;
+    }
+    int keys = 0, moved_x = 0, moved_y = 0, held = 0;
+    wm::KeyMsg last = {};
+};
+
+void test_lent_screen()
+{
+    const uint32_t blocks = os::blocks_out();
+    const proc::Pid pid = os::spawn("Game");
+    app::Number number = app::kNone;
+    {
+        const os::As as(pid);
+        app::Look look;
+        look.title = "Game";
+        number = app::open<Game>(look);
+    }
+    wait(10000);
+    auto &g = *static_cast<Game *>(os::ui::state(number));
+    const auto corner = [] { return display.pixels()[3 * 640 + 3]; };
+    const uint8_t desk = corner();
+    CHECK(!g.has_screen() && desktop.screen_lent_to() == nullptr);
+
+    os::ui::Screen screen;
+    CHECK(g.take_screen(screen) && g.has_screen());
+    CHECK(screen.pixels == display.pixels() && screen.width == 640 && screen.height == 480);
+    CHECK(desktop.screen_lent_to() == desktop.active() && !pointer.state().visible);
+    // The picture is the program's: what it writes stays, and nothing of
+    // the desktop is painted over it, whoever asks.
+    memset(screen.pixels, 0, 640 * 480);
+    g.screen_changed({0, 0, 640, 480});
+    desktop.invalidate({0, 0, 640, 480});
+    wait(1100000); // the taskbar's clock would paint
+    CHECK(corner() == 0 && display.pixels()[470 * 640 + 600] == 0);
+    // Every key, down and up, the modifiers too, and none repeats.
+    desktop.key(wm::key::LeftCtrl, true);
+    CHECK(g.keys == 1 && g.last.usage == wm::key::LeftCtrl && g.last.pressed);
+    desktop.key(wm::key::LeftCtrl, false);
+    CHECK(g.keys == 2 && !g.last.pressed);
+    desktop.key(wm::key::LeftGui, true); // no Start menu
+    desktop.key(wm::key::LeftGui, false);
+    CHECK(g.keys == 4 && !desktop.menu_open());
+    desktop.key(wm::key::LeftAlt, true);
+    desktop.key(wm::key::Tab, true); // no window switching
+    desktop.key(wm::key::Tab, false);
+    desktop.key(wm::key::LeftAlt, false);
+    CHECK(g.keys == 8 && strcmp(desktop.active()->title(), "Game") == 0);
+    desktop.key(wm::key::Up, true);
+    wait(2000000);
+    CHECK(g.keys == 9);
+    desktop.key(wm::key::Up, false);
+    // The mouse as movement, with its buttons; the pointer stays away.
+    ports::MouseEvent move = {};
+    move.x = 7;
+    move.y = -3;
+    move.buttons = 1;
+    desktop.mouse(move);
+    desktop.mouse(move);
+    CHECK(g.moved_x == 14 && g.moved_y == -6 && g.held == 1 && !pointer.state().visible);
+    move = {};
+    desktop.mouse(move);
+    // The screensaver does not start over a game nobody touches.
+    os::set_screen_saver(0, 60);
+    wait(61000000);
+    CHECK(!desktop.screen_saver_active() && g.has_screen());
+    os::set_screen_saver(-1, 0);
+
+    // Given back: the desktop is painted again and the pointer is there.
+    g.give_screen_back();
+    wait(10000);
+    CHECK(!g.has_screen() && desktop.screen_lent_to() == nullptr && pointer.state().visible && corner() == desk);
+    desktop.key(wm::key::A, true);
+    desktop.key(wm::key::A, false);
+
+    // Ctrl+Alt+Del takes it back whatever the program does, and then does
+    // what it always does.
+    CHECK(g.take_screen(screen));
+    memset(screen.pixels, 0, 640 * 480);
+    const int keys = g.keys;
+    desktop.key(wm::key::LeftCtrl, true);
+    desktop.key(wm::key::LeftAlt, true);
+    desktop.key(wm::key::Delete, true);
+    desktop.key(wm::key::Delete, false);
+    desktop.key(wm::key::LeftAlt, false);
+    desktop.key(wm::key::LeftCtrl, false);
+    wait(10000);
+    CHECK(g.keys == keys + 2 && !g.has_screen() && pointer.state().visible && corner() == desk);
+    while (desktop.active() != nullptr && strcmp(desktop.active()->title(), "Game") != 0) {
+        desktop.close(*desktop.active()); // the Task Manager, where there is one
+        wait(10000);
+    }
+
+    // A window that closes with the screen gives it back.
+    CHECK(desktop.active() != nullptr && g.take_screen(screen) && g.has_screen());
+    memset(screen.pixels, 0, 640 * 480);
+    g.close();
+    wait(10000);
+    wait(10000);
+    CHECK(desktop.screen_lent_to() == nullptr && pointer.state().visible && corner() == desk);
+    CHECK(!os::ui::alive(number) && !os::alive(pid) && os::blocks_out() == blocks);
+    // A window that is gone is lent nothing.
+    CHECK(!os::ui::take_screen(number, screen) && screen.pixels == nullptr);
+}
+
 void test_late_before_its_first_window()
 {
     static host::ThreadTasks tasks;
@@ -851,6 +971,7 @@ int main()
     test_process_list();
     test_programs_give_back();
     test_ui();
+    test_lent_screen();
     test_programs_on_tasks();
     test_late_before_its_first_window();
     test_not_responding(); // before the last one, which ends with the screen taken by Shut Down

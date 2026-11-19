@@ -63,6 +63,8 @@ enum class What : uint8_t {
     Closing, // the close button, Alt+F4, a TERM signal. True: the program deals with it (asks about
              // unsaved work, closes itself later); otherwise the window closes
     Menu,    // a menu of the menu bar is about to open: `index`, which. A chance to grey items out
+    MouseMoved, // only while the window has the whole screen (take_screen): the mouse moved by
+                // `x`, `y`, and `index` says which buttons are held (bit 0 left, 1 right, 2 middle)
     Closed,  // the window has closed, or never opened; once, and it and its numbers are dead after this
 };
 
@@ -125,6 +127,29 @@ bool has_keys(Window window);                     // the keys go to it, and it i
 void set_menu_bar(Window window, const wm::MenuBar *bar);
 // Asks for a part of the client area to be painted again.
 void redraw(Window window, const gfx::Rect &part);
+
+// The whole screen for one window, for a game that fills it (backlog item
+// 81). While the window has it the system paints nothing and shows no
+// pointer; every key reaches the window's Key event as it goes down and
+// up, the modifier keys too, and none repeats; the mouse comes as
+// MouseMoved. The picture is one RRRGGGBB byte per pixel (gfx::rgb),
+// `width` by `height`, rows one after the other, and stays the window's to
+// write until the loan ends: with give_screen_back(), when the window
+// closes, when the screen changes its size, or when the user presses
+// Ctrl+Alt+Del, the way out that is always there. The program is not told:
+// it asks has_screen() before it writes each picture. Afterwards the
+// desktop is painted again.
+struct Screen {
+    uint8_t *pixels = nullptr;
+    int width = 0, height = 0;
+};
+// False: the window is not on the screen, or the screen is not free.
+bool take_screen(Window window, Screen &out);
+bool has_screen(Window window);
+void give_screen_back(Window window);
+// Which part the program has changed, for whoever watches the screen from
+// afar (the remote screen). The monitor shows it anyway.
+void screen_changed(Window window, const gfx::Rect &part);
 
 // Controls, in the window's client area. kNoControl: no room (24 a window).
 Control label(Window window, const gfx::Rect &place, const char *text);

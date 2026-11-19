@@ -52,6 +52,8 @@ The journal entry with the reasons is
 | | `os::add_to_drag(path)`, `os::drops_to_come()` | One more file carried by the drag just begun (item 55); and, while a Dropped event is answered, how many more of the same drag follow, so that the folder is read again and the error box shown once, after the last |
 | | `os::Busy busy;` | The hourglass over the whole screen until the end of the block |
 | | `os::ui::set_hourglass(window, on)`, `os::ui::hourglass(window)` | The hourglass on demand (item 49): over the window's client area while it is on, and the window answers as before. A switch the program turns off itself; it goes with the window |
+| The whole screen | `os::ui::take_screen(window, out)`, `has_screen(window)`, `give_screen_back(window)` | A game that fills the screen (item 81): the window is lent the picture itself, one RRRGGGBB byte a pixel, and writes it as it likes. Meanwhile the system paints nothing and shows no pointer, every key reaches the window's Key event as it goes down and up (the modifiers too, none repeats), and the mouse comes as the event MouseMoved (how far, which buttons). It ends with `give_screen_back`, when the window closes, when the screen changes size, and on Ctrl+Alt+Del; the program is not told and asks `has_screen` before each picture |
+| | `os::ui::screen_changed(window, part)` | Says which part of the lent screen the program changed, for a remote screen |
 | Desktop | `os::set_backdrop(backdrop)` | The desktop's colour and pattern (Display) |
 | Desktop | `os::set_theme(index)` | The look of windows, buttons and the taskbar, a row of the table in `core/gfx/theme.hpp` (Display); the whole screen is painted again |
 | | `os::video_mode_count()`, `os::video_mode_at(index)`, `os::video_mode()`, `os::set_video_mode(index)` | The screen's modes (item 68), each a size with its timing, and changing to another (Display): done once the event has been answered, then every window is brought onto the new screen and all is painted again |
@@ -76,6 +78,8 @@ The journal entry with the reasons is
 | Sound | `os::play_sound(which)` | One of the system's sounds (`core/sound/sound.hpp`: Boot, Close, Alert, Error, Bell, and the games' and the Trash's: ChessMove, ChessCheck, ChessMate, SnakeEat, SnakeOver, Crumple) from its start; it returns at once, and a new one takes the place of the one playing. Nothing on a machine with no sound output (the board, for now) |
 | | `os::beep(steps, count)` | The beeper: steps of a pitch in Hz and a time in ms, 0 Hz for silence; a voice of its own beside the recordings |
 | | `os::sound_playing()` | Whether anything is still to be heard |
+| Log | `os::log(text)` | A line for the system's log, which `dmesg` shows: for a program with no window to say it in |
+| | `os::rest(ms)` | From a program's own code: gives the processor away for about `ms` while it waits for the clock |
 | Machine | `os::restart()` | |
 | | `os::stats(out)`, `os::fact(which, ...)`, `os::busy_us()` | Figures and facts for the tools that show them |
 

@@ -184,6 +184,7 @@ Processes, tasks, signals, init, OS calls, memory.
 - [Services are lines of the start-up file](decisions/services-start-up-file.md) (2026-11-18, owner, decided): `telnetd` and `vncd` are lines of init's start-up file; a Services dialog and commands edit them (backlog 62)
 - [Sound: the port, the beeper and the system's sounds](decisions/sound-port.md) (2026-11-18, owner+agent, to-confirm): A Sound port with two voices, samples and an emulated PC beeper; silent on the board, real on the PC and in the browser (backlog 58, 59)
 - [Bluetooth keyboard and mouse](decisions/bluetooth-keyboard-and-mouse.md) (2026-11-19, owner+agent, to-confirm): BLE HID host with NimBLE: pairs by itself when a keyboard or mouse is missing, no code, a switch in bluetooth.ini (backlog 51)
+- [The whole screen lent to a game](decisions/lent-screen.md) (2026-11-19, owner+agent, to-confirm): A window can borrow the whole screen: it writes the picture itself, gets every key raw and the mouse as movement; Ctrl+Alt+Del takes it back (backlog 81)
 
 ### storage
 
@@ -240,6 +241,7 @@ The programs and games, one decision each.
 - [The chess computer does not answer at once](decisions/chess-reply-pace.md) (2026-11-18, owner+agent, decided): Chess: the computer's move is shown no sooner than 250 to 350 ms after it began to think (backlog 67)
 - [The chess game](decisions/chess-game.md) (2026-11-18, owner, decided): Chess: own engine, moving by drag or click, piece sets, board colours, levels (backlog 50)
 - [The computer's chess piece lands](decisions/chess-landing.md) (2026-11-18, owner+agent, decided): The computer's piece drops 4 pixels onto its square and bounces once, 233 ms (backlog 64); details to confirm
+- [Doom](decisions/doom.md) (2026-11-19, owner+agent, to-confirm): Doom is a program file, doomgeneric's engine with the whole screen; the WAD is the player's, in C:\Programs; no sound yet (backlog 81)
 - [Sounds of the games and the Trash](decisions/game-sounds.md) (2026-11-19, owner+agent, to-confirm): Chess knocks on a move, warns the user of check, says checkmate; Culebra a berry and game over; the Trash crumples paper (backlog 70)
 - [The File manager's three views](decisions/file-manager-views.md) (2026-11-19, owner+agent, to-confirm): Icons, List and Details from the View menu, one way for every folder window (backlog 56)
 - [The Shut Down sequence](decisions/shut-down-sequence.md) (2026-11-19, owner+agent, decided): Shut Down closes the programs (ended after 20 s), fades the desktop, then to black, and shows the last screen on black (backlog 60)

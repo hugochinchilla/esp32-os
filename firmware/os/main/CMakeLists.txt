@@ -30,11 +30,12 @@ foreach(folder ${program_folders})
         list(APPEND program_files "${programs_dir}/${program}.app")
     endif()
 endforeach()
-file(GLOB_RECURSE program_sources "${repo}/programs/*.cpp" "${repo}/programs/*.hpp"
+file(GLOB_RECURSE program_sources "${repo}/programs/*.cpp" "${repo}/programs/*.hpp" "${repo}/programs/*.c"
+     "${repo}/programs/*.h" "${repo}/programs/*.txt" "${repo}/third_party/doomgeneric/*.[ch]"
      "${repo}/core/include/core/app/*.hpp" "${repo}/core/include/core/os/*.hpp")
 add_custom_command(
     OUTPUT ${bundle_c} ${program_files}
-    COMMAND ${CMAKE_COMMAND} -E env PROGRAMS_OUT=${programs_dir} CXX=${CMAKE_CXX_COMPILER} NM=${CMAKE_NM}
+    COMMAND ${CMAKE_COMMAND} -E env PROGRAMS_OUT=${programs_dir} CXX=${CMAKE_CXX_COMPILER} CC=${CMAKE_C_COMPILER} NM=${CMAKE_NM}
             STRIP=${CMAKE_STRIP} OBJCOPY=${CMAKE_OBJCOPY} READELF=${CMAKE_READELF}
             ${repo}/tools/build_programs.sh ${CMAKE_BINARY_DIR}
     COMMAND ${python} ${repo}/tools/gen_bundle.py --out ${bundle_c} ${program_files}
