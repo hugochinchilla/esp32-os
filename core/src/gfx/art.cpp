@@ -1405,13 +1405,14 @@ const Bitmap &signal_icon_16(int bars, bool locked)
 namespace {
 
 // The runes hagall and bjarkan bound into one sign (the initials of Harald
-// Bluetooth), blue, with no oval around it: the owner's choice, 2026-11-19,
-// after reading that the trademark is the sign in its blue oval. A white
-// edge carries it on a taskbar of any colour. `rune`: its colour. `dot`: a
-// green light in the corner (a device is connected). `cross`: a red cross
-// there (off).
-constexpr bool kBluetoothEdge = true;
-constexpr Pixels<16> bluetooth_pixels(int rune, bool dot, bool cross)
+// Bluetooth), one pixel thick, with no oval around it: the owner's choice,
+// 2026-11-19, after reading that the trademark is the sign in its blue
+// oval. `rune`: its colour. `edge`: a white edge around it, for the
+// program's icon, which sits on title bars and menus of any colour; the
+// tray's has none and takes a colour that shows on the bar. `dot`: a green
+// light in the corner (a device is connected). `cross`: a red cross there
+// (off).
+constexpr Pixels<16> bluetooth_pixels(int rune, bool edge, bool dot, bool cross)
 {
     constexpr const char *rows[16] = {
         "................", ".......B........", ".......BB.......", ".......B.B......",
@@ -1430,7 +1431,7 @@ constexpr Pixels<16> bluetooth_pixels(int rune, bool dot, bool cross)
                     beside = beside || (nx >= 0 && nx < 16 && ny >= 0 && ny < 16 && rows[ny][nx] == 'B');
                 }
             }
-            out.p[y * 16 + x] = static_cast<uint8_t>(rows[y][x] == 'B' ? rune : beside && kBluetoothEdge ? kWhite : kClear);
+            out.p[y * 16 + x] = static_cast<uint8_t>(rows[y][x] == 'B' ? rune : beside && edge ? kWhite : kClear);
         }
     }
     for (int y = 0; y < 5 && dot; y++) {
@@ -1452,17 +1453,27 @@ constexpr Pixels<16> bluetooth_pixels(int rune, bool dot, bool cross)
 
 } // namespace
 
-const Bitmap &bluetooth_icon_16(BluetoothIcon state)
+constexpr int kBluetoothBlue = rgb(0, 2, 3);
+
+const Bitmap &bluetooth_icon_16()
 {
-    constexpr int blue = rgb(0, 2, 3);
-    static constexpr Pixels<16> pixels[3] = {
-        bluetooth_pixels(kDarkGrey, false, true), bluetooth_pixels(blue, false, false),
-        bluetooth_pixels(blue, true, false),
+    static constexpr Pixels<16> pixels = bluetooth_pixels(kBluetoothBlue, true, false, false);
+    static constexpr Bitmap bitmap = {16, 16, pixels.p, kClear};
+    return bitmap;
+}
+
+const Bitmap &bluetooth_tray_16(BluetoothIcon state, bool dark_bar)
+{
+    static constexpr Pixels<16> pixels[6] = {
+        bluetooth_pixels(kDarkGrey, false, false, true),      bluetooth_pixels(kBluetoothBlue, false, false, false),
+        bluetooth_pixels(kBluetoothBlue, false, true, false), bluetooth_pixels(kGrey, false, false, true),
+        bluetooth_pixels(kWhite, false, false, false),        bluetooth_pixels(kWhite, false, true, false),
     };
-    static constexpr Bitmap bitmaps[3] = {
+    static constexpr Bitmap bitmaps[6] = {
         {16, 16, pixels[0].p, kClear}, {16, 16, pixels[1].p, kClear}, {16, 16, pixels[2].p, kClear},
+        {16, 16, pixels[3].p, kClear}, {16, 16, pixels[4].p, kClear}, {16, 16, pixels[5].p, kClear},
     };
-    return bitmaps[static_cast<int>(state)];
+    return bitmaps[static_cast<int>(state) + (dark_bar ? 3 : 0)];
 }
 
 // A program kept in a file that brings no picture of its own (backlog item

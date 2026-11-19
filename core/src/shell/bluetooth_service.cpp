@@ -6,6 +6,7 @@
 // program: the window that shows the devices is (bluetooth.cpp), and it
 // asks for the service through os::bluetooth().
 #include "core/gfx/art.hpp"
+#include "core/gfx/theme.hpp"
 #include "core/input/bluetooth.hpp"
 #include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
@@ -18,6 +19,7 @@ namespace {
 bt::Manager *g_bluetooth = nullptr;
 
 uint32_t g_shown_changes = 0;
+int g_shown_theme = 0;
 
 void tray_clicked(void *) { open_bluetooth(); }
 
@@ -26,14 +28,18 @@ void show_tray()
     const gfx::BluetoothIcon icon = !g_bluetooth->on()                 ? gfx::BluetoothIcon::Off
                                     : g_bluetooth->kinds_ready() != 0 ? gfx::BluetoothIcon::Connected
                                                                       : gfx::BluetoothIcon::On;
-    set_tray_icon(kTrayBluetooth, &gfx::bluetooth_icon_16(icon), &tray_clicked, nullptr);
+    // Blue on the classic grey bar; white where the theme writes the bar
+    // in a light ink, which is where the bar is dark or blue.
+    g_shown_theme = gfx::theme_index();
+    const bool dark_bar = gfx::theme().bar_ink != gfx::kBlack;
+    set_tray_icon(kTrayBluetooth, &gfx::bluetooth_tray_16(icon, dark_bar), &tray_clicked, nullptr);
 }
 
 // Four times a second: follow the radio, and show what changed.
 void bluetooth_tick(void *)
 {
     g_bluetooth->tick(manager().now_us());
-    if (g_bluetooth->changes() != g_shown_changes) {
+    if (g_bluetooth->changes() != g_shown_changes || gfx::theme_index() != g_shown_theme) {
         g_shown_changes = g_bluetooth->changes();
         show_tray();
     }

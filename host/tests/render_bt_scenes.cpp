@@ -216,9 +216,11 @@ int main(int argc, char **argv)
     // In every theme.
     for (int theme = 1; theme < gfx::theme_count(); theme++) {
         desktop.set_theme(theme);
+        wait(1); // the tray's icon takes the colour that shows on this bar
         save((std::string("bt-12-") + gfx::theme_at(theme).key).c_str());
     }
     desktop.set_theme(0);
+    wait(1);
 
     // Closed: it listens thinly again (the keyboard is still away).
     key(wm::key::Escape);

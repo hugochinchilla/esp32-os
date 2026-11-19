@@ -59,7 +59,10 @@ until he answers.
 - **An icon in the tray** (the owner's request, 2026-11-19), left of the
   network's. A click opens the Bluetooth program. The drawing (the
   owner's decision, 2026-11-19) is the Bluetooth rune itself, hagall and
-  bjarkan bound into one sign, in blue with a white edge and no oval. His
+  bjarkan bound into one sign, one pixel thick, with no oval. In the
+  tray it has no edge (the owner's choice between three previews): blue
+  on the classic grey bar, white on a bar that is dark or blue. The
+  program's icon keeps a white edge, for title bars and menus. His
   reason: he read on the Bluetooth site that the trademark is the logo,
   the rune inside its blue oval, and two runes of an alphabet drawn
   together cannot be one. The agent could not check how far the mark

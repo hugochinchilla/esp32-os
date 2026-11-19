@@ -331,3 +331,13 @@ dark one of Midnight). The agent could not check how far the mark reaches
 and recorded the choice as the owner's. Grey with a red cross when off, a
 green light in the corner when a keyboard or mouse is connected. The
 bjarkan-only tile lasted one build and was never pushed.
+
+In the afternoon the owner asked for the indicator "a bit thinner" and a
+try without the white outline. The rune went from two pixels thick to one.
+Without the edge it was clean on the grey bar, lost on the blue bar of Sky
+and weak on the dark ones; he was shown both rows in the four themes and
+three ways out: no edge and white on dark or blue bars (chosen), keep the
+edge, or no edge and always blue. The Bluetooth service picks the tray's
+picture from the theme (a bar written in a light ink is a dark bar) and
+again when the theme changes. The program's own icon keeps the edge: it
+sits on the blue title bar and in menus.
