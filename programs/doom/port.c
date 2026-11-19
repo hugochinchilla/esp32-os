@@ -506,7 +506,21 @@ int I_GetTimeMS(void)
 }
 
 int I_GetTime(void) { return (int)(((uint32_t)I_GetTimeMS() * TICRATE) / 1000); }
-void I_Sleep(int ms) { sys_rest(ms > 0 ? (uint32_t)ms : 1); }
+/* How long the engine has waited for its clock rather than worked: the
+ * figures in the log tell the two apart. */
+static uint32_t waited_us;
+void I_Sleep(int ms)
+{
+    const uint32_t began = sys_us();
+    sys_rest(ms > 0 ? (uint32_t)ms : 1);
+    waited_us += sys_us() - began;
+}
+uint32_t port_waited_us(void)
+{
+    const uint32_t was = waited_us;
+    waited_us = 0;
+    return was;
+}
 void I_WaitVBL(int count) { (void)count; }
 void I_InitTimer(void) {}
 

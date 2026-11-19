@@ -42,6 +42,7 @@ int sys_rename(const char *from, const char *to);
 void sys_make_folder(const char *path);
 uint32_t sys_ms(void);      /* since the machine started */
 void sys_rest(uint32_t ms); /* lets the rest of the machine run */
+uint32_t sys_us(void);      /* the same clock in microseconds, for measuring */
 void sys_log(const char *text);
 /* The engine has a picture ready: 320 by 200 bytes, each a place in the
  * palette of 256 colours, three bytes each (red, green, blue). */
@@ -58,6 +59,7 @@ const char *port_error(void); /* NULL: it ended because the player quit */
 /* A key by its USB HID usage; the mouse by how far it moved and its buttons. */
 void port_key(int usage, int pressed);
 void port_mouse(int dx, int dy, int buttons);
+uint32_t port_waited_us(void); /* time spent waiting for the clock since the last call */
 void port_release_keys(void); /* every key held is let go: the screen was taken away */
 void port_show_again(void);   /* the next picture is handed over whole, palette too */
 

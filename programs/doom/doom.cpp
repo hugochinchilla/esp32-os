@@ -265,8 +265,11 @@ private:
         }
         const uint32_t began = static_cast<uint32_t>(os::now_us());
         const bool goes_on = port_tick();
-        tick_us_ += static_cast<uint32_t>(os::now_us()) - began;
+        const uint32_t took = static_cast<uint32_t>(os::now_us()) - began;
+        tick_us_ += took;
         ticks_++;
+        longest_us_ = took > longest_us_ ? took : longest_us_;
+        late_ += took > kTicUs ? 1 : 0;
         if (!goes_on) {
             leave();
             return;
@@ -277,18 +280,27 @@ private:
     }
 
     // What the last ten seconds were like, for whoever reads the log: how
-    // many pictures a second, and how long one took to make and to put on
-    // the screen.
+    // many pictures a second out of how many rounds, how long a round took
+    // (the longest, and how many took more than the 1/35 s there is), and
+    // where the time of a round went: putting the picture on the screen,
+    // waiting for the engine's clock, and the rest, which is the game and
+    // its drawing.
     void report()
     {
-        char text[96];
+        char text[200];
         const uint32_t n = pictures_ > 0 ? pictures_ : 1, t = ticks_ > 0 ? ticks_ : 1;
-        snprintf(text, sizeof(text), "doom: %u.%u pictures/s, a round %u us, of it %u us to the screen",
-                 static_cast<unsigned>(pictures_ * 10 / (kReportUs / 1000000) / 10),
-                 static_cast<unsigned>(pictures_ * 10 / (kReportUs / 1000000) % 10), static_cast<unsigned>(tick_us_ / t),
-                 static_cast<unsigned>(picture_us_ / n));
+        const uint32_t seconds = kReportUs / 1000000;
+        const uint32_t round = tick_us_ / t, screen = picture_us_ / t, waited = port_waited_us() / t;
+        snprintf(text, sizeof(text),
+                 "doom: %u.%u pictures/s in %u.%u rounds/s, a round %u us (longest %u, %u late): %u to the screen "
+                 "(%u a picture), %u waiting, %u the game",
+                 static_cast<unsigned>(pictures_ / seconds), static_cast<unsigned>(pictures_ * 10 / seconds % 10),
+                 static_cast<unsigned>(ticks_ / seconds), static_cast<unsigned>(ticks_ * 10 / seconds % 10),
+                 static_cast<unsigned>(round), static_cast<unsigned>(longest_us_), static_cast<unsigned>(late_),
+                 static_cast<unsigned>(screen), static_cast<unsigned>(picture_us_ / n), static_cast<unsigned>(waited),
+                 static_cast<unsigned>(round > screen + waited ? round - screen - waited : 0));
         os::log(text);
-        pictures_ = ticks_ = tick_us_ = picture_us_ = 0;
+        pictures_ = ticks_ = tick_us_ = picture_us_ = longest_us_ = late_ = 0;
         report_at_ = os::now_us() + kReportUs;
     }
 
@@ -315,7 +327,7 @@ private:
     int left_ = 0, top_ = 0;
     uint8_t table_[4][256] = {};
     int files_[os::file::kMaxOpenEach] = {};
-    uint32_t pictures_ = 0, ticks_ = 0, tick_us_ = 0, picture_us_ = 0;
+    uint32_t pictures_ = 0, ticks_ = 0, tick_us_ = 0, picture_us_ = 0, longest_us_ = 0, late_ = 0;
     uint64_t report_at_ = 0;
 };
 
@@ -421,6 +433,7 @@ void sys_make_folder(const char *path)
 
 uint32_t sys_ms(void) { return static_cast<uint32_t>(os::now_us() / 1000); }
 void sys_rest(uint32_t ms) { os::rest(ms); }
+uint32_t sys_us() { return static_cast<uint32_t>(os::now_us()); }
 void sys_log(const char *text) { os::log(text); }
 
 void sys_picture(const uint8_t *pixels, const uint8_t *palette, int palette_changed)
