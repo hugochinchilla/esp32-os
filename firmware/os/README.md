@@ -5,8 +5,8 @@ real self-test (processor, RAM, a memory test, flash, drives, video, input,
 sound), and runs the desktop, which fades in: window manager, taskbar and Start menu, desktop icons, and the
 built-in programs (About Chinchilla, Editor, File manager, Picture viewer, Welcome, Widget
 gallery). Drive C: is LittleFS on the flash (9 MB, `partitions.csv`); files
-stay across restarts. A new drive is formatted and gets the sample files and
-pictures. Programs keep their settings in C:\.config\<program>.ini. It answers the debug protocol on the serial port. Input is injected over the debug link until there is a USB keyboard and
+stay across restarts. A new drive is formatted and gets its folders and a few
+text files; the programs and pictures are copied by `tools/flash.py`. Programs keep their settings in C:\.config\<program>.ini. It answers the debug protocol on the serial port. Input is injected over the debug link until there is a USB keyboard and
 mouse.
 
 Built with ESP-IDF v5.5 and run on the board on 2026-11-16.
@@ -15,11 +15,23 @@ Built with ESP-IDF v5.5 and run on the board on 2026-11-16.
 
 ```sh
 get_idf
-cd firmware/os
-idf.py set-target esp32s3
-idf.py build
-idf.py -p /dev/ttyACM0 flash
+tools/flash.py                  # from the repository root
 ```
+
+`tools/flash.py` builds the firmware and the programs kept in files
+(`programs/*`), writes the bootloader, the partition table, `otadata` and
+the OS, waits for the desktop and copies to C: what the firmware does not
+carry (since 2026-11-19, backlog item 77): the programs to `C:\Programs`,
+the sample pictures to `C:\pictures`, and Doom's `DOOM1.WAD` when
+`programs/doom` is there (fetched once to `build/downloads/`, or given with
+`--wad FILE`). Only what changed is sent, and nothing else on C: is touched.
+`tools/flash.py --files-only` copies without flashing, `--no-build` uses the
+build that is there, `--list` shows the set. The first time in a new
+checkout, run `idf.py set-target esp32s3` in `firmware/os` before it.
+
+`idf.py -p /dev/ttyACM0 flash` in `firmware/os` still writes the firmware,
+but leaves C: as it was: programs of another build stay there, and a new C:
+has none.
 
 The serial port runs at 921,600 baud. The chip's ROM and the bootloader
 print their messages at 115,200 baud, so they look garbled in `idf.py

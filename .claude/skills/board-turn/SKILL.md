@@ -47,13 +47,25 @@ the repo is in English; reply to the owner in the language he writes.
 cd WORKTREE/firmware/os && rm -f sdkconfig && . ~/esp/esp-idf/export.sh && idf.py build
 ```
 
-Loadable programs (item 27): `tools/build_programs.sh BUILDDIR` (all names
-exported; it must print "0 name(s) missing"), output in `build/programs/`.
+Loadable programs (item 27) are built by `idf.py build` into
+`firmware/os/build/programs/*.app` and checked against the firmware's exports
+(it must print "0 name(s) missing"). The firmware does not carry them since
+item 77: `tools/flash.py` copies them to C: (step 3).
 
 ## 3. Flash
 
 Which layout the board is on decides the command. Read the partition table
 offsets in `build/flash_args` first.
+
+Since item 77 the programs, the sample pictures and Doom's `DOOM1.WAD` are not
+in the firmware. After any flash of a branch that has `tools/flash.py`, run
+`python3 tools/flash.py --files-only` (the files of the build in
+`firmware/os/build`, only what changed; `C:\system\installed.txt` lists them),
+or flash with `python3 tools/flash.py --no-build`, which writes 0x0, 0x8000,
+0xf0000 and 0x100000 with esptool and then copies. Do it again after
+reflashing `main`: the programs on C: must be those of the firmware that runs.
+The WAD is fetched to `build/downloads/` of the worktree; `--wad FILE` takes a
+copy kept elsewhere, `--no-wad` leaves it out.
 
 - **3 MB layout** (`main` since backlog item 71, 2026-11-19: bootloader 0x0,
   table 0x8000, BIOS 0x10000, otadata 0xf0000, ota_0 0x100000, ota_1 0x400000,

@@ -568,8 +568,14 @@ def make_tests(folder):
         f.write("\n".join(manifest) + "\n")
 
 
+# The sample pictures, in the order they are embedded.
+SAMPLE_NAMES = ("test card.png", "landscape.jpg", "mascot.bmp", "earthrise.jpg", "blue marble.png")
+
+
 def samples():
-    """The RAM disk's pictures: small, so the firmware stays small."""
+    """The sample pictures of a new drive, {name: bytes}: tools/flash.py
+    copies them to the board's C:\\pictures; the PC programs and the browser
+    version carry them (embed)."""
     out = {}
     tmp = "/tmp/chinchilla-samples"
     os.makedirs(tmp, exist_ok=True)
@@ -581,7 +587,7 @@ def samples():
               palette=pal + [(0, 0, 0)] * (16 - len(pal)))
     import gen_photos  # public-domain NASA photographs, see third_party/samples/
     gen_photos.main(tmp)
-    for name in ("test card.png", "landscape.jpg", "mascot.bmp", "earthrise.jpg", "blue marble.png"):
+    for name in SAMPLE_NAMES:
         with open(tmp + "/" + name, "rb") as f:
             out[name] = f.read()
     return out

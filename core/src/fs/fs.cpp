@@ -1,6 +1,5 @@
 #include "core/fs/fs.hpp"
 
-#include "core/fs/samples.hpp"
 
 #include <cstdio>
 #include <cstring>
@@ -578,7 +577,7 @@ FsError Storage::do_finish_save(Save &save, bool keep) const
     return e;
 }
 
-void add_samples(Storage &storage, char drive)
+void add_first_files(Storage &storage, char drive)
 {
     char root[4] = {drive, ':', '\\', 0};
     char p[kMaxPath];
@@ -601,7 +600,7 @@ void add_samples(Storage &storage, char drive)
              "\r\n"
              "This drive lives in the board's flash memory.\r\n"
              "Files on it stay when the board restarts.\r\n"
-             "These samples were put here when the drive was first formatted.\r\n");
+             "These files were put here when the drive was first formatted.\r\n");
     } else {
         file("readme.txt",
              "Chinchilla RAM disk\r\n"
@@ -628,14 +627,6 @@ void add_samples(Storage &storage, char drive)
     // Text files are Latin-1, as 98 wrote them (names are kept in UTF-8).
     file("Documents\\español.txt", "Texto en espa\xf1ol: a\xf1o, ni\xf1o, caf\xe9, \xa1hola!\r\n");
     file("system\\version.txt", "Chinchilla 0.3\r\n");
-    // Pictures made by tools/gen_pictures.py, and two NASA photographs
-    // (public domain, see third_party/samples/README.md).
-    for (int i = 0; i < kSamplePictureCount; i++) {
-        char rel[96];
-        snprintf(rel, sizeof(rel), "pictures\\%s", kSamplePictures[i].name);
-        path::join(root, rel, p, sizeof(p));
-        storage.write_file(p, kSamplePictures[i].data, kSamplePictures[i].size);
-    }
 }
 
 } // namespace fs

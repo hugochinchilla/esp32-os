@@ -195,7 +195,6 @@ MessageBox *message_window()
 
 /* ---- Start menu and desktop ------------------------------------------------------ */
 
-constexpr uint32_t kInstallAfterUs = 2 * 1000 * 1000;
 constexpr int kMaxApps = 16;
 // Programs kept in files (backlog item 27): every program file in this
 // folder has an entry in Start > Programs, after the built-in ones, with
@@ -1299,10 +1298,6 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
     welcome_file();
     install_screen_saver();
     install_display();
-    // Those that come with the system go into C:\Programs a moment after
-    // the desktop is up, not before it: the check reads the drive, and on
-    // the board that was time added to every start.
-    os::start_timer(kInstallAfterUs, 0, [](void *) { install_programs(); }, nullptr);
     start_network();
     start_bluetooth();
     // The taskbar, the Start menu and the icons are a process of their own
