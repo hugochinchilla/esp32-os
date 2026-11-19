@@ -44,7 +44,7 @@ public:
     void offer_coarse() { offers_coarse_ = true; }
     bool set_coarse(int width) override
     {
-        if (!offers_coarse_ || (width != 0 && width != 320 && width != 640)) {
+        if (!offers_coarse_ || (width != 0 && width != 320)) {
             return false;
         }
         if (width != coarse_) {

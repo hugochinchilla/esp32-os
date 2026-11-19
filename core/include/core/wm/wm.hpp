@@ -242,8 +242,7 @@ public:
     // when the screen's mode changes, on Ctrl+Alt+Del, which then opens
     // what it always opens, and on the logo key, which minimises the
     // window: the window finds out with screen_lent_to().
-    // `coarse`: the window would rather have a picture of 320x240 (320) or
-    // of 640x240 (640) that the
+    // `coarse`: the window would rather have a picture of 320x240 (320) that the
     // screen makes large by itself (ports::Display::set_coarse), if this
     // screen has one; lent_width() and lent_height() say what it got. The
     // desktop keeps its own size meanwhile and is painted again afterwards.

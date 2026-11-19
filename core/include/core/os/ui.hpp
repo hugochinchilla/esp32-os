@@ -146,8 +146,7 @@ struct Screen {
 };
 // False: the window is not on the screen, or the screen is not free.
 // `coarse`: 320, the program would rather draw 320x240 and have the screen
-// make it large, or 640, 640x240 with only the lines made twice as tall;
-// either costs the program nothing (on the board, the monitor's
+// make it large, which costs the program nothing (on the board, the monitor's
 // signal with every pixel twice as wide and every line sent twice). Not
 // every screen can: `out` says what the program got, the coarse picture or
 // the screen as it was.

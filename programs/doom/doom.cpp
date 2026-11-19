@@ -165,25 +165,6 @@ public:
         // whole: the screen's own memory is slow to write a byte at a time.
         uint8_t upper[kDoomW * 2], lower[kDoomW * 2];
         uint8_t *out = screen_.pixels + top_ * screen_.width + left_;
-        if (wide_ == 2 && tall_ == 1) {
-            // Lines twice as tall from the screen, pixels twice as wide
-            // from here: the dither as fine as the screen across.
-            for (int y = 0; y < kDoomH; y++) {
-                const uint8_t *in = pixels + y * kDoomW;
-                const uint8_t *even = table_[(y & 1) * 2], *odd = table_[(y & 1) * 2 + 1];
-                for (int x = 0; x < kDoomW; x++) {
-                    const uint8_t c = in[x];
-                    upper[2 * x] = even[c];
-                    upper[2 * x + 1] = odd[c];
-                }
-                memcpy(out, upper, sizeof(upper));
-                out += screen_.width;
-            }
-            screen_changed({left_, top_, kDoomW * 2, kDoomH});
-            pictures_++;
-            picture_us_ += static_cast<uint32_t>(os::now_us()) - began;
-            return;
-        }
         if (wide_ == 1) {
             // The coarse picture: a pixel for a pixel, and the same four
             // tables laid over squares of four of the game's own pixels.
@@ -277,14 +258,12 @@ private:
 
     // F12 goes round the ways of showing the picture (the owner kept the
     // key that was made to tell them apart on the monitor; the choice is
-    // remembered): the coarse screen, 320x240; 640x240, where the screen
-    // only makes the lines tall; and the screen as it is with each pixel
-    // made four by this program (the finest dither, and four times the
-    // bytes). A fourth, 320x240 with no dither, the owner saw and took
-    // out: large stains of solid colour.
+    // remembered): the coarse screen, 320x240, and the screen as it is
+    // with each pixel made four by this program (the finest dither, and
+    // four times the bytes). The owner's choice of the ones tried.
     void next_look()
     {
-        static const char *const kNames[kLooks] = {"doom: 320x240", "doom: 640x240, each pixel made two",
+        static const char *const kNames[kLooks] = {"doom: 320x240",
                                                    "doom: the screen as it is, each pixel made four"};
         look_ = (look_ + 1) % kLooks;
         os::log(kNames[look_]);
@@ -303,7 +282,7 @@ private:
         // The coarse picture if this screen has one: 320x240 that the
         // screen makes large by itself, so that the engine's 320x200 go
         // out as they are. Otherwise this program makes each pixel four.
-        if (!take_screen(screen_, look_ == kFourfold ? 0 : look_ == kTall ? 640 : 320)) {
+        if (!take_screen(screen_, look_ == kFourfold ? 0 : 320)) {
             return false;
         }
         playing_ = true;
@@ -407,7 +386,7 @@ private:
     os::ui::Screen screen_;
     int left_ = 0, top_ = 0;
     static constexpr uint16_t kLookKey = 0x45; // F12
-    enum { kDithered, kTall, kFourfold, kLooks };
+    enum { kDithered, kFourfold, kLooks };
     int look_ = kDithered, saved_look_ = kDithered;
     fs::Ini settings_; // C:\.config\doom.ini
     int wide_ = 2, tall_ = 2; // how many of the screen's pixels one of the game's is

@@ -41,8 +41,15 @@ The rest is the agent's, to confirm:
 - **The picture uses the memory the screen already has** (its first 76,800
   bytes) and starts black at both changes. No pointer is mixed in.
 - **Doom dithers over squares of four of its own pixels** with the tables
-  it had: the same levels, a grain twice as coarse. If the bands show too
-  much, 640x240 is the next thing to try.
+  it had: the same levels, a grain twice as coarse. F12 in the game goes
+  to 640x480 and back (`doom.md`).
+- **Its bounce buffers hold 20 lines of signal, 6,400 bytes**, not the 10
+  of the other modes: a bounce buffer of 4,095 bytes or fewer is one DMA
+  descriptor, and the IDF's driver then refills the wrong buffer after it
+  restarts at a vertical blank (the owner saw the picture of twenty lines
+  up at the left end of lines; the reason is beside `bounce_lines` in
+  `firmware/os/main/vga.c`). Any new mode must keep its buffers above
+  4,095 bytes.
 - **800x600 goes to 320x240 too** and comes back to 800x600: the monitor
   changes signal twice. Not chosen: 400x300 from the 800x600 signal (one
   more mode to prove on the bench for a game that draws 320x200).

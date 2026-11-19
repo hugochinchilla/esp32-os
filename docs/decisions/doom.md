@@ -79,11 +79,12 @@ day and has not answered; all of it is his to overrule:
   doomgeneric has it.
 - **F12 in the game changes how the picture is shown** (the owner's,
   2026-11-19: the key was made to find a fault of the 320x240 signal, and
-  he asked to keep it, "me parece una buena feature"). It goes round
-  320x240, 640x240 where the screen only makes the lines tall, and the
-  screen as it is with each pixel made four by the program. A fourth,
-  320x240 with no dither, he saw on the monitor and took out ("no tiene
-  detalle, todo son grandes manchas de colores solidos"). The agent's, to confirm: the
-  choice is kept in `C:\.config\doom.ini` (`[picture] look=`), written when
+  he asked to keep it, "me parece una buena feature"). It goes between
+  320x240 and the screen as it is, 640x480, with each pixel made four by
+  the program ("dejamos f12 para saltar entre dos resoluciones"). Tried
+  and taken out: 320x240 with no dither, which he saw on the monitor ("no
+  tiene detalle, todo son grandes manchas de colores solidos"), and
+  640x240, made to find the fault and of no use once it was found. The agent's, to confirm: the
+  choice is kept in `C:\.config\doom.ini` (`[picture] look=`, 0 or 1), written when
   the program closes; 320x240 dithered is the one a new board starts with;
-  where the screen has no coarse picture (the PC) all three show the last.
+  where the screen has no coarse picture (the PC) both show the last.

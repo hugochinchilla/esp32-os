@@ -286,14 +286,14 @@ public:
     // signal as 640x480.
     bool set_coarse(int width) override
     {
-        if (width != 0 && width != 320 && width != 640) {
+        if (width != 0 && width != 320) {
             return false;
         }
         if (width == coarse_) {
             return true;
         }
         const int before = coarse_ != 0 ? mode_before_ : vga_mode();
-        if (!switch_to(width == 320 ? VGA_MODE_COARSE : width == 640 ? VGA_MODE_TALL : before)) {
+        if (!switch_to(width == 320 ? VGA_MODE_COARSE : before)) {
             return false;
         }
         mode_before_ = before;
