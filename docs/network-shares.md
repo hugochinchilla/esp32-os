@@ -6,7 +6,8 @@ ligero si no"). Nothing is built here: this is the comparison the owner
 chooses from. What he has said since is in
 [the decision](decisions/network-shares.md): he wants a client and a
 server, as two programs, each an optional service, outside the firmware if
-that can be done. The story of how it was made is in
+that can be done; and, on a card, in the firmware now and as program
+files later. The story of how it was made is in
 [the journal](journal/2026-11-19-network-shares-research.md).
 
 ## The short answer
@@ -390,19 +391,18 @@ is the system's business, not the driver's.
    share as a drive letter, and `smbd`, the server, which shows C: to the
    PCs. Two programs, each a line of the start-up file, off until ticked
    in Services.
-2. **As program files, if the first board turn says they can be.** That
-   turn is the measurement the backlog asked for, done on a file from the
-   start: a throwaway program file with libsmb2 inside connects to a
-   share, lists a folder and reads 1 MB. It answers three things at once:
-   does the loader take the library, what internal RAM a connected share
-   costs (free and largest block before, during, after), and the speed,
-   with `dbg.py misses` after. It needs the sockets exported to program
-   files, and a share to connect to.
-3. **If the file does not load or run**, the same code goes inside the
-   firmware behind the same `mount` call, still two optional services,
-   and moves out later. **If the RAM is too much** (over about 30 KB),
-   try the library's memory in external RAM; if that fails, WebDAV with
-   our own client.
+2. **In the firmware now, program files later** (the owner's choice,
+   2026-11-19; the agent had recommended program files from the start
+   with a board trial first). Both are built inside the firmware behind
+   the `mount` call a program file would use, and move out to files when
+   item 77 or the store lets files reach C: without the firmware
+   carrying them.
+3. **Measure first.** One board turn with a throwaway command that
+   connects to a share, lists a folder and reads 1 MB: free internal RAM
+   and largest block before, during and after; speed; `dbg.py misses`.
+   It needs a share to connect to. **If the RAM is too much** (over
+   about 30 KB), try the library's memory in external RAM; if that
+   fails, WebDAV with our own client.
 4. **Then the file layer** (a lock per drive, timeouts, the listing kept,
    delete without the Trash), tested on the PC with a volume that is slow
    and fails on purpose. Most of the client's work, and none of it
@@ -411,21 +411,20 @@ is the system's business, not the driver's.
    a Samba server, then on the board.
 6. **Then the server**, tested from the owner's own PC first.
 
-Size: the backlog says L for the idea; with a server and program files it
-is two L items. Roughly: one day for the measurement, three for the
-pieces program files lack, two to three for the file layer, two to three
+Size: the backlog says L for the idea; with a server it is two L items.
+Roughly: one day for the measurement, two to three for the file layer, two to three
 for the client and its program, four to five for the server with a round
 of testing against each kind of PC.
 
 ## Questions for the owner
 
 Answered on 2026-11-19: client and server, two programs, optional
-services.
+services, in the firmware now and program files later.
 
-1. Program files as recommended (with the firmware as the fallback), or
-   in the firmware from the start?
-2. May program files be given the sockets and `malloc` by name? It is a
-   change to the rule that programs ask through the OS calls only.
+1. (Answered: in the firmware now, program files later.)
+2. For the later move: may program files be given the sockets and
+   `malloc` by name? It is a change to the rule that programs ask
+   through the OS calls only. Not needed yet.
 3. Is the server SMB too, as recommended, or is FTP enough for that
    direction?
 4. What would the board connect to, and what would connect to it: a

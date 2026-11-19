@@ -113,9 +113,15 @@ The recommendation became: SMB both ways, two programs (`netdrive`,
 the library and what RAM a connected share costs, inside the firmware
 otherwise.
 
+Put to him on a card, he chose the third option: "Firmware ahora,
+ficheros después". The recommended one was program files from the start
+with a board trial; his choice takes the surer road, builds the `mount`
+call now, and leaves the service-in-a-file and the sockets for program
+files to the day the files can reach C: by themselves.
+
 ## What is left
 
-Backlog item 80 stays `todo`. The owner has still to say: program files
-or firmware, whether program files may have sockets, and the server's
-protocol. The next step, if he takes the recommendation, is the board
-measurement with a throwaway program file.
+Backlog item 80 stays `todo`. The owner has still to say the server's
+protocol, what the board would connect to and where passwords are kept.
+The next step is the board measurement of the client's internal RAM, with
+a throwaway command in the firmware.
