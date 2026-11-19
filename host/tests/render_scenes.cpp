@@ -34,13 +34,17 @@ void save(const char *name, bool update = true, bool with_pointer = false)
     if (update) {
         desktop.update(); // paint what direct calls (not events) changed
     }
-    std::vector<uint8_t> shown(display.pixels(), display.pixels() + 640 * 480);
+    // The screen in the size it has now (640x480 but for the scenes that
+    // change the mode: the checker tells the size by the length).
+    const int width = display.width();
+    const size_t size = static_cast<size_t>(width) * display.height();
+    std::vector<uint8_t> shown(display.pixels(), display.pixels() + size);
     if (with_pointer) {
-        video::compose_pointer(shown.data(), 0, 640 * 480, 640, pointer.state());
+        video::compose_pointer(shown.data(), 0, static_cast<int>(size), width, pointer.state());
     }
     std::string path = folder + "/" + name + ".raw";
     FILE *f = fopen(path.c_str(), "wb");
-    if (f == nullptr || fwrite(shown.data(), 1, 640 * 480, f) != 640 * 480) {
+    if (f == nullptr || fwrite(shown.data(), 1, size, f) != size) {
         printf("cannot write %s\n", path.c_str());
         failures++;
     }
@@ -74,13 +78,19 @@ void double_click(int x, int y)
     }
 }
 
-void key(uint16_t usage, bool alt = false)
+void key(uint16_t usage, bool alt = false, bool ctrl = false)
 {
     if (alt) {
         desktop.key(wm::key::LeftAlt, true);
     }
+    if (ctrl) {
+        desktop.key(wm::key::LeftCtrl, true);
+    }
     desktop.key(usage, true);
     desktop.key(usage, false);
+    if (ctrl) {
+        desktop.key(wm::key::LeftCtrl, false);
+    }
     if (alt) {
         desktop.key(wm::key::LeftAlt, false);
     }
@@ -1326,6 +1336,93 @@ int main(int argc, char **argv)
             click(ix, iy);
             check(desktop.window_count() == 0 && gfx::theme_index() == 0, "a click after Escape did what the menu entry does");
         }
+    }
+
+    // The screen's mode (backlog item 68), after everything else: its
+    // scenes wait half a minute, and the pictures before them must not
+    // depend on that.
+    {
+        const auto check = [&](bool ok, const char *what) {
+            if (!ok) {
+                printf("Resolution: %s\n", what);
+                failures++;
+            }
+        };
+        fs::Ini ini;
+        char value[32] = "";
+        // The Resolution tab (backlog item 68). Ctrl+Tab turns to it; the
+        // mode picked is shown by Apply and asked about, and with no answer
+        // in fifteen seconds the screen goes back.
+        const auto mode_kept = [&](const char *wanted) {
+            return shell::load_settings("desktop", ini) && ini.get("screen", "mode", value, sizeof(value)) &&
+                   strcmp(value, wanted) == 0;
+        };
+        const auto active_is = [&](const char *title) {
+            return desktop.active() != nullptr && strcmp(desktop.active()->title(), title) == 0;
+        };
+        const int windows_before = desktop.window_count();
+        shell::display_dialog();
+        key(wm::key::Tab, false, true); // Ctrl+Tab
+        save("37y-display-resolution");
+        key(wm::key::Tab, false, true);
+        save("38f-display-appearance-again"); // and round to Appearance, as it opened
+        key(wm::key::Tab, false, true);
+        key(0x16, true);                // Alt+S: the list of modes
+        key(wm::key::Down);             // 800 x 600
+        save("37z-display-800-picked");
+        check(display.width() == 640, "nothing changes before Apply");
+        key(0x04, true);                // Alt+A
+        check(display.width() == 800 && display.height() == 600, "Apply changes the screen");
+        check(desktop.work_area().w == 800 && desktop.taskbar().y == 600 - wm::Wm::kTaskbarHeight,
+              "the taskbar is at the bottom of the new screen");
+        check(desktop.frames()->totals().budget_us == 16579, "the frame budget is the new mode's");
+        check(desktop.window_count() == windows_before + 2, "the question is asked over the dialog");
+        save("38a-800x600-keep-question");
+        check(!mode_kept("800x600"), "nothing is written before Keep");
+        wait(14000000);
+        check(display.width() == 800, "it waits fifteen seconds");
+        save("38b-800x600-one-second-left");
+        wait(1500000);
+        check(display.width() == 640 && display.height() == 480, "with no answer the screen goes back");
+        check(desktop.window_count() == windows_before + 1 && active_is("Display"), "and the question is gone");
+        save("38c-display-went-back");
+        // Kept: Apply again, then Keep.
+        key(wm::key::Down);
+        key(0x04, true);
+        key(0x0E, true);                // Alt+K: Keep
+        check(display.width() == 800 && mode_kept("800x600"), "Keep keeps it, in desktop.ini");
+        wait(16000000);
+        check(display.width() == 800, "and it stays");
+        key(wm::key::Escape);           // the dialog
+        check(display.width() == 800 && desktop.window_count() == windows_before, "closing the dialog changes nothing");
+        save("38d-800x600-desktop");
+        // A maximised window fills the new screen and the old one again.
+        shell::open_in_editor(nullptr);
+        desktop.toggle_maximize(*desktop.active());
+        check(desktop.active()->frame().w == 800 && desktop.active()->frame().h == 600 - wm::Wm::kTaskbarHeight,
+              "a maximised window fills 800 x 600");
+        save("38e-800x600-editor-maximised");
+        // Back to 640 x 480 with OK: the dialog closes and the question stays.
+        shell::display_dialog();
+        key(wm::key::Tab, false, true);
+        key(0x16, true);
+        key(wm::key::Up);
+        key(wm::key::Enter);            // OK
+        check(display.width() == 640 && active_is("Display") && desktop.window_count() == windows_before + 2,
+              "OK changes the screen and leaves the question");
+        check(desktop.window_at(0)->frame().w == 640, "the maximised window fills 640 x 480 again");
+        key(wm::key::Escape);           // the question: not kept
+        check(display.width() == 800 && mode_kept("800x600"), "Escape on the question goes back");
+        shell::display_dialog();
+        key(wm::key::Tab, false, true);
+        key(0x16, true);
+        key(wm::key::Up);
+        key(wm::key::Enter);
+        key(0x0E, true);                // Keep
+        check(display.width() == 640 && mode_kept("640x480"), "and 640 x 480 is kept the same way");
+        desktop.close(*desktop.active()); // the Editor
+        desktop.tick();
+        check(desktop.window_count() == windows_before, "everything is closed again");
     }
 
     // Shut Down from the Start menu: Enter picks Shut Down, and the screen

@@ -138,6 +138,8 @@ void Taskbar::news(wm::PanelNews what)
     case wm::PanelNews::Clock:
         wm_.invalidate(clock_rect());
         break;
+    case wm::PanelNews::Screen:
+        break; // everything is painted again, and the bar asks where it is each time
     }
 }
 

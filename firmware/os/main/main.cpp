@@ -247,11 +247,67 @@ private:
     SemaphoreHandle_t mutex_;
 };
 
+// The width of the picture as the video interrupt needs it (vga_width() is
+// not in internal RAM).
+DRAM_ATTR int s_picture_width = 640;
+
+// Changes the video mode on a task tied to core 1, as video_task starts it:
+// the new panel's interrupt must be on that core too.
+struct ModeChange {
+    int mode;
+    SemaphoreHandle_t done;
+};
+void mode_task(void *context)
+{
+    auto *change = static_cast<ModeChange *>(context);
+    vga_set_mode(change->mode);
+    s_picture_width = vga_width();
+    xSemaphoreGive(change->done);
+    vTaskDelete(nullptr);
+}
+
 class VgaDisplay : public ports::Display {
 public:
-    int width() const override { return VGA_WIDTH; }
-    int height() const override { return VGA_HEIGHT; }
+    int width() const override { return vga_width(); }
+    int height() const override { return vga_height(); }
     uint8_t *pixels() override { return vga_framebuffer(); }
+    int mode_count() const override { return vga_mode_count(); }
+    ports::VideoMode mode_at(int index) const override
+    {
+        vga_mode_info_t m;
+        vga_mode_info(index, &m);
+        return {static_cast<int16_t>(m.width), static_cast<int16_t>(m.height), m.pixel_clock_hz, m.frame_us};
+    }
+    int mode() const override { return vga_mode(); }
+    // The UI task waits here while the signal stops and starts again (a few
+    // milliseconds; the monitor then takes its own time to show a picture).
+    bool set_mode(int index) override
+    {
+        if (index < 0 || index >= vga_mode_count()) {
+            return false;
+        }
+        if (index == vga_mode()) {
+            return true;
+        }
+        const int64_t began = esp_timer_get_time();
+        ModeChange change = {index, xSemaphoreCreateBinary()};
+        if (change.done == nullptr) {
+            return false;
+        }
+        if (xTaskCreatePinnedToCore(mode_task, "video", 4096, &change, 10, nullptr, 1) != pdPASS) {
+            vSemaphoreDelete(change.done);
+            return false;
+        }
+        xSemaphoreTake(change.done, portMAX_DELAY);
+        vSemaphoreDelete(change.done);
+        vga_mode_info_t m;
+        vga_mode_info(index, &m);
+        ESP_LOGI(TAG, "screen: %ux%u, pixel clock %u Hz, a frame every %u us (changed in %d us)",
+                 static_cast<unsigned>(m.width), static_cast<unsigned>(m.height),
+                 static_cast<unsigned>(m.pixel_clock_hz), static_cast<unsigned>(m.frame_us),
+                 static_cast<int>(esp_timer_get_time() - began));
+        return true;
+    }
 };
 
 // The pointer as the video interrupt sees it. Changes go to `pending`; the
@@ -269,7 +325,7 @@ IRAM_ATTR void compose_line(uint8_t *pixels, int first, int count)
         s_active = s_pending;
         portEXIT_CRITICAL_ISR(&s_pointer_lock);
     }
-    video::compose_pointer(pixels, first, count, VGA_WIDTH, s_active);
+    video::compose_pointer(pixels, first, count, s_picture_width, s_active);
 }
 
 class VgaPointer : public ports::Pointer {
@@ -768,10 +824,11 @@ void ui_task(void *)
     static EspSystem system;
     static EspClock clock;
     static wm::Wm desktop(display, pointer, clock); // internal: every event and repaint goes through it
-    // One video frame: 800 x 525 pixels with the blanking, at the pixel
-    // clock (16 800 us at 25 MHz). What the desktop's work is measured
-    // against (core/sys/frames.hpp, tools/dbg.py frames).
-    desktop.frames()->set_budget(static_cast<uint32_t>(800ULL * 525 * 1000000 / vga_pixel_clock_hz()));
+    // One video frame with its blanking (16 800 us at 640x480: 800 x 525
+    // pixels at 25 MHz). What the desktop's work is measured against
+    // (core/sys/frames.hpp, tools/dbg.py frames). The desktop sets it again
+    // when the mode changes.
+    desktop.frames()->set_budget(display.mode_at(display.mode()).frame_us);
     static BootInput input(desktop);
     static EXT_RAM_BSS_ATTR dbg::Protocol protocol(sink, lock, display, pointer, input, system, "esp32-os");
     protocol.set_desktop(&desktop);
@@ -891,6 +948,7 @@ void ui_task(void *)
     static RtosLock damage_lock;
     remote.set_lock(&damage_lock);
     desktop.set_damage_listener([](const gfx::Rect &r, void *) { remote.damage(r); }, nullptr);
+    desktop.set_mode_listener([](void *) { remote.screen_changed(); }, nullptr);
 
     // init, PID 1: it starts the rest from C:\.config\startup.txt, in the
     // file's order (core/init/init.hpp). What the file can name is added
@@ -1254,7 +1312,7 @@ void ui_task(void *)
 void video_task(void *done)
 {
     s_video_start_us = static_cast<uint32_t>(esp_timer_get_time());
-    vga_start();
+    vga_start(VGA_MODES);
     vga_set_line_hook(compose_line);
     xSemaphoreGive(static_cast<SemaphoreHandle_t>(done));
     vTaskDelete(nullptr);

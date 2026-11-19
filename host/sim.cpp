@@ -224,6 +224,7 @@ int main(int argc, char **argv)
     static host::ThreadLock damage_lock;
     remote.set_lock(&damage_lock);
     screen.set_damage_listener([](const gfx::Rect &r, void *) { remote.damage(r); }, nullptr);
+    screen.set_mode_listener([](void *) { remote.screen_changed(); }, nullptr);
 
     // A real board first prints start-up text that is not part of the
     // protocol, then says hello.

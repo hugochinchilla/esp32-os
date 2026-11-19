@@ -288,6 +288,45 @@ private:
     const char *caption_;
 };
 
+// Tabs: a row of titles along the top and, under it, the frame of the page
+// they choose. It draws the titles and the frame only. The widgets of a
+// page are the window's own, added after this one and lying over it; its
+// owner shows those of the chosen page and hides the others (an empty rect)
+// when on_change tells of another one.
+class Tabs : public Widget {
+public:
+    using Callback = void (*)(Tabs &tabs, void *context);
+    static constexpr int kMax = 6;
+    static constexpr int kStrip = 20; // the height of the row of titles
+
+    Tabs(const Rect &r, const char *const *titles, int count, Callback on_change = nullptr, void *context = nullptr)
+        : Widget(r), titles_(titles), count_(count < kMax ? count : kMax), on_change_(on_change), context_(context)
+    {
+    }
+    void paint(gfx::Canvas &c) override;
+    bool opaque() const override { return false; } // only its lines: the window fills the page
+    bool wants_mouse() const override { return true; }
+    void mouse(const MouseMsg &m) override;
+    bool focusable() const override { return true; }
+    bool key(const KeyMsg &k) override;
+    bool turn_page(int step) override;
+    int count() const { return count_; }
+    int selected() const { return selected_; }
+    void select(int index);
+    // Where a title is, in the widget's coordinates, as it is when it is not
+    // the chosen one (which is drawn two pixels larger all round).
+    Rect tab(int index) const;
+    // The inside of the page's frame, in the window's client coordinates.
+    Rect page() const { return {rect.x + 2, rect.y + kStrip + 2, rect.w - 4, rect.h - kStrip - 4}; }
+
+private:
+    const char *const *titles_;
+    int count_;
+    Callback on_change_;
+    void *context_;
+    int selected_ = 0;
+};
+
 // Lines of text ('\n' between them) in a sunken white box. Read-only, no
 // scrolling: lines that do not fit are cut off.
 class TextArea : public Widget {

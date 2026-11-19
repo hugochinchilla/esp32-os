@@ -129,6 +129,7 @@ enum class Kind : uint8_t {
     Meter,
     TextEdit,
     IconView,
+    Tabs,
 };
 
 // A line of text exactly as given, kept by the control.
@@ -987,6 +988,7 @@ public:
             case Kind::Meter: static_cast<Meter *>(controls_[i])->~Meter(); break;
             case Kind::TextEdit: static_cast<OwnedTextEdit *>(controls_[i])->~OwnedTextEdit(); break;
             case Kind::IconView: static_cast<IconView *>(controls_[i])->~IconView(); break;
+            case Kind::Tabs: static_cast<wm::Tabs *>(controls_[i])->~Tabs(); break;
             }
             os::release(controls_[i]);
         }
@@ -1051,6 +1053,7 @@ public:
     static void ticked(wm::CheckBox &b, void *context) { static_cast<Behind *>(context)->from(b, What::Changed); }
     static void scrolled(wm::ScrollBar &b, void *context) { static_cast<Behind *>(context)->from(b, What::Changed); }
     static void picked(wm::ListBox &l, void *context) { static_cast<Behind *>(context)->from(l, What::Changed); }
+    static void turned(wm::Tabs &t, void *context) { static_cast<Behind *>(context)->from(t, What::Changed); }
     // Enter on a row, or a double click. A program that has no use for it
     // gets what Enter does anywhere else in the window: the default button.
     static void chosen(wm::ListBox &l, void *context)
@@ -1444,6 +1447,13 @@ Control group(Window window, const gfx::Rect &place, const char *caption)
     return w != nullptr ? w->make<wm::GroupFrame>(Kind::Group, place, caption) : kNoControl;
 }
 
+Control tabs(Window window, const gfx::Rect &place, const char *const *titles, int count)
+{
+    const prog::InCall in_call;
+    Behind *w = behind(window);
+    return w != nullptr ? w->make<wm::Tabs>(Kind::Tabs, place, titles, count, &Behind::turned, w) : kNoControl;
+}
+
 Control text_area(Window window, const gfx::Rect &place, const char *text)
 {
     const prog::InCall in_call;
@@ -1668,7 +1678,9 @@ void place_control(Window window, Control control, const gfx::Rect &place)
     if (wm::Widget *c = w != nullptr ? w->any(control) : nullptr) {
         c->invalidate(); // where it was
         c->rect = place;
-        if (w->kind(control) == Kind::TextEdit) {
+        if (w->kind(control) == Kind::List) {
+            static_cast<wm::ListBox *>(c)->layout(); // its scroll bar, and what of it shows
+        } else if (w->kind(control) == Kind::TextEdit) {
             static_cast<OwnedTextEdit *>(c)->layout();
         } else if (w->kind(control) == Kind::IconView) {
             static_cast<IconView *>(c)->layout();
@@ -1940,6 +1952,9 @@ int selected(Window window, Control control)
     if (auto *v = control_of<IconView>(window, control, Kind::IconView)) {
         return v->selected();
     }
+    if (auto *t = control_of<wm::Tabs>(window, control, Kind::Tabs)) {
+        return t->selected();
+    }
     auto *l = control_of<wm::ListBox>(window, control, Kind::List);
     return l != nullptr ? l->selected() : -1;
 }
@@ -1953,6 +1968,8 @@ void select(Window window, Control control, int index)
         g->select_quietly(index);
     } else if (auto *v = control_of<IconView>(window, control, Kind::IconView)) {
         v->select(index);
+    } else if (auto *t = control_of<wm::Tabs>(window, control, Kind::Tabs)) {
+        t->select(index);
     }
 }
 

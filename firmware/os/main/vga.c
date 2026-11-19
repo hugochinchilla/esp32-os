@@ -1,13 +1,15 @@
 /*
- * VGA output through the LCD peripheral. The settings are the ones proven
- * with firmware/vga-test on the bench: 25.000 MHz pixel clock and bounce
- * buffers (see docs/DECISIONS.md, "Found on the bench").
+ * VGA output through the LCD peripheral. The settings of the first mode are
+ * the ones proven with firmware/vga-test on the bench: 25.000 MHz pixel
+ * clock and bounce buffers (see docs/DECISIONS.md, "Found on the bench").
+ * The second mode, 800x600, is backlog item 68.
  *
  * We own the single framebuffer and fill the bounce buffers ourselves, so a
  * line hook (the mouse pointer) can be mixed in on the way out.
  */
 #include "vga.h"
 
+#include <stddef.h>
 #include <string.h>
 
 #include "driver/gpio.h"
@@ -34,12 +36,35 @@
 #define PIN_HSYNC 9
 #define PIN_VSYNC 10
 
-#define PIXEL_CLOCK_HZ 25000000
-#define BOUNCE_PIXELS (10 * VGA_WIDTH)
-#define FRAME_BYTES (VGA_WIDTH * VGA_HEIGHT)
+/* The modes. 640x480 is the one proven on the bench first; its 25.000 MHz is
+ * 160 MHz / 6.4. 800x600 at 60 Hz is the standard's timing as it stands:
+ * 40 MHz is 160 MHz / 4, a whole division. Both syncs idle high and pulse
+ * low in the first, idle low and pulse high in the second, as the standards
+ * say (a monitor may tell the modes apart by it). */
+typedef struct {
+    uint16_t width, height;
+    uint32_t pixel_clock_hz;
+    uint16_t h_front, h_sync, h_back;
+    uint16_t v_front, v_sync, v_back;
+    bool sync_high;
+} vga_mode_t;
+static const vga_mode_t s_modes[] = {
+    {640, 480, 25000000, 16, 96, 48, 10, 2, 33, false}, /* 800 x 525 in all, 59.52 Hz */
+    {800, 600, 40000000, 40, 128, 88, 1, 4, 23, true},  /* 1056 x 628 in all, 60.32 Hz */
+};
+#define MODE_COUNT ((int)(sizeof(s_modes) / sizeof(s_modes[0])))
+#define BOUNCE_LINES 10
 
 static esp_lcd_panel_handle_t s_panel;
 static uint8_t *s_framebuffer;
+/* The mode in use, as the interrupt needs it: in internal RAM, not read
+ * from the table (which is constant data, behind the cache). */
+static int s_mode;
+static int s_modes_used = 1;     /* vga_start(modes) */
+static size_t s_picture_bytes;   /* the memory behind s_framebuffer */
+static int s_width = 640, s_height = 480;
+static int s_frame_bytes = 640 * 480;
+static uint32_t s_period_cycles;
 static volatile uint32_t s_frames;
 static vga_line_hook_t s_line_hook;
 static volatile uint64_t s_fill_cycles;
@@ -51,7 +76,7 @@ static volatile uint64_t s_fill_cycles;
  * over. Lateness is how long after its slot (counted from the frame's first
  * refill) a refill started. */
 #define CYCLES_PER_US (CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ)
-#define PERIOD_CYCLES (10 * 800 * CYCLES_PER_US / 25)
+#define PERIOD_CYCLES s_period_cycles /* 320 us at 640x480, 264 us at 800x600 */
 static volatile vga_scan_stats_t s_scan;
 static volatile uint32_t s_missed_total, s_missed_worst_cycles, s_missed_pos;
 static uint32_t s_last_start;
@@ -87,7 +112,7 @@ static IRAM_ATTR bool on_bounce_empty(esp_lcd_panel_handle_t panel, void *bounce
     /* Start fetching the next piece from PSRAM, as the driver does when it
      * owns the framebuffer. */
     int next = pos_px + len_bytes;
-    if (next >= FRAME_BYTES) {
+    if (next >= s_frame_bytes) {
         next = 0;
     }
     Cache_Start_DCache_Preload((uint32_t)(s_framebuffer + next), len_bytes, 0);
@@ -127,36 +152,49 @@ static IRAM_ATTR bool on_vsync(esp_lcd_panel_handle_t panel,
     return false;
 }
 
-void vga_start(void)
+static uint32_t frame_us(const vga_mode_t *m)
 {
-    /* The one picture in memory. Allocated before the panel, because the
-     * panel starts filling bounce buffers as soon as it is set up. */
-    s_framebuffer = heap_caps_aligned_alloc(64, FRAME_BYTES, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    ESP_ERROR_CHECK(s_framebuffer ? ESP_OK : ESP_ERR_NO_MEM);
-    memset(s_framebuffer, 0, FRAME_BYTES);
+    const uint64_t h = m->width + m->h_front + m->h_sync + m->h_back;
+    const uint64_t v = m->height + m->v_front + m->v_sync + m->v_back;
+    return (uint32_t)(h * v * 1000000 / m->pixel_clock_hz);
+}
+
+/* Sets the panel up in a mode and starts it. The picture's memory is there
+ * already; no panel exists. */
+static void start_mode(int index)
+{
+    const vga_mode_t *m = &s_modes[index];
+    s_mode = index;
+    s_width = m->width;
+    s_height = m->height;
+    s_frame_bytes = m->width * m->height;
+    /* One bounce buffer of picture with its share of the blanking. */
+    s_period_cycles = (uint32_t)((uint64_t)BOUNCE_LINES * (m->width + m->h_front + m->h_sync + m->h_back) *
+                                 (CYCLES_PER_US * 1000000ULL) / m->pixel_clock_hz);
+    s_last_pos = -1;
+    memset(s_framebuffer, 0, s_picture_bytes);
 
     esp_lcd_rgb_panel_config_t config = {
         .clk_src = LCD_CLK_SRC_DEFAULT,
         .timings = {
-            .pclk_hz = PIXEL_CLOCK_HZ,
-            .h_res = VGA_WIDTH,
-            .v_res = VGA_HEIGHT,
-            .hsync_pulse_width = 96,
-            .hsync_back_porch = 48,
-            .hsync_front_porch = 16,
-            .vsync_pulse_width = 2,
-            .vsync_back_porch = 33,
-            .vsync_front_porch = 10,
-            /* Both syncs idle high and pulse low, as 640x480 expects. */
+            .pclk_hz = m->pixel_clock_hz,
+            .h_res = m->width,
+            .v_res = m->height,
+            .hsync_pulse_width = m->h_sync,
+            .hsync_back_porch = m->h_back,
+            .hsync_front_porch = m->h_front,
+            .vsync_pulse_width = m->v_sync,
+            .vsync_back_porch = m->v_back,
+            .vsync_front_porch = m->v_front,
             .flags = {
-                .hsync_idle_low = 0,
-                .vsync_idle_low = 0,
+                .hsync_idle_low = m->sync_high,
+                .vsync_idle_low = m->sync_high,
             },
         },
         .data_width = 8,
         .bits_per_pixel = 8,
         .num_fbs = 0,
-        .bounce_buffer_size_px = BOUNCE_PIXELS,
+        .bounce_buffer_size_px = BOUNCE_LINES * m->width,
         .hsync_gpio_num = PIN_HSYNC,
         .vsync_gpio_num = PIN_VSYNC,
         .de_gpio_num = -1,
@@ -190,6 +228,65 @@ void vga_start(void)
     esp_rom_gpio_connect_out_signal(PIN_B_MIRROR, LCD_DATA_OUT1_IDX, false, false);
 }
 
+void vga_start(int modes)
+{
+    /* The one picture in memory, large enough for the largest mode that
+     * will be used, so that its address never changes and a task that is
+     * reading it while the mode changes reads memory that is still there.
+     * Allocated before the panel, because the panel starts filling bounce
+     * buffers as soon as it is set up. */
+    s_modes_used = modes < 1 ? 1 : (modes > MODE_COUNT ? MODE_COUNT : modes);
+    for (int i = 0; i < s_modes_used; i++) {
+        const size_t bytes = (size_t)s_modes[i].width * s_modes[i].height;
+        s_picture_bytes = bytes > s_picture_bytes ? bytes : s_picture_bytes;
+    }
+    s_framebuffer = heap_caps_aligned_alloc(64, s_picture_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    ESP_ERROR_CHECK(s_framebuffer ? ESP_OK : ESP_ERR_NO_MEM);
+    start_mode(0);
+}
+
+void vga_set_mode(int index)
+{
+    if (index < 0 || index >= s_modes_used || index == s_mode) {
+        return;
+    }
+    /* The panel goes with its interrupt, its DMA channel and its two bounce
+     * buffers (internal RAM), and a new one is made: the buffers are 10
+     * lines of the mode each. */
+    ESP_ERROR_CHECK(esp_lcd_panel_del(s_panel));
+    s_panel = NULL;
+    start_mode(index);
+}
+
+int vga_mode_count(void)
+{
+    return s_modes_used;
+}
+
+void vga_mode_info(int index, vga_mode_info_t *out)
+{
+    const vga_mode_t *m = &s_modes[index >= 0 && index < MODE_COUNT ? index : 0];
+    out->width = m->width;
+    out->height = m->height;
+    out->pixel_clock_hz = m->pixel_clock_hz;
+    out->frame_us = frame_us(m);
+}
+
+int vga_mode(void)
+{
+    return s_mode;
+}
+
+int vga_width(void)
+{
+    return s_width;
+}
+
+int vga_height(void)
+{
+    return s_height;
+}
+
 void vga_set_line_hook(vga_line_hook_t hook)
 {
     s_line_hook = hook;
@@ -200,7 +297,7 @@ void vga_missed_total(uint32_t *missed, uint32_t *worst_us, uint32_t *line)
     *missed = s_missed_total;
     *worst_us = s_missed_worst_cycles / CYCLES_PER_US;
     s_missed_worst_cycles = 0; /* a miss landing between these two lines loses only its lateness */
-    *line = s_missed_pos / VGA_WIDTH;
+    *line = s_missed_pos / (uint32_t)s_width;
 }
 
 void vga_scan_stats(vga_scan_stats_t *out, bool reset)
@@ -227,7 +324,7 @@ uint8_t *vga_framebuffer(void)
 
 uint32_t vga_pixel_clock_hz(void)
 {
-    return PIXEL_CLOCK_HZ;
+    return s_modes[s_mode].pixel_clock_hz;
 }
 
 uint32_t vga_frame_count(void)

@@ -66,9 +66,13 @@ public:
     // Guards the damage grid, for when damage() and poll() are called by
     // different tasks. Without one they must be the same task.
     void set_lock(ports::Lock *lock) { lock_ = lock; }
-    // A part of the screen was painted. The one call here for another task
-    // than the one that polls.
+    // A part of the screen was painted. This and screen_changed() are the
+    // calls here for another task than the one that polls.
     void damage(const gfx::Rect &r);
+    // The screen has another size (wm::Wm::set_mode_listener). The viewer
+    // is let go at the next poll(): it was told the old size when it
+    // connected, and it finds the new one when it connects again.
+    void screen_changed();
     // Takes new viewers, reads what the viewer sent, sends what fits.
     void poll() override;
     // The viewer is let go and its memory given back.
@@ -104,6 +108,7 @@ private:
     };
 
     void turn(); // poll() without the tidying up
+    void measure(); // the screen's size, and the grid that goes with it
     void start(net::Stream *stream);
     void drop();
     void free_buffers();
@@ -149,6 +154,7 @@ private:
     uint8_t sending_[kCells] = {}; // the update being sent
     bool any_dirty_ = false;
     bool collecting_ = false; // a viewer is past its greeting: damage() counts
+    bool resized_ = false;    // screen_changed() was called; poll() acts on it
 
     // The viewer's wishes.
     Format format_ = {};

@@ -117,6 +117,9 @@ Wm::Wm(ports::Display &display, ports::Pointer &pointer, ports::Clock &clock)
 
 void Wm::start()
 {
+    if (mode_wanted_ >= 0) {
+        change_mode(); // the mode the settings ask for, before the first picture
+    }
     blink_timer_ = start_timer_for(desktop_pid_, kBlinkUs, kBlinkUs, &Wm::blink, this);
     start_timer_for(desktop_pid_, 1000000, 1000000, &Wm::clock_tick, this);
     shape_ = &video::arrow_pointer();
@@ -2294,6 +2297,88 @@ void Wm::set_backdrop(const Backdrop &backdrop)
     invalidate({0, 0, width_, height_});
 }
 
+bool Wm::set_video_mode(int index)
+{
+    if (index < 0 || index >= display_.mode_count()) {
+        return false;
+    }
+    mode_wanted_ = index;
+    return true;
+}
+
+// From tick(), before anything else: no program's code is running, so every
+// window may be moved and told of its new size.
+void Wm::change_mode()
+{
+    const int index = mode_wanted_;
+    mode_wanted_ = -1;
+    if (index == display_.mode()) {
+        return;
+    }
+    const proc::Scope desktop(procs_, desktop_pid_);
+    // What was going on with the old screen is over.
+    stop_screen_saver();
+    close_menus();
+    capture_ = Capture::None;
+    captured_ = nullptr;
+    const Rect work_before = work_area();
+    if (!display_.set_mode(index)) {
+        return;
+    }
+    outline_shown_ = false; // the new picture starts black: there is nothing to take back
+    width_ = display_.width();
+    height_ = display_.height();
+    if (const uint32_t frame_us = display_.mode_at(index).frame_us) {
+        frames_.set_budget(frame_us);
+    }
+    pointer_x_ = pointer_x_ < width_ ? pointer_x_ : width_ - 1;
+    pointer_y_ = pointer_y_ < height_ ? pointer_y_ : height_ - 1;
+    pointer_.set_position(pointer_x_, pointer_y_);
+    // The windows: a maximised one fills the new work area; the others are
+    // brought back onto it, and made smaller if they can be and must.
+    const Rect work = work_area();
+    const auto fitted = [&work](Rect f, bool resizable) {
+        if (resizable) {
+            f.w = f.w < work.w ? f.w : work.w;
+            f.h = f.h < work.h ? f.h : work.h;
+        }
+        f.x = f.x + f.w > work.w ? work.w - f.w : f.x;
+        f.y = f.y + f.h > work.h ? work.h - f.h : f.y;
+        f.x = f.x < 0 ? 0 : f.x;
+        f.y = f.y < 0 ? 0 : f.y;
+        return f;
+    };
+    for (int i = 0; i < count_; i++) {
+        Window &w = *stack_[i];
+        const bool maximized =
+            w.state_ == WindowState::Maximized || (w.state_ == WindowState::Minimized && w.was_maximized_);
+        // One that stood in the middle of the old screen (a dialog as it
+        // opens) stands in the middle of the new one.
+        const bool centred = w.frame_.x == (work_before.w - w.frame_.w) / 2 &&
+                             w.frame_.y == (work_before.h - w.frame_.h) / 2;
+        const Rect middle = {(work.w - w.frame_.w) / 2, (work.h - w.frame_.h) / 2, w.frame_.w, w.frame_.h};
+        const Rect to = maximized ? work : fitted(centred ? middle : w.frame_, w.resizable_);
+        if (maximized) {
+            w.restore_ = fitted(w.restore_, w.resizable_);
+        }
+        if (to == w.frame_) {
+            continue;
+        }
+        const bool another_size = to.w != w.frame_.w || to.h != w.frame_.h;
+        w.frame_ = to;
+        if (another_size) {
+            const proc::Scope as(procs_, w.owner_);
+            w.resized();
+        }
+    }
+    tell_panels(PanelNews::Screen);
+    if (mode_fn_ != nullptr) {
+        mode_fn_(mode_context_);
+    }
+    update_pointer_shape();
+    invalidate({0, 0, width_, height_});
+}
+
 void Wm::set_theme(int index)
 {
     if (index != gfx::theme_index()) {
@@ -2637,6 +2722,11 @@ void Wm::stop_timer(int id)
 
 void Wm::tick()
 {
+    if (mode_wanted_ >= 0) {
+        // Not part of the piece measured below: the signal stops and starts
+        // again, which is not the desktop's work. The repaint that follows is.
+        change_mode();
+    }
     const Work piece(*this, sys::Frames::kTick);
     if (procs_ != nullptr) {
         procs_->between(); // programs that were late and have come back
@@ -2682,8 +2772,8 @@ void Wm::tick()
 
 uint32_t Wm::idle_us()
 {
-    if (!dirty_.empty() && !saver_on_) {
-        return 0; // something to paint
+    if ((!dirty_.empty() && !saver_on_) || mode_wanted_ >= 0) {
+        return 0; // something to paint, or the screen to change
     }
     const uint64_t now = now_us();
     uint64_t due = UINT64_MAX;

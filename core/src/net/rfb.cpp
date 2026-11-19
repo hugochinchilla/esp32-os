@@ -137,12 +137,23 @@ Server::Server(ports::Display &display, ports::Pointer &pointer, ports::InputSin
                ports::Memory &memory)
     : display_(display), pointer_(pointer), input_(input), clock_(clock), memory_(memory)
 {
-    width_ = display.width() > kMaxWidth ? kMaxWidth : display.width();
-    height_ = display.height() > kMaxHeight ? kMaxHeight : display.height();
+    measure();
+}
+
+void Server::measure()
+{
+    width_ = display_.width() > kMaxWidth ? kMaxWidth : display_.width();
+    height_ = display_.height() > kMaxHeight ? kMaxHeight : display_.height();
     cells_x_ = (width_ + kCell - 1) / kCell;
     cells_y_ = (height_ + kCell - 1) / kCell;
     blocks_x_ = (width_ + kBlock - 1) / kBlock;
     blocks_y_ = (height_ + kBlock - 1) / kBlock;
+}
+
+void Server::screen_changed()
+{
+    const Hold hold(lock_);
+    resized_ = true;
 }
 
 /* ---- Connections ---------------------------------------------------------------- */
@@ -301,6 +312,20 @@ void Server::poll()
 
 void Server::turn()
 {
+    bool resized;
+    {
+        const Hold hold(lock_);
+        resized = resized_;
+        resized_ = false;
+    }
+    if (resized) {
+        // Until here this task went on with the old size, which is safe:
+        // the picture's memory is as large in every mode.
+        if (state_ != State::Idle) {
+            drop();
+        }
+        measure();
+    }
     for (net::Listener *listener : listeners_) {
         net::Stream *s = listener != nullptr ? listener->accept() : nullptr;
         if (s == nullptr) {

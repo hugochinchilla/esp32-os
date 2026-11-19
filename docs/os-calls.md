@@ -53,6 +53,7 @@ The journal entry with the reasons is
 | | `os::ui::set_hourglass(window, on)`, `os::ui::hourglass(window)` | The hourglass on demand (item 49): over the window's client area while it is on, and the window answers as before. A switch the program turns off itself; it goes with the window |
 | Desktop | `os::set_backdrop(backdrop)` | The desktop's colour and pattern (Display) |
 | Desktop | `os::set_theme(index)` | The look of windows, buttons and the taskbar, a row of the table in `core/gfx/theme.hpp` (Display); the whole screen is painted again |
+| | `os::video_mode_count()`, `os::video_mode_at(index)`, `os::video_mode()`, `os::set_video_mode(index)` | The screen's modes (item 68), each a size with its timing, and changing to another (Display): done once the event has been answered, then every window is brought onto the new screen and all is painted again |
 | | `os::set_screen_saver(animation, seconds)` | Which animation and after how long; -1 for none (Screen Saver) |
 | | `os::preview_screen_saver(animation)`, `os::last_saver_run()` | Shows one now; how the last run went |
 | | `os::launch(program)` | Starts one of the system's own programs by name, or brings it forward |

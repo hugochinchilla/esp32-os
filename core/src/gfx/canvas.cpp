@@ -61,7 +61,7 @@ Colour dither_t(Rgb c, unsigned t)
 } // namespace
 
 uint8_t *Canvas::write_counts_ = nullptr;
-uint8_t Canvas::band_[kBandRows * 640];
+uint8_t Canvas::band_[kBandRows * kMaxWidth];
 
 void Canvas::copy_band(const Rect &band)
 {

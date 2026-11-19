@@ -249,6 +249,32 @@ def main():
         assert sum(1 for p in crash if p != 0) > 2000
         board.repaint()
         assert board.screenshot(pointer=False)[2] == before
+        # The screen's modes (backlog item 68): two, the first in use. A
+        # change is made just after the reply; the screenshot and the info
+        # are then of the new size, and the taskbar is at its bottom.
+        current, modes = board.video_modes()
+        assert current == 0 and [(m["width"], m["height"]) for m in modes] == [(640, 480), (800, 600)], modes
+        assert (modes[0]["frame_us"], modes[1]["frame_us"]) == (16800, 16579), modes
+        assert board.video_modes(1)[0] == 1
+        width, height, wide = board.screenshot(pointer=False)
+        assert (width, height, len(wide)) == (800, 600, 800 * 600)
+        assert (board.info()["width"], board.info()["height"]) == (800, 600)
+        assert wide[590 * 800 + 400] == before[470 * 640 + 320], "the taskbar's face at the bottom of both"
+        assert board.frames()["budget_us"] == 16579
+        board.repaint()
+        assert board.screenshot(pointer=False)[2] == wide, "nothing stale after the change"
+        try:
+            board.video_modes(7)
+            refused = False
+        except dbg.DebugError as e:
+            refused = "bad arguments" in str(e)
+        assert refused, "a mode that does not exist was accepted"
+        board.close()  # one program on the port at a time
+        out = subprocess.run([sys.executable, dbg.__file__, "--port", port, "mode"], capture_output=True, text=True)
+        assert "* 1: 800 x 600, 60.32 frames a second" in out.stdout and "  0: 640 x 480, 59.52" in out.stdout, out
+        board = dbg.Board(port, timeout=2.0)
+        assert board.video_modes(0)[0] == 0
+        assert board.screenshot(pointer=False)[2] == before, "and back, the picture is what it was"
         # A fault on purpose: the simulator answers and carries on (a PC
         # does not crash to order); a PID that is not running is refused.
         board.fault("hang")

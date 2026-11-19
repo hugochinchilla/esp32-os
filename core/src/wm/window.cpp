@@ -315,12 +315,24 @@ void Window::wheel(const WheelMsg &m)
 
 bool Window::key(const KeyMsg &k)
 {
+    if (k.pressed && k.usage == key::Tab && (k.mods & kCtrl) != 0) {
+        // The next page of the window's tabs (with Shift, the one before).
+        for (int i = 0; i < widget_count_; i++) {
+            if (widgets_[i]->turn_page((k.mods & kShift) != 0 ? -1 : 1)) {
+                return true;
+            }
+        }
+        return false;
+    }
     if (focus_ != nullptr && focus_->key(k)) {
         return true;
     }
     if (!k.pressed) {
         return false;
     }
+    // A widget with an empty place is not shown (a page of tabs that is not
+    // the one in front): the keys pass it over.
+    const auto takes_focus = [](const Widget *w) { return w->focusable() && !w->rect.empty(); };
     if (k.usage == key::Tab && widget_count_ > 0) {
         // Next (or with Shift, previous) widget that takes the focus.
         int at = 0;
@@ -332,7 +344,7 @@ bool Window::key(const KeyMsg &k)
         const int step = (k.mods & kShift) ? widget_count_ - 1 : 1;
         for (int n = 1; n <= widget_count_; n++) {
             Widget *w = widgets_[(at + n * step) % widget_count_];
-            if (w->focusable()) {
+            if (takes_focus(w)) {
                 set_focus(w);
                 return true;
             }
@@ -345,7 +357,7 @@ bool Window::key(const KeyMsg &k)
         const char letter = key::letter(k.usage);
         for (int i = 0; i < widget_count_; i++) {
             Widget *w = widgets_[i];
-            if (w->access() != letter) {
+            if (w->access() != letter || w->rect.empty()) {
                 continue;
             }
             if (w->focusable()) {
@@ -354,7 +366,7 @@ bool Window::key(const KeyMsg &k)
                 return true;
             }
             for (int j = i + 1; j < widget_count_; j++) {
-                if (widgets_[j]->focusable()) {
+                if (takes_focus(widgets_[j])) {
                     set_focus(widgets_[j]);
                     return true;
                 }

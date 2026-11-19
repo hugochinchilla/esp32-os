@@ -96,12 +96,37 @@ protected:
     ~Tasks() = default;
 };
 
+// One way the screen can be sent to the monitor (backlog item 68).
+struct VideoMode {
+    int16_t width, height;
+    uint32_t pixel_clock_hz; // 0 where there is no signal (a window on a PC)
+    uint32_t frame_us;       // one frame with its blanking, as it is really sent
+};
+
 // The screen: one byte per pixel, RRRGGGBB, rows top to bottom, no padding.
 class Display {
 public:
+    // No larger mode than this is ever offered: what is sized once for the
+    // widest screen (the canvas's scratch band) is sized by it.
+    static constexpr int kMaxWidth = 800, kMaxHeight = 600;
+
     virtual int width() const = 0;
     virtual int height() const = 0;
     virtual uint8_t *pixels() = 0;
+
+    // The modes this screen can show; the first is the one it starts in. A
+    // screen that cannot change has the one.
+    virtual int mode_count() const { return 1; }
+    virtual VideoMode mode_at(int /*index*/) const
+    {
+        return {static_cast<int16_t>(width()), static_cast<int16_t>(height()), 0, 0};
+    }
+    virtual int mode() const { return 0; }
+    // Changes to another mode: width(), height() and pixels() answer for it
+    // from then on, and the picture starts black. Only the window manager
+    // calls it (wm::Wm::set_video_mode), on the UI task, so that what is on
+    // the screen is laid out again. False: nothing changed.
+    virtual bool set_mode(int index) { return index == mode(); }
 
 protected:
     ~Display() = default;
@@ -144,6 +169,12 @@ public:
     virtual void get_time(int &hours, int &minutes, int &seconds) = 0;
     // Blinking off (caret always shown), for screenshots that compare.
     virtual void set_animations(bool on) = 0;
+    // The screen's modes and changing between them (Display::set_mode goes
+    // through the desktop, which lays the windows out again): `dbg.py mode`.
+    virtual int video_mode_count() const { return 0; }
+    virtual VideoMode video_mode_at(int /*index*/) const { return {}; }
+    virtual int video_mode() const { return 0; }
+    virtual bool set_video_mode(int /*index*/) { return false; }
     // The desktop's count of frames over budget, if it keeps one.
     virtual sys::Frames *frames() { return nullptr; }
     // Times each kind of drawing and every window on the real screen, then

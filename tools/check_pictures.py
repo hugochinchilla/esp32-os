@@ -19,12 +19,14 @@ sys.path.insert(0, HERE)
 import dbg  # noqa: E402
 
 REFERENCE = os.path.join(HERE, "..", "host", "tests", "pictures")
-W, H = 640, 480
+# The screen's modes: a picture's size is told by how many pixels it has.
+SIZES = {640 * 480: (640, 480), 800 * 600: (800, 600)}
 
 
 def read_png(path):
     """Pixel indices of a 256-colour PNG written by dbg.write_png."""
     data = open(path, "rb").read()
+    W, H = struct.unpack(">II", data[16:24])
     assert data[:8] == b"\x89PNG\r\n\x1a\n", path
     pos, idat = 8, b""
     while pos < len(data):
@@ -51,6 +53,7 @@ def main():
         assert names, "the renderer wrote nothing"
         for name in names:
             got = open(os.path.join(folder, name + ".raw"), "rb").read()
+            W, H = SIZES[len(got)]
             ref = os.path.join(REFERENCE, name + ".png")
             if update:
                 os.makedirs(REFERENCE, exist_ok=True)
@@ -62,7 +65,9 @@ def main():
                 failed.append("%s: no reference picture" % name)
                 continue
             want = read_png(ref)
-            if want != got:
+            if len(want) != len(got):
+                failed.append("%s: the picture has another size" % name)
+            elif want != got:
                 diff = [i for i in range(W * H) if want[i] != got[i]]
                 xs = [i % W for i in diff]
                 ys = [i // W for i in diff]

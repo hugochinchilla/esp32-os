@@ -60,6 +60,7 @@ enum class PanelNews : uint8_t {
     Windows, // a window opened, closed, was minimized or restored, or another one is in use
     Menu,    // the Start menu opened or closed
     Clock,   // the time of day shows another minute, or was set
+    Screen,  // the screen has another size (Wm::set_video_mode): the work area and the bar moved
 };
 
 class Wm;
@@ -323,6 +324,26 @@ public:
         damage_context_ = context;
     }
 
+    // The screen's modes (ports::Display; backlog item 68). set_video_mode()
+    // asks for another one: it is changed at the next tick(), when no
+    // program's code is running. Every window is then brought onto the new
+    // screen (a maximised one fills it again), the panels are told
+    // (PanelNews::Screen), the frame budget becomes the new mode's and
+    // everything is painted. False: there is no such mode.
+    int video_mode_count() const override { return display_.mode_count(); }
+    ports::VideoMode video_mode_at(int index) const override { return display_.mode_at(index); }
+    // The one asked for, from the moment it is asked.
+    int video_mode() const override { return mode_wanted_ >= 0 ? mode_wanted_ : display_.mode(); }
+    bool set_video_mode(int index) override;
+    // Told after every change, for whoever keeps the screen's size (a
+    // remote screen).
+    using ModeFn = void (*)(void *context);
+    void set_mode_listener(ModeFn fn, void *context)
+    {
+        mode_fn_ = fn;
+        mode_context_ = context;
+    }
+
     // Marks part of the screen for painting; update() paints it.
     void invalidate(const Rect &r);
     void update();
@@ -449,6 +470,10 @@ private:
     ports::Pointer &pointer_;
     ports::Clock &clock_;
     int width_, height_;
+    int mode_wanted_ = -1; // set_video_mode() asked for it; -1: nothing asked
+    ModeFn mode_fn_ = nullptr;
+    void *mode_context_ = nullptr;
+    void change_mode();
 
     bool room_for_one_more();
     Window *first_stack_[kFirstWindows] = {};

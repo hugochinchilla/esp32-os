@@ -190,7 +190,8 @@ private:
 
     SDL_Window *window_ = nullptr;
     SDL_Renderer *renderer_ = nullptr;
-    SDL_Texture *frame_ = nullptr; // 640x480, the screen
+    SDL_Texture *frame_ = nullptr; // the screen, in its size of the moment
+    int frame_w_ = kWidth, frame_h_ = kHeight;
     SDL_Texture *large_ = nullptr; // the screen a whole number of times larger
     int large_scale_ = 0;
     desktop::Fit fit_ = {0, 0, kWidth, kHeight};
@@ -315,16 +316,30 @@ void Machine::close_window()
 // keep even sizes instead of some columns coming out wider than others.
 void Machine::draw()
 {
-    desktop::to_rgb(display_.pixels(), kWidth, kHeight, pointer_.state(), rgb_.data());
-    SDL_UpdateTexture(frame_, nullptr, rgb_.data(), kWidth * 4);
+    // The screen's size now: Display > Resolution can change it.
+    const int width = display_.width(), height = display_.height();
+    if (width != frame_w_ || height != frame_h_) {
+        SDL_DestroyTexture(frame_);
+        frame_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, width, height);
+        if (frame_ == nullptr) {
+            return;
+        }
+        SDL_SetTextureScaleMode(frame_, SDL_ScaleModeNearest);
+        frame_w_ = width;
+        frame_h_ = height;
+        rgb_.resize(static_cast<size_t>(width) * height);
+        large_scale_ = 0; // the larger copy is made again
+    }
+    desktop::to_rgb(display_.pixels(), width, height, pointer_.state(), rgb_.data());
+    SDL_UpdateTexture(frame_, nullptr, rgb_.data(), width * 4);
     int w = 0, h = 0;
     SDL_GetRendererOutputSize(renderer_, &w, &h);
-    fit_ = desktop::fit(w, h, kWidth, kHeight);
-    const int scale = desktop::whole_scale(fit_, kWidth, kHeight);
+    fit_ = desktop::fit(w, h, width, height);
+    const int scale = desktop::whole_scale(fit_, width, height);
     if (scale != large_scale_) {
         SDL_DestroyTexture(large_);
-        large_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, kWidth * scale,
-                                   kHeight * scale);
+        large_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, width * scale,
+                                   height * scale);
         if (large_ != nullptr) {
             SDL_SetTextureScaleMode(large_, SDL_ScaleModeLinear);
         }
@@ -442,7 +457,8 @@ void Machine::mouse_at(int window_x, int window_y, int wheel, int wheel_x)
         window_y = window_y * oh / wh;
     }
     int x = 0, y = 0;
-    desktop::to_screen(desktop::fit(ow, oh, kWidth, kHeight), window_x, window_y, kWidth, kHeight, x, y);
+    const int width = display_.width(), height = display_.height();
+    desktop::to_screen(desktop::fit(ow, oh, width, height), window_x, window_y, width, height, x, y);
     if (booting_) {
         skip_boot_ |= buttons_ != 0;
         return;

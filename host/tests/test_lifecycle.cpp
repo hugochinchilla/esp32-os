@@ -427,7 +427,7 @@ void test_dialogs()
         int blocks; // while open
     };
     const Tool tools[] = {
-        {"Display", "Display", &shell::display_dialog, 15}, // the window and fourteen controls
+        {"Display", "Display", &shell::display_dialog, 20}, // the window and nineteen controls (five more for the Resolution page)
         {"Screen Saver", "Screen Saver", &shell::screen_saver_dialog, 11}, // by number: the window and ten controls
         {"Network", "Network", &shell::open_network, 14},
         {"Services", "Services", &shell::services_dialog, 8}, // the window and seven controls

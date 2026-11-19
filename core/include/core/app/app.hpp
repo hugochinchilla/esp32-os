@@ -305,6 +305,14 @@ public:
     void set(uint32_t value, uint32_t total) const { os::ui::set_level(window_, number_, value, total); }
 };
 
+// A row of titles and the frame of the page they choose (os::ui::tabs).
+class Tabs : public Control {
+public:
+    using Control::Control;
+    int selected() const { return os::ui::selected(window_, number_); }
+    void select(int index) const { os::ui::select(window_, number_, index); } // tells of it (changed)
+};
+
 class GroupFrame : public Control {
 public:
     using Control::Control;
@@ -442,6 +450,10 @@ protected:
     GroupFrame group(const gfx::Rect &place, const char *caption)
     {
         return {number_, os::ui::group(number_, place, caption)};
+    }
+    Tabs tabs(const gfx::Rect &place, const char *const *titles, int count)
+    {
+        return {number_, os::ui::tabs(number_, place, titles, count)};
     }
     TextArea text_area(const gfx::Rect &place, const char *text)
     {

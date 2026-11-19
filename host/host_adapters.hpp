@@ -22,18 +22,43 @@
 
 namespace host {
 
+// A screen of 640x480 can also be 800x600, with the board's own timings, so
+// that the PC builds and the tests change mode as the board does. Any other
+// size has the one mode.
 class MemoryDisplay : public ports::Display {
 public:
     MemoryDisplay(int width, int height)
-        : width_(width), height_(height), pixels_(static_cast<size_t>(width) * height)
+        : modes_{{static_cast<int16_t>(width), static_cast<int16_t>(height), 0, 0}, {800, 600, 40000000, 16579}},
+          mode_count_(width == 640 && height == 480 ? 2 : 1),
+          pixels_(static_cast<size_t>(mode_count_ == 2 ? 800 : width) * (mode_count_ == 2 ? 600 : height))
     {
+        if (mode_count_ == 2) {
+            modes_[0].pixel_clock_hz = 25000000;
+            modes_[0].frame_us = 16800;
+        }
     }
-    int width() const override { return width_; }
-    int height() const override { return height_; }
+    int width() const override { return modes_[mode_].width; }
+    int height() const override { return modes_[mode_].height; }
+    // The same memory in every mode, as on the board: only the row length
+    // changes.
     uint8_t *pixels() override { return pixels_.data(); }
+    int mode_count() const override { return mode_count_; }
+    ports::VideoMode mode_at(int index) const override { return modes_[index >= 0 && index < mode_count_ ? index : 0]; }
+    int mode() const override { return mode_; }
+    bool set_mode(int index) override
+    {
+        if (index < 0 || index >= mode_count_) {
+            return false;
+        }
+        mode_ = index;
+        std::fill(pixels_.begin(), pixels_.end(), 0);
+        return true;
+    }
 
 private:
-    int width_, height_;
+    ports::VideoMode modes_[2];
+    int mode_count_;
+    int mode_ = 0;
     std::vector<uint8_t> pixels_;
 };
 
