@@ -18,7 +18,13 @@ short melody on Shut Down; and the PC's beeper is emulated for the BIOS's
 beep at start-up. The pitch of that beep, 1,000 Hz, he accepted earlier
 the same day in the parked work on a real beeper (backlog 48).
 
-The rest is the agent's and waits for him:
+Confirmed by the owner on 2026-11-19, after hearing the Linux program's
+start-up and shut-down ("los sonidos están perfectos"): the beep, the
+welcome chime (`boot.pcm`), the closing melody (`close.pcm`) and how loud
+they are against each other.
+
+The rest is the agent's and waits for him (he has not heard an error code
+or said anything about the other points):
 
 - **The port** is `ports::Sound` with two voices that sound together:
   recorded samples (16 bits, one channel, 22,050 a second, the form of
@@ -47,7 +53,7 @@ The rest is the agent's and waits for him:
   silent, as the owner asked when he parked the real beeper.
 - **Which sound where**: `boot.pcm` when the desktop is up and `close.pcm`
   with the "safe to power down" screen (both chosen on 2026-11-16 for these
-  moments; the backlog asks to confirm they are still the ones);
+  moments);
   `alert.pcm` with every message box and question; `error.pcm` when there
   is no memory to open a program; `bell.pcm` for the terminal's bell.
   Restart plays nothing: the machine is gone at once.
