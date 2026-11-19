@@ -369,3 +369,40 @@ is away, and the Wi-Fi sharing; they are to look at if gaps remain.
 
 The firmware compiles and links (1,948,320 bytes). Not run on the board:
 the pace a real mouse accepts is exactly what the next turn measures.
+
+### The guess was wrong: it was the sharing with Wi-Fi
+
+The fourth turn ran the shorter pace. The mouse connected at 11.25 ms (and
+may skip up to 44 turns when it has nothing to say), the keyboard at 11.25
+and then asked for 22.5. The gaps did not change: 90% of them 39 ms or
+less, the longest 49 ms, about fifty over 40 ms in twelve seconds, with
+the keyboard forgotten too. The owner felt no difference. Then he turned
+Wi-Fi off himself and said it was better, if not perfect; measured: no
+gap over 40 ms, the longest 29 ms, 90% at 19 ms or less, 197 pieces of
+work a second instead of 150.
+
+So the pace asked for was a fault, but not this fault. The radio is one,
+and Wi-Fi and Bluetooth take turns at it. Wi-Fi's power saving is off on
+this board (a remote screen's clicks lagged 100 to 300 ms with it), and
+with it off Wi-Fi holds its whole share of every turn whether it has
+anything to say or not; the mouse is heard only in Bluetooth's share, in
+bursts.
+
+What was changed: while a Bluetooth device is connected, Wi-Fi's power
+saving is turned on (`WIFI_PS_MIN_MODEM`: it sleeps between the access
+point's beacons unless it is sending), and put back off when the last
+device disconnects. `wifi_rests = false` under `[bluetooth]` leaves Wi-Fi
+alone, so the board can compare both with one firmware. The pace is now
+7.5 ms flat, the shortest there is, for what was left with Wi-Fi off.
+
+Options: power saving only while a device is connected (chosen: a board
+with no Bluetooth device keeps the quick remote screen); always on with
+Bluetooth enabled (simpler, and the remote screen pays even with no
+device); leaving it and living with the jumps; telling the coexistence
+code to prefer Bluetooth (ESP-IDF offers `esp_coex_preference_set`, but
+its effect on a connection's turns is not documented for the ESP32-S3,
+and it is kept as the next thing to try). The cost is the owner's to
+weigh once measured: with a Bluetooth mouse in use, a click from the
+remote screen may answer 100 to 300 ms late again.
+
+Compiled and linked (1,948,816 bytes); not run on the board.

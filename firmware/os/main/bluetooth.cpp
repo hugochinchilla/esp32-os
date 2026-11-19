@@ -19,6 +19,7 @@
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 
@@ -49,11 +50,12 @@ const ble_uuid16_t kHidServiceUuid = {{BLE_UUID_TYPE_16}, kHidService};
 constexpr uint16_t kBackgroundInterval = 320, kBackgroundWindow = 32; // of 0.625 ms
 constexpr uint16_t kSearchInterval = 160, kSearchWindow = 48;
 constexpr int32_t kConnectMs = 10000;
-// How often a connected device may speak: every 7.5 to 11.25 ms (units of
-// 1.25 ms). NimBLE's own choice is 30 to 50 ms, and a mouse then hands over
-// its 125 reports a second four or five at a time: the pointer jumped
-// every third frame (the board, 2026-11-19).
-constexpr uint16_t kLinkIntervalMin = 6, kLinkIntervalMax = 9;
+// How often a connected device may speak: every 7.5 ms (units of 1.25 ms),
+// the shortest there is, so that each of a mouse's 125 reports a second
+// has a turn of its own. NimBLE's own choice is 30 to 50 ms. (The board,
+// 2026-11-19: at 11.25 ms the pointer still jumped; the gaps were Wi-Fi's,
+// see share_radio.)
+constexpr uint16_t kLinkIntervalMin = 6, kLinkIntervalMax = 6;
 // A device not heard for this long is no longer listed.
 constexpr int64_t kHeardUs = 8 * 1000000ll;
 
@@ -190,8 +192,9 @@ private:
 
 class Radio : public bt::Port {
 public:
-    bool begin(ports::InputSink &sink)
+    bool begin(ports::InputSink &sink, bool wifi_rests)
     {
+        wifi_rests_ = wifi_rests;
         mutex_ = xSemaphoreCreateMutex();
         input_.begin(sink);
         const size_t before = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
@@ -532,6 +535,31 @@ private:
         ble_gap_terminate(c.handle, BLE_ERR_REM_USER_CONN_TERM);
     }
 
+    // Wi-Fi and Bluetooth take turns at the one radio. With Wi-Fi's power
+    // saving off (wifi.cpp: a remote screen's clicks lag with it) Wi-Fi
+    // keeps its whole share of every turn, and a mouse was heard in bursts
+    // 40 to 50 ms apart: the pointer jumped (the board, 2026-11-19; with
+    // Wi-Fi off it did not). So while a Bluetooth device is connected Wi-Fi
+    // rests between the access point's beacons unless it has something to
+    // send, and is put back as it was when the last device goes.
+    // `wifi_rests = false` in bluetooth.ini leaves Wi-Fi alone.
+    void share_radio()
+    {
+        int connected = 0;
+        {
+            Guard g(mutex_);
+            for (const Conn &c : conns_) {
+                connected += c.used && c.handle != BLE_HS_CONN_HANDLE_NONE ? 1 : 0;
+            }
+        }
+        const bool rest = wifi_rests_ && connected > 0;
+        if (rest != wifi_resting_) {
+            wifi_resting_ = rest;
+            const esp_err_t err = esp_wifi_set_ps(rest ? WIFI_PS_MIN_MODEM : WIFI_PS_NONE);
+            ESP_LOGI(TAG, "Wi-Fi %s (%s)", rest ? "rests between beacons" : "never rests", esp_err_to_name(err));
+        }
+    }
+
     // The pace of a connection, in the log: the board check reads it.
     void log_pace(uint16_t handle, const char *when)
     {
@@ -573,6 +601,7 @@ private:
             } else {
                 ESP_LOGI(TAG, "connect failed: %d", event->connect.status);
             }
+            r.share_radio();
             r.apply_scan();
             return 0;
         }
@@ -592,6 +621,7 @@ private:
                 Guard g(r.mutex_);
                 c->used = false;
             }
+            r.share_radio();
             r.apply_scan();
             return 0;
         }
@@ -832,6 +862,8 @@ private:
 
     SemaphoreHandle_t mutex_ = nullptr;
     MergedInput input_;
+    bool wifi_rests_ = true;    // the setting
+    bool wifi_resting_ = false; // NimBLE's task: what Wi-Fi was last told
     volatile bool started_ = false, synced_ = false;
     volatile bt::Listen listen_ = bt::Listen::Off;
     volatile bool connecting_ = false; // (mutex to change)
@@ -862,7 +894,7 @@ NoRadio s_none;
 
 } // namespace
 
-bool bluetooth_begin(ports::InputSink &sink)
+bool bluetooth_begin(ports::InputSink &sink, bool wifi_rests)
 {
     if (s_radio != nullptr) {
         return s_radio->on();
@@ -873,7 +905,7 @@ bool bluetooth_begin(ports::InputSink &sink)
         return false;
     }
     s_radio = new (room) Radio;
-    return s_radio->begin(sink);
+    return s_radio->begin(sink, wifi_rests);
 }
 bt::Port &bluetooth_port()
 {

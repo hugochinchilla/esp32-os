@@ -953,7 +953,8 @@ void ui_task(void *)
     const int64_t bluetooth_start = esp_timer_get_time();
     static EXT_RAM_BSS_ATTR fs::Ini bluetooth_ini;
     bluetooth_ini.load(storage, "C:\\.config\\bluetooth.ini");
-    static const bool bluetooth_radio = bluetooth_ini.get_bool("bluetooth", "enabled", true) && bluetooth_begin(desktop);
+    static const bool bluetooth_radio = bluetooth_ini.get_bool("bluetooth", "enabled", true) &&
+                                       bluetooth_begin(desktop, bluetooth_ini.get_bool("bluetooth", "wifi_rests", true));
     static EXT_RAM_BSS_ATTR bt::Manager bluetooth(bluetooth_port(), &storage);
     shell::set_bluetooth(&bluetooth);
     protocol.set_bluetooth(&bluetooth);
