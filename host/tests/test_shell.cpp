@@ -328,8 +328,26 @@ void test_trash_view()
     letter('f', 4);
     letter('e');
     CHECK(strcmp(title(), "Empty Trash") == 0);
+    // Emptied, it sounds of paper crumpled (backlog item 70); asked and
+    // answered No, nothing is crumpled.
+    static const int16_t samples[sound::kIds] = {};
+    static sound::Clip clips[sound::kIds];
+    for (int i = 0; i < sound::kIds; i++) {
+        clips[i] = {&samples[i], 1};
+    }
+    host::RecordingSound heard;
+    sound::set_clips(clips);
+    os::install_sound(&heard);
+    key(wm::key::Escape); // No
+    CHECK(exists("C:\\.trash\\gone.txt") && strcmp(title(), "Trash") == 0 && heard.played.empty());
+    letter('f', 4);
+    letter('e');
+    CHECK(heard.played.size() == 1 && heard.played[0] == &samples[static_cast<int>(sound::Id::Alert)]);
     key(wm::key::Enter); // Yes
     CHECK(!exists("C:\\.trash\\gone.txt") && strcmp(title(), "Trash") == 0);
+    CHECK(heard.played.size() == 2 && heard.played[1] == &samples[static_cast<int>(sound::Id::Crumple)]);
+    os::install_sound(nullptr);
+    sound::set_clips(nullptr);
     CHECK(no_stale_pixels());
     key(wm::key::F4, 4);
 }

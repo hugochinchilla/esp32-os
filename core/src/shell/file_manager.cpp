@@ -849,7 +849,9 @@ private:
             static char text[120];
             snprintf(text, sizeof(text), "Cannot empty the Trash:\n%s.", fs::error_text(e));
             message_box("Empty Trash", text);
+            return;
         }
+        os::play_sound(sound::Id::Crumple); // paper crumpled into a ball (backlog item 70)
     }
 
     // Refreshes after a change, or says what went wrong.

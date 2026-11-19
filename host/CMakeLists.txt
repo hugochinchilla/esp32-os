@@ -280,7 +280,9 @@ if(SDL2_FOUND)
         COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/sounds/embed_sounds.py
                 ${CMAKE_CURRENT_SOURCE_DIR}/../docs/sounds ${CMAKE_CURRENT_BINARY_DIR}/system_sounds.cpp
         DEPENDS ../tools/sounds/embed_sounds.py ../docs/sounds/boot.pcm ../docs/sounds/close.pcm
-                ../docs/sounds/alert.pcm ../docs/sounds/error.pcm ../docs/sounds/bell.pcm)
+                ../docs/sounds/alert.pcm ../docs/sounds/error.pcm ../docs/sounds/bell.pcm
+                ../docs/sounds/chess_move.pcm ../docs/sounds/chess_check.pcm ../docs/sounds/chess_mate.pcm
+                ../docs/sounds/snake_eat.pcm ../docs/sounds/snake_over.pcm ../docs/sounds/crumple.pcm)
     add_executable(chinchilla desktop/main.cpp ${CMAKE_CURRENT_BINARY_DIR}/system_sounds.cpp)
     if(TARGET SDL2::SDL2)
         target_link_libraries(chinchilla PRIVATE core SDL2::SDL2)

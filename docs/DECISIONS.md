@@ -235,6 +235,7 @@ The programs and games, one decision each.
 - [The chess computer does not answer at once](decisions/chess-reply-pace.md) (2026-11-18, owner+agent, decided): Chess: the computer's move is shown no sooner than 250 to 350 ms after it began to think (backlog 67)
 - [The chess game](decisions/chess-game.md) (2026-11-18, owner, decided): Chess: own engine, moving by drag or click, piece sets, board colours, levels (backlog 50)
 - [The computer's chess piece lands](decisions/chess-landing.md) (2026-11-18, owner+agent, decided): The computer's piece drops 4 pixels onto its square and bounces once, 233 ms (backlog 64); details to confirm
+- [Sounds of the games and the Trash](decisions/game-sounds.md) (2026-11-19, owner+agent, to-confirm): Chess knocks on a move and says check and checkmate; Culebra a berry and game over; the Trash crumples paper; Cactus Patch is silent (backlog 70)
 
 ### console
 

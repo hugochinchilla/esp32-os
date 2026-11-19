@@ -35,7 +35,9 @@ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/system_sounds.cpp
     COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/sounds/embed_sounds.py
             ${CMAKE_CURRENT_SOURCE_DIR}/../docs/sounds ${CMAKE_CURRENT_BINARY_DIR}/system_sounds.cpp
     DEPENDS ../tools/sounds/embed_sounds.py ../docs/sounds/boot.pcm ../docs/sounds/close.pcm
-            ../docs/sounds/alert.pcm ../docs/sounds/error.pcm ../docs/sounds/bell.pcm)
+            ../docs/sounds/alert.pcm ../docs/sounds/error.pcm ../docs/sounds/bell.pcm
+            ../docs/sounds/chess_move.pcm ../docs/sounds/chess_check.pcm ../docs/sounds/chess_mate.pcm
+            ../docs/sounds/snake_eat.pcm ../docs/sounds/snake_over.pcm ../docs/sounds/crumple.pcm)
 add_executable(chinchilla ../host/desktop/main.cpp ${CMAKE_CURRENT_BINARY_DIR}/system_sounds.cpp)
 target_compile_options(chinchilla PRIVATE -Wall -Wextra -Werror)
 target_link_libraries(chinchilla PRIVATE core idbfs.js)

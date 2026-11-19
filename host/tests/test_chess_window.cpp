@@ -18,6 +18,7 @@
 #include "core/msg/queue.hpp"
 #include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
+#include "core/sound/sound.hpp"
 #include "core/wm/wm.hpp"
 #include "../host_adapters.hpp"
 #include "../thread_queue.hpp"
@@ -278,6 +279,26 @@ void test_game()
     chess::Game &g = shell::chess_game();
     CHECK(g.plies() == 0 && !shell::chess_thinking());
 
+    // The sounds (backlog item 70): every piece put down knocks, the
+    // user's and the computer's; check and checkmate have their own.
+    static const int16_t samples[sound::kIds] = {};
+    static sound::Clip clips[sound::kIds];
+    for (int i = 0; i < sound::kIds; i++) {
+        clips[i] = {&samples[i], 1};
+    }
+    static host::RecordingSound heard;
+    sound::set_clips(clips);
+    os::install_sound(&heard);
+    auto clip_of = [](sound::Id id) { return &samples[static_cast<int>(id)]; };
+    auto heard_since = [&](size_t mark, sound::Id id) {
+        for (size_t i = mark; i < heard.played.size(); i++) {
+            if (heard.played[i] == clip_of(id)) {
+                return true;
+            }
+        }
+        return false;
+    };
+
     // Two clicks: the piece, then the square. The piece picked stands on
     // yellow; the computer answers before the click returns (no tasks).
     const uint8_t dark = square_colour("e2");
@@ -287,6 +308,8 @@ void test_game()
     CHECK(no_stale_pixels());
     click_square("e4");
     CHECK(g.plies() == 2 && g.position().side() == White && !shell::chess_thinking());
+    CHECK(heard.played.size() == 2 && heard.played[0] == clip_of(sound::Id::ChessMove) &&
+          heard.played[1] == clip_of(sound::Id::ChessMove));
     CHECK(chess::type_of(g.position().at(chess::square(4, 3))) == chess::Pawn);
     CHECK(strstr(shell::chess_status(), "Your move.") != nullptr);
     CHECK(no_stale_pixels());
@@ -445,12 +468,15 @@ void test_game()
     click_square("g2");
     click_square("g4");
     CHECK(g.status() == chess::Status::Checkmate && g.plies() == 4);
+    CHECK(heard.played.back() == clip_of(sound::Id::ChessMate)); // the computer's piece
+    size_t mark = heard.played.size();
     CHECK(strcmp(shell::chess_status(), "Checkmate. The computer wins.") == 0);
     click_square("a2");
     click_square("a3");
     CHECK(g.plies() == 4);
     letter('z', kCtrl);
     CHECK(g.plies() == 2 && strcmp(shell::chess_status(), "Your move.") == 0);
+    CHECK(heard.played.size() == mark); // no move, and a move taken back: silence
     click_square("a2");
     click_square("a3");
     CHECK(g.plies() == 4 && g.status() == chess::Status::Playing);
@@ -464,6 +490,7 @@ void test_game()
     click_square("h5");
     CHECK(g.status() == chess::Status::Checkmate && strcmp(shell::chess_status(), "Checkmate. You win!") == 0);
     CHECK(!shell::chess_thinking());
+    CHECK(heard.played.back() == clip_of(sound::Id::ChessMate));
 
     // Resign ends the game; Take back takes the resignation back.
     key(kF2);
@@ -554,6 +581,18 @@ void test_game()
     choose(1, 2);
     CHECK(kept("side=random"));
     CHECK(shell::chess_game().plies() == (shell::chess_user() == White ? 0 : 1));
+    // Check: the queen to h5 again, where a pawn can still step in.
+    key(kF2);
+    desktop.update();
+    choose(1, 0);
+    play("e2e4 f7f6 d2d4 a7a6");
+    shell::chess_refresh();
+    mark = heard.played.size();
+    click_square("d1");
+    click_square("h5");
+    CHECK(shell::chess_game().status() == chess::Status::Playing && heard.played.size() > mark);
+    CHECK(heard.played[mark] == clip_of(sound::Id::ChessCheck) && !heard_since(mark, sound::Id::ChessMate));
+    os::install_sound(nullptr);
     desktop.close(*board());
     wait(1000);
     wait(1000);

@@ -11,7 +11,8 @@ import os
 import struct
 import sys
 
-NAMES = ["boot", "close", "alert", "error", "bell"]
+NAMES = ["boot", "close", "alert", "error", "bell",
+         "chess_move", "chess_check", "chess_mate", "snake_eat", "snake_over", "crumple"]
 
 
 def main():

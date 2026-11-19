@@ -860,6 +860,7 @@ private:
     {
         pick(-1);
         if (game_.play(m)) {
+            move_sound();
             turn();
         } else {
             sync();
@@ -867,6 +868,17 @@ private:
     }
 
     /* ---- The game ---- */
+
+    // A piece has just been put down, the user's or the computer's (backlog
+    // item 70): the knock of the piece, or what says check or checkmate,
+    // which begin with that knock. The draws sound as any move.
+    void move_sound()
+    {
+        const Status status = game_.status();
+        os::play_sound(status == Status::Checkmate               ? sound::Id::ChessMate
+                       : status == Status::Playing && game_.position().in_check() ? sound::Id::ChessCheck
+                                                                 : sound::Id::ChessMove);
+    }
 
     // After every move, and after a game starts: is it over, and if not,
     // whose turn is it.
@@ -1033,6 +1045,7 @@ private:
         if (brain_->result.best != chess::kNoMove && game_.play(brain_->result.best)) {
             pick(-1);
             start_landing(chess::to_of(brain_->result.best));
+            move_sound();
         }
         turn();
     }
