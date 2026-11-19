@@ -406,3 +406,50 @@ weigh once measured: with a Bluetooth mouse in use, a click from the
 remote screen may answer 100 to 300 ms late again.
 
 Compiled and linked (1,948,816 bytes); not run on the board.
+
+## What the board measured with the owner's devices
+
+The owner's devices: a Logitech MX Master 3 (mouse) and an MX Keys Mini
+(keyboard). Head 9ae1688 at the end; the turns ran 9cd4439, d8e7434 and
+9ae1688.
+
+- Pairing. The mouse paired by itself, connected to ready in 2.6 s (it
+  says it is a keyboard and a mouse; 4 reports, a report map of 140
+  bytes). The keyboard took 4.3 s (9 reports, 258 bytes) and the owner
+  paired it from the window: it was not taken by itself. After Forget and
+  pairing mode again it was not taken by itself either, and he paired it
+  from the window in 5.1 s. After a restart both are remembered and come
+  back at a key or a click, in 2.1 and 4.0 s. The keyboard turned off and
+  on comes back by itself.
+- Memory, free internal / largest internal block / free external: main
+  188,655 / 114,688 / 5,957,636; listening 133,199 / 59,392 / 5,757,952;
+  both devices and the Editor open 124,483 / 51,200 / 5,143,836. Unused
+  stack: `nimble_host` 3,104 to 3,328 bytes, `btController` 2,100. The
+  window costs about 4.3 KB of external RAM while open. The firmware is
+  1,979,984 bytes on the laptop.
+- The pointer, gaps between movements while the mouse moves (90% at or
+  under / 99% / longest / gaps over 40 ms):
+
+| | 90% | 99% | longest | over 40 ms |
+| --- | --- | --- | --- | --- |
+| 9cd4439, Wi-Fi joined | 39 ms | | 50 ms | about 50 in 12 s |
+| d8e7434 (pace 7.5 to 11.25 ms) | the same | | | |
+| Wi-Fi off | 19 ms | 20 ms | 29 ms | none |
+| 9ae1688, Wi-Fi rests | 19 ms | 29 ms | 48 ms | 1 in 30 s |
+| 9ae1688, `wifi_rests = false` | 39 ms | 77 ms | 114 ms | 134 |
+| 9ae1688, the remote screen busy | 30 ms | 49 ms | 60 ms | 93 |
+
+  The owner: "much better, not perfect". The devices change the pace
+  after connecting: the mouse to 11.25 ms (it may skip 44 turns), the
+  keyboard to 22.5 ms (20 turns).
+- What Wi-Fi resting costs the remote screen: nothing that shows. From a
+  click to the Start menu 0.49 to 0.89 s with the devices connected, 0.39
+  to 0.93 s without; a full update 4.9 to 6.6 s against 4.7 to 6.7 s.
+- No missed refills. The tray icon and the window work.
+- Found: after reconnecting, the mouse showed its address in place of its
+  name. And why the keyboard was never taken by itself: the mouse counts
+  as a keyboard too, so no keyboard was missing. Both are for a change
+  after this one.
+- Not run: the gaps with Wi-Fi off on 9ae1688, the debug link over Wi-Fi.
+
+The owner had it merged on these figures.
