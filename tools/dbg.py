@@ -45,6 +45,7 @@ FRAMES = 23
 PAINT_BENCH = 24
 VIDEO_MODE = 25
 WIFI = 0x20
+BLUETOOTH = 0x21
 MAX_REQUEST = 1024  # largest request payload the board takes
 LOG, HELLO, SHOT_DATA, SHOT_END = 0x70, 0x71, 0x72, 0x73
 REPLY = 0x80
@@ -544,6 +545,96 @@ class Board:
     def wifi_forget(self, ssid):
         self.request(WIFI, b"\x05" + self._name(ssid))
 
+    # ---- Bluetooth keyboards and mice. An address is written
+    # "c4:9d:ed:01:02:03 random" (or "... public"), as bt_list() gives it.
+
+    BT_STATES = ["connecting", "pairing", "reading its reports", "ready"]
+    BT_KINDS = ["unknown", "keyboard", "mouse", "keyboard+mouse"]
+
+    @staticmethod
+    def _bt_address(text):
+        words = text.split()
+        parts = words[0].split(":") if words else []
+        if len(parts) != 6 or (len(words) > 1 and words[1] not in ("random", "public")) or len(words) > 2:
+            raise DebugError("not a Bluetooth address: %r" % text)
+        try:
+            return bytes(int(p, 16) for p in parts) + bytes([1 if words[1:] == ["random"] else 0])
+        except ValueError:
+            raise DebugError("not a Bluetooth address: %r" % text)
+
+    def bt_list(self):
+        """What is connected, what is heard advertising and what is
+        remembered: a dict with "on", "listening", "auto_pair", "has"
+        (the kinds that are ready), "links", "found" and "remembered"."""
+        body = self.request(BLUETOOTH, b"\x00")
+        i = 2
+
+        def address():
+            nonlocal i
+            text = ":".join("%02x" % b for b in body[i:i + 6]) + (" random" if body[i + 6] else " public")
+            i += 7
+            return text
+
+        def name():
+            nonlocal i
+            text = body[i + 1:i + 1 + body[i]].decode("utf-8", "replace")
+            i += 1 + body[i]
+            return text
+
+        out = {"on": bool(body[0] & 1), "listening": bool(body[0] & 2), "auto_pair": bool(body[0] & 4),
+               "has": self.BT_KINDS[body[1] & 3] if body[1] & 3 else "nothing",
+               "links": [], "found": [], "remembered": []}
+        count = body[i]
+        i += 1
+        for _ in range(count):
+            entry = {"address": address(), "state": self.BT_STATES[body[i]], "kind": self.BT_KINDS[body[i + 1] & 3]}
+            i += 2
+            entry["name"] = name()
+            out["links"].append(entry)
+        count = body[i]
+        i += 1
+        for _ in range(count):
+            entry = {"address": address(), "rssi": struct.unpack_from("<b", body, i)[0],
+                     "kind": self.BT_KINDS[body[i + 1] & 3], "hid": bool(body[i + 2] & 1),
+                     "pairing": bool(body[i + 2] & 2), "remembered": bool(body[i + 2] & 4)}
+            i += 3
+            entry["name"] = name()
+            out["found"].append(entry)
+        count = body[i]
+        i += 1
+        for _ in range(count):
+            entry = {"address": address(), "kind": self.BT_KINDS[body[i] & 3], "connected": bool(body[i + 1])}
+            i += 2
+            entry["name"] = name()
+            out["remembered"].append(entry)
+        return out
+
+    def bt_pair(self, address, timeout=40.0):
+        """Connects and pairs a device that bt_list() found, and waits for
+        the result: its entry in "links" once ready, None if it failed."""
+        if self.request(BLUETOOTH, b"\x01" + self._bt_address(address)) != b"\x01":
+            return None
+        key = address.split()[0].lower()
+        end = time.monotonic() + timeout
+        while time.monotonic() < end:
+            time.sleep(0.3)
+            mine = [l for l in self.bt_list()["links"] if l["address"].split()[0] == key]
+            if not mine:
+                return None
+            if mine[0]["state"] == "ready":
+                return mine[0]
+        return None
+
+    def bt_forget(self, address):
+        self.request(BLUETOOTH, b"\x02" + self._bt_address(address))
+
+    def bt_auto_pair(self, on):
+        self.request(BLUETOOTH, bytes([3, 1 if on else 0]))
+
+    def bt_listen(self, on):
+        """Keeps the board listening for devices, as while a list is on show."""
+        self.request(BLUETOOTH, bytes([4, 1 if on else 0]))
+
     # ---- Files. Paths are written C:\Documents\notes.txt ("/" works too).
 
     @staticmethod
@@ -862,6 +953,59 @@ def wifi_command(board, args):
         board.wifi_forget(args.ssid)
 
 
+def bt_command(board, args):
+    """The bt command: Bluetooth keyboards and mice."""
+    def address_of(text, entries):
+        # The six bytes are enough when the device is in one of the lists.
+        if text is None:
+            raise DebugError("which device? dbg.py bt %s ADDRESS (see dbg.py bt)" % args.action)
+        for e in entries:
+            if e["address"].split()[0] == text.split()[0].lower():
+                return e["address"]
+        return text
+
+    if args.action in ("status", "scan"):
+        if args.action == "scan":
+            board.bt_listen(True)
+            time.sleep(args.seconds)
+        state = board.bt_list()
+        if args.action == "scan":
+            board.bt_listen(False)
+        if not state["on"]:
+            print("Bluetooth is off (C:\\.config\\bluetooth.ini, enabled) or did not start")
+            return
+        print("on, %s, pairing by itself %s; has: %s" % ("listening" if state["listening"] else "not listening",
+                                                         "on" if state["auto_pair"] else "off", state["has"]))
+        for l in state["links"]:
+            print("connected   %s  %-14s %-20s %s" % (l["address"], l["kind"], l["state"], l["name"]))
+        for r in state["remembered"]:
+            if not r["connected"]:
+                print("remembered  %s  %-14s %-20s %s" % (r["address"], r["kind"], "not connected", r["name"]))
+        for f in state["found"]:
+            marks = ", ".join(m for m in ("pairing", "remembered") if f[m])
+            print("heard       %s  %-14s %4d dBm %-11s %s%s" % (
+                f["address"], f["kind"] if f["hid"] else "not an input", f["rssi"], "", f["name"],
+                "  (%s)" % marks if marks else ""))
+    elif args.action == "pair":
+        state = board.bt_list()
+        if not state["listening"]:
+            board.bt_listen(True)
+            time.sleep(args.seconds)
+            state = board.bt_list()
+            board.bt_listen(False)
+        link = board.bt_pair(address_of(args.address, state["found"]))
+        if link is None:
+            raise DebugError("not paired (is it in pairing mode, and in dbg.py bt scan?)")
+        print("paired: %s, a %s" % (link["name"] or link["address"], link["kind"]))
+    elif args.action == "forget":
+        state = board.bt_list()
+        board.bt_forget(address_of(args.address, state["remembered"] + state["links"]))
+    elif args.action == "auto":
+        if args.address not in ("on", "off"):
+            raise DebugError("dbg.py bt auto on|off")
+        board.bt_auto_pair(args.address == "on")
+
+
 def task_table(totals, tasks, earlier=None):
     """The task list as lines of text, busiest first. Shares are of one
     core, so two cores add up to 200 %. With `earlier` (the result of an
@@ -966,6 +1110,12 @@ def main(argv=None):
     p.add_argument("--no-remember", action="store_true", help="connect without remembering the network")
     p.add_argument("--password-stdin", action="store_true",
                    help="read the password from standard input instead of asking")
+    p = sub.add_parser("bt", help="Bluetooth keyboards and mice: status, scan, pair ADDRESS, forget ADDRESS, "
+                                  "auto on|off (pairing by itself)")
+    p.add_argument("action", nargs="?", default="status", choices=["status", "scan", "pair", "forget", "auto"])
+    p.add_argument("address", nargs="?", help="the device, as dbg.py bt shows it (the six bytes are enough); "
+                                              "on or off for auto")
+    p.add_argument("--seconds", type=float, default=4.0, help="how long scan (and pair) listens first")
     sub.add_parser("monitor", help="show the board's log text until Ctrl+C")
     sub.add_parser("console", help="the board's command shell on this wire (needs `console:once` in "
                                    "C:\\.config\\startup.txt); Ctrl+] leaves")
@@ -1117,6 +1267,8 @@ def main(argv=None):
             print("fault sent: %s%s" % (args.kind, " as PID %d" % args.pid if args.pid else ""))
         elif args.command == "wifi":
             wifi_command(board, args)
+        elif args.command == "bt":
+            bt_command(board, args)
         elif args.command == "console":
             run_console(board)
         elif args.command == "monitor":

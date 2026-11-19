@@ -1291,6 +1291,7 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
     // the board that was time added to every start.
     os::start_timer(kInstallAfterUs, 0, [](void *) { install_programs(); }, nullptr);
     start_network();
+    start_bluetooth();
     // The taskbar, the Start menu and the icons are a process of their own
     // (backlog item 21), started by init at its line of startup.txt and
     // again whenever it ends (item 39). With the file already done, or with

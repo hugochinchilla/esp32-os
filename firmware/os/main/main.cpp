@@ -42,6 +42,7 @@
 #include "rtos_tasks.hpp"
 #include "core/job/job.hpp"
 #include "core/prog/prog.hpp"
+#include "core/input/bluetooth.hpp"
 #include "core/msg/input.hpp"
 #include "core/msg/queue.hpp"
 #include "core/net/posix_dialer.hpp"
@@ -67,6 +68,7 @@
 #include "boot_flag.h"
 #include "crash.hpp"
 #include "vga.h"
+#include "bluetooth.hpp"
 #include "wifi.hpp"
 
 // tools/dbg.py reboot --fast arms a one-shot fast start: a word in NVS
@@ -937,6 +939,20 @@ void ui_task(void *)
     protocol.set_network(&wifi);
     ESP_LOGI(TAG, "wifi %s in %lld ms", radio ? "started" : "did not start",
              (esp_timer_get_time() - wifi_start) / 1000);
+
+    // Bluetooth keyboards and mice (backlog item 51), after Wi-Fi: the two
+    // share the radio. C:\.config\bluetooth.ini [bluetooth] enabled (false:
+    // the stack is not started and takes no memory). Their keys and
+    // movements come to the desktop as messages from the stack's own task.
+    const int64_t bluetooth_start = esp_timer_get_time();
+    static EXT_RAM_BSS_ATTR fs::Ini bluetooth_ini;
+    bluetooth_ini.load(storage, "C:\\.config\\bluetooth.ini");
+    static const bool bluetooth_radio = bluetooth_ini.get_bool("bluetooth", "enabled", true) && bluetooth_begin(desktop);
+    static EXT_RAM_BSS_ATTR bt::Manager bluetooth(bluetooth_port(), &storage);
+    shell::set_bluetooth(&bluetooth);
+    protocol.set_bluetooth(&bluetooth);
+    ESP_LOGI(TAG, "bluetooth %s in %lld ms", bluetooth_radio ? "started" : "not started",
+             (esp_timer_get_time() - bluetooth_start) / 1000);
 
     // The remote screen: a VNC viewer connects to the board's address, port
     // 5900. The port opens when init starts the network services, further

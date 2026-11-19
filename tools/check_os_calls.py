@@ -44,6 +44,7 @@ MOVED = [
 # way down to the power-off screen), and what the programs share.
 SYSTEM = [
     "apps.cpp",
+    "bluetooth_service.cpp",
     "boot.cpp",
     "desktop.cpp",
     "listing.cpp",

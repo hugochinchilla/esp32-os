@@ -2,6 +2,7 @@
 #include "core/sys/frames.hpp"
 #include "core/sys/log.hpp"
 #include "core/proc/table.hpp"
+#include "core/input/bluetooth.hpp"
 #include "core/net/wifi.hpp"
 
 #include <cstring>
@@ -350,6 +351,9 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
 
     case kWifi:
         wifi_command(seq, args, args_size);
+        break;
+    case kBluetooth:
+        bluetooth_command(seq, args, args_size);
         break;
 
     case kFileList:
@@ -1004,6 +1008,100 @@ void Protocol::wifi_command(uint8_t seq, const uint8_t *args, size_t size)
         return;
     }
     reply(kWifi, seq, kOk, body, n);
+}
+
+/* ---- Bluetooth keyboards and mice ------------------------------------------------- */
+
+// The first byte says what: 0 list, 1 pair, 2 forget, 3 pairing by itself
+// on or off, 4 listening on or off (as while a list is on show). An
+// address travels as its six bytes and a byte that is 1 for a random one.
+void Protocol::bluetooth_command(uint8_t seq, const uint8_t *args, size_t size)
+{
+    if (bluetooth_ == nullptr || size == 0) {
+        reply(kBluetooth, seq, bluetooth_ == nullptr ? kUnknownCommand : kBadArguments, nullptr, 0);
+        return;
+    }
+    bt::Manager &m = *bluetooth_;
+    uint8_t *body = chunk_;
+    size_t n = 0;
+    const auto put_address = [&](const bt::Address &a) {
+        memcpy(body + n, a.bytes, 6);
+        body[n + 6] = a.random ? 1 : 0;
+        n += 7;
+    };
+    const auto put_name = [&](const char *name) {
+        const size_t length = strlen(name);
+        body[n++] = static_cast<uint8_t>(length);
+        memcpy(body + n, name, length);
+        n += length;
+    };
+    bt::Address address = {};
+    if (args[0] == 1 || args[0] == 2) {
+        if (size != 8) {
+            reply(kBluetooth, seq, kBadArguments, nullptr, 0);
+            return;
+        }
+        memcpy(address.bytes, args + 1, 6);
+        address.random = args[7] != 0;
+    } else if ((args[0] == 3 || args[0] == 4) && size != 2) {
+        reply(kBluetooth, seq, kBadArguments, nullptr, 0);
+        return;
+    }
+    switch (args[0]) {
+    case 0: { // what is connected, what is heard, what is remembered
+        body[n++] = static_cast<uint8_t>((m.on() ? 1 : 0) | (m.scanning() ? 2 : 0) | (m.auto_pair() ? 4 : 0));
+        body[n++] = m.kinds_ready();
+        body[n++] = static_cast<uint8_t>(m.link_count());
+        for (int i = 0; i < m.link_count(); i++) {
+            const bt::Link &l = m.link(i);
+            put_address(l.address);
+            body[n++] = static_cast<uint8_t>(l.state);
+            body[n++] = l.kinds;
+            put_name(l.name);
+        }
+        // Every list full would not fit the reply: what does not is left out.
+        const size_t entry = 7 + 3 + 1 + bt::kNameMax;
+        size_t count_at = n++;
+        body[count_at] = 0;
+        for (int i = 0; i < m.found_count() && n + entry + 1 <= kMaxReplyPayload; i++) {
+            const bt::Found &f = m.found(i);
+            body[count_at]++;
+            put_address(f.address);
+            body[n++] = static_cast<uint8_t>(f.rssi);
+            body[n++] = f.kinds;
+            body[n++] = static_cast<uint8_t>((f.hid ? 1 : 0) | (f.pairing ? 2 : 0) |
+                                             (m.is_remembered(f.address) ? 4 : 0));
+            put_name(f.name);
+        }
+        count_at = n++;
+        body[count_at] = 0;
+        for (int i = 0; i < m.remembered_count() && n + entry <= kMaxReplyPayload; i++) {
+            const bt::Manager::Remembered &r = m.remembered(i);
+            body[count_at]++;
+            put_address(r.address);
+            body[n++] = r.kinds;
+            body[n++] = m.is_linked(r.address) ? 1 : 0;
+            put_name(r.name);
+        }
+        break;
+    }
+    case 1: // 1 in the reply: the attempt has started
+        body[n++] = m.pair(address) ? 1 : 0;
+        break;
+    case 2:
+        m.forget(address);
+        break;
+    case 3:
+        m.set_auto_pair(args[1] != 0);
+        break;
+    case 4:
+        m.set_listing(args[1] != 0);
+        break;
+    default:
+        reply(kBluetooth, seq, kBadArguments, nullptr, 0);
+        return;
+    }
+    reply(kBluetooth, seq, kOk, body, n);
 }
 
 } // namespace dbg

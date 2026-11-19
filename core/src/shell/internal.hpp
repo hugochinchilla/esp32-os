@@ -176,6 +176,9 @@ sh::TerminalSession *open_session(ports::ByteSink &device, const char *&why);
 
 // Starts following the network, if there is one (network.cpp).
 void start_network();
+// Starts following the Bluetooth keyboards and mice, if there is a radio
+// for them (bluetooth_service.cpp).
+void start_bluetooth();
 
 // Centres a window of the given size in the work area.
 gfx::Rect centred(const wm::Wm &wm, int w, int h);

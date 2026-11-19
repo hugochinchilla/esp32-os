@@ -220,6 +220,43 @@ def main():
         except dbg.DebugError:
             pass
 
+        # Bluetooth against the simulator's pretend radio: a keyboard and a
+        # mouse in the air, neither in pairing mode, so nothing is taken
+        # until asked.
+        state = board.bt_list()
+        assert state["on"] and state["auto_pair"] and state["has"] == "nothing", state
+        assert state["links"] == [] and state["remembered"] == [], state
+        assert state["listening"], state  # no keyboard and no mouse: it listens
+        for _ in range(20):
+            state = board.bt_list()
+            if len(state["found"]) == 3:
+                break
+            time.sleep(0.1)
+        names = {f["name"]: f for f in state["found"]}
+        assert set(names) == {"Teclado Chinchilla", "Raton sin cola", "Termometro"}, state
+        assert names["Teclado Chinchilla"]["kind"] == "keyboard" and not names["Termometro"]["hid"], state
+        keyboard = names["Teclado Chinchilla"]["address"]
+        assert keyboard == "c4:9d:ed:00:00:01 random", keyboard
+        link = board.bt_pair(keyboard)
+        assert link is not None and link["kind"] == "keyboard" and link["name"] == "Teclado Chinchilla", link
+        state = board.bt_list()
+        assert state["has"] == "keyboard" and [r["name"] for r in state["remembered"]] == ["Teclado Chinchilla"]
+        assert state["remembered"][0]["connected"], state
+        assert b"keyboard Teclado Chinchilla" in board.get("C:\\.config\\bluetooth.ini")
+        assert board.bt_pair(keyboard) is None  # already connected
+        board.bt_forget(keyboard)
+        state = board.bt_list()
+        assert state["links"] == [] and state["remembered"] == [] and state["has"] == "nothing", state
+        board.bt_auto_pair(False)
+        assert not board.bt_list()["auto_pair"]
+        board.bt_auto_pair(True)
+        for bad in (b"\x01\x00", b"\x02", b"\x03", b"\x09"):
+            try:
+                board.request(dbg.BLUETOOTH, bad)
+                raise AssertionError("a bad Bluetooth command was accepted")
+            except dbg.DebugError:
+                pass
+
         # The command line works too. Only one program can use the port.
         board.close()
         out = subprocess.run([sys.executable, dbg.__file__, "--port", port, "info"],
@@ -233,6 +270,15 @@ def main():
         out = subprocess.run([sys.executable, dbg.__file__, "--port", port, "wifi", "scan"],
                              capture_output=True, text=True, timeout=30)
         assert "Casa Chinchilla  (connected)" in out.stdout, out
+        out = subprocess.run([sys.executable, dbg.__file__, "--port", port, "bt", "pair", "c4:9d:ed:00:00:02"],
+                             capture_output=True, text=True, timeout=30)
+        assert "paired: Raton sin cola, a mouse" in out.stdout, out
+        out = subprocess.run([sys.executable, dbg.__file__, "--port", port, "bt"],
+                             capture_output=True, text=True, timeout=30)
+        assert "has: mouse" in out.stdout and "connected   c4:9d:ed:00:00:02 random  mouse" in out.stdout, out
+        out = subprocess.run([sys.executable, dbg.__file__, "--port", port, "bt", "forget", "c4:9d:ed:00:00:02"],
+                             capture_output=True, text=True, timeout=30)
+        assert out.returncode == 0, out
         with tempfile.TemporaryDirectory() as folder:
             path = os.path.join(folder, "bare.png")
             out = subprocess.run([sys.executable, dbg.__file__, "--port", port, "screenshot",
