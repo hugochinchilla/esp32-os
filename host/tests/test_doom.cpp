@@ -392,6 +392,22 @@ int main(int argc, char **argv)
         save(pictures, "doom-10c-fourfold");
         f12();
         CHECK(desktop.screen_lent_to() != nullptr && display.coarse() && display.width() == 320);
+        // The look is remembered: left at 640x240, closed, started again.
+        f12();
+        f12();
+        CHECK(display.coarse() && display.width() == 640);
+        CHECK(os::signal(t.find_by_name("Doom"), proc::Signal::Term) == proc::Sent::Ok);
+        wait(10000);
+        wait(200000);
+        CHECK(desktop.screen_lent_to() == nullptr && t.count() == processes);
+        CHECK(shell::run_file("C:\\Programs\\doom.app", why, sizeof(why)));
+        wait(10000);
+        wait(200000);
+        tics(10);
+        CHECK(desktop.screen_lent_to() != nullptr && display.coarse() && display.width() == 640);
+        f12();
+        f12();
+        CHECK(display.coarse() && display.width() == 320);
         // The logo key: the desktop is back at its own size, painted.
         desktop.key(wm::key::LeftGui, true);
         desktop.key(wm::key::LeftGui, false);

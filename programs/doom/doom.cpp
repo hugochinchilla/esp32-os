@@ -69,6 +69,12 @@ public:
           quit_(button({kClientW - 12 - 90, kClientH - 12 - 23, 90, 23}, "&Quit"))
     {
         g_window = this;
+        // The look chosen with F12 last time (C:\.config\doom.ini).
+        if (os::load_settings("doom", settings_)) {
+            const int look = settings_.get_int("picture", "look", kDithered);
+            look_ = look >= 0 && look < kLooks ? look : kDithered;
+        }
+        saved_look_ = look_;
         set_default(wad != nullptr ? play_ : quit_);
         play_.set_enabled(false);
         if (wad != nullptr) {
@@ -115,6 +121,10 @@ public:
     {
         stop();
         give_screen_back();
+        if (look_ != saved_look_) {
+            settings_.set_int("picture", "look", look_);
+            os::save_settings("doom", settings_);
+        }
         // All the engine had, wherever it was.
         port_free_all();
         for (int &file : files_) {
@@ -265,8 +275,9 @@ private:
         report_at_ = os::now_us() + kReportUs;
     }
 
-    // F12 goes round the ways of showing the picture, so that they can be
-    // told apart on the monitor itself: the coarse screen with the dither,
+    // F12 goes round the ways of showing the picture (the owner kept the
+    // key that was made to tell them apart on the monitor; the choice is
+    // remembered): the coarse screen with the dither,
     // the coarse screen with each colour rounded to the nearest the board
     // has, 640x240 where the screen only makes the lines tall, and the
     // screen as it is with each pixel made four by this
@@ -402,7 +413,8 @@ private:
     int left_ = 0, top_ = 0;
     static constexpr uint16_t kLookKey = 0x45; // F12
     enum { kDithered, kPlain, kTall, kFourfold, kLooks };
-    int look_ = kDithered;
+    int look_ = kDithered, saved_look_ = kDithered;
+    fs::Ini settings_; // C:\.config\doom.ini
     int wide_ = 2, tall_ = 2; // how many of the screen's pixels one of the game's is
     uint8_t table_[4][256] = {};
     int files_[os::file::kMaxOpenEach] = {};
