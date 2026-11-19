@@ -369,6 +369,24 @@ int main(int argc, char **argv)
             CHECK(count > 20 && outside == 0); // the title picture, black above and below
         }
         save(pictures, "doom-10-coarse");
+        // F12 goes round the looks: the coarse picture undithered, the
+        // screen as it is with every pixel made four, and round again.
+        const auto f12 = [] {
+            desktop.key(0x45, true);
+            desktop.key(0x45, false);
+            wait(10000);
+            tics(3);
+        };
+        const uint32_t dithered = screen_sum();
+        f12();
+        CHECK(desktop.screen_lent_to() != nullptr && display.coarse() && screen_sum() != dithered);
+        save(pictures, "doom-10b-coarse-plain");
+        f12();
+        CHECK(desktop.screen_lent_to() != nullptr && !display.coarse() && display.width() == 640);
+        CHECK(colours() > 20 && display.pixels()[5 * 640 + 5] == 0);
+        save(pictures, "doom-10c-fourfold");
+        f12();
+        CHECK(desktop.screen_lent_to() != nullptr && display.coarse() && display.width() == 320);
         // The logo key: the desktop is back at its own size, painted.
         desktop.key(wm::key::LeftGui, true);
         desktop.key(wm::key::LeftGui, false);

@@ -94,6 +94,12 @@ public:
         if (!playing_) {
             return false;
         }
+        if (k.usage == kLookKey) {
+            if (k.pressed) {
+                next_look();
+            }
+            return true;
+        }
         port_key(k.usage, k.pressed);
         return true;
     }
@@ -137,9 +143,10 @@ public:
             static constexpr int kLean[4] = {32, 159, 223, 96};
             for (int place = 0; place < 4; place++) {
                 for (int i = 0; i < 256; i++) {
-                    const int r = (palette[i * 3] * 7 + kLean[place]) / 255;
-                    const int g = (palette[i * 3 + 1] * 7 + kLean[place]) / 255;
-                    const int b = (palette[i * 3 + 2] * 3 + kLean[place]) / 255;
+                    const int lean = look_ == kPlain ? 127 : kLean[place];
+                    const int r = (palette[i * 3] * 7 + lean) / 255;
+                    const int g = (palette[i * 3 + 1] * 7 + lean) / 255;
+                    const int b = (palette[i * 3 + 2] * 3 + lean) / 255;
                     table_[place][i] = gfx::rgb(r, g, b);
                 }
             }
@@ -239,13 +246,37 @@ private:
         report_at_ = os::now_us() + kReportUs;
     }
 
+    // F12 goes round the ways of showing the picture, so that they can be
+    // told apart on the monitor itself: the coarse screen with the dither,
+    // the coarse screen with each colour rounded to the nearest the board
+    // has, and the screen as it is with each pixel made four by this
+    // program (the finest dither, and four times the bytes).
+    void next_look()
+    {
+        static const char *const kNames[kLooks] = {"doom: 320x240, dithered", "doom: 320x240, plain",
+                                                   "doom: the screen as it is, each pixel made four"};
+        look_ = (look_ + 1) % kLooks;
+        os::log(kNames[look_]);
+        if (look_ == kPlain) {
+            port_show_again(); // the same screen, other tables
+            return;
+        }
+        give_screen_back();
+        if (!play()) {
+            playing_ = false; // behind the Play button, as when the system takes the screen
+            stop();
+            port_release_keys();
+            play_.set_enabled(true);
+        }
+    }
+
     // Takes the screen and lets the engine run. False: the screen is not free.
     bool play()
     {
         // The coarse picture if this screen has one: 320x240 that the
         // screen makes large by itself, so that the engine's 320x200 go
         // out as they are. Otherwise this program makes each pixel four.
-        if (!take_screen(screen_, true)) {
+        if (!take_screen(screen_, look_ != kFourfold)) {
             return false;
         }
         playing_ = true;
@@ -347,6 +378,9 @@ private:
     bool playing_ = false; // and has the screen
     os::ui::Screen screen_;
     int left_ = 0, top_ = 0;
+    static constexpr uint16_t kLookKey = 0x45; // F12
+    enum { kDithered, kPlain, kFourfold, kLooks };
+    int look_ = kDithered;
     int scale_ = 2; // 1: the screen is the coarse picture, a pixel for a pixel
     uint8_t table_[4][256] = {};
     int files_[os::file::kMaxOpenEach] = {};
