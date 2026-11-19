@@ -143,7 +143,7 @@ The picture: signal, memory, painting, frame time.
 Flash layout, the BIOS stage, start-up screens.
 
 - [Flash layout](decisions/flash-layout.md) (2026-11-16, owner, decided): The first partition table: one app area and C: above it. Changed since by the update slots and the BIOS partition
-- [Start-up timing](decisions/start-up-timing.md) (2026-11-16, owner, decided): How long the self-test and the splash stay on screen (`monitor_wait_ms`, `splash_ms`), and what the self-test shows
+- [Start-up timing](decisions/start-up-timing.md) (2026-11-16, owner, decided): How long the self-test stays on screen (`monitor_wait_ms`) and what it shows; the splash it also timed was removed 2026-11-19
 - [A BIOS stage in its own partition](decisions/bios-stage.md) (2026-11-17, owner, decided): The self-test is a BIOS, a small firmware in its own partition that restarts into the OS
 - [BIOS screen font](decisions/bios-screen-font.md) (2026-11-17, owner, decided): The BIOS screen is true text, 80 by 30 characters in Spleen 8x16
 - [BIOS stage: flash and details](decisions/bios-flash-and-details.md) (2026-11-17, owner, decided): The BIOS takes 1 MB from C:; two update slots, C: after them. The sizes were changed by "App slots of 3 MB"
@@ -151,6 +151,8 @@ Flash layout, the BIOS stage, start-up screens.
 - [Chosen for the BIOS's text screen](decisions/bios-text-screen.md) (2026-11-17, agent, to-confirm): One grid of 80 by 30 cells mirrored to serial as plain text (backlog 46, step 1)
 - [The BIOS's first screen](decisions/bios-first-screen.md) (2026-11-17, owner, decided): The BIOS shows a first screen until 7 s after the reset, because the monitor takes that long
 - [App slots of 3 MB](decisions/app-slots-3-mb.md) (2026-11-19, owner, decided): Two update slots of 3 MB, `otadata` at 0xf0000, the BIOS partition 896 KB, C: 9 MB from 0x700000 (backlog 71)
+- [No splash screen](decisions/no-splash.md) (2026-11-19, owner, decided): The OS's splash screen is removed with its timer, its setting and its fonts; the desktop fades in after the BIOS's screen (backlog 74)
+- [The desktop fades in at start-up](decisions/start-up-fade.md) (2026-11-19, owner+agent, to-confirm): At start-up the screen shows the desktop's plain colour, rests 300 ms, and the desktop comes up in seven steps; not on a debug fast start (backlog 74)
 
 ### system
 

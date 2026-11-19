@@ -774,8 +774,6 @@ void show_boot_screen(int which, void *context)
         sys::CrashRecord sample;
         sys::crash_sample(sample);
         shell::show_crash_screen(io, crash_last() != nullptr ? *crash_last() : sample, true, false);
-    } else {
-        shell::show_splash(io, false);
     }
 }
 
@@ -878,12 +876,17 @@ void ui_task(void *)
     }
     protocol.set_storage(&storage);
 
-    // Start-up screens: the real self-test, then the splash.
+    // The start-up screen: the real self-test (the BIOS shows its own).
     static shell::BootIo boot_io{display, system, memory, clock, &storage, &boot_idle, &protocol, &boot_log};
     shell::BootSettings boot = shell::boot_settings(storage);
     // Both are read, so both are cleared.
     const bool from_bios = take_from_bios();
+    // The desktop fades in (backlog item 74) unless a fast start was asked
+    // for. A start that comes from the BIOS is a normal one for that.
+    static bool fade_in = true;
+    fade_in = !boot.fastboot;
     if (take_fast_next()) {
+        fade_in = false;
         boot.fastboot = true;
         ESP_LOGI(TAG, "one-shot fast boot (armed by tools/dbg.py; boot.ini unchanged)");
     } else if (from_bios) {
@@ -894,7 +897,6 @@ void ui_task(void *)
     }
     boot_io.video_start_us = s_video_start_us;
     boot_io.monitor_wait_ms = boot.monitor_wait_ms;
-    boot_io.splash_ms = boot.splash_ms;
     boot_io.pace_percent = boot.pace_percent;
     boot_io.hold_s = boot.hold_s;
     boot_io.crash_hold_s = boot.crash_hold_s;
@@ -912,11 +914,7 @@ void ui_task(void *)
     }
     const int64_t test_start = esp_timer_get_time();
     const int failed = boot.fastboot ? shell::run_quiet_checks(boot_io) : shell::run_self_test(boot_io);
-    const int64_t splash_start = esp_timer_get_time();
-    if (!boot.fastboot) {
-        shell::show_splash(boot_io);
-    }
-    const int64_t splash_end = esp_timer_get_time();
+    const int64_t test_end = esp_timer_get_time();
     protocol.set_boot_screens(&show_boot_screen, &boot_io);
     input.booting = false;
     if (boot_io.skipped) {
@@ -988,7 +986,10 @@ void ui_task(void *)
             os::install_dialer(&dialer);
             shell::start(desktop, system, storage, memory);
             protocol.set_counters(shell::picture_timings(), shell::kPictureTimings);
-            desktop.start();
+            // The plain desktop first, and what is on it fades in once
+            // this task is in its loop (backlog item 74); a fast start
+            // shows it all at once, and the figure below is that painting.
+            desktop.start(fade_in ? wm::Wm::Arrival::FromColour : wm::Wm::Arrival::AtOnce);
             first_paint_us = desktop.last_update_us();
             return true;
         },
@@ -1234,11 +1235,11 @@ void ui_task(void *)
     shell::startup_trouble(not_done);
 
     ESP_LOGI(TAG, "debug link ready at %d baud", CONFIG_ESP_CONSOLE_UART_BAUDRATE);
-    ESP_LOGI(TAG, "%s: %d failed, %lld ms (on screen until %u ms after the video started); splash %lld ms; "
+    ESP_LOGI(TAG, "%s: %d failed, %lld ms (on screen until %u ms after the video started); "
              "boot to desktop %lld ms, %lld ms after the video started",
-             boot.fastboot ? "fast start" : "self-test", failed, (splash_start - test_start) / 1000,
+             boot.fastboot ? "fast start" : "self-test", failed, (test_end - test_start) / 1000,
              static_cast<unsigned>(boot.fastboot ? 0 : boot_io.monitor_wait_ms),
-             (splash_end - splash_start) / 1000, (esp_timer_get_time() - boot_start) / 1000,
+             (esp_timer_get_time() - boot_start) / 1000,
              (esp_timer_get_time() - s_video_start_us) / 1000);
     ESP_LOGI(TAG, "first full paint took %u us", static_cast<unsigned>(first_paint_us));
 

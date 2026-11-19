@@ -113,8 +113,20 @@ public:
     // open. Not counted as any program's.
     void set_memory(ports::Memory *memory) { memory_ = memory; }
 
-    // Sets the pointer up and paints the whole screen.
-    void start();
+    // Sets the pointer up and paints the whole screen. With an arrival
+    // other than AtOnce the desktop fades in instead (backlog item 74), the
+    // way Shut Down fades it out: the screen shows the plain desktop (at
+    // once, or what it shows now fades into it first), rests, and then
+    // what the desktop has on it comes up in kFadeLevels steps. Until that
+    // is over nothing else paints and input is ignored. The steps are
+    // timers: they begin when tick() is first called.
+    enum class Arrival : uint8_t { AtOnce, FromColour, FromPicture };
+    void start(Arrival arrival = Arrival::AtOnce);
+    bool arriving() const { return arrive_stage_ != Arriving::No; }
+    static constexpr uint32_t kFadeStepUs = 60000; // one level of colour
+    static constexpr int kFadeLevels = 7;          // red and green have eight levels
+    static constexpr int kFadeRestSteps = 5;       // the plain desktop stays this many steps
+    ~Wm();
 
     // The process table, and the process that owns the server itself (its
     // own timers, and the panels' calls when a panel names no owner). With
@@ -571,6 +583,21 @@ private:
     void *attention_context_ = nullptr;
     ScreenFn screen_fn_ = nullptr;
     void *screen_context_ = nullptr;
+    // The desktop fading in (start()).
+    enum class Arriving : uint8_t { No, Picture, Rest, Rising };
+    Arriving arrive_stage_ = Arriving::No;
+    int arrive_step_ = 0;
+    int arrive_timer_ = 0;
+    uint8_t *arrive_copy_ = nullptr; // the desktop's picture while it rises; the Memory port's
+    static void arrive_tick(void *self);
+    void arrive_step();
+    void arrived();
+    // Where the desktop, the windows and the menus are painted: the screen,
+    // or the picture kept while the desktop rises.
+    uint8_t *paint_pixels()
+    {
+        return arrive_stage_ == Arriving::Rest && arrive_copy_ != nullptr ? arrive_copy_ : display_.pixels();
+    }
     void event_done(uint32_t start);
 
     // Processes.

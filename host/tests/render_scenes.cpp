@@ -184,8 +184,6 @@ int main(int argc, char **argv)
         failures++;
     }
     save("00a-boot-self-test", false);
-    shell::show_splash(boot, false);
-    save("00b-boot-splash", false);
     // The error screen at the start after a crash: a program that hung, and
     // one that used a bad pointer.
     {

@@ -1,6 +1,6 @@
 // Start-up screens: a quick, real self-test (each line printed when its
-// check has finished, with the value it found), then the splash with the
-// mascot and the 256-colour ribbon, then the desktop takes over.
+// check has finished, with the value it found), then the desktop, which
+// fades in (Wm::start). There is no splash screen (the owner, 2026-11-19).
 #pragma once
 
 #include <cstddef>
@@ -20,7 +20,6 @@ constexpr uint32_t kInternalTestBudgetUs = 20000; // and the internal one
 constexpr const char *kVersion = "v0.3";
 constexpr uint32_t kSelfTestPace = 130; // percent: how slowly the lines appear (selftest_pace)
 constexpr uint32_t kSelfTestHoldMs = 350;        // the finished self-test stays this long
-constexpr uint32_t kSplashMs = 0; // the owner: hidden by default (splash_ms)
 constexpr uint32_t kSelfTestHoldS = 5; // the finished self-test counts down this long (selftest_hold_s)
 // How long after the video starts the self-test stays up, so a monitor that
 // takes a while to show a picture still shows it ([boot] monitor_wait_ms in
@@ -55,13 +54,12 @@ struct BootIo {
     // that the self-test stays up.
     uint32_t video_start_us = 0;
     uint32_t monitor_wait_ms = 0;
-    uint32_t splash_ms = kSplashMs;
     uint32_t pace_percent = kSelfTestPace;
     uint32_t hold_s = kSelfTestHoldS;
     uint32_t crash_hold_s = kCrashHoldS;
     // True once a key or mouse button asks to skip the screens (may be nullptr).
     bool (*skip)(void *context) = nullptr;
-    bool skipped = false; // set when that happened: the splash is skipped too
+    bool skipped = false; // set when that happened
     // Like idle, but may sleep a short while (on the board one 10 ms tick)
     // so other tasks run. Used while more than kNapMarginUs of a wait is
     // left; the rest is done with idle so the wait does not overshoot.
@@ -75,7 +73,6 @@ struct BootIo {
 struct BootSettings {
     bool fastboot = false;                   // no start-up screens, no memory test
     uint32_t monitor_wait_ms = kMonitorWaitMs;
-    uint32_t splash_ms = kSplashMs;
     uint32_t pace_percent = kSelfTestPace;
     uint32_t hold_s = kSelfTestHoldS;
     uint32_t crash_hold_s = kCrashHoldS;
@@ -117,8 +114,6 @@ int run_quiet_checks(BootIo &io);
 // runs to the end. With hold, it then stays up at least kSelfTestHoldMs and
 // until monitor_wait_ms after the video started, unless skipped.
 int run_self_test(BootIo &io, bool hold = true);
-// The splash screen; with hold, stays io.splash_ms unless skipped.
-void show_splash(BootIo &io, bool hold = true);
 
 // The memory test alone: writes and verifies borrowed external RAM until
 // the budget is spent or there is none left to borrow. `progress` is

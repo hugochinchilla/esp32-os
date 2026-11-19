@@ -38,7 +38,7 @@ Files so far:
 | `viewer.ini` | `[view]` | `dither`: none, bayer2, bayer4, bayer8, blue-noise, floyd-steinberg, floyd-serpentine, atkinson, jarvis-judice-ninke, stucki, sierra-lite |
 | `files.ini` | `[view]` | `show_hidden`: true or false |
 | `screensaver.ini` | `[saver]` | `saver`: none, starfield, chinchillas, curves. `wait_minutes`: 1 to 99 |
-| `boot.ini` | `[boot]` | `fastboot`: true skips the start-up screens and the memory test (the other checks still run and are logged), default false. `monitor_wait_ms`: when the self-test's lines start appearing, counted from the start of the video, so a monitor that is slow to show a picture shows them, 0 to 30000, default 2500 (0: at once). `selftest_pace`: how slowly the lines and the memory count appear, in percent, 0 to 400, default 130. `selftest_hold_s`: how long the finished self-test stays, counting down under "Press any key to continue", 0 to 60, default 5 (0: no countdown, a short pause). `splash_ms`: how long the splash stays, default 0 (not shown at all). A key or mouse button skips to the desktop from any of them. `crash_hold_s`: how long the error screen after a crash counts down before the start goes on by itself, 0 to 600, default 15 (0: it stays until a key or mouse button) |
+| `boot.ini` | `[boot]` | `fastboot`: true skips the start-up screens and the memory test (the other checks still run and are logged), default false. `monitor_wait_ms`: when the self-test's lines start appearing, counted from the start of the video, so a monitor that is slow to show a picture shows them, 0 to 30000, default 2500 (0: at once). `selftest_pace`: how slowly the lines and the memory count appear, in percent, 0 to 400, default 130. `selftest_hold_s`: how long the finished self-test stays, counting down under "Press any key to continue", 0 to 60, default 5 (0: no countdown, a short pause). A key or mouse button skips to the desktop. `crash_hold_s`: how long the error screen after a crash counts down before the start goes on by itself, 0 to 600, default 15 (0: it stays until a key or mouse button) |
 | `boot.ini` | `[watchdog]` | `timeout_s`: how long the desktop's loop may give no sign of life before the machine writes a crash report and restarts, 5 to 600, default 15; 0 switches the watchdog off. The report is added to `C:\crash.txt` at the next start |
 | `desktop.ini` | `[welcome]` | `created`: true once welcome.txt has been put in C:\Documents\Desktop, so a deleted copy does not come back; set it to false to get it again |
 | `desktop.ini` | `[documents]` | `moved`: true once an old C:\docs has been moved into C:\Documents (done by itself at start-up) |
@@ -58,11 +58,13 @@ Since the BIOS (2026-11-17, `firmware/bios`): the self-test and its
 countdown are shown by the BIOS, which cannot read `boot.ini` and uses the
 built-in defaults until its settings move to NVS (backlog item 46, step 3).
 The `[boot]` keys for the self-test then only reach the OS's own screen,
-which shows when there is no BIOS in the flash. `splash_ms`, `crash_hold_s`
-and `[watchdog]` are the OS's and work as before.
+which shows when there is no BIOS in the flash. `crash_hold_s` and
+`[watchdog]` are the OS's and work as before. There is no splash screen and
+no `splash_ms` any more (2026-11-19); the key is ignored if a file has it.
 
 A one-shot fast start for debugging: `tools/dbg.py reboot --fast`, or
 `tools/dbg.py boot fast-next` before flashing, makes the next start behave as
 `fastboot = true` once (no self-test screen, no countdown, no monitor wait, no
-splash, no memory test) and logs "one-shot fast boot". boot.ini is not
+memory test, and the desktop shows at once instead of fading in) and logs
+"one-shot fast boot". boot.ini is not
 changed; the start after that is normal again. The flag is kept in NVS.

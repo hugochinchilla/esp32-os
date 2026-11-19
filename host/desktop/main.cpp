@@ -580,7 +580,6 @@ void Machine::start()
     static shell::BootIo io{display_, system_, memory_, clock_, &storage_, &Machine::boot_idle, this, nullptr};
     io.video_start_us = clock_.micros();
     io.monitor_wait_ms = 0;
-    io.splash_ms = boot.splash_ms;
     io.pace_percent = boot.pace_percent;
     io.hold_s = boot.hold_s;
     io.skip = [](void *self) { return static_cast<Machine *>(self)->skip_boot_; };
@@ -590,7 +589,6 @@ void Machine::start()
         shell::run_quiet_checks(io);
     } else {
         shell::run_self_test(io);
-        shell::show_splash(io);
     }
     booting_ = false;
     buttons_ = 0;
@@ -650,7 +648,9 @@ void Machine::start()
     tm local = {};
     localtime_r(&now, &local);
     screen_.set_time(local.tm_hour, local.tm_min, local.tm_sec);
-    screen_.start();
+    // The desktop fades in out of its plain colour (backlog item 74); a
+    // fast start shows it at once.
+    screen_.start(boot.fastboot || options_.fast ? wm::Wm::Arrival::AtOnce : wm::Wm::Arrival::FromColour);
     dirty_ = true;
 }
 

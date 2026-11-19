@@ -2,7 +2,7 @@
 
 The start of the real firmware. It brings up the screen, shows a quick
 real self-test (processor, RAM, a memory test, flash, drives, video, input,
-sound) and a splash screen, and runs the desktop: window manager, taskbar and Start menu, desktop icons, and the
+sound), and runs the desktop, which fades in: window manager, taskbar and Start menu, desktop icons, and the
 built-in programs (About Chinchilla, Editor, File manager, Picture viewer, Welcome, Widget
 gallery). Drive C: is LittleFS on the flash (9 MB, `partitions.csv`); files
 stay across restarts. A new drive is formatted and gets the sample files and
