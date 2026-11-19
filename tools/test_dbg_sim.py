@@ -57,14 +57,15 @@ def main():
         _, _, before = board.screenshot(pointer=False)
         lines = board.paint_bench().splitlines()
         assert lines[0].startswith("paint bench: 480 x 300 = 144000 pixels"), lines
-        names = [line.rsplit(" ", 1)[0] for line in lines[1:12]]
-        assert names == ["fill", "fill_rgb", "fill_fade", "fill in the band", "text_opaque", "text_opaque straight",
+        names = [line.rsplit(" ", 1)[0] for line in lines[1:15]]
+        assert names == ["fill", "fill_rgb", "fill_fade", "fade worked out", "4 lines down", "4 lines down in the band",
+                         "fill in the band", "text_opaque", "text_opaque straight",
                          "text", "blit_opaque 84 x 40x40", "blit 84 x 40x40", "copy from external",
                          "copy from internal"], names
-        assert all(line.rsplit(" ", 1)[1].isdigit() for line in lines[1:12]), lines
-        assert lines[12].startswith("window Welcome to Chinchill: ") and " frame " in lines[12], lines
-        assert lines[13].startswith("window About Chinchilla: "), lines
-        assert lines[14].startswith("everything again ") and len(lines) == 15, lines
+        assert all(line.rsplit(" ", 1)[1].isdigit() for line in lines[1:15]), lines
+        assert lines[15].startswith("window Welcome to Chinchill: ") and " menu " in lines[15], lines
+        assert lines[16].startswith("window About Chinchilla: "), lines
+        assert lines[17].startswith("everything again ") and len(lines) == 18, lines
         assert board.screenshot(pointer=False)[2] == before
 
         # Drag About by its title bar with mouse events.

@@ -223,6 +223,12 @@ int run_post(Post &post, bool hold)
         }
     };
     int failures = 0;
+    // The beep code at the end is for the worst thing found.
+    sound::PostResult result = sound::PostResult::Ok;
+    auto found = [&](bool passed, sound::PostResult what) {
+        failures += passed ? 0 : 1;
+        result = passed ? result : sound::worse(result, what);
+    };
     char v[96], t[128];
     uint32_t value = 0;
     shown();
@@ -232,7 +238,7 @@ int run_post(Post &post, bool hold)
     bool ok = io.system.fact(ports::Fact::Processor, value, v, sizeof(v));
     line(s, kProcessorRow, "Main Processor : ", ok ? v : "not recognised", ok ? kText : kRed);
     log("Processor", v, ok);
-    failures += ok ? 0 : 1;
+    found(ok, sound::PostResult::NotFatal);
     shown();
 
     // The memory tests, the count climbing as they go.
@@ -260,7 +266,7 @@ int run_post(Post &post, bool hold)
                      static_cast<unsigned long>(r.read));
             io.log(t, io.context);
         }
-        failures += ok ? 0 : 1;
+        found(ok, sound::PostResult::Memory);
         shown();
     }
 
@@ -271,7 +277,7 @@ int run_post(Post &post, bool hold)
         shell::format_bytes(v, sizeof(v), value);
         log(f == ports::Fact::Flash ? "Flash" : (f == ports::Fact::InternalRam ? "Internal RAM" : "External RAM"), v,
             ok);
-        failures += ok ? 0 : 1;
+        found(ok, f == ports::Fact::Flash ? sound::PostResult::NotFatal : sound::PostResult::Memory);
     }
 
     // Video.
@@ -279,7 +285,7 @@ int run_post(Post &post, bool hold)
     snprintf(v, sizeof(v), "VGA %dx%d, 256 colours", io.display.width(), io.display.height());
     line(s, kVideoRow, "Detecting video ....... ", v, ok ? kText : kRed);
     log("Video", v, ok);
-    failures += ok ? 0 : 1;
+    found(ok, sound::PostResult::Video);
     shown();
 
     // Drive C:.
@@ -303,7 +309,7 @@ int run_post(Post &post, bool hold)
     }
     line(s, kDriveRow, "Detecting drive C: .... ", v, ok ? kText : kRed);
     log("Drive C:", v, ok);
-    failures += ok ? 0 : 1;
+    found(ok, sound::PostResult::Drive);
     shown();
 
     // Keyboard (and mouse), sound.
@@ -318,7 +324,7 @@ int run_post(Post &post, bool hold)
         ok = io.system.fact(f.fact, value, v, sizeof(v));
         line(s, f.row, f.label, ok ? v : "not found", ok ? kText : kRed);
         log(f.name, v, ok);
-        failures += ok ? 0 : 1;
+        found(ok, sound::PostResult::NotFatal);
         shown();
     }
 
@@ -329,7 +335,7 @@ int run_post(Post &post, bool hold)
         post.bootable = post.boot_device(v, sizeof(v), post.boot_context);
         line(s, kBootRow, "Boot device ........... ", v, post.bootable ? kText : kRed);
         log("Boot device", v, post.bootable);
-        failures += post.bootable ? 0 : 1;
+        found(post.bootable, sound::PostResult::NoSystem);
         shown();
     }
 
@@ -338,6 +344,10 @@ int run_post(Post &post, bool hold)
         line(s, kKeyRow, "Flash one with the cable, then restart.", "", kText);
         s.paint(c);
         s.move_to(s.cursor_row() + 1);
+        post.result = result;
+        if (hold) {
+            shell::post_beep(io, result); // once; the caller may repeat it while it stays here
+        }
         return failures;
     }
     if (failures == 0) {
@@ -347,6 +357,12 @@ int run_post(Post &post, bool hold)
         line(s, kSummaryRow, t, "", kRed);
     }
     s.paint(c);
+    post.result = result;
+    if (hold) {
+        // The beep, as a PC gives when its self-test is done: one short
+        // when all is well, a code when not. It sounds over the countdown.
+        shell::post_beep(io, result);
+    }
     if (hold && !io.skipped) {
         if (io.hold_s > 0) {
             // The finished screen stays, counting down; a key goes on at once.
@@ -361,6 +377,9 @@ int run_post(Post &post, bool hold)
             // Long enough to read the last line (longer when something failed).
             shell::wait_until(io, io.clock.micros() + (failures ? 3 : 1) * shell::kSelfTestHoldMs * 1000);
         }
+    }
+    if (hold) {
+        shell::let_beep_end(io, result); // a key ended the wait: the beep still finishes
     }
     s.move_to(s.cursor_row() + 1); // serial: the last line is finished
     return failures;

@@ -111,11 +111,16 @@ void square_xy(const char *name, int &x, int &y)
     y = c.y + 32 + (white ? 7 - rank : rank) * 40 + 20;
 }
 
+// The computer's answer is not shown sooner than 250 to 350 ms after it
+// began to think: long enough for it to be on the board.
+void let_it_answer() { wait(400000); }
+
 void click_square(const char *name)
 {
     int x, y;
     square_xy(name, x, y);
     click(x, y);
+    let_it_answer();
 }
 
 void drag(const char *from, const char *to)
@@ -128,6 +133,7 @@ void drag(const char *from, const char *to)
     mouse((x + x2) / 2, (y + y2) / 2, 1);
     mouse(x2, y2, 1);
     mouse(x2, y2, 0);
+    let_it_answer();
 }
 
 uint8_t pixel(int x, int y) { return display.pixels()[y * 640 + x]; }
@@ -206,6 +212,7 @@ void choose(int level, int side)
         click(c.x + 56 + side * 104, c.y + 167);
     }
     key(wm::key::Enter);
+    let_it_answer(); // if the computer has White
     desktop.update();
 }
 
@@ -314,6 +321,7 @@ void test_game()
         mouse(x2, y2, 1);
         CHECK(no_stale_pixels());
         mouse(x2, y2, 0);
+        let_it_answer();
     }
     CHECK(g.plies() == 4 && chess::type_of(g.position().at(chess::square(5, 2))) == chess::Knight);
     CHECK(no_stale_pixels());
@@ -420,6 +428,7 @@ void test_game()
         const gfx::Rect c = desktop.active()->client();
         click(c.x + 10 + 74 + 34, c.y + 96 - 22); // Rook
     }
+    let_it_answer();
     desktop.update();
     CHECK(desktop.active() == board() && g.plies() == plies + 2);
     CHECK(g.position().at(chess::square(0, 7)) == chess::piece(White, chess::Rook) || g.taken(White, chess::Rook) == 1);
@@ -535,6 +544,7 @@ void test_game()
     open_chess();
     CHECK(strcmp(front(), "New game") == 0);
     key(wm::key::Enter); // as it stands: level 3, Black
+    let_it_answer();
     desktop.update();
     CHECK(shell::chess_user() == Black && shell::chess_game().plies() == 1);
     CHECK(square_colour("a6") == gfx::rgb(7, 6, 2));
@@ -571,7 +581,7 @@ std::string square_pixels(int sq)
 // in the middle columns, where no letter, number or corner mark is.
 int foot(const std::string &square)
 {
-    const char ground = square[1 * 40 + 20];
+    const char ground = square[1 * 40 + 38]; // a corner: a lifted king reaches the top in the middle
     for (int row = 39; row >= 0; row--) {
         for (int col = 10; col < 30; col++) {
             if (square[row * 40 + col] != ground) {
@@ -604,6 +614,7 @@ void press_square(const char *name)
     square_xy(name, pressed_x, pressed_y);
     mouse(pressed_x, pressed_y, 0);
     mouse(pressed_x, pressed_y, 1);
+    let_it_answer(); // the piece starts to land on this tick
 }
 void release()
 {
@@ -697,6 +708,100 @@ void test_landing()
     storage.remove("C:\\.config\\chess.ini");
 }
 
+/* ---- The computer does not answer at once ---------------------------------------- */
+
+void test_pace()
+{
+    start_desktop();
+    desktop.set_time(9, 41, 0);
+    wait(1000);
+    const uint32_t bytes_before = os::bytes_out();
+    open_chess();
+    choose(1, 0);
+    chess::Game &g = shell::chess_game();
+
+    // The engine has its move before the click returns (no tasks), and
+    // keeps it: the user's piece is seen on its square first, the game
+    // waiting for the computer. The move comes 250 to 350 ms later, another
+    // length each time.
+    bool short_one = false, long_one = false;
+    const char *const moves[4][2] = {{"e2", "e4"}, {"d2", "d4"}, {"a2", "a3"}, {"h2", "h3"}};
+    for (int i = 0; i < 4; i++) {
+        int x, y;
+        square_xy(moves[i][0], x, y);
+        click(x, y);
+        square_xy(moves[i][1], x, y);
+        mouse(x, y, 0);
+        mouse(x, y, 1); // played on the press; the clock stands still from here
+        const int plies = 2 * i + 1;
+        CHECK(g.plies() == plies && shell::chess_thinking() && board()->hourglass());
+        CHECK(strcmp(shell::chess_status(), "The computer is thinking...") == 0);
+        CHECK(no_stale_pixels());
+        // The user cannot move for the computer meanwhile.
+        desktop.mouse({true, static_cast<int16_t>(x), static_cast<int16_t>(y), 0, 0});
+        wait(249000);
+        CHECK(g.plies() == plies && shell::chess_thinking());
+        uint32_t waited = 249000;
+        while (g.plies() == plies && waited < 400000) {
+            wait(10000);
+            waited += 10000;
+        }
+        CHECK(g.plies() == plies + 1 && !shell::chess_thinking() && !board()->hourglass());
+        CHECK(waited >= 250000 && waited <= 360000);
+        short_one = short_one || waited < 300000;
+        long_one = long_one || waited >= 300000;
+        wait(1000000);
+    }
+    (void)short_one; // which lengths came up depends on the clock: not checked
+    (void)long_one;
+
+    // Take back while the answer waits: it is dropped, and does not come
+    // later. The same for another game.
+    {
+        int x, y;
+        click_square("g1"); // an answer comes, then:
+        square_xy("g1", x, y);
+        const int before = g.plies();
+        letter('z', kCtrl);
+        CHECK(g.plies() == before - 2);
+        square_xy("b1", x, y);
+        click(x, y);
+        square_xy("c3", x, y);
+        click(x, y);
+        CHECK(g.plies() == before - 1 && shell::chess_thinking());
+        letter('z', kCtrl);
+        CHECK(g.plies() == before - 2 && !shell::chess_thinking() && !board()->hourglass());
+        wait(1000000);
+        CHECK(g.plies() == before - 2 && strstr(shell::chess_status(), "Your move.") != nullptr);
+        click(x, y); // nothing is picked: a click on an empty square
+        square_xy("b1", x, y);
+        click(x, y);
+        square_xy("c3", x, y);
+        click(x, y);
+        key(kF2);
+        desktop.update();
+        choose(1, 0);
+        CHECK(g.plies() == 0 && !shell::chess_thinking());
+        wait(1000000);
+        CHECK(g.plies() == 0);
+    }
+
+    // The window closes while an answer waits.
+    {
+        int x, y;
+        square_xy("e2", x, y);
+        click(x, y);
+        square_xy("e4", x, y);
+        click(x, y);
+        CHECK(g.plies() == 1 && shell::chess_thinking());
+    }
+    desktop.close(*board());
+    wait(1000);
+    wait(1000000);
+    CHECK(board() == nullptr && os::bytes_out() == bytes_before);
+    storage.remove("C:\\.config\\chess.ini");
+}
+
 /* ---- The engine in a background job, on a real thread --------------------------- */
 
 void let_job_finish(msg::Inbox &inbox)
@@ -757,6 +862,7 @@ void test_background()
     let_job_finish(inbox); // the old answer: not played
     CHECK(g.plies() == 0 && shell::chess_thinking() && tasks.started == started + 4);
     let_job_finish(inbox); // the new one
+    let_it_answer();
     CHECK(g.plies() == 1 && !shell::chess_thinking());
 
     // The strongest level looks as deep as its time allows: the window's
@@ -903,6 +1009,7 @@ int main(int argc, char **argv)
     }
     test_game();
     test_landing();
+    test_pace();
     msg::set_queue(&queue);
     job::jobs().set_tasks(&tasks);
     test_background();

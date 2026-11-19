@@ -391,6 +391,46 @@ enum class Fact : uint8_t {
     Sound,       // text: the sound output
 };
 
+// ---- Sound (backlog item 58) ----
+//
+// Two voices, mixed by whatever plays them: recorded samples (the system's
+// sounds, docs/sounds/) and the beeper, which stands for the one-pitch
+// speaker a PC of the time had on its mainboard.
+
+// The samples' form, as docs/sounds/ keeps them: signed 16 bits, one
+// channel, this many a second.
+constexpr uint32_t kSoundRate = 22050;
+
+// One step of what the beeper plays: a square wave at `hz` for `ms`
+// milliseconds; 0 Hz is silence. One pitch at a time, on or off.
+struct Beep {
+    uint16_t hz;
+    uint16_t ms;
+};
+constexpr int kBeepSteps = 32; // the longest run of steps Sound::beep takes
+
+// The sound output. Every call returns at once: the machine keeps the time
+// itself, so a busy caller does not make a sound stumble. One task at a
+// time (the UI task, or the start-up code before there is one).
+class Sound {
+public:
+    // Plays the samples from the start. They are not copied: they must stay
+    // where they are until they have played or something else is played
+    // (the system's sounds are constants). Whatever samples were playing
+    // stop; the beeper is a voice of its own and goes on.
+    virtual void play(const int16_t *samples, size_t count) = 0;
+    // Plays the steps on the beeper. They are copied (kBeepSteps at most).
+    // A new call replaces what the beeper was playing; count 0 silences it.
+    virtual void beep(const Beep *steps, int count) = 0;
+    // Silence: both voices.
+    virtual void stop() = 0;
+    // Something is still to be heard.
+    virtual bool playing() = 0;
+
+protected:
+    ~Sound() = default;
+};
+
 // One task as the kernel sees it (a FreeRTOS task on the board). Programs
 // that share the UI task are not tasks: they all show up as "ui".
 enum class TaskState : uint8_t {

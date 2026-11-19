@@ -452,6 +452,30 @@ private:
     std::chrono::steady_clock::time_point start_ = std::chrono::steady_clock::now();
 };
 
+// A sound output that plays nothing and remembers what it was asked: the
+// tests read it. `busy` is what playing() answers.
+class RecordingSound : public ports::Sound {
+public:
+    void play(const int16_t *samples, size_t count) override
+    {
+        played.push_back(samples);
+        played_count = count;
+    }
+    void beep(const ports::Beep *steps, int count) override
+    {
+        beeps.assign(steps, steps + (count > 0 ? count : 0));
+        beep_calls++;
+    }
+    void stop() override { stops++; }
+    bool playing() override { return busy; }
+
+    std::vector<const int16_t *> played; // every play(), in order
+    size_t played_count = 0;             // of the last one
+    std::vector<ports::Beep> beeps;      // the last beep()
+    int beep_calls = 0, stops = 0;
+    bool busy = false;
+};
+
 // Where an update goes on the PC: memory. finish() wants what an ESP image
 // starts with (0xE9), so tests can send something that is not one.
 class MemoryUpdater : public ports::Updater {

@@ -176,19 +176,19 @@ Beats, in order:
    chess" and "maximise" are the parts to watch), and Chess with a piece
    dragged across the board.
 
-Figures for the captions (board, before; the "after" column is filled in
-by the board turn):
+Figures for the captions (board; "after" is the first pass, 627a372. The
+second pass, below, has its own turn to come):
 
 | | Before | After |
 | --- | --- | --- |
-| A window's frame | 6 to 8 ms | |
-| The Terminal's inside | 25.4 ms | |
-| Chess's inside | 28.8 ms | |
+| A window's frame | 6 to 8 ms | 4.7 to 7.5 ms |
+| The Terminal's inside | 25.4 ms | 13.1 ms |
+| Chess's inside | 28.8 ms | 11.5 ms |
 | A chess piece moved | 16.4 ms | |
-| `text_opaque`, 144,000 pixels | 22.5 ms | |
-| `fill_fade`, 144,000 pixels | 216.5 ms | |
-| Five windows painted again | 69.9 ms | |
-| Pieces over a frame in the benchmark | 40 to 41 | |
+| `text_opaque`, 144,000 pixels | 22.5 ms | 10.2 ms |
+| `fill_fade`, 144,000 pixels | 216.5 ms | 3.6 ms |
+| Five windows painted again | 69.9 ms | 43.2 ms |
+| Pieces over a frame in the benchmark | 40 to 41 | 36 to 38 |
 
 A line that may be worth saying: one frame at 60 Hz is 16.8 ms, and this
 board writes a pixel to its screen memory in 26 ns at best, so a full
@@ -222,3 +222,106 @@ Pieces: each of the three sets changes every piece. Filmed with the webcam at
 60 frames a second during the frames benchmark (windows to the front, a piece
 dragged): no flicker, tearing or trail seen; the owner is to judge the motion
 on the monitor.
+
+## The second pass (2026-11-18)
+
+Built and tested on the PC; the firmware and the programs compile and link
+in the cloud. Not yet run on the board.
+
+### What the board said about the first pass
+
+Better, and about half of what the agent had estimated for the owner:
+
+| | Before | Estimated | Measured |
+| --- | --- | --- | --- |
+| Chess's inside | 28.8 ms | 7 | 11.5 |
+| The Terminal's inside | 25.4 ms | 6 | 13.1 |
+| A window's frame | 6 to 8 ms | 1.5 | 4.7 to 7.5 |
+| Five windows painted again | 69.9 ms | 45 to 50 | 43.2 |
+| Over budget in the benchmark | 40 to 41 | | 36 to 38 |
+
+Three things were wrong in the estimate, and each is a lesson:
+
+- **The fade was kept, but only one of it.** Every window has its own
+  width and place, so the kept rows were almost never the ones asked for,
+  and working them out again cost what it always had: twelve searches
+  through the board's levels for every column, now for all 640 columns
+  instead of the title bar's own. The bench's `fill_fade` line asked for the
+  same fade three times and showed 3.6 ms; a real desktop never asks twice.
+- **The frame was never mostly the fade.** That was read off the PC's
+  profile, and the PC does not have the board's memory. The new reading:
+  the screen is in external RAM behind a small cache, and a line drawn
+  from top to bottom touches a different line of that cache for every
+  pixel. `fill_fade`, which wrote columns, measured it without anyone
+  noticing: 1.5 µs a pixel, against 26 ns along a row, about sixty times.
+  A window's two sides are an edge of two lines and a strip two pixels
+  wide, three passes from top to bottom each: some 2,400 pixels at the
+  dear price, 3 to 4 ms. This is still a reading, not a measurement; the
+  bench now has a line for it.
+- **The text was still decoded once a row.** The new loop read each glyph
+  row once but called `next_latin1` for every character on each of its
+  twelve rows, and tested every cell for the clip's edge and the caret.
+  10.2 ms where the bench's straight loop takes 4.9.
+
+### What was changed
+
+- **The dither is two tables** (`dither_levels`, 8 KB, filled the first
+  time a colour is dithered): the level of each of 256 values at each of
+  the 16 thresholds. A dithered colour is three look-ups instead of three
+  searches, so a fade's rows are cheap to work out whenever they are not
+  the ones kept. `fill_rgb` and `fill_pattern` use the same tables.
+- **The text decodes a stretch of characters once** (96 at a time, on the
+  stack) and then writes their rows; the cells cut by the clip are taken
+  out of the loop before it starts, and the caret's cell splits it in two.
+- **A window's border goes through the scratch band** (`Wm::paint_border`):
+  the four strips of the frame are drawn in the band's fast memory and
+  each row of a side reaches the screen in one piece, one visit to each
+  line of the cache instead of three.
+- **The bench says more**: `fade worked out` (a fade of a new width each
+  time), `4 lines down` and the same through the band (the reading above,
+  to be confirmed or not), and each window's menu bar apart from its frame.
+
+No estimate is given this time. The figures will be the board's.
+
+Tested on the PC: the gate passes, 53 of 53, the reference pictures the
+same to the pixel; `test_canvas` (the fade, the text with carets and
+clips, the band) passes unchanged, and `test_paint` still finds no pixel
+written twice with the border in the band.
+
+### For the video, an addition
+
+The second act writes itself: the first fix worked on the PC and fell
+short on the board, 41 frames over budget to 37, because the estimate
+trusted a profile from a machine with a different memory. The detail worth
+showing is the price of a vertical line: on this board a line of 300
+pixels drawn downwards costs as much as 17,000 pixels drawn across,
+because every pixel of it lands in a different line of the cache in front
+of the external RAM. A Windows 98 window has a bevelled edge down each
+side; five windows have ten.
+
+## On the board, the second pass (2026-11-19, 5c9296c)
+
+App-flashed on the BIOS layout; the programs' bundle was unchanged. The paint
+bench, first block, against 627a372: text_opaque 8,097 (10,161), the windows'
+frames 3,731 to 5,163 (4,700 to 7,500), the Terminal's inside 11,140 (13,137),
+everything again 40,614 (43,198), 16,748 with the Editor maximised (17,709).
+New lines: `fade worked out` 714 us, `4 lines down` 1,618 and `4 lines down in the
+band` 801 (so a vertical run through the band costs half), a window's menu bar
+210 to 340 us. The other three blocks agree.
+
+Frames benchmark, three runs: over budget 37, 36 and 35 of about 1,913 frames
+drawn (627a372: 38, 38, 36), no missed refill of the video signal, 1 to 5 late
+timers. The gain is small because what is left over budget is the pieces that
+paint a whole large window (drops 12 frames, to front 11, maximise 6), and
+their time is in the programs' own insides, which this pass hardly touched.
+Free RAM with the five windows open: 150,571 internal (158,755: the two
+dither tables are 8 KB) and 5,143,272 external.
+
+Screenshots: borders whole on all four sides in every window, active and
+inactive; title bars with the blue fade; the desktop with the Dots and the
+Crosses patterns over a dithered colour; Terminal and Editor text whole, the
+caret showing and eight characters selected with Shift+Left; Sky, Glacier and
+Midnight with two overlapping windows and the Display dialog: borders and title
+bars whole. Webcam at 60 frames a second during the benchmark (windows to the
+front, a piece dragged, the Editor opening): no border flickered or showed a
+gap; the Editor's opening shows the translucent growing outline that main has.

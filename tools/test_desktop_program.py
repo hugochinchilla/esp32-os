@@ -42,9 +42,75 @@ def run(program, folder, scale):
     drive = os.path.join(folder, "drive %d" % scale, "C")  # made by the program
     shot = os.path.join(folder, "shot%d.bmp" % scale)
     env = dict(os.environ, SDL_VIDEODRIVER="dummy", ASAN_OPTIONS="detect_leaks=0")
-    subprocess.run([program, "--drive", drive, "--fast", "--scale", str(scale), "--screenshot", shot,
+    # --mute: a test run on a PC with loudspeakers plays nothing.
+    subprocess.run([program, "--drive", drive, "--fast", "--mute", "--scale", str(scale), "--screenshot", shot,
                     "--exit-after", "700"], env=env, check=True, timeout=60)
     return drive, read_bmp(shot)
+
+
+def read_wav(path):
+    """A WAV file of 16-bit samples, one channel, as (rate, samples)."""
+    data = open(path, "rb").read()
+    assert data[:4] == b"RIFF" and data[8:12] == b"WAVE", "not a WAV file"
+    channels, rate = struct.unpack_from("<HI", data, 22)
+    size, = struct.unpack_from("<I", data, 40)
+    assert channels == 1 and size == len(data) - 44, (channels, size, len(data))
+    return rate, struct.unpack_from("<%dh" % (size // 2), data, 44)
+
+
+def sounds(rate, samples):
+    """The stretches that are not silence, as (start s, end s, pitch Hz, loudest)."""
+    step = rate // 100
+    found, start = [], None
+    for i in range(0, len(samples) + step, step):
+        loud = any(abs(v) > 40 for v in samples[i:i + step])
+        if loud and start is None:
+            start = i
+        elif not loud and start is not None:
+            part = samples[start:i]
+            ups = [n for n in range(1, len(part)) if part[n - 1] < 0 <= part[n]]
+            pitch = (len(ups) - 1) * rate / (ups[-1] - ups[0]) if len(ups) > 1 else 0
+            found.append((start / rate, i / rate, pitch, max(abs(v) for v in part)))
+            start = None
+    return found
+
+
+def check_sound(program, folder):
+    """A whole start with SDL's "dummy" sound card, which takes the samples
+    at the pace of a real one and plays nothing: what would be heard is
+    recorded and looked at. The self-test ends in one short beep at
+    1,000 Hz; the welcome chime follows when the desktop is up."""
+    drive = os.path.join(folder, "drive sound", "C")
+    os.makedirs(os.path.join(drive, ".config"))
+    with open(os.path.join(drive, ".config", "boot.ini"), "w") as f:
+        f.write("[boot]\nselftest_pace = 20\nselftest_hold_s = 0\n")  # a quick self-test
+    with open(os.path.join(drive, "keep.txt"), "w") as f:
+        f.write("not a new drive: no sample files to write")
+    wav = os.path.join(folder, "heard.wav")
+    env = dict(os.environ, SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="dummy", ASAN_OPTIONS="detect_leaks=0")
+    subprocess.run([program, "--drive", drive, "--scale", "1", "--record", wav, "--exit-after", "4500"],
+                   env=env, check=True, timeout=60)
+    rate, samples = read_wav(wav)
+    assert rate == 22050, rate
+    heard = sounds(rate, samples)
+    assert len(heard) >= 2, "expected a beep and the chime, heard %s" % (heard,)
+    beep, chime = heard[0], heard[1]
+    assert 0.15 < beep[1] - beep[0] < 0.26, "the beep lasted %.2f s" % (beep[1] - beep[0])
+    assert abs(beep[2] - 1000) < 15, "the beep was at %d Hz" % beep[2]
+    assert 4000 < beep[3] < 16000, "the beep's loudest sample was %d" % beep[3]
+    # The chime (docs/sounds/boot.pcm, 3.5 s) starts after the beep has ended
+    # and is the recording itself, sample for sample.
+    assert chime[0] > beep[1] and chime[1] - chime[0] > 1.0, heard
+    boot = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "docs", "sounds", "boot.pcm")
+    data = open(boot, "rb").read()
+    recording = struct.unpack("<%dh" % (len(data) // 2), data)
+    first = next(i for i, v in enumerate(recording) if abs(v) > 40)
+    at = next(i for i in range(int(chime[0] * rate) - rate // 50, len(samples)) if abs(samples[i]) > 40)
+    assert samples[at:at + 8000] == recording[first:first + 8000], "the chime is not the recording"
+
+    # --mute: no sound card is opened and nothing waits for one.
+    subprocess.run([program, "--drive", drive, "--fast", "--mute", "--exit-after", "300"], env=env, check=True,
+                   timeout=60)
 
 
 def main():
@@ -80,6 +146,8 @@ def main():
                 if not (rows2[2 * y][2 * x] == p and rows2[2 * y + 1][2 * x + 1] == p):
                     different += 1
         assert different == 0, "%d pixels differ at twice the size" % different
+
+        check_sound(program, folder)
     print("desktop program: ok")
 
 

@@ -135,7 +135,7 @@ The picture: signal, memory, painting, frame time.
 - [Decided: video](decisions/decided-video.md) (2026-11-16, owner, decided): 640x480 at 60 Hz, 256 colours, one picture in memory, the pointer mixed in at scanout, dithered colours
 - [Missed video refills are logged](decisions/missed-video-refills.md) (2026-11-17, owner, decided): Missed refills are logged; `dbg.py tasks` stays although it can cause them
 - [Chosen for the frame budget](decisions/frame-budget.md) (2026-11-18, agent, to-confirm): The budget is one video frame, 16 800 us; how drawing is measured against it (backlog 63)
-- [Screen sizes: 640x480 and 800x600](decisions/screen-sizes.md) (2026-11-18, owner, decided): Display > Resolution changes the picture at once; a box asks to keep it, back after 15 s (backlog 68). The agent's parts are to confirm
+- [Screen sizes: 640x480 and 800x600](decisions/screen-sizes.md) (2026-11-18, owner, decided): Display > Resolution changes the picture at once; a box asks to keep it, back after 15 s; 640x480 the default (backlog 68)
 
 ### boot
 
@@ -178,6 +178,7 @@ Processes, tasks, signals, init, OS calls, memory.
 - [The settings tools ask through the OS calls](decisions/settings-tools-os-calls.md) (2026-11-17, agent, to-confirm): Display, Screen Saver, Network and Shut Down are programs that ask through new OS calls (backlog 20)
 - [Watchdog, crash record and error screen](decisions/watchdog-crash-record-error-screen.md) (2026-11-17, agent, to-confirm): Heartbeat watchdog, a crash record kept over the restart, and the error screen (backlog 7)
 - [Services are lines of the start-up file](decisions/services-start-up-file.md) (2026-11-18, owner, decided): `telnetd` and `vncd` are lines of init's start-up file; a Services dialog and commands edit them (backlog 62)
+- [Sound: the port, the beeper and the system's sounds](decisions/sound-port.md) (2026-11-18, owner+agent, to-confirm): A Sound port with two voices, samples and an emulated PC beeper; silent on the board, real on the PC and in the browser (backlog 58, 59)
 
 ### storage
 
@@ -231,6 +232,7 @@ The programs and games, one decision each.
 - [Chosen for Copy, Cut and Paste of files](decisions/file-copy-cut-paste.md) (2026-11-18, agent, to-confirm): One clipboard for text or files; Copy, Cut and Paste in the File manager and on the desktop (backlog 54)
 - [Chosen for selecting several files](decisions/selecting-several-files.md) (2026-11-18, owner+agent, to-confirm): Ctrl+click and a rubber-band rectangle in the File manager (backlog 55)
 - [Pictures in Vizcacha](decisions/browser-pictures.md) (2026-11-18, owner+agent, decided): Vizcacha shows a page's PNG, JPEG and BMP pictures, fetched after the text and fitted to the page; GIF stays a box (backlog 53)
+- [The chess computer does not answer at once](decisions/chess-reply-pace.md) (2026-11-18, owner+agent, decided): Chess: the computer's move is shown no sooner than 250 to 350 ms after it began to think (backlog 67)
 - [The chess game](decisions/chess-game.md) (2026-11-18, owner, decided): Chess: own engine, moving by drag or click, piece sets, board colours, levels (backlog 50)
 - [The computer's chess piece lands](decisions/chess-landing.md) (2026-11-18, owner+agent, decided): The computer's piece drops 4 pixels onto its square and bounces once, 233 ms (backlog 64); details to confirm
 

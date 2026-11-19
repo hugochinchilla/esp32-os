@@ -394,10 +394,11 @@ private:
     {
         int first = 0, last = 0;
         bool changed;
+        int bells;
         {
             const Hold hold(lock_);
             changed = screen_.take_changes(first, last);
-            screen_.take_bells(); // no sound yet
+            bells = screen_.take_bells();
             // The window manager asks for the caret at times of its own:
             // where the cursor is, as last seen under the lock.
             view_.set_caret(screen_.cursor_row() < 0
@@ -407,6 +408,9 @@ private:
             history_ = screen_.history();
             scrolled_ = screen_.scrolled();
             rows_ = screen_.rows();
+        }
+        if (bells > 0) {
+            os::play_sound(sound::Id::Bell);
         }
         show_history();
         if (!on_screen()) {

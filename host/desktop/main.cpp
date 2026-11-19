@@ -2,7 +2,7 @@
 // in a window. The window is the monitor, the PC's mouse and keyboard are
 // the board's, and a folder of the PC is drive C:.
 //
-//   chinchilla [--drive FOLDER] [--fast] [--scale N] [--fullscreen]
+//   chinchilla [--drive FOLDER] [--fast] [--scale N] [--fullscreen] [--mute]
 //
 // It is not an emulator of the ESP32: nothing here is the chip, its memory
 // limits or its speed. This file is to the PC what firmware/os/main/main.cpp
@@ -30,6 +30,7 @@
 #endif
 
 #include "core/init/init.hpp"
+#include "core/os/os.hpp"
 #include "core/os/tcp.hpp"
 #include "core/fs/fs.hpp"
 #include "core/fs/samples.hpp"
@@ -40,6 +41,7 @@
 
 #include "../folder_volume.hpp"
 #include "../host_adapters.hpp"
+#include "audio.hpp"
 #include "screen.hpp"
 #ifdef __EMSCRIPTEN__
 #include "web_dialer.hpp"
@@ -76,6 +78,19 @@ EM_ASYNC_JS(int, web_mount_drive, (const char *path), {
 });
 
 // The size the canvas has on the page, in the screen's real pixels.
+// Browsers play no sound on a page nobody has clicked, so the page starts
+// switched off, with a power button (web/shell.html): this waits for it.
+// The words under it are the owner's ("Click to start Chinchilla 96"). A page
+// without the button starts at once.
+EM_ASYNC_JS(void, web_wait_for_power, (), {
+    const off = document.getElementById('off'); // a click anywhere on it will do
+    if (off) {
+        await new Promise((pressed) => off.addEventListener('click', pressed, {once: true}));
+        off.remove();
+    }
+    Module.canvas.focus();
+});
+
 EM_JS(int, web_canvas_width, (), {
     return Math.max(1, Math.round(Module.canvas.clientWidth * (window.devicePixelRatio || 1)));
 });
@@ -111,9 +126,16 @@ public:
 // What the start-up self-test says about the machine.
 class PcSystem : public host::HostSystem {
 public:
+    bool sound = false; // there is a sound output
+
     bool fact(ports::Fact which, uint32_t &value, char *text, size_t capacity) override
     {
         switch (which) {
+        case ports::Fact::Sound:
+            value = 0;
+            snprintf(text, capacity, "%s", sound ? (kWeb ? "the browser's, and a beeper" : "the PC's sound card, and a beeper")
+                                                 : "none");
+            return true;
         case ports::Fact::Processor:
             value = 0;
             snprintf(text, capacity, "this PC (not an ESP32)");
@@ -132,6 +154,8 @@ struct Options {
     std::string drive;
     bool fast = false;
     bool fullscreen = false;
+    bool mute = false;
+    std::string record;       // tests: what is played, as a WAV file
     int scale = 0;            // 0: the largest whole size that fits the desktop
     std::string screenshot;   // tests: save the window here ...
     uint32_t exit_after = 0;  // ... and leave after this many ms
@@ -181,6 +205,8 @@ private:
     host::SteadyClock clock_;
     host::HostMemory memory_;
     PcSystem system_;
+    host::SdlSound sound_;
+    bool leaving_ = false; // shut down by the window's close button: gone when the melody has ended
     wm::Wm screen_{display_, pointer_, clock_};
     fs::Storage storage_;
     host::FolderVolume volume_;
@@ -261,12 +287,22 @@ bool Machine::open_window()
     // Chinchilla draws its own pointer (the arrow, the hourglass, the
     // resize arrows); the PC's is hidden while it is over the window.
     SDL_ShowCursor(SDL_DISABLE);
+    // Sound: without it (no card, or --mute) everything else works.
+    if (!options_.mute) {
+        system_.sound = sound_.open(options_.record.c_str());
+        if (!system_.sound) {
+            fprintf(stderr, "chinchilla: no sound: %s\n", SDL_GetError());
+        }
+    }
+    sound::set_clips(host::kSystemSounds);
+    os::install_sound(&sound_);
     started_ms_ = SDL_GetTicks();
     return true;
 }
 
 void Machine::close_window()
 {
+    sound_.close();
     SDL_DestroyTexture(large_);
     SDL_DestroyTexture(frame_);
     SDL_DestroyRenderer(renderer_);
@@ -444,7 +480,10 @@ void Machine::close_asked()
     }
     release_keys();
     if (shell::power_down()) {
-        running_ = false;
+        // The last screen stays for as long as the closing melody plays;
+        // closing the window again leaves at once.
+        leaving_ = true;
+        dirty_ = true;
         return;
     }
     screen_.tick();
@@ -525,6 +564,7 @@ void Machine::boot_idle(void *self)
     if (SDL_GetTicks() - m.presented_ms_ >= kFrameMs) {
         m.present();
     }
+    m.sound_.watch();
 #ifdef __EMSCRIPTEN__
     // Hands the processor back to the browser, which cannot show a picture
     // or deliver a key while the program keeps it (this is what Asyncify
@@ -556,6 +596,7 @@ void Machine::start()
     io.pace_percent = boot.pace_percent;
     io.hold_s = boot.hold_s;
     io.skip = [](void *self) { return static_cast<Machine *>(self)->skip_boot_; };
+    io.sound = &sound_;
     pointer_.set_visible(false);
     if (boot.fastboot || options_.fast) {
         shell::run_quiet_checks(io);
@@ -632,7 +673,13 @@ void Machine::restart()
 #ifdef __EMSCRIPTEN__
     (void)argv_;
     emscripten_cancel_main_loop();
-    EM_ASM({ setTimeout(() => location.reload(), 300); }); // after C: has been written back
+    EM_ASM({
+        try {
+            sessionStorage.setItem('chinchilla-restart', '1'); // it comes back on without the power button
+        } catch (error) {
+        }
+        setTimeout(() => location.reload(), 300); // after C: has been written back
+    });
 #else
     close_window();
     execv("/proc/self/exe", argv_);
@@ -660,6 +707,7 @@ bool Machine::step()
     while (SDL_PollEvent(&event) != 0) {
         handle(event);
     }
+    sound_.watch();
     screen_.tick();
     if (system_.reboot_requested) {
         system_.reboot_requested = false;
@@ -700,6 +748,9 @@ bool Machine::step()
         }
         return false;
     }
+    if (leaving_ && !sound_.playing()) {
+        return false;
+    }
     return running_;
 }
 
@@ -737,6 +788,7 @@ void usage()
            "  --fast           no start-up screens\n"
            "  --scale N        open the window N times 640x480 (default: what fits)\n"
            "  --fullscreen     start on the whole screen\n"
+           "  --mute           no sound\n"
            "  --help           this text\n\n"
            "In the window: F11 whole screen and back, F12 saves a picture of the\n"
            "window in the current folder, Ctrl+Alt+End is Ctrl+Alt+Del, Ctrl+Esc\n"
@@ -765,6 +817,10 @@ int main(int argc, char **argv)
             options.fullscreen = true;
         } else if (arg == "--scale" && more) {
             options.scale = atoi(argv[++i]);
+        } else if (arg == "--mute") {
+            options.mute = true;
+        } else if (arg == "--record" && more) { // for the tests: what is played, as a WAV file
+            options.record = argv[++i];
         } else if (arg == "--screenshot" && more) { // for the tests
             options.screenshot = argv[++i];
         } else if (arg == "--exit-after" && more) { // for the tests, in ms
@@ -781,6 +837,9 @@ int main(int argc, char **argv)
         fprintf(stderr, "chinchilla: %s cannot be used as drive C: (%s)\n", options.drive.c_str(), strerror(errno));
         return 1;
     }
+#ifdef __EMSCRIPTEN__
+    web_wait_for_power();
+#endif
     static Machine machine(options, argv);
     if (!machine.open_window()) {
         return 1;

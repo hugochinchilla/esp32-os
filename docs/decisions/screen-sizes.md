@@ -4,14 +4,12 @@ date: 2026-11-18
 by: owner
 status: decided
 area: video
-summary: "Display > Resolution changes the picture at once; a box asks to keep it, back after 15 s (backlog 68). The agent's parts are to confirm"
+summary: "Display > Resolution changes the picture at once; a box asks to keep it, back after 15 s; 640x480 the default (backlog 68)"
 ---
 
 # Screen sizes: 640x480 and 800x600
 
-The story is in `docs/journal/2026-11-18-resolution-800x600.md`. Nothing of
-this has run on the board yet; if the board cannot hold 800x600 the mode
-goes from the table and this file says so.
+The story is in `docs/journal/2026-11-18-resolution-800x600.md`. Checked on the board 2026-11-19 and merged.
 
 Decided by the owner (2026-11-18):
 
@@ -23,6 +21,11 @@ Decided by the owner (2026-11-18):
   `C:\.config\desktop.ini`) only on Keep. Not chosen: a change at the next
   start (no way back from a picture the monitor refuses, short of the debug
   link), and a change at once without the question.
+
+- **640x480 stays the default; 800x600 is offered** (2026-11-19, after the
+  board turn: a steady picture and no refill missed when idle, 270 refills
+  missed under load at 800x600, 174 KB less free external RAM in both
+  modes). A board with nothing kept starts in 640x480.
 
 Chosen by the agent, to confirm:
 
