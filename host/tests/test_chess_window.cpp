@@ -581,7 +581,8 @@ void test_game()
     choose(1, 2);
     CHECK(kept("side=random"));
     CHECK(shell::chess_game().plies() == (shell::chess_user() == White ? 0 : 1));
-    // Check: the queen to h5 again, where a pawn can still step in.
+    // Check given to the computer (the queen to h5 again, where a pawn can
+    // still step in) is a move like any other: the warning is the user's.
     key(kF2);
     desktop.update();
     choose(1, 0);
@@ -591,7 +592,20 @@ void test_game()
     click_square("d1");
     click_square("h5");
     CHECK(shell::chess_game().status() == chess::Status::Playing && heard.played.size() > mark);
-    CHECK(heard.played[mark] == clip_of(sound::Id::ChessCheck) && !heard_since(mark, sound::Id::ChessMate));
+    CHECK(heard.played[mark] == clip_of(sound::Id::ChessMove) && !heard_since(mark, sound::Id::ChessMate));
+    // The user in check: the computer's bishop takes a queen left on d2,
+    // beside the king.
+    key(kF2);
+    desktop.update();
+    choose(2, 0);
+    play("d2d4 e7e6 d1d2 f8b4");
+    shell::chess_refresh();
+    mark = heard.played.size();
+    click_square("a2");
+    click_square("a4");
+    CHECK(shell::chess_game().position().in_check() && strcmp(shell::chess_status(), "Check. Your move.") == 0);
+    CHECK(heard.played.size() == mark + 2 && heard.played[mark] == clip_of(sound::Id::ChessMove) &&
+          heard.played[mark + 1] == clip_of(sound::Id::ChessCheck));
     os::install_sound(nullptr);
     desktop.close(*board());
     wait(1000);

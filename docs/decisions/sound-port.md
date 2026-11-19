@@ -57,7 +57,7 @@ or said anything about the other points):
   `alert.pcm` with every message box and question; `error.pcm` when there
   is no memory to open a program; `bell.pcm` for the terminal's bell.
   Restart plays nothing: the machine is gone at once.
-- **The recordings are not in `core/`** (390 KB; 630 KB with the games'
+- **The recordings are not in `core/`** (390 KB; 606 KB with the games'
   and the Trash's of backlog item 70, `docs/decisions/game-sounds.md`): a machine that can play
   them hands them in (`sound::set_clips`). The PC and browser builds
   compile them in from `docs/sounds/`; the board's firmware does not carry

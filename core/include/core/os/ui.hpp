@@ -253,7 +253,27 @@ bool hourglass(Window window);
 // can be picked.
 // RightClick: the right button went down in it; the program asks item_at()
 // what is there and picks it, unless it is one of several picked already.
+// It shows them one of three ways (backlog item 56), which the program
+// sets with set_view_mode(): Icons, the grid, as it is made; List, small
+// pictures with the names beside them, filled down the columns and going on
+// to the right; Details, one entry per line under a row of titles. What is
+// picked stays through a change of view. The List and the Details show the
+// 16 x 16 pictures of set_small_icons(), one per entry. The Details show the
+// program's columns, set_columns(): the first is the name's (its cells are
+// not read, its width is the least it gets: it takes what the others
+// leave), the others have a text per entry. All these tables are the
+// program's and must stay valid.
+enum class ViewMode : uint8_t { Icons, List, Details };
+struct Column {
+    const char *title;
+    int width;                // pixels
+    bool right;               // numbers: against the right edge
+    const char *const *cells; // a text per entry; nullptr: none
+};
 Control icon_view(Window window, const gfx::Rect &place);
+void set_view_mode(Window window, Control icon_view, ViewMode mode);
+void set_small_icons(Window window, Control icon_view, const gfx::Bitmap *const *icons);
+void set_columns(Window window, Control icon_view, const Column *columns, int count);
 void reset_view(Window window, Control icon_view); // nothing picked, back at the top
 // The entry whose picture or name is at a point of it, or -1 (the empty
 // space between two entries is no entry).

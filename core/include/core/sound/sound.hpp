@@ -2,7 +2,7 @@
 // recordings behind them. The first five were chosen by the owner on
 // 2026-11-16; all are kept in docs/sounds/ as raw samples (ports::kSoundRate).
 //
-// The recordings are 630 KB together and are not part of core/: a machine
+// The recordings are 606 KB together and are not part of core/: a machine
 // that can play them hands them in when it starts (the PC and browser
 // builds compile them in). A machine that plays nothing, as the board for
 // now, hands in none and pays nothing for them.

@@ -870,14 +870,17 @@ private:
     /* ---- The game ---- */
 
     // A piece has just been put down, the user's or the computer's (backlog
-    // item 70): the knock of the piece, or what says check or checkmate,
-    // which begin with that knock. The draws sound as any move.
+    // item 70): the knock of the piece, or what says checkmate, or the
+    // warning that the user is in check; both begin with that knock. The
+    // warning is for the user (the owner, 2026-11-19): a check given to the
+    // computer sounds as any move, and so do the draws.
     void move_sound()
     {
         const Status status = game_.status();
-        os::play_sound(status == Status::Checkmate               ? sound::Id::ChessMate
-                       : status == Status::Playing && game_.position().in_check() ? sound::Id::ChessCheck
-                                                                 : sound::Id::ChessMove);
+        const bool warned = status == Status::Playing && game_.position().side() == user_ && game_.position().in_check();
+        os::play_sound(status == Status::Checkmate ? sound::Id::ChessMate
+                       : warned                    ? sound::Id::ChessCheck
+                                                   : sound::Id::ChessMove);
     }
 
     // After every move, and after a game starts: is it over, and if not,

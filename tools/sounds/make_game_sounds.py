@@ -10,7 +10,7 @@ system. The timbres are those of the system's sounds the owner chose on
 sound like the same machine.
 
 Output (default /mnt/project-files/look/sounds/games/):
-  <sound>-<letter>-<name>.wav   three candidates for each sound, to listen to
+  <sound>-<letter>-<name>.wav   the candidates for each sound, to listen to
   final/<file>.wav              the one of each that the build plays
 and the final ones as raw samples in docs/sounds/<file>.pcm (16 bits, one
 channel, 22,050 a second), which is what the PC and browser builds compile
@@ -95,6 +95,33 @@ def check_c():
     bell = additive_bell(0.7, note("E6"), [(1, 1, 1), (2.0, 0.3, 1.8), (3.01, 0.25, 2.6), (4.2, 0.1, 4)], 0.22)
     tr = place(tr, bell, 0.07, 0.5)
     return reverb(tr, 0.15, 0.8, 0.3)
+
+
+# The owner, 2026-11-19, on the three above: check "suena alegre"; it is heard
+# when the player is put in check, so it must warn, as an alert does.
+def check_d():
+    """The piece, then the same high wooden note twice, quickly: a warning."""
+    tr = place(np.zeros(1), tock(), 0.0, 0.8)
+    tr = place(tr, wood(note("D6"), 0.25), 0.09, 0.6)
+    tr = place(tr, wood(note("D6"), 0.3), 0.20, 0.6)
+    return reverb(tr, 0.14, 0.7, 0.3)
+
+
+def check_e():
+    """The piece, then two kalimba notes falling a tense step (a tritone)."""
+    tr = place(np.zeros(1), tock(), 0.0, 0.8)
+    tr = place(tr, pluck(note("A5"), 0.07), 0.08, 0.65)
+    tr = place(tr, pluck(note("D#5"), 0.12), 0.20, 0.7)
+    return reverb(tr, 0.12, 0.6, 0.25)
+
+
+def check_f():
+    """The piece, then the message box's knock turned over: two wooden notes
+    going down instead of up."""
+    tr = place(np.zeros(1), tock(), 0.0, 0.8)
+    tr = place(tr, wood(note("G5")), 0.09, 0.6)
+    tr = place(tr, wood(note("C#5")), 0.20, 0.6)
+    return reverb(tr, 0.16, 0.7, 0.4)
 
 
 # ================================================================ CHESS: CHECKMATE
@@ -231,18 +258,22 @@ CANDIDATES = [
     ("snake-eat", [("a-kalimba-up", eat_a), ("b-gulp", eat_b), ("c-bite", eat_c)]),
     ("snake-over", [("a-wood-down", over_a), ("b-droop", over_b), ("c-kalimba-down", over_c)]),
     ("trash-crumple", [("a-three-squeezes", crumple_a), ("b-into-the-bin", crumple_b), ("c-quick", crumple_c)]),
+    # The second round for check, made last so that the random source gives
+    # the sounds above the same noise as when the owner heard them.
+    ("chess-check", [("d-wood-twice", check_d), ("e-kalimba-tritone", check_e), ("f-wood-down", check_f)]),
 ]
 
 # What the build plays: docs/sounds/<file>.pcm, in the order of sound::Id
-# after the system's five. To confirm with the owner, who has not heard
-# them (2026-11-19).
+# after the system's five. The owner's picks of 2026-11-19 (the move, the
+# berry and checkmate as first built; game over b; the paper c), but for
+# check, which is the agent's pick of the second three and waits for him.
 FINAL = [
     ("chess_move", move_a, -14.0),
-    ("chess_check", check_a, -12.0),
+    ("chess_check", check_d, -12.0),
     ("chess_mate", mate_a, -12.0),
     ("snake_eat", eat_a, -14.0),
-    ("snake_over", over_a, -12.0),
-    ("crumple", crumple_a, -15.0),
+    ("snake_over", over_b, -12.0),
+    ("crumple", crumple_c, -15.0),
 ]
 
 
