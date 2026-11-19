@@ -18,7 +18,7 @@ simulator only; it has not run on the board. The owner chose the name (see
 
 - Look: a green striped snake with a face on pale sand, red berries, a
   24 x 18 board of 12-pixel cells in a sunken frame. All drawn in
-  `core/src/shell/culebra.cpp`; the 16x16 icon is in `core/src/gfx/art.cpp`.
+  `programs/culebra/culebra.cpp`; the 16x16 icon is in `core/src/gfx/art.cpp`.
 - Rules: walls end the game (no wrapping round), as does the snake's own
   body; the head may follow its tail. Two turns can be waiting, so quick
   corners work. Filling the board wins.

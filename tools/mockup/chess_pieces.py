@@ -8,7 +8,7 @@ drawings serve both sides.
 
     python3 tools/mockup/chess_pieces.py header out.inc   the rows, for C++
     python3 tools/mockup/chess_pieces.py sheet out.png    a sheet to look at
-    python3 tools/mockup/chess_pieces.py packed core/src/shell/chess_pieces.hpp
+    python3 tools/mockup/chess_pieces.py packed programs/chess/chess_pieces.hpp
                                                           the game's own copy
     python3 tools/mockup/chess_pieces.py icon out.txt     the program's icon
 
@@ -306,7 +306,7 @@ def header(path):
 
 
 def packed(path):
-    """The game's copy (core/src/shell/chess.cpp): two bits a pixel, four
+    """The game's copy (programs/chess/chess.cpp): two bits a pixel, four
     pixels a byte, the leftmost in the low bits. 0 clear, 1 outline, 2 body,
     3 detail."""
     code = {" ": 0, "X": 1, "o": 2, "-": 3}

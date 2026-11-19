@@ -199,6 +199,15 @@ target_compile_options(chess_app PRIVATE -O2 -fno-sanitize=all)
 # Not a program of the system: the chess engine's measuring program for
 # board checks (tools/bench/chess_bench), built here so that it stays whole.
 add_program(chess_bench ../tools/bench/chess_bench ${CMAKE_CURRENT_BINARY_DIR})
+# What the board would refuse: a program that asks the system for a name
+# the firmware does not export to programs (tools/gen_exports.py).
+set(program_libraries "")
+foreach(target ${program_targets})
+    list(APPEND program_libraries $<TARGET_FILE:${target}>)
+endforeach()
+add_test(NAME program_exports
+         COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/gen_exports.py --nm ${CMAKE_NM} --pc
+                 --check ${program_libraries} -- $<TARGET_FILE:core>)
 add_executable(test_loaded tests/test_loaded.cpp)
 target_link_libraries(test_loaded PRIVATE core ${CMAKE_DL_LIBS} Threads::Threads)
 set_target_properties(test_loaded PROPERTIES ENABLE_EXPORTS ON)

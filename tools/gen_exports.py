@@ -15,6 +15,12 @@ the table always matches the firmware it is part of:
 
 With --check and program files, it says instead which of the names those
 programs need are missing (tools/build_programs.sh).
+
+With --pc as well, the program files and the library are the PC's (the
+tests' build): only the names of this project's own code are looked at,
+since the PC's C library and checkers are not the board's. It tells on the
+PC, where there is no compiler for the board, that a program asks for
+something the firmware would not let it have.
 """
 import argparse
 import re
@@ -78,11 +84,18 @@ def needed(nm, program):
     return [line.split()[-1] for line in out.splitlines() if line.split()]
 
 
+def ours(name):
+    """A C++ name of this project's code: not the C library's, the C++
+    library's (std, operator new and delete, the ABI's) or a checker's."""
+    return name.startswith("_Z") and not re.match(r"_Z(St|NSt|NKSt|n[wa]|d[la]|T[VIS]N10__cxxabiv)", name)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--nm", default="nm")
     ap.add_argument("--out")
     ap.add_argument("--check", nargs="*", help="program files: say what they need that is not exported")
+    ap.add_argument("--pc", action="store_true", help="with --check: the PC's build, this project's own names only")
     ap.add_argument("archive")
     args = ap.parse_args()
 
@@ -91,7 +104,7 @@ def main():
         have = set(names)
         bad = 0
         for program in args.check:
-            missing = [n for n in needed(args.nm, program) if n not in have]
+            missing = [n for n in needed(args.nm, program) if n not in have and (not args.pc or ours(n))]
             for n in missing:
                 print(f"{program}: needs {n}, which the system does not export")
             bad += len(missing)

@@ -90,7 +90,7 @@ private:
     static constexpr int kSize = 0; // the group of the three radio buttons
     static GalleryWindow &self(void *context) { return *static_cast<GalleryWindow *>(context); }
     static void menu_close(void *context) { self(context).close(); }
-    static void menu_about(void *) { open_about(); }
+    static void menu_about(void *) { os::launch("About Chinchilla"); }
     static void toggle_bold(void *context) { self(context).bold_.set_checked(!self(context).bold_.checked()); }
     // The hourglass on demand, to look at: over the controls, and the window
     // answers as before.
