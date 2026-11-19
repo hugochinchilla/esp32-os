@@ -121,6 +121,11 @@ void Wm::start()
         change_mode(); // the mode the settings ask for, before the first picture
     }
     blink_timer_ = start_timer_for(desktop_pid_, kBlinkUs, kBlinkUs, &Wm::blink, this);
+    // The minute the clock shows from its first painting: the tick has news
+    // only when that changes, not one second after the start.
+    int h, m, s;
+    get_time(h, m, s);
+    shown_minute_ = h * 60 + m;
     start_timer_for(desktop_pid_, 1000000, 1000000, &Wm::clock_tick, this);
     shape_ = &video::arrow_pointer();
     pointer_.set_shape(*shape_);
@@ -2835,6 +2840,7 @@ void Wm::set_time(int hours, int minutes, int seconds)
 {
     time_base_s_ = hours * 3600 + minutes * 60 + seconds;
     time_base_us_ = now_us();
+    shown_minute_ = hours * 60 + minutes; // told here: the tick has nothing to add
     tell_panels(PanelNews::Clock);
     update();
 }
