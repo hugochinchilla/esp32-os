@@ -178,3 +178,12 @@ shows the time, and changes when the minute does.
   10 s for the shell's answer, 2 s for a port).
 - A board check of the clock when this branch has its turn, with the rest
   of a batch: it does not need one of its own.
+
+## On the board (2026-11-19, d3c32c8)
+
+App-flashed on the 3 MB layout. Free RAM 189,107 internal and 5,955,748
+external as on main; no missed refill. Once Wi-Fi had joined, the taskbar clock
+showed the laptop's time to the minute (12:18 PM at 12:18 on the laptop). The
+board's own time read 12:18:24; after waiting for the minute to pass,
+`dbg.py time now` read 12:19:02 and a screenshot showed 12:19 PM, the next
+minute, so the clock still follows the minute.
