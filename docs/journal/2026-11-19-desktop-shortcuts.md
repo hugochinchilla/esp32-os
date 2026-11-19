@@ -121,3 +121,21 @@ back, the logo key acting on release), the owner answered "si, son
 correctas". The decision is now `decided`. The coordinator reports that the
 board checks passed; the board thread writes its own figures here when it
 merges.
+
+## On the board (2026-11-19, f622f5a)
+
+App-flashed on the 3 MB layout (`esp32-os.bin` 1,758,416 bytes), keys sent with
+`dbg.py`. The logo key: one tap opens the Start menu and a second closes it;
+`key down gui` alone opens nothing and `key up gui` then opens it; Escape closes
+it. Alt+F4 on the empty desktop opens "Shut Down Chinchilla" and Escape closes
+it with the desktop as before. Alt+F4 with the Editor in the focus closes the
+Editor and opens no dialog. After a click on an empty place of the desktop,
+Alt+F4 opens the dialog and the Editor stays open behind it. Logo+D with the
+Editor, My Board and Culebra open: the three go to the taskbar minimised, the
+bare desktop shows with no Start menu; logo+D again brings the three back at the
+same positions. Ten logo+D in a row: no missed refill; five of the keys took 29
+ms (about 190,000 pixels painted each, one frame is 16.8 ms) and nothing else
+went over a frame. Logo+D with the Shut Down dialog open changes nothing. Free
+RAM before opening the three programs and after closing them: 188,503 internal
+and 5,953,968 / 5,954,008 external. A real USB keyboard was not tried. The owner
+then confirmed the three readings.
