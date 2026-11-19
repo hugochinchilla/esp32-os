@@ -102,3 +102,31 @@ If the firmware ever fills 3 MB: the sample photos and the loadable programs
 (252 KB) could be put on C: when the board is flashed instead of riding in
 the firmware; building for size instead of speed would cost drawing time and
 has not been measured.
+
+## On the board (2026-11-19, 907bab2)
+
+Before: a copy of C: (29 files in 6 folders) and a read-only copy of `nvs` were
+taken to `/tmp`. `build/flash_args` listed exactly 0x0, 0x8000, 0xf0000 and
+0x100000. The region that becomes C: (0x700000, 0x900000) was erased with
+`esptool.py erase_region`, then `idf.py flash`: four writes, all verified,
+`nvs` and the BIOS not touched. Results:
+
+1. Start-up: the BIOS says "Detecting drive C: .... 9 MB flash disk" and "Boot
+   device ........... ota_0, 1.6 MB, image OK"; the OS starts with no panic or
+   watchdog line.
+2. The board joined the saved Wi-Fi network by itself, nothing typed: yes.
+3. C: came up freshly formatted with the sample files; the 29 files of the
+   backup were put back (29 files, 6 folders) and a copy taken again was
+   identical to the first, also after a fast restart.
+4. Update over the network: `tools/ota.py` sent 1,755,600 bytes in 32.3 s; the
+   board started on trial, confirmed itself after 10 s, and the BIOS's Boot
+   device line then read `ota_1`. A second update (36.3 s, to `ota_0`) was
+   aborted during its trial with `fault abort`: the board came back on `ota_1`.
+   So `otadata` works at 0xf0000 for the bootloader, the BIOS and the OS.
+5. `reboot --fast` and `boot fast-next` work.
+6. Idle desktop: free 188,999 internal and 5,955,816 external (before the
+   change 189,103 and 5,956,036), repaint 14.4 ms (15.2), same tasks; a Start
+   menu restart worked; `fault abort` grew `C:\crash.txt` on the new C: from
+   3,970 to 4,384 bytes. `dbg.py misses` 0 after each scenario.
+
+The board was left on `main`'s build in slot `ota_1` with the new layout.
