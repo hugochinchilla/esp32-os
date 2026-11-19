@@ -18,6 +18,7 @@
 #include "core/msg/queue.hpp"
 #include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
+#include "../../programs/test_hooks.hpp"
 #include "core/sound/sound.hpp"
 #include "core/wm/wm.hpp"
 #include "../host_adapters.hpp"
@@ -198,7 +199,7 @@ void start_desktop()
 
 void open_chess()
 {
-    shell::launch(*shell::find_app("Chess"));
+    shell::start_program("Chess");
     desktop.update();
 }
 
@@ -241,8 +242,8 @@ void test_game()
 {
     start_desktop();
     const uint32_t bytes_before = os::bytes_out();
-    const shell::App *app = shell::find_app("Chess");
-    CHECK(app != nullptr && app->icon != nullptr);
+    const shell::Program *app = shell::find_program("Chess");
+    CHECK(app != nullptr && app->icon != nullptr && app->built_in == nullptr);
     open_chess();
 
     // The board, and over it the dialog that asks which game.

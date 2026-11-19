@@ -24,6 +24,9 @@ if(HOST_SANITIZE)
 endif()
 
 add_subdirectory(../core core)
+# The programs of programs/, linked into the tests that open them or look
+# inside them. The Linux program loads them from files instead.
+include(../programs/linked.cmake)
 
 find_package(Threads REQUIRED) # the simulated board's services thread
 add_executable(sim sim.cpp)
@@ -164,8 +167,9 @@ add_test(NAME decisions_index
 # Programs loaded from files (backlog 27). The sample program is built as a
 # shared library of the PC and loaded by the PC's own loader; the test
 # program lets it find the OS calls by name, as the firmware does.
-function(add_program name source)
-    add_library(${name}_app MODULE ${source})
+function(add_program name folder)
+    file(GLOB sources CONFIGURE_DEPENDS ${folder}/*.cpp)
+    add_library(${name}_app MODULE ${sources})
     target_include_directories(${name}_app PRIVATE ../core/include ../core/src/shell)
     target_compile_options(${name}_app PRIVATE -fvisibility=hidden -fno-exceptions -fno-rtti)
     set_target_properties(${name}_app PROPERTIES PREFIX "" OUTPUT_NAME "${name}" SUFFIX ".so")
@@ -174,19 +178,17 @@ function(add_program name source)
                        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../tools/pack_app.sh ${CMAKE_OBJCOPY}
                                $<TARGET_FILE:${name}_app> ${CMAKE_CURRENT_BINARY_DIR}/${name}.app)
 endfunction()
-add_program(hello ../programs/hello/hello.cpp)
-# The games in the form the board has them in (a file each); the PC's
-# system also has them built in.
-add_program(culebra ../programs/culebra/culebra.cpp)
-add_program(cactus_patch ../programs/cactus_patch/cactus_patch.cpp)
-add_program(chess ../programs/chess/chess.cpp)
+add_program(hello ../programs/hello)
+add_program(culebra ../programs/culebra)
+add_program(cactus_patch ../programs/cactus_patch)
+add_program(chess ../programs/chess)
 # With the engine in it: optimised, as the engine is in the core, and
 # without the checkers, which would make the file larger than the megabyte
 # a program may be (the same source is checked as part of the core).
 target_compile_options(chess_app PRIVATE -O2 -fno-sanitize=all)
 # Not a program of the system: the chess engine's measuring program for
 # board checks (tools/bench/chess_bench), built here so that it stays whole.
-add_program(chess_bench ../tools/bench/chess_bench/chess_bench.cpp)
+add_program(chess_bench ../tools/bench/chess_bench)
 add_executable(test_loaded tests/test_loaded.cpp)
 target_link_libraries(test_loaded PRIVATE core ${CMAKE_DL_LIBS} Threads::Threads)
 set_target_properties(test_loaded PROPERTIES ENABLE_EXPORTS ON)
@@ -329,3 +331,15 @@ add_test(NAME browser_pictures
 # leak checker would report them; applied after every add_test above.
 get_property(all_tests DIRECTORY PROPERTY TESTS)
 set_tests_properties(${all_tests} PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
+
+# The programs of programs/ are linked into every test and tool here, as
+# they are into the web page, so that C:\Programs has them and they can be
+# opened and looked into. Not into the two that load program files the way
+# the board and the Linux program do, nor into the mock-up.
+get_property(all_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+foreach(target ${all_targets})
+    get_target_property(type ${target} TYPE)
+    if(type STREQUAL "EXECUTABLE" AND NOT target MATCHES "^(test_loaded|chinchilla|chess_mockup)$")
+        target_link_libraries(${target} PRIVATE programs_linked)
+    endif()
+endforeach()

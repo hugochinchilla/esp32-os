@@ -12,6 +12,7 @@
 #include "core/os/os.hpp"
 #include "core/shell/boot.hpp"
 #include "core/shell/shell.hpp"
+#include "../../programs/test_hooks.hpp"
 #include "core/sound/beeps.hpp"
 #include "core/sound/mixer.hpp"
 #include "core/sound/sound.hpp"
@@ -335,7 +336,7 @@ void test_culebra_sounds(host::RecordingSound &out)
 {
     using games::Snake;
     const size_t before = out.played.size();
-    shell::open_culebra();
+    shell::start_program("Culebra");
     const Snake &g = shell::culebra_game();
     const uint16_t keys[4] = {wm::key::Up, wm::key::Right, wm::key::Down, wm::key::Left};
     for (int steps = 0; steps < 600 && g.berries() < 1 && g.state() != Snake::State::Over; steps++) {

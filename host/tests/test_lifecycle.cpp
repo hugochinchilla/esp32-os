@@ -13,6 +13,7 @@
 #include "core/net/wifi.hpp"
 #include "core/proc/table.hpp"
 #include "core/shell/shell.hpp"
+#include "../../programs/test_hooks.hpp"
 #include "core/wm/widgets.hpp"
 #include "core/wm/wm.hpp"
 #include "../fake_bluetooth.hpp"
@@ -595,8 +596,8 @@ void test_no_memory()
     for (int i = 0; i < shell::app_count(); i++) {
         shell::launch(shell::app(i));
     }
-    shell::launch(*shell::find_app("Editor"));
-    shell::launch(*shell::find_app("Editor"));
+    shell::start_program("Editor");
+    shell::start_program("Editor");
     shell::open_trash();
     shell::display_dialog();
     shell::screen_saver_dialog();
@@ -605,7 +606,7 @@ void test_no_memory()
     CHECK(many > wm::Wm::kFirstWindows);
     wait(10000);
     const int rows = t.count();
-    shell::launch(*shell::find_app("Editor"));
+    shell::start_program("Editor");
     shell::open_folder("C:\\Documents\\Desktop"); // a fourth folder window
     shell::message_box("Note", "There is room for this.");
     wait(10000);
@@ -622,8 +623,7 @@ void test_no_memory()
 // in memory.
 void test_settings_survive()
 {
-    const shell::App &culebra = *shell::find_app("Culebra");
-    shell::launch(culebra);
+    shell::start_program("Culebra");
     letter('g', kAlt);
     letter('s'); // Speed
     letter('s'); // Slow
@@ -633,13 +633,12 @@ void test_settings_survive()
     CHECK(storage.read_file("C:\\.config\\culebra.ini", text, sizeof(text) - 1, n) == ports::FsError::Ok);
     text[n] = 0;
     CHECK(strstr(text, "speed = slow") != nullptr);
-    const shell::App &cactus = *shell::find_app("Cactus Patch");
-    shell::launch(cactus);
+    shell::start_program("Cactus Patch");
     const int small = desktop.active()->frame().w;
     letter('g', kAlt);
     letter('m'); // Medium
     key(wm::key::F4, kAlt);
-    shell::launch(cactus);
+    shell::start_program("Cactus Patch");
     CHECK(desktop.active()->frame().w > small && shell::cactus_patch_field().cols() == 16);
     letter('g', kAlt);
     letter('s');

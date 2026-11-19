@@ -1,4 +1,4 @@
-// Chess bench: measures the chess engine (core/src/games/chess.cpp) on the
+// Chess bench: measures the chess engine (programs/chess/chess_game.cpp) on the
 // real board. Not one of the programs that come with the system: it is
 // built only when asked for and copied to the board for a board check.
 //
@@ -14,7 +14,7 @@
 #include <cstring>
 #include <new>
 
-#include "../../../core/src/games/chess.cpp"
+#include "../../../programs/chess/chess_game.cpp"
 #include "core/app/app.hpp"
 #include "core/os/os.hpp"
 

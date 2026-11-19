@@ -28,11 +28,6 @@ struct Entry {
 constexpr uint32_t kRoomy = 8 * 1024;
 const Entry kApps[] = {
     {{"About Chinchilla", nullptr, &open_about, false, true}, &gfx::mascot_16},
-#ifndef CHINCHILLA_GAMES_IN_FILES // on the board they are files in C:\Programs (backlog item 27)
-    {{"Cactus Patch", nullptr, &open_cactus_patch, false, true}, &gfx::cactus_icon_16},
-    {{"Chess", nullptr, &open_chess, false, true, 6 * 1024}, &gfx::chess_icon_16},
-    {{"Culebra", nullptr, &open_culebra, false, true}, &gfx::snake_icon_16},
-#endif
     {{"Defragmenter", nullptr, &open_defragmenter, false, true, kRoomy}, &gfx::defrag_icon_16},
     {{"Editor", nullptr, &open_editor, true, true, kRoomy}, &gfx::editor_icon_16},
     {{"File manager", nullptr, &open_file_manager, false, true, kRoomy}, &gfx::files_icon_16},

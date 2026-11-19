@@ -353,15 +353,16 @@ protected:
 // from the firmware, made ready to run in memory. What the program asks of
 // the system by name (the OS calls) is joined to it as it is loaded. The
 // adapters: Espressif's ELF loader on the board, the PC's own dynamic
-// loader for the tests.
+// loader in the Linux program, and for a machine that cannot load code (the
+// web page) the list of programs linked into it (core/app/linked.hpp).
 class Loader {
 public:
     // Makes the program in `image` (the file's bytes, whole; not kept) ready
     // to run. nullptr if it cannot be, with `why` in plain words.
     virtual void *load(const uint8_t *image, size_t size, const char *&why) = 0;
-    // Calls its way in (APP_MAIN in core/app/app.hpp) and returns what it
-    // returned: 0 if it started.
-    virtual int enter(void *module) = 0;
+    // Calls its way in (APP_MAIN in core/app/app.hpp) with these arguments
+    // and returns what it returned: 0 if it started.
+    virtual int enter(void *module, int argc, char **argv) = 0;
     // How much memory it takes while loaded, in bytes (its code and data).
     virtual size_t bytes(void *module) = 0;
     // Takes it out of memory. None of its code may run after this.

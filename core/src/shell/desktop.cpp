@@ -9,6 +9,7 @@
 #include "core/msg/queue.hpp"
 #include "core/prog/prog.hpp"
 #include "core/fs/ini.hpp"
+#include "core/app/linked.hpp"
 #include "core/gfx/art.hpp"
 #include "core/desk/desk.hpp"
 #include "core/os/os.hpp"
@@ -195,101 +196,33 @@ MessageBox *message_window()
 
 /* ---- Start menu and desktop ------------------------------------------------------ */
 
-constexpr int kMaxApps = 16;
-// Programs kept in files (backlog item 27): every program file in this
-// folder has an entry in Start > Programs, after the built-in ones, with
-// the name and the picture its header gives.
-constexpr int kMaxFilePrograms = 8;
-wm::MenuItem g_program_items[kMaxApps + kMaxFilePrograms];
+// Start > Programs: the programs there are (programs.cpp), the system's
+// own and the program files of C:\Programs alike, read again each time the
+// Start menu opens.
+wm::MenuItem g_program_items[kMaxPrograms];
 wm::Menu g_programs = {g_program_items, 0};
-int g_built_in = 0; // how many of the entries are the program table's
 
-struct FileProgram {
-    char path[fs::kMaxPath];
-    char title[app::FileInfo::kTitleSize];
-    uint8_t pixels[16 * 16];
-    gfx::Bitmap icon;
-    bool own_icon;
-    // The file as it was when its header was read: read again if it changes.
-    uint32_t size;
-    int64_t modified;
-};
-struct FilePrograms {
-    FileProgram rows[kMaxFilePrograms];
-    int count;
-};
-// The taskbar's, asked for the first time the Start menu opens.
-FilePrograms *g_menu_files = nullptr;
+void launch_program(void *context)
+{
+    const Program &program = *static_cast<const Program *>(context);
+    static char text[200];
+    char name[app::FileInfo::kTitleSize];
+    snprintf(name, sizeof(name), "%s", program.name);
+    char why[120] = "";
+    if (!start_program(program, nullptr, why, sizeof(why))) {
+        snprintf(text, sizeof(text), "%s could not be run:\n%s.", name, why);
+        message_box("Run", text);
+    }
+}
 
-void launch_file(void *context) { open_file(static_cast<const FileProgram *>(context)->path); }
-
-// Brings the entries up to date with the folder, as the Start menu opens.
-// The folder is listed each time; a file's header is read only if the file
-// is new or has changed.
 void find_programs(void *)
 {
-    if (g_menu_files == nullptr) {
-        g_menu_files = static_cast<FilePrograms *>(os::allocate(sizeof(FilePrograms)));
-        if (g_menu_files == nullptr) {
-            return;
-        }
-        g_menu_files->count = 0;
+    const int count = program_count();
+    for (int i = 0; i < count; i++) {
+        const Program &p = program(i);
+        g_program_items[i] = {p.name, &launch_program, const_cast<Program *>(&p), nullptr, p.icon, 0};
     }
-    FilePrograms &f = *g_menu_files;
-    int n = 0;
-    fs::DirEntry entry;
-    for (int i = 0; n < kMaxFilePrograms && os::file::entry(kProgramsFolder, i, entry) == ports::FsError::Ok; i++) {
-        char path[fs::kMaxPath];
-        snprintf(path, sizeof(path), "%s\\%s", kProgramsFolder, entry.name);
-        if (entry.folder || !is_program_file(path)) {
-            continue;
-        }
-        int known = -1;
-        for (int j = n; j < f.count && known < 0; j++) {
-            if (strcmp(f.rows[j].path, path) == 0 && f.rows[j].size == entry.size &&
-                f.rows[j].modified == entry.modified) {
-                known = j;
-            }
-        }
-        FileProgram &row = f.rows[n];
-        if (known > n) {
-            const FileProgram moved = row;
-            row = f.rows[known];
-            f.rows[known] = moved;
-        } else if (known < 0) {
-            if (n < f.count) {
-                // Its place goes to the new one; what was here is kept
-                // further on if there is room, or read again another time.
-                f.rows[f.count < kMaxFilePrograms ? f.count++ : kMaxFilePrograms - 1] = row;
-            }
-            // Its header, in memory asked for only while it is read.
-            auto *header = static_cast<app::FileInfo *>(os::allocate(sizeof(app::FileInfo)));
-            if (header == nullptr || !program_info(path, *header)) {
-                os::release(header);
-                continue; // not a program of this system: no entry
-            }
-            snprintf(row.path, sizeof(row.path), "%s", path);
-            snprintf(row.title, sizeof(row.title), "%s", header->title);
-            if (row.title[0] == 0) {
-                snprintf(row.title, sizeof(row.title), "%.*s", static_cast<int>(sizeof(row.title)) - 1, entry.name);
-                if (char *dot = strrchr(row.title, '.')) {
-                    *dot = 0;
-                }
-            }
-            memcpy(row.pixels, header->icon16, sizeof(row.pixels));
-            row.icon = {16, 16, nullptr, header->clear};
-            row.own_icon = header->has16 != 0;
-            row.size = entry.size;
-            row.modified = entry.modified;
-            os::release(header);
-        }
-        row.icon.pixels = row.pixels; // the row may have moved
-        g_program_items[g_built_in + n] = {row.title, &launch_file, &row, nullptr,
-                                           row.own_icon ? &row.icon : &gfx::program_icon_16(), 0};
-        n++;
-    }
-    f.count = n;
-    g_programs.count = g_built_in + n;
+    g_programs.count = count;
 }
 void open_screen_saver(void *) { screen_saver_dialog(); }
 void network_panel(void *) { open_network(); }
@@ -324,7 +257,6 @@ wm::Menu g_settings = {g_settings_items, 7};
 wm::MenuItem g_start_items[5];
 wm::Menu g_start = {g_start_items, 5};
 
-void launch_app(void *context) { launch(*static_cast<const App *>(context)); }
 void shut_down(void *) { shut_down_dialog(); } // the Start menu's entry, and Alt+F4 on the desktop
 
 struct NotYet {
@@ -1101,9 +1033,8 @@ void stop_taskbar(proc::Pid pid, proc::Signal, void *)
     g_taskbar = proc::kNone;
     wm.set_start_menu(nullptr, nullptr);
     wm.set_start_menu_opening(nullptr, nullptr);
-    g_programs.count = g_built_in;
-    os::release(g_menu_files);
-    g_menu_files = nullptr;
+    g_programs.count = 0;
+    forget_programs();
     destroy(g_bar);
     destroy(g_desk);
     wm.end(pid);
@@ -1141,13 +1072,7 @@ void start_taskbar(void *)
     g_bar = new (bar_place) desk::Taskbar(wm);
     g_desk = new (desk_place) desk::Icons(wm);
 
-    const int n = app_count() < kMaxApps ? app_count() : kMaxApps;
-    for (int i = 0; i < n; i++) {
-        const App &a = app(i);
-        g_program_items[i] = {a.name, &launch_app, const_cast<App *>(&a), nullptr, a.icon, 0};
-    }
-    g_programs.count = n;
-    g_built_in = n;
+    find_programs(nullptr);
     wm.set_start_menu_opening(&find_programs, nullptr);
     g_start_items[0] = {"&Programs", nullptr, nullptr, &g_programs, &gfx::folder_icon_16(), 0};
     g_start_items[1] = {"&Settings", nullptr, nullptr, &g_settings, &gfx::settings_icon_16(), 0};
@@ -1264,11 +1189,9 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
     kit.shut_down = &power_down;
     kit.open_session = &open_session;
     kit.launch = [](const char *program) {
-        const App *found = find_app(program);
-        if (found != nullptr) {
-            launch(*found);
-        }
-        return found != nullptr;
+        char why[120];
+        const Program *found = find_program(program);
+        return found != nullptr && start_program(*found, nullptr, why, sizeof(why));
     };
     os::install(kit);
     // The desktop is a process too: the Start menu, the icons and the
@@ -1294,6 +1217,15 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
 
     wm.set_attention_key(&attention_key, nullptr);
     wm.set_leave_key(&shut_down, nullptr);
+    // A build with the programs linked into it (the web page, the PC's
+    // tests; core/app/linked.hpp) has their files written and finds their
+    // code by itself. A machine with a loader of its own gives it with
+    // set_loader(), before or after this.
+    if (app::linked_count() > 0) {
+        const os::As as_desktop(os::find("desktop"));
+        set_loader(&app::linked_loader());
+        app::install_linked(storage, kProgramsFolder);
+    }
     move_old_documents();
     welcome_file();
     install_screen_saver();

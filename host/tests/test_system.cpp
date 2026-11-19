@@ -209,9 +209,9 @@ void test_defragmenter_window()
 void test_task_manager()
 {
     close_all();
-    shell::launch(*shell::find_app("Welcome"));
+    shell::start_program("Welcome");
     shell::open_in_editor("C:\\Documents\\notes.txt");
-    shell::launch(*shell::find_app("Widget gallery"));
+    shell::start_program("Widget gallery");
     CHECK(desktop.window_count() == 3);
 
     // Ctrl+Alt+Del opens it, whatever has the focus, and the key does not
@@ -308,10 +308,10 @@ void test_task_manager()
     CHECK(find("Widget gallery") == nullptr && desktop.window_count() == 2);
     wait(7000000);
     CHECK(strcmp(title(), "Task Manager") == 0 && desktop.window_count() == 2);
-    shell::launch(*shell::find_app("Widget gallery"));
+    shell::start_program("Widget gallery");
 
     // A window opened behind its back shows up within a second.
-    shell::launch(*shell::find_app("About Chinchilla"));
+    shell::start_program("About Chinchilla");
     ctrl_alt_del();
     wait(1000000);
     key(wm::key::End);
@@ -408,7 +408,7 @@ int pixels_of(gfx::Colour c)
 void test_power_down()
 {
     close_all();
-    shell::launch(*shell::find_app("Welcome"));
+    shell::start_program("Welcome");
     shell::open_in_editor("C:\\Documents\\notes.txt");
     desktop.text("keep me?");
 
@@ -435,7 +435,7 @@ void test_power_down()
 
     // Again, by Alt+S this time, and No to the question: the Editor closes
     // without saving and the rest follows by itself.
-    shell::launch(*shell::find_app("Welcome"));
+    shell::start_program("Welcome");
     shell::shut_down_dialog();
     letter('s', kAlt);
     wait(1000);

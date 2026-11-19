@@ -8,9 +8,6 @@
 #include "core/app/file.hpp"
 #include "core/fs/fs.hpp"
 #include "core/fs/ini.hpp"
-#include "core/games/cactus.hpp"
-#include "core/games/chess.hpp"
-#include "core/games/snake.hpp"
 #include "core/gfx/canvas.hpp"
 #include "core/ports.hpp"
 #include "core/sh/terminal_session.hpp"
@@ -53,10 +50,36 @@ struct App {
     uint32_t stack = 0;
 };
 
+// The programs that are part of the system (apps.cpp): few, since the rest
+// are files in C:\Programs.
 int app_count();
 const App &app(int index);
 const App *find_app(const char *name);
 void launch(const App &app);
+
+// Every program there is to start (programs.cpp): the system's own and the
+// program files of C:\Programs, as one list in the order of their names.
+struct Program {
+    const char *name;
+    const gfx::Bitmap *icon; // 16x16: its own, or the one for any program
+    const App *built_in;     // nullptr: it is a file
+    const char *path;        // the file
+};
+constexpr int kMaxFilePrograms = 24, kMaxPrograms = 32;
+// Looks at the folder again and says how many there are. program(i) and
+// what find_program() returns are good until the next call of either.
+int program_count();
+const Program &program(int index);
+// By name, in any case; with `or_start`, also the only one whose name
+// starts so ("edit" for the Editor, not "c" for two programs).
+const Program *find_program(const char *name, bool or_start = false);
+// Starts it; a program file gets `argument` as its argv[1]. False, with
+// `why` in plain words, if it did not start.
+bool start_program(const Program &program, const char *argument, char *why, size_t capacity);
+// The same by name, saying so in a message box if it did not start.
+bool start_program(const char *name, const char *argument = nullptr);
+// Gives back what the list keeps of the program files (the taskbar ended).
+void forget_programs();
 
 // A small window with a message and an OK button. It is modal to the window
 // in use when it opens. One at a time: a new message replaces the one shown.
@@ -174,10 +197,6 @@ void set_session_owner(const sh::Env &env, proc::Pid owner);
 // Tests: the grid of the Terminal in front (nullptr: none is open).
 const tty::Screen *terminal_screen();
 
-// Culebra, the snake game. Tests: the game in its window.
-void open_culebra();
-const games::Snake &culebra_game();
-
 // Wi-Fi, if the machine has it: call before start(). The shell then shows
 // the signal icon in the tray, keeps the manager running and sets the clock
 // from the network. Without it, Network says it is not available.
@@ -191,23 +210,6 @@ bt::Manager *bluetooth();
 void open_bluetooth();
 // The Network panel: networks in range, connect, forget.
 void open_network();
-
-// Tests and reference pictures: the game in the Cactus Patch window, and a
-// repaint after changing it directly.
-games::CactusField &cactus_patch_field();
-void cactus_patch_refresh();
-int cactus_patch_seconds();
-
-// Chess (backlog item 50): its Start menu entry. Tests and reference
-// pictures, while it is open: the game in its window, whether the computer
-// is thinking, the side the user plays, the status line, and whose turn it
-// is worked out again after the game was changed directly.
-void open_chess();
-games::chess::Game &chess_game();
-bool chess_thinking();
-games::chess::Color chess_user();
-const char *chess_status();
-void chess_refresh();
 
 // The taskbar and the icons on the desktop (core/desk/desk.hpp), while the
 // `taskbar` process runs; nullptr while it does not. For the tests and the
@@ -237,7 +239,8 @@ bool program_info(const char *path, app::FileInfo &info);
 // Loads the file and runs it as a new process with the name the program
 // gives itself, on a task of its own where the machine has tasks. False, with
 // `why` in plain words, if it could not be loaded or did not start.
-bool run_file(const char *path, char *why, size_t capacity);
+// `argument`, if given, is what the program is asked to open: its argv[1].
+bool run_file(const char *path, char *why, size_t capacity, const char *argument = nullptr);
 
 // Where the programs kept in files live. The computer puts them there when
 // the board is flashed (tools/flash.py, backlog item 77); the Start menu

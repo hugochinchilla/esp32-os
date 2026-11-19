@@ -19,29 +19,6 @@ namespace shell {
 
 namespace {
 
-// The program with this name, in any case; else the only one whose name
-// starts with it ("edit" for the Editor, not "c" for two programs).
-const App *program_named(const char *name)
-{
-    const size_t length = strlen(name);
-    if (length == 0) {
-        return nullptr;
-    }
-    const App *starts = nullptr;
-    int count = 0;
-    for (int i = 0; i < app_count(); i++) {
-        const App &a = app(i);
-        if (strcasecmp(a.name, name) == 0) {
-            return &a;
-        }
-        if (strncasecmp(a.name, name, length) == 0) {
-            starts = &a;
-            count++;
-        }
-    }
-    return count == 1 ? starts : nullptr;
-}
-
 bool open_path(const char *full, char *why, size_t capacity)
 {
     if (strlen(full) <= 3) {
@@ -103,8 +80,8 @@ public:
         open_in_editor(full_path);
         return true;
     }
-    int program_count() override { return app_count(); }
-    const char *program_name(int index) override { return app(index).name; }
+    int program_count() override { return shell::program_count(); }
+    const char *program_name(int index) override { return program(index).name; }
 };
 
 /* ---- The Run dialog ---------------------------------------------------------------- */
@@ -234,9 +211,13 @@ bool run_text(const char *typed, const char *folder, char *why, size_t capacity,
         return true;
     }
     if (programs) {
-        if (const App *a = program_named(text)) {
-            launch(*a);
-            return true;
+        if (const Program *found = find_program(text, true)) {
+            char reason[96] = "";
+            if (start_program(*found, nullptr, reason, sizeof(reason))) {
+                return true;
+            }
+            snprintf(why, capacity, "Cannot run %s:\n%s.", text, reason);
+            return false;
         }
     }
     if (paths) {

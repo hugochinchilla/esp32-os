@@ -341,7 +341,7 @@ void click(int x, int y)
 void test_size_and_scroll_bar()
 {
     close_everything();
-    shell::launch(*shell::find_app("Terminal"));
+    shell::start_program("Terminal");
     wm::Window *w = desktop.active();
     CHECK(w != nullptr && w->resizable());
     const tty::Screen *s = shell::terminal_screen();
@@ -458,7 +458,7 @@ void test_run()
     CHECK(memory.in_use() == blocks);
 
     // From a Terminal: run, open and edit put windows on the desktop.
-    shell::launch(*shell::find_app("Terminal"));
+    shell::start_program("Terminal");
     wm::Window *terminal = desktop.active();
     enter("run editor");
     CHECK(strcmp(title(), "Untitled - Editor") == 0);

@@ -1,6 +1,7 @@
 # The portable core. Builds as an ESP-IDF component and as a plain CMake
 # library for the PC. Nothing in here may include ESP-IDF or OS headers.
 set(CORE_SRCS
+    src/app/linked.cpp
     src/bios/post.cpp
     src/bios/text_screen.cpp
     src/dbg/cobs.cpp
@@ -11,9 +12,6 @@ set(CORE_SRCS
     src/fs/memory_volume.cpp
     src/fs/sample_pictures.cpp
     src/fs/samples.cpp
-    src/games/cactus.cpp
-    src/games/chess.cpp
-    src/games/snake.cpp
     src/image/blue_noise.cpp
     src/image/bmp.cpp
     src/image/convert.cpp
@@ -73,15 +71,13 @@ set(CORE_SRCS
     src/sys/missed_refills.cpp
     src/shell/about.cpp
     src/shell/apps.cpp
+    src/shell/programs.cpp
     src/shell/gallery.cpp
     src/shell/welcome.cpp
     src/shell/bluetooth.cpp
     src/shell/bluetooth_service.cpp
     src/shell/boot.cpp
     src/shell/browser.cpp
-    src/shell/cactus_patch.cpp
-    src/shell/chess.cpp
-    src/shell/culebra.cpp
     src/shell/defrag.cpp
     src/shell/desktop.cpp
     src/shell/display.cpp
@@ -117,14 +113,7 @@ set(CORE_SRCS
 )
 
 if(ESP_PLATFORM)
-    # On the board the games are programs kept in files (programs/,
-    # backlog item 27; the owner's choice, 2026-11-17): built by themselves,
-    # carried by the firmware as data and installed in C:\Programs. They
-    # are not part of this library there; on the PC they are.
-    list(REMOVE_ITEM CORE_SRCS src/games/cactus.cpp src/games/chess.cpp src/games/snake.cpp src/shell/cactus_patch.cpp
-         src/shell/chess.cpp src/shell/culebra.cpp)
     idf_component_register(SRCS ${CORE_SRCS} INCLUDE_DIRS "include" LDFRAGMENTS "linker.lf")
-    target_compile_definitions(${COMPONENT_LIB} PUBLIC CHINCHILLA_GAMES_IN_FILES=1)
     return()
 endif()
 
@@ -132,6 +121,3 @@ add_library(core STATIC ${CORE_SRCS})
 target_include_directories(core PUBLIC include)
 target_compile_features(core PUBLIC cxx_std_17)
 target_compile_options(core PRIVATE -Wall -Wextra -Woverloaded-virtual -Werror -fno-exceptions -fno-rtti)
-# The chess engine's tests look at millions of positions: optimised even in
-# the PC's checked build, where everything else is not.
-set_source_files_properties(src/games/chess.cpp PROPERTIES COMPILE_OPTIONS "-O2")

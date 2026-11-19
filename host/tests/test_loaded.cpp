@@ -151,13 +151,23 @@ int main(int argc, char **argv)
     wait(10000);
     CHECK(loader.loaded == 0 && t.count() == processes && os::blocks_out() == blocks);
 
-    // Start > Programs: the program files of C:\Programs, after the
-    // built-in ones, by the names and pictures they give themselves. Found
+    // Start > Programs: the program files of C:\Programs, among the
+    // system's own, by the names and pictures they give themselves. Found
     // as the menu opens; gone from it when the file has gone.
     desktop.open_start_menu();
     const wm::Menu *programs = desktop.popup_menu(0)->items[0].submenu;
-    const int built_in = programs->count;
+    const int before = programs->count;
     desktop.close_menus();
+    // The list is in the order of the names: where "Hello" is in it.
+    const auto hello_entry = [&]() -> const wm::MenuItem * {
+        for (int i = 0; i < programs->count; i++) {
+            if (strcmp(programs->items[i].label, "Hello") == 0) {
+                return &programs->items[i];
+            }
+        }
+        return nullptr;
+    };
+    CHECK(hello_entry() == nullptr);
     // The folder tools/flash.py makes on the board; nothing else makes it.
     CHECK(storage.make_folder("C:\\Programs") == ports::FsError::Ok);
     CHECK(storage.write_file("C:\\Programs\\hello.app", program.data(), program.size()) == ports::FsError::Ok);
@@ -165,12 +175,12 @@ int main(int argc, char **argv)
     CHECK(storage.write_file("C:\\Programs\\broken.app", "not a program", 13) == ports::FsError::Ok);
     for (int round = 0; round < 2; round++) { // the second time from what it remembers
         desktop.open_start_menu();
-        CHECK(programs->count == built_in + 1);
-        const wm::MenuItem &entry = programs->items[built_in];
-        CHECK(strcmp(entry.label, "Hello") == 0 && entry.icon != nullptr && entry.icon->pixels[17] == gfx::kBlack);
+        CHECK(programs->count == before + 1 && hello_entry() != nullptr);
+        const wm::MenuItem &entry = *hello_entry();
+        CHECK(entry.icon != nullptr && entry.icon->pixels[17] == gfx::kBlack);
         desktop.close_menus();
     }
-    programs->items[built_in].action(programs->items[built_in].context);
+    hello_entry()->action(hello_entry()->context);
     wait(10000);
     CHECK(loader.loaded == 1 && strcmp(title(), "Hello") == 0);
     desktop.close(*desktop.active());
@@ -179,7 +189,7 @@ int main(int argc, char **argv)
     CHECK(loader.loaded == 0);
     CHECK(storage.remove("C:\\Programs\\hello.app") == ports::FsError::Ok);
     desktop.open_start_menu();
-    CHECK(programs->count == built_in);
+    CHECK(programs->count == before && hello_entry() == nullptr);
     desktop.close_menus();
     CHECK(t.count() == processes);
 

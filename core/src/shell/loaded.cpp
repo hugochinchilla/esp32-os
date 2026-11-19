@@ -25,11 +25,13 @@ struct Loaded {
     proc::Pid pid = proc::kNone;
     void *module = nullptr;
     int32_t bytes = 0;               // counted as the process's memory
+    char *words = nullptr;           // its file's path and what it was asked to open: argv
+    char *argv[3] = {};
     int result = 0;                  // what its way in returned
     std::atomic<bool> inside{false}; // its way in has not returned yet
     bool gone = false;               // its process has ended: to be taken out of memory
 };
-constexpr int kMaxLoaded = 8;
+constexpr int kMaxLoaded = 16;
 // The header of the file being made ready: too large for a program's stack,
 // and one file is made ready at a time.
 app::FileInfo g_info;
@@ -70,6 +72,8 @@ void sweep(void *)
         }
         proc::table().add_memory(l.pid, -l.bytes);
         g_loader->unload(l.module);
+        os::release(l.words);
+        l.words = nullptr;
         l.pid = proc::kNone;
         l.module = nullptr;
         l.bytes = 0;
@@ -153,7 +157,7 @@ bool program_info(const char *path, app::FileInfo &info)
     return read == ports::FsError::Ok && got == sizeof(info) && app::is_program(info);
 }
 
-bool run_file(const char *path, char *why, size_t capacity)
+bool run_file(const char *path, char *why, size_t capacity, const char *argument)
 {
     const prog::InCall in_call;
     if (g_loader == nullptr) {
@@ -217,11 +221,24 @@ bool run_file(const char *path, char *why, size_t capacity)
     }
     char name[proc::Process::kNameSize];
     process_name(path, info, name, sizeof(name));
-    const proc::Pid pid = os::spawn(name);
+    // Its arguments, kept while it is loaded: the file, then what to open.
+    const size_t path_size = strlen(path) + 1, argument_size = argument != nullptr ? strlen(argument) + 1 : 0;
+    char *words = static_cast<char *>(os::allocate(path_size + argument_size));
+    const proc::Pid pid = words != nullptr ? os::spawn(name) : proc::kNone;
     if (pid == proc::kNone) {
         g_loader->unload(module);
-        return fail(why, capacity, "too many programs are running");
+        const bool memory = words == nullptr;
+        os::release(words);
+        return fail(why, capacity, memory ? "there is not enough memory" : "too many programs are running");
     }
+    memcpy(words, path, path_size);
+    if (argument != nullptr) {
+        memcpy(words + path_size, argument, argument_size);
+    }
+    place->words = words;
+    place->argv[0] = words;
+    place->argv[1] = argument != nullptr ? words + path_size : nullptr;
+    place->argv[2] = nullptr;
     place->pid = pid;
     place->module = module;
     place->bytes = static_cast<int32_t>(g_loader->bytes(module));
@@ -238,7 +255,7 @@ bool run_file(const char *path, char *why, size_t capacity)
     // that opens none ends at once and is swept away. One that is late
     // coming back is left to it: the sweep sees how it went.
     in_process(pid, nullptr, [place] {
-        place->result = g_loader->enter(place->module);
+        place->result = g_loader->enter(place->module, place->argv[1] != nullptr ? 2 : 1, place->argv);
         place->inside.store(false);
     });
     if (place->inside.load()) {

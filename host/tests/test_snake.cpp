@@ -8,6 +8,7 @@
 #include "core/games/snake.hpp"
 #include "core/prog/prog.hpp"
 #include "core/shell/shell.hpp"
+#include "../../programs/test_hooks.hpp"
 #include "core/wm/wm.hpp"
 #include "../host_adapters.hpp"
 
@@ -294,9 +295,9 @@ constexpr uint16_t kF2 = 0x3B;
 // (backlog item 26) and everything below must go as it does without.
 void test_window(bool own_task)
 {
-    const shell::App *app = shell::find_app("Culebra");
-    CHECK(app != nullptr && app->icon != nullptr);
-    shell::launch(*app);
+    const shell::Program *app = shell::find_program("Culebra");
+    CHECK(app != nullptr && app->icon != nullptr && app->built_in == nullptr);
+    shell::start_program("Culebra");
     const Snake &g = shell::culebra_game(); // the game is in the window
     CHECK(strcmp(title(), "Culebra") == 0);
     CHECK(g.state() == State::Ready);
@@ -395,7 +396,7 @@ void test_window(bool own_task)
     CHECK(memory.in_use() == blocks - 4); // the window, with the game in it, and its three controls
     CHECK(prog::runner().tasks() == 0);   // and its task
     wait(kStep * 3);
-    shell::launch(*app);
+    shell::start_program("Culebra");
     desktop.update(); // a direct call, not an event: paint it
     const Snake &g2 = shell::culebra_game();
     CHECK(g2.state() == State::Ready && g2.head_row() == 9);
