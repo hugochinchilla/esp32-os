@@ -178,3 +178,19 @@ refill missed. So the WAD costs five to six minutes, once. Each 1 KB
 request opens, writes and closes the file; keeping it open between
 requests, or larger requests, is where that time would come down. Not
 done here.
+
+## On the board, the second turn (2026-11-19, 0c41aa7)
+
+`tools/flash.py --no-build` straight after the build, with the desktop empty
+and nobody touching the board: esptool wrote the four addresses (the OS,
+1,726,624 bytes, in 25.4 s), the board restarted, and the first file was copied
+7.1 s after the hard reset; four files were new that time (the programs of the
+build; the pictures were already there) and the run ended at 47 s in all. After
+`dbg.py rm` of `hello.app`, `--files-only` copied one file in 3.4 s and a second
+run copied none; with `dbg.py reboot` and `--files-only` started at once, the
+tool waited for the board (7.1 s) and reported 0 copied with no error.
+`dbg.py misses` 0; Hello opened from Start > Programs. The owner chose this
+design and the PR was merged.
+
+Also seen in the first turn (b48bd76) and left as it was: `dbg.py put` of a
+4.2 MB file took 339 s (12 KB/s) and reading it back 184 s, byte-identical.
