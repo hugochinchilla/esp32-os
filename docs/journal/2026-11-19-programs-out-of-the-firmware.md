@@ -266,9 +266,86 @@ On the PC: the 59 tests pass after each step. The reference pictures
 that changed (about 48 at each step) changed in the free space shown
 and nothing else: one more file in `C:\Programs`.
 
+## Step 4: the File manager
+
+The owner's "incluso explorer (si no es complicado por lo de la
+papelera)". It was not, because the Trash already had a source of its own
+(`trash.cpp`) and so had the file commands (`file_ops.cpp`) and the
+listing: the File manager only called them.
+
+**What goes and what stays.** The window on a folder (toolbar, address,
+the three views, the menus, the drags) is `programs/file_manager`. The
+Trash, Delete, Copy, Cut and Paste, a drop on a folder and the listing of
+a folder stay in the system: the desktop's Trash icon, its own icons and
+the file dialogs use them. `core/shell/files.hpp` gathers what the File
+manager asks of them, and the firmware exports those names to it.
+
+Considered for that boundary:
+
+- (a) Export the system's functions by name, as the message boxes and
+  the file dialogs already are. Chosen: nothing is rewritten, and what
+  the File manager may ask is one header.
+- (b) Make each of them an OS call (`os::trash::...`). Not done: an OS
+  call is a promise to every program, and no other program is meant to
+  empty the Trash or paste files; the header can become that the day a
+  second program needs it.
+- (c) Move the Trash into the File manager and have the desktop ask the
+  program. Not done: the desktop would lose its Trash icon whenever the
+  file is missing, and a drop on it would have to start a program.
+
+**One program, many windows.** The folder windows were one process and
+still are: the program runs one copy, and `shell::open_folder` starts it
+by name with the folder as its argument. Started again while it runs, it
+is handed the folder (`os::accept_open`) and opens another window, or
+brings forward the one that shows it.
+
+**Told when folders change.** The desktop gathered the file system's
+notices and called the File manager's `refresh_folder_windows` itself.
+That is `os::file::watch` now: a program says it shows folders and is
+called, as itself, with the folders that changed.
+
+**Not reading the file to find it running.** `run_file` read a program's
+whole file before it looked whether the program was running already. For
+a folder opened from the desktop that was the File manager's 26 KB read
+from the flash each time, to do nothing with them. It reads the header
+first now, and the rest only if it must load. The same pass no longer
+brings the program's main window forward before the program is told what
+to open: the program brings forward the window it chooses (else opening
+a folder raised an unrelated folder window first).
+
+Which program opens which kind of file (`open_file`, by extension)
+stayed in the system, in `run.cpp`: the desktop's icons and Run ask it,
+and the File manager asks it for the words of its Kind column
+(`file_kind`).
+
+Tested on the PC: 59 of 59. `test_shell` (the File manager's menus, the
+Trash's view, copy and paste, the change notices), `test_lifecycle` and
+the pictures all drive it through `shell::open_folder` as before and did
+not have to change, beyond one line that opened My Board from the
+system's table. One reference picture changed beyond the free space: a
+process number in the Task Manager (30 where it was 28).
+
+## The firmware after step 4
+
+Compiled in the cloud, not run: 1,614,192 bytes, 85,200 less than
+`main`. (Step 3 with Run's arguments was 1,627,408.) `file_manager.app`
+is 26,160 bytes. "exports: 479 names; 12 program(s) checked, 0 name(s)
+missing".
+
+The firmware shrank less than the programs weigh (about 180 KB of files
+without Doom), because much of what a program is made of was never its
+own: the window manager, the widgets, the decoders and the file system
+stay.
+
 ## What is left
 
-The File manager. The Trash, copy and paste and the folder listing stay
-in the system (the desktop uses them); the File manager will ask for
-them, be told when folders change, and open another folder when it is
-started again.
+- The board has run none of this. Two turns are asked for: steps 1 to 3
+  at one commit, step 4 at the next.
+- The Linux program and the web page have not been compiled (no SDL2 and
+  no Emscripten in the cloud). The owner's laptop has both.
+- With an empty C: the desktop's My Board, Documents and Trash icons say
+  that the File manager is not on the machine. A way to get the programs
+  onto a board without a computer is backlog item 78 (the store).
+- `core/include/core/games`, `core/www` and `core/tty/screen.hpp` are
+  headers of code that now lives in `programs/`; they stay there for the
+  tests that include them.

@@ -103,8 +103,29 @@ The rest is the agent's, to confirm:
   Terminal) stay in the firmware's art too, so the taskbar draws them
   without reading a file.
 
+- **The File manager is one program with a window for each folder**
+  (step 4). `shell::open_folder` starts it by name with the folder as its
+  argument; started again while it runs, it opens another window or
+  brings forward the one that shows the folder (`os::accept_open`). It is
+  told when folders change (`os::file::watch`) and reads them again
+  itself.
+- **The Trash, the file commands and the listing stay in the system**:
+  the desktop's Trash icon and its own icons, the file dialogs and a drop
+  on the desktop use them. `core/shell/files.hpp` is what the File
+  manager asks of them (`in_trash`, `delete_asking`, `copy_files`,
+  `paste_files`, `move_to_folder`, `Listing`...), found by name like the
+  message boxes; they are not OS calls, because no other program is meant
+  to use them. Which program opens which kind of file (`open_file`) stays
+  in the system too: the desktop's icons and Run ask it.
+- **A program that already runs is told from the header of its file**,
+  before the rest is read: opening a folder does not read the File
+  manager's file again. A program that takes what it is asked to open
+  brings forward the window it chooses.
+
 What it costs: with an empty C: the desktop has the Start menu, Settings,
 Run, About, Welcome and the Task Manager, and nothing else until
-`tools/flash.py --files-only` has run. An update over the network still
-brings the firmware alone (see
+`tools/flash.py --files-only` has run: its My Board, Documents and Trash
+icons say "File manager is not on this machine. Its file belongs in
+C:\Programs.", and so does a folder typed in Run. An update over the
+network still brings the firmware alone (see
 [The files of C: are copied when the board is flashed](files-copied-when-flashing.md)).

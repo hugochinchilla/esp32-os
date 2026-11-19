@@ -60,6 +60,7 @@ The journal entry with the reasons is
 | | `os::set_screen_saver(animation, seconds)` | Which animation and after how long; -1 for none (Screen Saver) |
 | | `os::preview_screen_saver(animation)`, `os::last_saver_run()` | Shows one now; how the last run went |
 | | `os::launch(program, argument)` | Starts a program by its name, whether it is one of the system's own or a file of `C:\Programs`, or brings it forward; `argument`, if given, is what it is asked to open (its `argv[1]`) |
+| | `os::file::watch(changed)` | For a program that shows folders (the File manager): `changed` is called as the program, a moment after anyone made, wrote, renamed or removed files, with the folders it happened in (`os::file::Changes`, `has(folder)`) |
 | | `os::counters()` | A few figures (`os::kCounters`) a program leaves for whoever measures it, read over the debug link and kept after it has gone: the Picture viewer's timings of its last picture |
 | | `os::accept_open(opened)` | For a program that runs one copy at a time: when it is started again while it runs, `opened` is called as the program with the new argument (or none), instead of only bringing its window forward. The Picture viewer shows the other picture that way |
 | | `os::ui::set_document(window, path)` | Says which file a window has open. A program that runs many copies (the Editor) is not started again for a file one of its windows already has: that window comes forward |
