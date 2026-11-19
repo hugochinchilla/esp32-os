@@ -38,10 +38,6 @@ struct WideFont {
     }
 };
 
-// The start-up splash's name and subtitle: Spleen 32x64 and 12x24, only the
-// letters they use.
-extern const WideFont kSpleen32x64;
-extern const WideFont kSpleen12x24;
 // The self-test screen: Spleen 8x16, printable ASCII.
 extern const WideFont kSpleen8x16;
 

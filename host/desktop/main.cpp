@@ -580,7 +580,6 @@ void Machine::start()
     static shell::BootIo io{display_, system_, memory_, clock_, &storage_, &Machine::boot_idle, this, nullptr};
     io.video_start_us = clock_.micros();
     io.monitor_wait_ms = 0;
-    io.splash_ms = boot.splash_ms;
     io.pace_percent = boot.pace_percent;
     io.hold_s = boot.hold_s;
     io.skip = [](void *self) { return static_cast<Machine *>(self)->skip_boot_; };
@@ -590,7 +589,6 @@ void Machine::start()
         shell::run_quiet_checks(io);
     } else {
         shell::run_self_test(io);
-        shell::show_splash(io);
     }
     booting_ = false;
     buttons_ = 0;

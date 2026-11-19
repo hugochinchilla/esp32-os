@@ -461,9 +461,9 @@ class Board:
         return found
 
     def boot_screen(self, which):
-        """Shows a start-up screen again ("selftest" runs the checks again,
-        "splash"); repaint() brings the desktop back."""
-        self.request(BOOT_SCREEN, bytes([{"selftest": 0, "splash": 1, "fast-next": 2, "crash": 3}[which]]))
+        """Shows a start-up screen again ("selftest" runs the checks again);
+        repaint() brings the desktop back."""
+        self.request(BOOT_SCREEN, bytes([{"selftest": 0, "fast-next": 2, "crash": 3}[which]]))
 
     def fault(self, kind, pid=0):
         """Makes the board fail on purpose: "hang" (the desktop's loop spins
@@ -949,7 +949,7 @@ def main(argv=None):
                    help="seconds between the two readings behind the %%NOW column (default 1; 0: one reading)")
     p.add_argument("--json", action="store_true", help="the last reading as JSON")
     p = sub.add_parser("boot", help="show a start-up screen again (repaint brings the desktop back)")
-    p.add_argument("screen", choices=["selftest", "splash", "fast-next", "crash"],
+    p.add_argument("screen", choices=["selftest", "fast-next", "crash"],
                    help="fast-next: show nothing, make the next start a fast one (for before flashing). "
                         "crash: the error screen, with the last crash of this start or a made-up one")
     p = sub.add_parser("fault", help="make the board fail on purpose, to try the watchdog and the error screen "

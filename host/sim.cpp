@@ -177,7 +177,6 @@ int main(int argc, char **argv)
                                  },
                                  nullptr, nullptr};
     shell::run_self_test(boot_io);
-    shell::show_splash(boot_io);
     protocol.set_boot_screens(
         [](int which, void *) {
             if (which == 0) {
@@ -186,8 +185,6 @@ int main(int argc, char **argv)
                 sys::CrashRecord sample; // the PC has no crashes of its own to show
                 sys::crash_sample(sample);
                 shell::show_crash_screen(boot_io, sample, true, false);
-            } else {
-                shell::show_splash(boot_io, false);
             }
         },
         nullptr);

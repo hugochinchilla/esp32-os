@@ -8,10 +8,10 @@ Covers character codes 0 to 255 (ASCII and Latin-1); codes the font lacks are
 left blank. Every glyph must have the same size, as Spleen's do. One byte per
 row, leftmost pixel in bit 7.
 
-Wider fonts, only some characters (for the start-up screens):
+Wider fonts, only some characters:
 
   python3 tools/gen_font.py third_party/fonts/spleen/spleen-32x64.bdf \
-      core/src/gfx/font_spleen32x64.cpp kSpleen32x64 "Chinal"
+      core/src/gfx/font_big.cpp kBig "Chinal"
 
 writes a gfx::WideFont with just those characters, (width + 7) / 8 bytes
 per row.

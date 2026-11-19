@@ -4,12 +4,15 @@ date: 2026-11-19
 by: owner+agent
 status: to-confirm
 area: boot
-summary: "After the splash the screen shows the desktop's plain colour, rests 300 ms, and the desktop comes up in seven steps; not on a fast start (backlog 74)"
+summary: "At start-up the screen shows the desktop's plain colour, rests 300 ms, and the desktop comes up in seven steps; not on a debug fast start (backlog 74)"
 ---
 
 Backlog item 74; the story is in
-`docs/journal/2026-11-19-start-up-fade.md`. PC only so far. Previews:
-`look/startup-fade/` in the project files.
+`docs/journal/2026-11-19-start-up-fade.md` and
+`docs/journal/2026-11-19-no-splash.md`. Previews: `look/startup-fade/` in
+the project files. Since the same day there is no splash (`no-splash.md`):
+where this file says "the splash", read "what the screen showed before",
+which is black after the BIOS's restart.
 
 The owner's, 2026-11-19, after seeing Shut Down's fade
 (`shut-down-sequence.md`): the same for switching on. Read the desktop's
@@ -47,9 +50,12 @@ As built, the agent's readings, each his to confirm or overrule:
 - **Input is ignored and the pointer hidden until the desktop is whole**,
   as while Shut Down fades. A window that opens during the fade shows when
   it is over.
-- **Not on a fast start** (`dbg.py reboot --fast`, the PC program's
+- **Not on a fast start that was asked for** (`dbg.py reboot --fast`,
+  `boot fast-next`, `fastboot = true` in boot.ini, the PC program's
   `--fast`): the desktop at once, as before, so the board checks and the
-  tools keep their timing.
+  tools keep their timing. A start that comes from the BIOS does fade,
+  though the OS treats it as a fast one in every other way (the first
+  board turn found that it did not).
 - **The welcome chime stays where it is**, when the desktop has started:
   it begins with the plain colour and the desktop comes up about 0.3 s
   into it. Not chosen: holding it back to the first step of the fade.

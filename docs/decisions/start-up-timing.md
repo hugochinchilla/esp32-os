@@ -4,7 +4,7 @@ date: 2026-11-16
 by: owner
 status: decided
 area: boot
-summary: "How long the self-test and the splash stay on screen (`monitor_wait_ms`, `splash_ms`), and what the self-test shows"
+summary: "How long the self-test stays on screen (`monitor_wait_ms`) and what it shows; the splash it also timed was removed 2026-11-19"
 ---
 
 # Start-up timing
@@ -34,3 +34,9 @@ screen stays with "Press any key to continue" and "Booting in 5" counting to
 splash is hidden by default (`splash_ms` 0: not drawn at all, no blank
 frame); its code and its exact picture test stay. The desktop starts with no
 windows open (Welcome and About are no longer launched).
+
+Revised 2026-11-19 (the owner): the splash is gone altogether, its screen,
+its `splash_ms`, its two fonts and its test. It had been hidden since
+2026-11-16 and added nothing; the desktop fading in is the arrival now
+(`no-splash.md`, `start-up-fade.md`). What this file says about the splash
+above is the record.
