@@ -61,3 +61,10 @@ which stays the agent's choice, to confirm.
 ## 5. What is left
 
 Nothing but that confirmation. All six sounds are the owner's picks.
+
+## 6. Confirmed
+
+Later that morning, after PR 75 was merged, the owner answered the open
+point: "Si, solo suena si me lo dan a mi". The check warning for the user
+alone is his decision now (`docs/decisions/game-sounds.md`); the code
+already did that and did not change.
