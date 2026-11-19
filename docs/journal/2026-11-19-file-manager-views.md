@@ -1,7 +1,8 @@
 # The File manager's List and Details
 
-2026-11-19. Backlog item 56. Built and tested on the PC. Whether the firmware
-compiles is said at the end; nothing here has run on the board.
+2026-11-19. Backlog item 56. Built and tested on the PC. The firmware
+compiles and links in the cloud (ESP-IDF v5.5, 1,763,776 bytes); nothing here
+has run on the board.
 
 ## 1. What was asked
 
