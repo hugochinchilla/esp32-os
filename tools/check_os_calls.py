@@ -30,7 +30,6 @@ MOVED = [
     "settings.cpp",
     "shutdown.cpp",
     "task_manager.cpp",
-    "terminal.cpp",
     "trash.cpp",
     "welcome.cpp",
 ]

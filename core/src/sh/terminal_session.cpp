@@ -40,6 +40,11 @@ bool TerminalSession::start(EndedFn gone, void *context)
     return running_;
 }
 
+void TerminalSession::set_size(int columns, int rows)
+{
+    tty_.set_size(columns, rows);
+}
+
 void TerminalSession::typed(const uint8_t *bytes, size_t size)
 {
     tty_.input(bytes, size);

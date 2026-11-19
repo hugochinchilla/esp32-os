@@ -96,8 +96,6 @@ set(CORE_SRCS
     src/shell/shutdown.cpp
     src/shell/task_manager.cpp
     src/shell/sessions.cpp
-    src/shell/terminal.cpp
-    src/tty/screen.cpp
     src/tty/tty.cpp
     src/wm/paint_bench.cpp
     src/wm/text_edit.cpp

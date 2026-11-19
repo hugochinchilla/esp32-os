@@ -174,10 +174,6 @@ void open_picture(const char *path);
 // Timings of the Picture viewer's last picture (µs): decoding, opening to
 // last row, longest timer slice (programs/test_hooks.hpp has the look).
 constexpr int kPictureTimings = 3;
-// The Terminal: a terminal emulator in a window, the device of a session
-// that runs as a process of its own (`sh`). Every call opens another one,
-// up to three.
-void open_terminal();
 // What a terminal session needs to run on a task of its own (core/sh/
 // terminal_session.hpp). The machine hands in a few (one per Terminal that
 // may be open at once), before any Terminal opens. With none, or without
@@ -192,8 +188,6 @@ sh::Env session_environment(sh::UiCall *ui, proc::Pid owner);
 // Another owner for that memory: a service that is stopped and started
 // again (telnetd) has a new process each time.
 void set_session_owner(const sh::Env &env, proc::Pid owner);
-// Tests: the grid of the Terminal in front (nullptr: none is open).
-const tty::Screen *terminal_screen();
 
 // Wi-Fi, if the machine has it: call before start(). The shell then shows
 // the signal icon in the tray, keeps the manager running and sets the clock

@@ -29,14 +29,13 @@
 #include <new>
 
 #include "core/app/app.hpp"
-#include "core/gfx/art.hpp"
 #include "core/msg/queue.hpp"
 #include "core/os/os.hpp"
 #include "core/sh/terminal_session.hpp"
 #include "core/shell/shell.hpp"
 #include "core/tty/screen.hpp"
 #include "core/tty/tty.hpp"
-#include "internal.hpp"
+#include "art.hpp"
 
 namespace shell {
 
@@ -104,9 +103,6 @@ private:
     void *window_ = nullptr;
     std::atomic<bool> told_{false};
 };
-
-constexpr int kMaxTerminals = 3;
-app::Number g_terminals[kMaxTerminals] = {}; // their windows' numbers: dead once closed
 
 class TerminalWindow : public app::Window {
 public:
@@ -307,6 +303,10 @@ public:
     }
     void text_in(app::Control, const char *utf8) override { typed(utf8, strlen(utf8)); }
 
+    // Which of the three places on the screen it opened at.
+    int place() const { return place_; }
+    void take_place(int place) { place_ = place; }
+
 private:
     // Rows of the grid, in the picture. The size of the grid changes only
     // on the UI task (resized), so it is read without the lock.
@@ -428,6 +428,7 @@ private:
     sh::TerminalSession *session_ = nullptr; // the system's; nullptr once either side has gone
     ports::Lock *lock_ = nullptr;            // the session's, for the grid; nullptr: one task only
     int safety_ = 0;
+    int place_ = 0;
     Screen screen_;
     Shown shown_;
     app::Picture view_;
@@ -439,61 +440,84 @@ private:
 
 } // namespace
 
-// Every call opens another Terminal, as a process of its own.
-void open_terminal()
-{
-    int place = -1;
-    for (int i = kMaxTerminals - 1; i >= 0; i--) {
-        if (!os::ui::alive(g_terminals[i])) {
-            place = i; // free
-        }
-    }
-    if (place < 0) {
-        message_box("Terminal", "Three Terminals are open already.\nClose one of them first.");
-        return;
-    }
-    const proc::Pid pid = os::spawn("Terminal");
-    if (pid == proc::kNone) {
-        message_box("Terminal", "The Terminal could not start:\ntoo many programs are running.");
-        return;
-    }
-    in_process(pid, "Terminal", [place] {
-        app::Look look;
-        look.title = "Terminal";
-        look.x = 40 + place * 22;
-        look.y = 30 + place * 22;
-        look.width = TerminalWindow::kWidth + TerminalWindow::kBar;
-        look.height = TerminalWindow::kHeight;
-        look.icon = &gfx::terminal_icon_16();
-        look.flags = app::kClientSize;
-        // Not shown until it has its session.
-        const app::Number number = app::make<TerminalWindow>(look);
-        if (number == app::kNone) {
-            no_memory_for("Terminal");
-            return;
-        }
-        if (const char *why = app::program<TerminalWindow>(number)->begin()) {
-            os::ui::close(number);
-            message_box("Terminal", why);
-            return;
-        }
-        if (app::show(number)) {
-            g_terminals[place] = number;
-        }
-    });
-}
-
+#ifdef APP_LINKED
+// Tests: the grid of the Terminal the keyboard goes to, else of any that
+// is open (programs/test_hooks.hpp).
 const tty::Screen *terminal_screen()
 {
-    // The one the keyboard goes to, else any that is open.
     const TerminalWindow *found = nullptr;
-    for (const app::Number number : g_terminals) {
-        const TerminalWindow *t = app::program<TerminalWindow>(number);
+    for (int i = 0; i < os::process_count(); i++) {
+        const proc::Process &p = os::process_at(i);
+        if (strcmp(p.name, "Terminal") != 0) {
+            continue;
+        }
+        const TerminalWindow *t = app::program<TerminalWindow>(os::main_window(p.pid));
         if (t != nullptr && t->on_screen() && (found == nullptr || t->has_keys())) {
             found = t;
         }
     }
     return found != nullptr ? &found->screen() : nullptr;
 }
+#endif
 
 } // namespace shell
+
+APP_INFO(app::many(app::file_info("Terminal", 8 * 1024, art::kSmall, art::kSmallInks)));
+
+namespace {
+// The window's icon: the header's own pixels are not in memory with the
+// program, so they are made again here from the same rows.
+constexpr app::Icon16 kWindowIcon = app::icon16(art::kSmall, art::kSmallInks);
+constexpr int kMaxTerminals = 3; // the machine has that many session tasks
+} // namespace
+
+// Every start is another Terminal, a process of its own, up to three.
+APP_MAIN(int, char **)
+{
+    static const gfx::Bitmap icon = {16, 16, kWindowIcon.pixels, app::kClearInk};
+    // The places the others took, by where their windows are.
+    bool taken[kMaxTerminals] = {};
+    int others = 0;
+    for (int i = 0; i < os::process_count(); i++) {
+        const proc::Process &p = os::process_at(i);
+        const os::ui::Window window = os::main_window(p.pid);
+        if (p.pid == os::self() || strcmp(p.name, "Terminal") != 0 || window == os::kNoWindow) {
+            continue;
+        }
+        others++;
+        if (const auto *t = app::program<shell::TerminalWindow>(window)) {
+            taken[t->place()] = true;
+        }
+    }
+    if (others >= kMaxTerminals) {
+        shell::message_box("Terminal", "Three Terminals are open already.\nClose one of them first.");
+        return 0; // said: the system has nothing to add
+    }
+    int place = 0;
+    while (place < kMaxTerminals - 1 && taken[place]) {
+        place++;
+    }
+    app::Look look;
+    look.title = "Terminal";
+    look.x = 40 + place * 22;
+    look.y = 30 + place * 22;
+    look.width = shell::TerminalWindow::kWidth + shell::TerminalWindow::kBar;
+    look.height = shell::TerminalWindow::kHeight;
+    look.icon = &icon;
+    look.flags = app::kClientSize;
+    // Not shown until it has its session.
+    const app::Number number = app::make<shell::TerminalWindow>(look);
+    if (number == app::kNone) {
+        shell::message_box("Terminal", "There is not enough memory to open the Terminal.");
+        return 0;
+    }
+    shell::TerminalWindow *terminal = app::program<shell::TerminalWindow>(number);
+    terminal->take_place(place);
+    if (const char *why = terminal->begin()) {
+        os::ui::close(number);
+        shell::message_box("Terminal", why);
+        return 0;
+    }
+    app::show(number);
+    return 0;
+}

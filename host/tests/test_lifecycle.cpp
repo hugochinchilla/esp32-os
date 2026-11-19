@@ -604,6 +604,7 @@ void test_no_memory()
     shell::start_program("Editor");
     shell::start_program("Editor");
     shell::start_program("Picture viewer");
+    shell::start_program("Terminal");
     shell::open_trash();
     shell::display_dialog();
     shell::screen_saver_dialog();

@@ -27,7 +27,6 @@ const Entry kApps[] = {
     {{"About Chinchilla", nullptr, &open_about, false, true}, &gfx::mascot_16},
     {{"File manager", nullptr, &open_file_manager, false, true, kRoomy}, &gfx::files_icon_16},
     {{"Task Manager", nullptr, &open_task_manager, false, true, kRoomy}, &gfx::tasks_icon_16},
-    {{"Terminal", nullptr, &open_terminal, true}, &gfx::terminal_icon_16},
     // A page is read, laid out and fetched on its task, with addresses of
     // 600 bytes on the stack at several depths. ponytail: a first figure,
     // to be trimmed with what the board measures.

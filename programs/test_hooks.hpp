@@ -7,6 +7,7 @@
 #include "core/games/cactus.hpp"
 #include "core/games/chess.hpp"
 #include "core/games/snake.hpp"
+#include "core/tty/screen.hpp"
 
 namespace shell {
 
@@ -23,6 +24,10 @@ int cactus_patch_seconds();
 // of the last picture (shell::kPictureTimings of them).
 void finish_picture();
 const uint32_t *picture_timings();
+
+// The Terminal: the grid of the one the keyboard goes to, else of any
+// that is open (nullptr: none is).
+const tty::Screen *terminal_screen();
 
 // Chess: the game in its window, whether the computer is thinking, the
 // side the user plays, the status line, and whose turn it is worked out

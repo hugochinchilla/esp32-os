@@ -71,7 +71,7 @@ int main(int argc, char **argv)
 
     // Room for the largest program in its PC form (Chess, with the checkers
     // built in, is most of a megabyte).
-    static fs::MemoryVolume disk(memory.allocate(4 << 20), 4 << 20, "RAM disk");
+    static fs::MemoryVolume disk(memory.allocate(16 << 20), 16 << 20, "RAM disk");
     storage.mount('C', disk);
     shell::start(desktop, system_, storage, memory);
     desktop.start();
