@@ -369,11 +369,14 @@ bool g_taskbar_up = false;
 // ends; the memory is counted as the taskbar's.
 desk::Taskbar *g_bar = nullptr;
 desk::Icons *g_desk = nullptr;
-// The tray icon is the network's to set (network.cpp), whether or not there
-// is a taskbar to show it at the moment.
-const gfx::Bitmap *g_tray_icon = nullptr;
-void (*g_tray_click)(void *context) = nullptr;
-void *g_tray_context = nullptr;
+// The tray icons are the network's and Bluetooth's to set (their
+// services), whether or not there is a taskbar to show them at the moment.
+struct TrayIcon {
+    const gfx::Bitmap *icon;
+    void (*click)(void *context);
+    void *context;
+};
+TrayIcon g_tray[desk::Taskbar::kMaxTray] = {};
 
 // Where the icons are (backlog item 41). The desktop keeps the places in
 // C:\.config\icons.ini: [system] by label, [files] by the file's name, each
@@ -1180,9 +1183,12 @@ void start_taskbar(void *)
         g_settings_items[2].flags = 0;
     }
     if (bluetooth() != nullptr) {
+        g_settings_items[3].icon = &gfx::bluetooth_icon_16();
         g_settings_items[3].flags = 0;
     }
-    g_bar->set_tray_icon(g_tray_icon, g_tray_click, g_tray_context);
+    for (int i = 0; i < desk::Taskbar::kMaxTray; i++) {
+        g_bar->set_tray_icon(i, g_tray[i].icon, g_tray[i].click, g_tray[i].context);
+    }
     {
         fs::Ini ini;
         load_settings("icons", ini);
@@ -1205,14 +1211,15 @@ void start_taskbar(void *)
 
 } // namespace
 
-void set_tray_icon(const gfx::Bitmap *icon, void (*click)(void *context), void *context)
+void set_tray_icon(int place, const gfx::Bitmap *icon, void (*click)(void *context), void *context)
 {
     const prog::InCall in_call;
-    g_tray_icon = icon;
-    g_tray_click = click;
-    g_tray_context = context;
+    if (place < 0 || place >= desk::Taskbar::kMaxTray) {
+        return;
+    }
+    g_tray[place] = {icon, click, context};
     if (g_bar != nullptr) {
-        g_bar->set_tray_icon(icon, click, context);
+        g_bar->set_tray_icon(place, icon, click, context);
     }
 }
 

@@ -1,9 +1,11 @@
 // Bluetooth keyboards and mice, as the system keeps them running (backlog
 // item 51): the manager is driven four times a second, so a device that
 // was paired is connected again when it calls, and a new one in pairing
-// mode is taken when the machine has no keyboard or no mouse. Not a
+// mode is taken when the machine has no keyboard or no mouse; the tray
+// shows whether it is off, on, or has a device connected. Not a
 // program: the window that shows the devices is (bluetooth.cpp), and it
 // asks for the service through os::bluetooth().
+#include "core/gfx/art.hpp"
 #include "core/input/bluetooth.hpp"
 #include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
@@ -15,7 +17,27 @@ namespace {
 
 bt::Manager *g_bluetooth = nullptr;
 
-void bluetooth_tick(void *) { g_bluetooth->tick(manager().now_us()); }
+uint32_t g_shown_changes = 0;
+
+void tray_clicked(void *) { open_bluetooth(); }
+
+void show_tray()
+{
+    const gfx::BluetoothIcon icon = !g_bluetooth->on()                 ? gfx::BluetoothIcon::Off
+                                    : g_bluetooth->kinds_ready() != 0 ? gfx::BluetoothIcon::Connected
+                                                                      : gfx::BluetoothIcon::On;
+    set_tray_icon(kTrayBluetooth, &gfx::bluetooth_icon_16(icon), &tray_clicked, nullptr);
+}
+
+// Four times a second: follow the radio, and show what changed.
+void bluetooth_tick(void *)
+{
+    g_bluetooth->tick(manager().now_us());
+    if (g_bluetooth->changes() != g_shown_changes) {
+        g_shown_changes = g_bluetooth->changes();
+        show_tray();
+    }
+}
 
 } // namespace
 
@@ -34,6 +56,8 @@ void start_bluetooth()
     // Like the Wi-Fi manager it has no row in the process table: it is
     // driven by this timer, on the UI task, so the timer is the desktop's.
     g_bluetooth->start(manager().now_us());
+    g_shown_changes = g_bluetooth->changes();
+    show_tray();
     manager().start_timer(250000, 250000, &bluetooth_tick, nullptr);
 }
 

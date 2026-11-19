@@ -49,10 +49,14 @@ public:
     int quick_launch_count() const { return quick_count_; }
     Rect quick_launch_rect(int index) const;
 
-    // A 16x16 icon in the tray, left of the clock (nullptr: none). A click
-    // on it calls `click`.
-    void set_tray_icon(const gfx::Bitmap *icon, void (*click)(void *context) = nullptr, void *context = nullptr);
-    Rect tray_icon_rect() const; // empty without an icon
+    // The tray, left of the clock: kMaxTray places for a 16x16 icon each
+    // (nullptr: none), place 0 next to the clock. The icons there are stand
+    // side by side, with no gap for an empty place. A click on one
+    // calls its `click`.
+    static constexpr int kMaxTray = 2;
+    void set_tray_icon(int place, const gfx::Bitmap *icon, void (*click)(void *context) = nullptr,
+                       void *context = nullptr);
+    Rect tray_icon_rect(int place = 0) const; // empty without an icon there
     Rect clock_rect() const;
 
     // Buttons: -1 the Start button, 0.. the window buttons.
@@ -71,9 +75,13 @@ private:
     bool attached_ = false;
     QuickLaunch quick_[kMaxQuick] = {};
     int quick_count_ = 0;
-    const gfx::Bitmap *tray_icon_ = nullptr;
-    void (*tray_click_)(void *context) = nullptr;
-    void *tray_context_ = nullptr;
+    int tray_count() const; // the icons there are
+    struct Tray {
+        const gfx::Bitmap *icon;
+        void (*click)(void *context);
+        void *context;
+    };
+    Tray tray_[kMaxTray] = {};
     bool held_ = false; // a button is held down
     int held_index_ = 0;
     bool held_inside_ = false;

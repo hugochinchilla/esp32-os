@@ -293,7 +293,7 @@ void open_bluetooth()
     look.title = "Bluetooth";
     look.width = 396;
     look.height = 320;
-    look.icon = &gfx::settings_icon_16();
+    look.icon = &gfx::bluetooth_icon_16();
     look.flags = app::kDialog;
     g_window = app::open<BluetoothWindow>(look);
     if (g_window == app::kNone) {

@@ -9,6 +9,7 @@
 #include "core/desk/desk.hpp"
 #include "core/fs/ini.hpp"
 #include "core/fs/memory_volume.hpp"
+#include "core/gfx/art.hpp"
 #include "core/gfx/theme.hpp"
 #include "core/init/init.hpp"
 #include "core/input/bluetooth.hpp"
@@ -123,6 +124,7 @@ int main(int argc, char **argv)
     wait(4);
     // Nothing connected: it listens thinly for a device that calls.
     CHECK(bluetooth.on() && radio.listening == bt::Listen::Background);
+    CHECK(!shell::taskbar()->tray_icon_rect(1).empty()); // its icon is in the tray
 
     // Start > Settings > Bluetooth.
     const gfx::Rect start = shell::taskbar()->button(-1);
@@ -230,6 +232,22 @@ int main(int argc, char **argv)
     wait(2);
     save("bt-13-radio-off");
     key(wm::key::Escape);
+
+    // The tray: a cross while it is off. On again, and beside the
+    // network's icon (put there by hand: this test has no Wi-Fi), a click
+    // on it opens the window.
+    CHECK(!shell::taskbar()->tray_icon_rect(1).empty() && shell::taskbar()->tray_icon_rect(0).empty());
+    save("bt-14-tray-off");
+    radio.off = false;
+    wait(2);
+    shell::taskbar()->set_tray_icon(0, &gfx::signal_icon_16(3));
+    const gfx::Rect tray = shell::taskbar()->tray_icon_rect(1);
+    CHECK(tray.x + tray.w == shell::taskbar()->tray_icon_rect(0).x);
+    click(tray.x + 8, tray.y + 8);
+    CHECK(title() == "Bluetooth");
+    save("bt-15-tray-click");
+    key(wm::key::Escape);
+    CHECK(title() == "");
 
     if (failures == 0) {
         printf("bluetooth scenes: all checks passed\n");

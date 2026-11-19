@@ -1400,6 +1400,53 @@ const Bitmap &signal_icon_16(int bars, bool locked)
     return bitmaps[(locked ? 6 : 1) + bars];
 }
 
+/* ---- Bluetooth ---------------------------------------------------------------- */
+
+namespace {
+
+// A keyboard with two radio waves over it (an original drawing: the
+// Bluetooth mark itself is a trademark and is not used). `waves`: the
+// colour of the waves; kClear: none, and a red cross in their place.
+constexpr Pixels<16> bluetooth_pixels(int waves)
+{
+    constexpr const char *rows[16] = {
+        "................", "................", ".....BBBBBB.....", "...BB......BB...",
+        "..B...BBBB...B..", ".....B....B.....", "................", ".......BB.......",
+        "................", "KKKKKKKKKKKKKKKK", "KWWWWWWWWWWWWWWK", "KWKWKWKWKWKWKWWK",
+        "KWWWWWWWWWWWWWWK", "KWKWKKKKKKKWKWWK", "KKKKKKKKKKKKKKKK", "................",
+    };
+    Pixels<16> out;
+    for (int y = 0; y < 16; y++) {
+        for (int x = 0; x < 16; x++) {
+            const char ch = rows[y][x];
+            out.p[y * 16 + x] = static_cast<uint8_t>(ch == 'K' ? kBlack : ch == 'W' ? kWhite : ch == 'B' ? waves : kClear);
+        }
+    }
+    if (waves == kClear) {
+        for (int y = 0; y < 7; y++) {
+            for (int x = 0; x < 6; x++) {
+                if (kCross[y][x] == 'R') {
+                    out.p[(y + 1) * 16 + x + 5] = rgb(7, 0, 0);
+                }
+            }
+        }
+    }
+    return out;
+}
+
+} // namespace
+
+const Bitmap &bluetooth_icon_16(BluetoothIcon state)
+{
+    static constexpr Pixels<16> pixels[3] = {
+        bluetooth_pixels(kClear), bluetooth_pixels(kDarkGrey), bluetooth_pixels(rgb(0, 2, 3)),
+    };
+    static constexpr Bitmap bitmaps[3] = {
+        {16, 16, pixels[0].p, kClear}, {16, 16, pixels[1].p, kClear}, {16, 16, pixels[2].p, kClear},
+    };
+    return bitmaps[static_cast<int>(state)];
+}
+
 // A program kept in a file that brings no picture of its own (backlog item
 // 27): a window with a title bar and a few lines of text.
 namespace {

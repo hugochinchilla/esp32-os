@@ -56,3 +56,8 @@ until he answers.
   in range, Pair, Forget, and the two switches as tick boxes. While it is
   open the radio listens hard, so a device shows at once. `tools/dbg.py
   bt` does the same from a PC.
+- **An icon in the tray** (the owner's request, 2026-11-19), left of the
+  network's: a keyboard under radio waves, grey when nothing is connected,
+  blue with a keyboard or mouse connected, a red cross when Bluetooth is
+  off. A click opens the Bluetooth program. The drawing is original: the
+  Bluetooth mark is a trademark and is not used.

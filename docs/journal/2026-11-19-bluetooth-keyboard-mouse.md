@@ -275,3 +275,30 @@ test opens and closes it as the other tools (twelve blocks open, none
 closed). The firmware compiles and links in the cloud (1,943,264 bytes,
 5.7 KB more than without the window); the window has not run on
 the board.
+
+## An icon in the tray
+
+The owner asked, on seeing the window: "we need a tray icon for bluetooth
+status, and clicking on it opens this dialog".
+
+The taskbar's tray held one icon, the network's. It now has two places
+(`desk::Taskbar::kMaxTray`), the network's next to the clock where it was
+and Bluetooth's left of it; an empty place leaves no gap. The Bluetooth
+service sets its icon whenever the manager says something changed, as the
+network's does, and a click opens the Bluetooth program.
+
+Three states: off (a red cross), on with nothing connected (grey waves),
+a keyboard or mouse connected (blue waves). Not shown: an attempt under
+way (it lasts seconds, and the window tells it), and which of keyboard
+and mouse is there (the window's first line does).
+
+The drawing: the Bluetooth rune is what everybody knows, but it is a
+registered trademark and the rule here is original or freely licensed
+art, so the icon is a drawing of its own, a keyboard under two radio
+waves. The owner can ask for another. The same icon is the window's and
+the Settings menu entry's.
+
+Tested on the PC: the scenes check that the icon is there from the start,
+show it off and beside the network's, and open the window by a click on
+it; the fifteen pictures were drawn again with the icon in them and two
+were added. The firmware compiles and links; not run on the board.
