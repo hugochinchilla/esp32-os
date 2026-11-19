@@ -416,6 +416,9 @@ void Wm::close(Window &w)
     if (menu_window_ == &w) {
         close_menus();
     }
+    if (lent_ == &w) {
+        return_screen();
+    }
     for (int i = at; i + 1 < count_; i++) {
         stack_[i] = stack_[i + 1];
     }
@@ -1115,7 +1118,7 @@ void Wm::key(uint16_t usage, bool pressed)
         caret_moved();
     }
     handle_key(usage, pressed);
-    if (!modifier && pressed) {
+    if (!modifier && pressed && lent_ == nullptr) {
         // A held key repeats, after a pause counted from the end of its own
         // handling: a press that took long (a save) does not repeat at once.
         repeat_usage_ = usage;
@@ -1183,10 +1186,30 @@ void Wm::handle_key(uint16_t usage, bool pressed)
         stop_timer(repeat_timer_);
         repeat_timer_ = 0;
         repeat_usage_ = 0;
+        return_screen(); // a lent screen comes back first: this is the way out of a game
         if (attention_ != nullptr && (screen_fn_ != nullptr || system_modal() == nullptr)) {
             close_menus();
             attention_(attention_context_);
         }
+        return;
+    }
+    if (lent_ != nullptr && bit == kGui) {
+        // The logo key leaves a game for the desktop (the owner's request,
+        // 2026-11-19): the screen comes back and the game's window is put
+        // away on the taskbar. The key does nothing else, down or up.
+        if (pressed) {
+            Window &game = *lent_;
+            return_screen();
+            minimize(game);
+            logo_alone_ = false; // let go, it is not the Start key this time
+        }
+        return;
+    }
+    if (lent_ != nullptr) {
+        // Every key as it is, the modifiers too: the window has the machine.
+        const KeyMsg raw = {usage, pressed, mods_};
+        const proc::Scope as(procs_, lent_->owner_);
+        lent_->key(raw);
         return;
     }
     if (screen_fn_ != nullptr) {
@@ -1288,6 +1311,21 @@ void Wm::mouse(const ports::MouseEvent &event)
 {
     const Work piece(*this, sys::Frames::kMouse);
     const proc::Scope desktop(procs_, desktop_pid_);
+    if (lent_ != nullptr) {
+        // Movement, not a place: there is no pointer. A mouse that reports
+        // places (a remote screen) moves by the difference between them.
+        const int dx = event.absolute ? event.x - lent_x_ : event.x;
+        const int dy = event.absolute ? event.y - lent_y_ : event.y;
+        if (event.absolute) {
+            lent_x_ = event.x;
+            lent_y_ = event.y;
+        }
+        last_input_us_ = now_us();
+        buttons_ = event.buttons;
+        const proc::Scope as(procs_, lent_->owner_);
+        lent_->mouse_moved(dx, dy, event.buttons);
+        return;
+    }
     if (screen_fn_ != nullptr) {
         return;
     }
@@ -1372,8 +1410,8 @@ void Wm::set_screen_saver(ScreenSaver *saver, uint32_t idle_seconds)
 
 void Wm::start_screen_saver()
 {
-    if (saver_ == nullptr || saver_on_) {
-        return;
+    if (saver_ == nullptr || saver_on_ || lent_ != nullptr) {
+        return; // a lent screen is in use, whatever the keyboard says
     }
     saver_on_ = true;
     saver_x_ = pointer_x_;
@@ -2409,6 +2447,49 @@ void Wm::take_over(ScreenFn paint, void *context)
     update();
 }
 
+uint8_t *Wm::lend_screen(Window &to, int coarse)
+{
+    if (lent_ == &to) {
+        return display_.pixels();
+    }
+    if (screen_fn_ != nullptr || to.wm_ != this) {
+        return nullptr; // Shut Down has it, or the desktop is still coming up
+    }
+    hold_screen();
+    lent_ = &to;
+    lent_x_ = pointer_x_;
+    lent_y_ = pointer_y_;
+    if (coarse != 0 && display_.set_coarse(coarse)) {
+        lent_coarse_ = true;
+        if (mode_fn_ != nullptr) {
+            mode_fn_(mode_context_); // whoever watches the screen from afar: it has another size
+        }
+    }
+    return display_.pixels();
+}
+
+void Wm::return_screen()
+{
+    if (lent_ == nullptr) {
+        return;
+    }
+    lent_ = nullptr;
+    screen_fn_ = nullptr;
+    if (lent_coarse_) {
+        lent_coarse_ = false;
+        display_.set_coarse(0);
+        if (mode_fn_ != nullptr) {
+            mode_fn_(mode_context_);
+        }
+    }
+    // Keys held when the screen went were never seen let go by anyone else.
+    buttons_ = 0;
+    swallow_button_ = false;
+    last_input_us_ = now_us();
+    pointer_.set_visible(true);
+    invalidate({0, 0, width_, height_}); // painted when the event that ended the loan is over
+}
+
 void Wm::hold_screen()
 {
     if (screen_fn_ != nullptr) {
@@ -2612,6 +2693,7 @@ void Wm::change_mode()
     }
     const proc::Scope desktop(procs_, desktop_pid_);
     // What was going on with the old screen is over.
+    return_screen();
     stop_screen_saver();
     close_menus();
     capture_ = Capture::None;
@@ -3057,7 +3139,9 @@ void Wm::tick()
     if (saver_on_) {
         saver_->tick(now);
     } else if (saver_ != nullptr && saver_idle_us_ != 0 && buttons_ == 0 && capture_ == Capture::None &&
-               now - last_input_us_ >= saver_idle_us_) {
+               lent_ == nullptr && now >= last_input_us_ && now - last_input_us_ >= saver_idle_us_) {
+        // (`now` was read before the timers ran: one of them may have ended a
+        // loan of the screen, which counts as input from that moment.)
         start_screen_saver();
     }
     update();
@@ -3080,7 +3164,8 @@ uint32_t Wm::idle_us()
     if (saver_on_) {
         const uint64_t frame = saver_->next_frame_us();
         due = frame < due ? frame : due;
-    } else if (saver_ != nullptr && saver_idle_us_ != 0 && buttons_ == 0 && capture_ == Capture::None) {
+    } else if (saver_ != nullptr && saver_idle_us_ != 0 && buttons_ == 0 && capture_ == Capture::None &&
+               lent_ == nullptr) {
         // With a button held it starts after the release, which is input.
         const uint64_t start = last_input_us_ + saver_idle_us_;
         due = start < due ? start : due;

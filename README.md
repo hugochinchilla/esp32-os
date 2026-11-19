@@ -64,7 +64,7 @@ resistor values and build notes.
 | `firmware/os/` | The OS firmware: ESP-IDF project with the ESP32 adapters for `core/` |
 | `firmware/vga-test/` | ESP-IDF test program for the VGA wiring |
 | `host/` | PC build: unit tests and picture tests for `core/`, a simulated board, and `desktop/`, Chinchilla as a desktop program for Linux |
-| `third_party/` | Freely licensed files from elsewhere: the Spleen font |
+| `third_party/` | Freely licensed files from elsewhere: the Spleen font; the engine of Doom (GPL 2), which is part of `programs/doom` only |
 | `web/` | Chinchilla in a web browser: the Emscripten build of `host/desktop/` and its page |
 | `ci/` | GitHub Actions workflows to copy into `.github/workflows/`: the build, publishing the browser version on GitHub Pages, and deploying its relay to Cloudflare |
 | `tools/` | `dbg.py`, the debug tool; `check_pictures.py`, the picture tests; `gen_font.py`, the font table generator; `mockup/`, the script that drew the target look; the setup script for Arch-based systems; the script that regenerates the board diagram |

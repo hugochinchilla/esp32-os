@@ -1453,6 +1453,14 @@ public:
         e.y = client().h;
         tell(e);
     }
+    void mouse_moved(int dx, int dy, uint8_t buttons) override
+    {
+        Event e{What::MouseMoved};
+        e.x = dx;
+        e.y = dy;
+        e.index = buttons;
+        tell(e);
+    }
     bool close_requested() override { return !tell(Event{What::Closing}); }
     static void icon_opened(IconView &v, void *context) { static_cast<Behind *>(context)->from(v, What::Chosen); }
     static void icon_picked(IconView &v, void *context) { static_cast<Behind *>(context)->from(v, What::Changed); }
@@ -2071,6 +2079,48 @@ bool in_front(Window window)
     const prog::InCall in_call;
     Behind *w = behind(window);
     return w != nullptr && os::in_front(*w);
+}
+
+bool take_screen(Window window, Screen &out, int coarse)
+{
+    const prog::InCall in_call;
+    out = {};
+    Behind *w = behind(window);
+    wm::Wm *wm = installed_kit().wm;
+    if (w == nullptr || wm == nullptr) {
+        return false;
+    }
+    out.pixels = wm->lend_screen(*w, coarse);
+    if (out.pixels == nullptr) {
+        return false;
+    }
+    out.width = wm->lent_width();
+    out.height = wm->lent_height();
+    return true;
+}
+
+bool has_screen(Window window)
+{
+    const prog::InCall in_call;
+    Behind *w = behind(window);
+    wm::Wm *wm = installed_kit().wm;
+    return w != nullptr && wm != nullptr && wm->screen_lent_to() == w;
+}
+
+void give_screen_back(Window window)
+{
+    const prog::InCall in_call;
+    if (has_screen(window)) {
+        installed_kit().wm->return_screen();
+    }
+}
+
+void screen_changed(Window window, const gfx::Rect &part)
+{
+    const prog::InCall in_call;
+    if (has_screen(window)) {
+        installed_kit().wm->screen_saver_drew(part);
+    }
 }
 
 bool has_keys(Window window)

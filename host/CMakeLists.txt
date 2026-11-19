@@ -2,7 +2,7 @@
 # the debug tool.
 #   cmake -S host -B build/host && cmake --build build/host && ctest --test-dir build/host
 cmake_minimum_required(VERSION 3.16)
-project(esp32_os_host CXX)
+project(esp32_os_host C CXX) # C for the engine of programs/doom only
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -187,6 +187,25 @@ target_compile_options(chess_app PRIVATE -O2 -fno-sanitize=all)
 # Not a program of the system: the chess engine's measuring program for
 # board checks (tools/bench/chess_bench), built here so that it stays whole.
 add_program(chess_bench ../tools/bench/chess_bench/chess_bench.cpp)
+# Doom (backlog item 81): our two files and the engine of
+# third_party/doomgeneric, which is C, is given port.h in place of the C
+# library and is not ours to make free of warnings. Optimised and without
+# the checkers, as Chess is: a program file may be a megabyte.
+file(STRINGS ../programs/doom/engine.txt doom_engine)
+list(TRANSFORM doom_engine PREPEND ${CMAKE_CURRENT_SOURCE_DIR}/../)
+add_program(doom "../programs/doom/doom.cpp;../programs/doom/port.c;${doom_engine}")
+target_include_directories(doom_app PRIVATE ../programs/doom ../third_party/doomgeneric)
+target_compile_options(doom_app PRIVATE -Os -fno-sanitize=all)
+set_source_files_properties(${doom_engine} ../programs/doom/port.c PROPERTIES COMPILE_OPTIONS
+                            "-w;-std=gnu99;-include;${CMAKE_CURRENT_SOURCE_DIR}/../programs/doom/port.h")
+# Without the game's data, which is not in the repository, the test checks
+# the program's window only; with it (-DDOOM_WAD=/path/to/DOOM1.WAD) it plays.
+set(DOOM_WAD "" CACHE FILEPATH "A Doom WAD file for the test of programs/doom")
+add_executable(test_doom tests/test_doom.cpp)
+target_link_libraries(test_doom PRIVATE core ${CMAKE_DL_LIBS} Threads::Threads)
+set_target_properties(test_doom PROPERTIES ENABLE_EXPORTS ON)
+add_dependencies(test_doom doom_app)
+add_test(NAME doom COMMAND test_doom ${CMAKE_CURRENT_BINARY_DIR}/doom.app ${DOOM_WAD})
 add_executable(test_loaded tests/test_loaded.cpp)
 target_link_libraries(test_loaded PRIVATE core ${CMAKE_DL_LIBS} Threads::Threads)
 set_target_properties(test_loaded PROPERTIES ENABLE_EXPORTS ON)
