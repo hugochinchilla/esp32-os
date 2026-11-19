@@ -58,7 +58,7 @@ The journal entry with the reasons is
 | | `os::set_screen_saver(animation, seconds)` | Which animation and after how long; -1 for none (Screen Saver) |
 | | `os::preview_screen_saver(animation)`, `os::last_saver_run()` | Shows one now; how the last run went |
 | | `os::launch(program)` | Starts one of the system's own programs by name, or brings it forward |
-| | `os::shut_down()` | Asks every program to close and shows the power-off screen; false if one called it off |
+| | `os::shut_down()` | Starts Shut Down and returns: programs are asked to close (ended after 20 s), the picture fades, the power-off screen shows; a program that says no calls it off |
 | Bluetooth | `os::bluetooth()` | The service that follows Bluetooth keyboards and mice (`core/input/bluetooth.hpp`), or nothing on a machine with no such radio; asked for each time, not kept |
 | Network | `os::network()` | The Wi-Fi service, or nothing on a board with no radio; asked for each time, not kept |
 | Sessions | `os::open_session(device, why)` | A command shell on a TTY of its own, as a process `sh`, child of the one asking, which is its device (the Terminal). `nullptr` and the reason if it cannot start |
@@ -73,7 +73,7 @@ The journal entry with the reasons is
 | Clipboard | `os::clipboard::set_files(folder, names, count, cut)` | Copy and Cut for files (item 54): their full paths go on the clipboard, which is the one the text uses and holds text or files, never both |
 | | `os::clipboard::file_count()`, `file(index, out, capacity)`, `files_cut()`, `clear()` | What Paste asks: which files, and whether they were cut. `os::ui::clipboard_size()` is of the text, 0 while files are there |
 | Settings | `os::load_settings(program, ini)`, `os::save_settings(program, ini)` | `C:\.config\<program>.ini` |
-| Sound | `os::play_sound(which)` | One of the system's sounds (`core/sound/sound.hpp`: Boot, Close, Alert, Error, Bell) from its start; it returns at once, and a new one takes the place of the one playing. Nothing on a machine with no sound output (the board, for now) |
+| Sound | `os::play_sound(which)` | One of the system's sounds (`core/sound/sound.hpp`: Boot, Close, Alert, Error, Bell, and the games' and the Trash's: ChessMove, ChessCheck, ChessMate, SnakeEat, SnakeOver, Crumple) from its start; it returns at once, and a new one takes the place of the one playing. Nothing on a machine with no sound output (the board, for now) |
 | | `os::beep(steps, count)` | The beeper: steps of a pitch in Hz and a time in ms, 0 Hz for silence; a voice of its own beside the recordings |
 | | `os::sound_playing()` | Whether anything is still to be heard |
 | Machine | `os::restart()` | |

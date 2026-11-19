@@ -53,7 +53,6 @@ namespace {
 
 constexpr int kWidth = 640, kHeight = 480;
 constexpr uint32_t kFrameMs = 16; // the window is redrawn at most this often
-constexpr uint32_t kForceCloseMs = 3000;
 
 #ifdef __EMSCRIPTEN__
 constexpr bool kWeb = true;
@@ -206,7 +205,7 @@ private:
     host::HostMemory memory_;
     PcSystem system_;
     host::SdlSound sound_;
-    bool leaving_ = false; // shut down by the window's close button: gone when the melody has ended
+    bool leaving_ = false; // shut down by the window's close button: gone when the last screen shows and the melody has ended
     wm::Wm screen_{display_, pointer_, clock_};
     fs::Storage storage_;
     host::FolderVolume volume_;
@@ -216,8 +215,6 @@ private:
     uint8_t buttons_ = 0;
     desktop::WheelNotches wheel_y_, wheel_x_;
     bool down_[256] = {};   // keys held, by USB usage code
-    uint32_t refused_ms_ = 0; // when a program last kept the window from closing
-    bool refused_ = false;
     int shots_ = 0;
     uint32_t started_ms_ = 0;
 };
@@ -467,29 +464,20 @@ void Machine::mouse_at(int window_x, int window_y, int wheel, int wheel_x)
                    static_cast<int8_t>(wheel_x)});
 }
 
-// The window's close button (or the PC's Alt+F4) is Shut Down: every program
-// is asked to close, so the Editor can still ask about unsaved text. If one
-// does, the window stays; closing it again within a few seconds leaves
-// anyway.
+// The window's close button (or the PC's Alt+F4) is Shut Down, the whole
+// sequence: every program is asked to close, so the Editor can still ask
+// about unsaved text, and the picture fades to the last screen. Closing the
+// window again while that runs leaves at once.
 void Machine::close_asked()
 {
-    const uint32_t now = SDL_GetTicks();
-    if (booting_ || shell::powered_down() || (refused_ && now - refused_ms_ < kForceCloseMs)) {
+    if (booting_ || shell::powered_down() || shell::shutting_down()) {
         running_ = false;
         return;
     }
     release_keys();
-    if (shell::power_down()) {
-        // The last screen stays for as long as the closing melody plays;
-        // closing the window again leaves at once.
-        leaving_ = true;
-        dirty_ = true;
-        return;
-    }
-    screen_.tick();
-    refused_ = true;
-    refused_ms_ = now;
-    fprintf(stderr, "chinchilla: a program has a question open. Answer it, or close the window again to leave now.\n");
+    shell::power_down();
+    leaving_ = true;
+    dirty_ = true;
 }
 
 void Machine::handle(const SDL_Event &e)
@@ -592,7 +580,6 @@ void Machine::start()
     static shell::BootIo io{display_, system_, memory_, clock_, &storage_, &Machine::boot_idle, this, nullptr};
     io.video_start_us = clock_.micros();
     io.monitor_wait_ms = 0;
-    io.splash_ms = boot.splash_ms;
     io.pace_percent = boot.pace_percent;
     io.hold_s = boot.hold_s;
     io.skip = [](void *self) { return static_cast<Machine *>(self)->skip_boot_; };
@@ -602,7 +589,6 @@ void Machine::start()
         shell::run_quiet_checks(io);
     } else {
         shell::run_self_test(io);
-        shell::show_splash(io);
     }
     booting_ = false;
     buttons_ = 0;
@@ -662,7 +648,9 @@ void Machine::start()
     tm local = {};
     localtime_r(&now, &local);
     screen_.set_time(local.tm_hour, local.tm_min, local.tm_sec);
-    screen_.start();
+    // The desktop fades in out of its plain colour (backlog item 74); a
+    // fast start shows it at once.
+    screen_.start(boot.fastboot || options_.fast ? wm::Wm::Arrival::AtOnce : wm::Wm::Arrival::FromColour);
     dirty_ = true;
 }
 
@@ -748,8 +736,11 @@ bool Machine::step()
         }
         return false;
     }
-    if (leaving_ && !sound_.playing()) {
+    if (leaving_ && shell::powered_down() && !sound_.playing()) {
         return false;
+    }
+    if (leaving_ && !shell::powered_down() && !shell::shutting_down()) {
+        leaving_ = false; // a program said no: Shut Down is off, and the window stays
     }
     return running_;
 }

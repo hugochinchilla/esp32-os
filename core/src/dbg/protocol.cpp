@@ -168,9 +168,14 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
     }
 
     case kScreenshot:
+        // Not answered here but in answer_waiting(), once everything that
+        // has arrived is read: a request that waits behind this one means
+        // the computer gave this one up, and only the last is answered.
         // An empty payload (the original request) means "with pointer".
-        send_screenshot(seq, args_size == 0 || !(args[0] & kWithoutPointer),
-                        args_size > 0 && (args[0] & kAcceptBackReference));
+        shots_given_up_ += shot_waiting_ ? 1 : 0;
+        shot_waiting_ = true;
+        shot_seq_ = seq;
+        shot_flags_ = args_size > 0 ? args[0] : 0;
         break;
 
     case kKey:
@@ -293,7 +298,7 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
             reply(type, seq, kOk, nullptr, 0);
             break;
         }
-        if (boot_show_ == nullptr || args_size != 1 || (args[0] > 1 && args[0] != 3)) {
+        if (boot_show_ == nullptr || args_size != 1 || (args[0] != 0 && args[0] != 3)) {
             reply(type, seq, boot_show_ == nullptr ? kUnknownCommand : kBadArguments, nullptr, 0);
             break;
         }
@@ -327,7 +332,7 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
         // kind, then optionally the PID to charge it to (16 bits): the fault
         // happens as if that program had made it, so the crash record and
         // the error screen name it.
-        if (args_size < 1 || args[0] > static_cast<uint8_t>(ports::Fault::Slow) || (args_size != 1 && args_size != 3)) {
+        if (args_size < 1 || args[0] > static_cast<uint8_t>(ports::Fault::Wait) || (args_size != 1 && args_size != 3)) {
             reply(type, seq, kBadArguments, nullptr, 0);
             break;
         }
@@ -731,6 +736,16 @@ void Protocol::send_log(const char *text, size_t size)
 }
 
 /* ---- Screenshot ---------------------------------------------------------- */
+
+bool Protocol::answer_waiting()
+{
+    if (!shot_waiting_) {
+        return false;
+    }
+    shot_waiting_ = false;
+    send_screenshot(shot_seq_, !(shot_flags_ & kWithoutPointer), shot_flags_ & kAcceptBackReference);
+    return true;
+}
 
 // The picture is sent run-length encoded, in chunks:
 //   0..127    copy the next (n + 1) bytes

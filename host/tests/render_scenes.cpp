@@ -184,8 +184,6 @@ int main(int argc, char **argv)
         failures++;
     }
     save("00a-boot-self-test", false);
-    shell::show_splash(boot, false);
-    save("00b-boot-splash", false);
     // The error screen at the start after a crash: a program that hung, and
     // one that used a bad pointer.
     {
@@ -1558,6 +1556,31 @@ int main(int argc, char **argv)
     centre_of(desktop.popup_item(0, 4), x, y);
     click(x, y);
     key(wm::key::Enter);
+    // Nothing is open: the picture is kept at the next tick and fades, a
+    // step every 60 ms (backlog item 60). Two steps in, the icons and the
+    // taskbar are on their way into the desktop; then the plain desktop,
+    // which darkens; then the last screen comes up out of the black.
+    clock_.now += 1000;
+    desktop.tick();
+    if (!desktop.taken_over() || !shell::shutting_down()) {
+        printf("Shut Down did not keep the picture to fade it\n");
+        failures++;
+    }
+    const auto fade_steps = [](int steps) {
+        for (int i = 0; i < steps; i++) {
+            clock_.now += 60000;
+            desktop.tick();
+        }
+    };
+    fade_steps(2);
+    save("38a-shut-down-fading", false);
+    fade_steps(6);
+    save("38b-shut-down-plain-desktop", false);
+    fade_steps(6);
+    save("38c-shut-down-darkening", false);
+    fade_steps(9);
+    save("38d-shut-down-rising", false);
+    fade_steps(8);
     if (!shell::powered_down()) {
         printf("Shut Down did not reach the power-down screen\n");
         failures++;

@@ -106,6 +106,22 @@ int first_selectable(const Menu &menu)
     return -1;
 }
 
+// `from` moved towards `to`: at the most `levels` of red and of green and
+// `blue_levels` of blue.
+gfx::Colour nearer(gfx::Colour from, gfx::Colour to, int levels, int blue_levels)
+{
+    const auto moved = [](int have, int want, int by) {
+        return want > have ? (want - have > by ? have + by : want) : (have - want > by ? have - by : want);
+    };
+    const int r = moved(from >> 5, to >> 5, levels);
+    const int g = moved((from >> 2) & 7, (to >> 2) & 7, levels);
+    const int b = moved(from & 3, to & 3, blue_levels);
+    return gfx::rgb(static_cast<unsigned>(r), static_cast<unsigned>(g), static_cast<unsigned>(b));
+}
+
+// One level of each channel from `from` towards `to`.
+gfx::Colour nearer(gfx::Colour from, gfx::Colour to, bool blue) { return nearer(from, to, 1, blue ? 1 : 0); }
+
 } // namespace
 
 Wm::Wm(ports::Display &display, ports::Pointer &pointer, ports::Clock &clock)
@@ -115,19 +131,165 @@ Wm::Wm(ports::Display &display, ports::Pointer &pointer, ports::Clock &clock)
 {
 }
 
-void Wm::start()
+void Wm::start(Arrival arrival)
 {
     if (mode_wanted_ >= 0) {
         change_mode(); // the mode the settings ask for, before the first picture
     }
     blink_timer_ = start_timer_for(desktop_pid_, kBlinkUs, kBlinkUs, &Wm::blink, this);
+    // The minute the clock shows from its first painting: the tick has news
+    // only when that changes, not one second after the start.
+    int h, m, s;
+    get_time(h, m, s);
+    shown_minute_ = h * 60 + m;
     start_timer_for(desktop_pid_, 1000000, 1000000, &Wm::clock_tick, this);
     shape_ = &video::arrow_pointer();
     pointer_.set_shape(*shape_);
     pointer_.set_position(pointer_x_, pointer_y_);
+    if (arrival != Arrival::AtOnce) {
+        arrive_timer_ = start_timer_for(desktop_pid_, kFadeStepUs, kFadeStepUs, &Wm::arrive_tick, this);
+    }
+    if (arrive_timer_ == 0) {
+        pointer_.set_visible(true);
+        invalidate({0, 0, width_, height_});
+        update();
+        return;
+    }
+    // The desktop fades in (backlog item 74). The screen is held as for
+    // Shut Down: nothing paints and input is ignored. The steps are the
+    // timer's, and timers run once whoever starts the system is in its
+    // loop, which is when everything that starts with it has been started.
+    pointer_.set_visible(false);
+    screen_fn_ = [](Canvas &, void *) {};
+    screen_context_ = nullptr;
+    arrive_step_ = 0;
+    if (arrival == Arrival::FromPicture) {
+        arrive_stage_ = Arriving::Picture; // what the screen shows fades into the plain desktop first
+        return;
+    }
+    arrive_stage_ = Arriving::Rest;
+    const uint32_t start = clock_.micros();
+    const Rect screen = {0, 0, width_, height_};
+    RectList all;
+    all.add(screen);
+    Canvas plain(display_.pixels(), width_, height_, all, screen);
+    fill_backdrop(plain, screen);
+    if (damage_fn_ != nullptr) {
+        damage_fn_(screen, damage_context_);
+    }
+    last_update_us_ = clock_.micros() - start;
+    frames_.painted(last_update_us_, static_cast<uint32_t>(width_) * static_cast<uint32_t>(height_));
+}
+
+Wm::~Wm()
+{
+    if (arrive_copy_ != nullptr) {
+        memory_->release(arrive_copy_);
+    }
+}
+
+void Wm::arrive_tick(void *self)
+{
+    static_cast<Wm *>(self)->arrive_step();
+}
+
+// The desktop is there: the screen is given back and painted whole, which
+// changes nothing that the fade has shown and adds what came meanwhile.
+void Wm::arrived()
+{
+    stop_timer(arrive_timer_);
+    arrive_timer_ = 0;
+    arrive_stage_ = Arriving::No;
+    if (arrive_copy_ != nullptr) {
+        memory_->release(arrive_copy_);
+        arrive_copy_ = nullptr;
+    }
+    screen_fn_ = nullptr;
     pointer_.set_visible(true);
     invalidate({0, 0, width_, height_});
     update();
+}
+
+void Wm::arrive_step()
+{
+    arrive_step_++;
+    if (arrive_stage_ == Arriving::Picture) {
+        // As Shut Down's fade to the plain desktop: blue on the even steps.
+        fade_step(true, gfx::kBlack, arrive_step_ % 2 == 0);
+        if (arrive_step_ >= kFadeLevels) {
+            arrive_stage_ = Arriving::Rest;
+            arrive_step_ = 0;
+        }
+        return;
+    }
+    if (arrive_stage_ == Arriving::Rest) {
+        if (arrive_step_ < kFadeRestSteps) {
+            return;
+        }
+        // The desktop as it is now, painted once into a picture of its own
+        // that lasts as long as the fade: the screen has no second picture
+        // (docs/decisions/decided-video.md), and what is to come up is not
+        // on it yet.
+        const size_t size = static_cast<size_t>(width_) * static_cast<size_t>(height_);
+        arrive_copy_ = memory_ != nullptr ? static_cast<uint8_t *>(memory_->allocate(size)) : nullptr;
+        if (arrive_copy_ == nullptr) {
+            arrived(); // no room for it: the desktop at once, as before
+            return;
+        }
+        const uint32_t start = clock_.micros();
+        screen_fn_ = nullptr;
+        invalidate({0, 0, width_, height_});
+        paint(false);
+        dirty_.clear();
+        screen_fn_ = [](Canvas &, void *) {};
+        frames_.painted(clock_.micros() - start, static_cast<uint32_t>(size));
+        arrive_stage_ = Arriving::Rising;
+        arrive_step_ = 0;
+        return;
+    }
+    if (arrive_stage_ != Arriving::Rising) {
+        return;
+    }
+    // Shut Down's fade run backwards: at step k every pixel is where that
+    // fade has it with k steps done of its seven, counted from the end.
+    const uint32_t start = clock_.micros();
+    const int away = kFadeLevels - arrive_step_;
+    uint8_t tile[64];
+    {
+        RectList all;
+        all.add({0, 0, 8, 8});
+        Canvas c(tile, 8, 8, all, {0, 0, 8, 8});
+        fill_backdrop(c, {0, 0, 8, 8});
+    }
+    uint8_t *pixels = display_.pixels();
+    int top = height_, bottom = -1;
+    for (int y = 0; y < height_; y++) {
+        const uint8_t *from = arrive_copy_ + static_cast<size_t>(y) * width_;
+        uint8_t *row = pixels + static_cast<size_t>(y) * width_;
+        const uint8_t *plain = tile + (y & 7) * 8;
+        bool changed = false;
+        for (int x = 0; x < width_; x++) {
+            const uint8_t want = from[x], back = plain[x & 7];
+            if (want == back) {
+                continue; // the plain desktop is there already
+            }
+            row[x] = nearer(want, back, away, away / 2);
+            changed = true;
+        }
+        if (changed) {
+            top = y < top ? y : top;
+            bottom = y;
+        }
+    }
+    if (bottom >= 0) {
+        if (damage_fn_ != nullptr) {
+            damage_fn_({0, top, width_, bottom - top + 1}, damage_context_);
+        }
+        frames_.painted(clock_.micros() - start, static_cast<uint32_t>(width_) * static_cast<uint32_t>(bottom - top + 1));
+    }
+    if (arrive_step_ >= kFadeLevels) {
+        arrived();
+    }
 }
 
 void Wm::set_panel(PanelPlace place, Panel *panel, proc::Pid owner)
@@ -164,7 +326,7 @@ void Wm::tell_panels(PanelNews what)
 
 gfx::Canvas Wm::canvas(const gfx::RectList &clip, const Rect &bounds)
 {
-    return Canvas(display_.pixels(), width_, height_, clip, bounds);
+    return Canvas(paint_pixels(), width_, height_, clip, bounds);
 }
 
 /* ---- Window list --------------------------------------------------------- */
@@ -2133,6 +2295,11 @@ void Wm::update()
         const Rect screen = {0, 0, width_, height_};
         Canvas c(display_.pixels(), width_, height_, dirty_, screen);
         screen_fn_(c, screen_context_);
+        if (damage_fn_ != nullptr) {
+            for (int i = 0; i < dirty_.size(); i++) {
+                damage_fn_(dirty_[i], damage_context_);
+            }
+        }
         const long area = dirty_.area();
         dirty_.clear();
         last_update_us_ = clock_.micros() - start;
@@ -2179,6 +2346,19 @@ Wm::Work::~Work()
 
 void Wm::take_over(ScreenFn paint, void *context)
 {
+    hold_screen();
+    screen_fn_ = paint;
+    screen_context_ = context;
+    invalidate({0, 0, width_, height_});
+    update();
+}
+
+void Wm::hold_screen()
+{
+    if (screen_fn_ != nullptr) {
+        return;
+    }
+    stop_screen_saver();
     close_menus();
     if (outline_shown_) {
         set_outline(outline_, false);
@@ -2188,11 +2368,70 @@ void Wm::take_over(ScreenFn paint, void *context)
     stop_timer(repeat_timer_);
     repeat_timer_ = 0;
     repeat_usage_ = 0;
+    update(); // what was still to be painted: the picture is whole when it is kept
     pointer_.set_visible(false);
-    screen_fn_ = paint;
-    screen_context_ = context;
-    invalidate({0, 0, width_, height_});
-    update();
+    // Whoever asks for painting from here on (a clock, a late program) gets
+    // none.
+    screen_fn_ = [](Canvas &, void *) {};
+    screen_context_ = nullptr;
+}
+
+bool Wm::fade_step(bool to_backdrop, gfx::Colour to, bool blue)
+{
+    if (screen_fn_ == nullptr) {
+        return false;
+    }
+    const uint32_t start = clock_.micros();
+    // The plain desktop repeats every 8 pixels both ways: its pattern is 8
+    // by 8 and the dither of its colours 4 by 4, both laid from the
+    // screen's corner. One tile of it says what belongs anywhere.
+    uint8_t tile[64];
+    if (to_backdrop) {
+        gfx::RectList all;
+        all.add({0, 0, 8, 8});
+        Canvas c(tile, 8, 8, all, {0, 0, 8, 8});
+        fill_backdrop(c, {0, 0, 8, 8});
+    } else {
+        memset(tile, to, sizeof(tile));
+    }
+    // For one colour everywhere, the answer for each of the 256 a pixel may
+    // have; for the desktop most pixels are there already, and the others
+    // are worked out one by one.
+    uint8_t next[256];
+    for (int i = 0; i < 256; i++) {
+        next[i] = nearer(static_cast<gfx::Colour>(i), to, blue);
+    }
+    uint8_t *pixels = display_.pixels();
+    int top = height_, bottom = -1;
+    for (int y = 0; y < height_; y++) {
+        uint8_t *row = pixels + static_cast<size_t>(y) * width_;
+        const uint8_t *want = tile + (y & 7) * 8;
+        bool changed = false;
+        for (int x = 0; x < width_; x++) {
+            const uint8_t have = row[x], target = want[x & 7];
+            if (have == target) {
+                continue;
+            }
+            const uint8_t now = to_backdrop ? nearer(have, target, blue) : next[have];
+            if (now != have) {
+                row[x] = now;
+                changed = true;
+            }
+        }
+        if (changed) {
+            top = y < top ? y : top;
+            bottom = y;
+        }
+    }
+    if (bottom < 0) {
+        return false;
+    }
+    if (damage_fn_ != nullptr) {
+        damage_fn_({0, top, width_, bottom - top + 1}, damage_context_);
+    }
+    const uint32_t took = clock_.micros() - start;
+    frames_.painted(took, static_cast<uint32_t>(width_) * static_cast<uint32_t>(bottom - top + 1));
+    return true;
 }
 
 uint32_t Wm::repaint_all()
@@ -2272,7 +2511,7 @@ void Wm::paint(bool painter)
             frames_.ran(sys::Frames::kPanelPaint, owner_of(PanelPlace::Bar), clock_.micros() - start);
         } else {
             // No bar: the background shows in its strip.
-            Canvas strip(display_.pixels(), width_, height_, region_, taskbar());
+            Canvas strip(paint_pixels(), width_, height_, region_, taskbar());
             fill_backdrop(strip, {0, 0, width_, height_});
         }
     }
@@ -2410,14 +2649,14 @@ void Wm::paint_desktop(const RectList &clip)
         return;
     }
     const Rect screen = {0, 0, width_, height_};
-    Canvas plain(display_.pixels(), width_, height_, clip, screen);
+    Canvas plain(paint_pixels(), width_, height_, clip, screen);
     fill_backdrop(plain, screen);
 }
 
 void Wm::paint_window(Window &w, const RectList &clip)
 {
     const uint32_t start = clock_.micros();
-    uint8_t *pixels = display_.pixels();
+    uint8_t *pixels = paint_pixels();
     Canvas frame(pixels, width_, height_, clip, w.frame_);
     paint_frame(frame, w);
     if (w.menu_bar_ != nullptr) {
@@ -2624,7 +2863,7 @@ void Wm::paint_popup(int level, const RectList &clip)
 {
     const Popup &p = popups_[level];
     const Rect &r = p.rect;
-    Canvas screen(display_.pixels(), width_, height_, clip, r);
+    Canvas screen(paint_pixels(), width_, height_, clip, r);
     screen.layered(r, [&](Canvas &c) {
     c.fill(r, gfx::face());
     c.raised(r);
@@ -2835,6 +3074,7 @@ void Wm::set_time(int hours, int minutes, int seconds)
 {
     time_base_s_ = hours * 3600 + minutes * 60 + seconds;
     time_base_us_ = now_us();
+    shown_minute_ = hours * 60 + minutes; // told here: the tick has nothing to add
     tell_panels(PanelNews::Clock);
     update();
 }

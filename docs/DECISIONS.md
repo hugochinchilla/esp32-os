@@ -136,13 +136,14 @@ The picture: signal, memory, painting, frame time.
 - [Missed video refills are logged](decisions/missed-video-refills.md) (2026-11-17, owner, decided): Missed refills are logged; `dbg.py tasks` stays although it can cause them
 - [Chosen for the frame budget](decisions/frame-budget.md) (2026-11-18, agent, to-confirm): The budget is one video frame, 16 800 us; how drawing is measured against it (backlog 63)
 - [Screen sizes: 640x480 and 800x600](decisions/screen-sizes.md) (2026-11-18, owner, decided): Display > Resolution changes the picture at once; a box asks to keep it, back after 15 s; 640x480 the default (backlog 68)
+- [Chosen for the refills missed at 800x600](decisions/scanout-ahead.md) (2026-11-19, agent, to-confirm): 800x600 copies the frame's third piece to internal RAM in the vertical blank (8,000 bytes); 640x480 is left as it was (backlog 68)
 
 ### boot
 
 Flash layout, the BIOS stage, start-up screens.
 
 - [Flash layout](decisions/flash-layout.md) (2026-11-16, owner, decided): The first partition table: one app area and C: above it. Changed since by the update slots and the BIOS partition
-- [Start-up timing](decisions/start-up-timing.md) (2026-11-16, owner, decided): How long the self-test and the splash stay on screen (`monitor_wait_ms`, `splash_ms`), and what the self-test shows
+- [Start-up timing](decisions/start-up-timing.md) (2026-11-16, owner, decided): How long the self-test stays on screen (`monitor_wait_ms`) and what it shows; the splash it also timed was removed 2026-11-19
 - [A BIOS stage in its own partition](decisions/bios-stage.md) (2026-11-17, owner, decided): The self-test is a BIOS, a small firmware in its own partition that restarts into the OS
 - [BIOS screen font](decisions/bios-screen-font.md) (2026-11-17, owner, decided): The BIOS screen is true text, 80 by 30 characters in Spleen 8x16
 - [BIOS stage: flash and details](decisions/bios-flash-and-details.md) (2026-11-17, owner, decided): The BIOS takes 1 MB from C:; two update slots, C: after them. The sizes were changed by "App slots of 3 MB"
@@ -150,6 +151,8 @@ Flash layout, the BIOS stage, start-up screens.
 - [Chosen for the BIOS's text screen](decisions/bios-text-screen.md) (2026-11-17, agent, to-confirm): One grid of 80 by 30 cells mirrored to serial as plain text (backlog 46, step 1)
 - [The BIOS's first screen](decisions/bios-first-screen.md) (2026-11-17, owner, decided): The BIOS shows a first screen until 7 s after the reset, because the monitor takes that long
 - [App slots of 3 MB](decisions/app-slots-3-mb.md) (2026-11-19, owner, decided): Two update slots of 3 MB, `otadata` at 0xf0000, the BIOS partition 896 KB, C: 9 MB from 0x700000 (backlog 71)
+- [No splash screen](decisions/no-splash.md) (2026-11-19, owner, decided): The OS's splash screen is removed with its timer, its setting and its fonts; the desktop fades in after the BIOS's screen (backlog 74)
+- [The desktop fades in at start-up](decisions/start-up-fade.md) (2026-11-19, owner+agent, to-confirm): At start-up the screen shows the desktop's plain colour, rests 300 ms, and the desktop comes up in seven steps; not on a debug fast start (backlog 74)
 
 ### system
 
@@ -237,7 +240,9 @@ The programs and games, one decision each.
 - [The chess computer does not answer at once](decisions/chess-reply-pace.md) (2026-11-18, owner+agent, decided): Chess: the computer's move is shown no sooner than 250 to 350 ms after it began to think (backlog 67)
 - [The chess game](decisions/chess-game.md) (2026-11-18, owner, decided): Chess: own engine, moving by drag or click, piece sets, board colours, levels (backlog 50)
 - [The computer's chess piece lands](decisions/chess-landing.md) (2026-11-18, owner+agent, decided): The computer's piece drops 4 pixels onto its square and bounces once, 233 ms (backlog 64); details to confirm
+- [Sounds of the games and the Trash](decisions/game-sounds.md) (2026-11-19, owner+agent, to-confirm): Chess knocks on a move, warns the user of check, says checkmate; Culebra a berry and game over; the Trash crumples paper (backlog 70)
 - [The File manager's three views](decisions/file-manager-views.md) (2026-11-19, owner+agent, to-confirm): Icons, List and Details from the View menu, one way for every folder window (backlog 56)
+- [The Shut Down sequence](decisions/shut-down-sequence.md) (2026-11-19, owner+agent, decided): Shut Down closes the programs (ended after 20 s), fades the desktop, then to black, and shows the last screen on black (backlog 60)
 
 ### console
 
@@ -276,5 +281,6 @@ The debug tool, the PC and browser builds, deployment.
 - [Chosen for the desktop program](decisions/desktop-program.md) (2026-11-17, agent, to-confirm): Chinchilla as an SDL2 program on the PC, `host/desktop/main.cpp` (backlog 32)
 - [The PC tool reads the port on a thread](decisions/pc-tool-reads-port-on-thread.md) (2026-11-17, agent, to-confirm): `tools/dbg.py` reads the serial port on a thread of its own so that console text is not lost (backlog 14b)
 - [The relay is deployed from GitHub](decisions/relay-deployed-from-github.md) (2026-11-18, owner+agent, decided): The web version's relay goes to Cloudflare from a GitHub workflow
+- [Chosen for screenshot requests that wait](decisions/screenshot-requests.md) (2026-11-19, agent, to-confirm): The debug link answers only the last screenshot request that waited, one per loop round; a hang's record says what the task was doing (backlog 75)
 
 <!-- decisions:end -->

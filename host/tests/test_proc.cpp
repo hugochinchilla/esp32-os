@@ -922,9 +922,15 @@ void test_shell()
     CHECK(t.find(editor_pid)->parent == proc::kRoot); // its parent ended: the root takes it
     {
         const proc::Scope as(&t, desk_pid);
-        CHECK(!shell::power_down());
+        CHECK(shell::power_down());
     }
+    wait(1000);
+    CHECK(shell::shutting_down());
     CHECK(desktop.windows_of(editor_pid) == 2 && desktop.windows_of(desk_pid) == 0);
+    key(wm::key::Escape); // Cancel: the Editor stays and Shut Down is off
+    wait(200000);
+    CHECK(!shell::shutting_down() && desktop.windows_of(editor_pid) == 1);
+    key(wm::key::F4, kAlt);
     letter('n'); // No: do not save
     wait(10000);
 
@@ -1170,6 +1176,43 @@ void test_taskbar()
     desktop.set_damage_listener(nullptr, nullptr);
 }
 
+// Shut Down does not wait for ever (backlog item 60): what is still open
+// after 20 seconds is ended as KILL ends it. Last: there is no way back.
+void test_shut_down_forces()
+{
+    proc::Table &t = proc::table();
+    close_all();
+    wait(10000);
+    const int before = t.count();
+    shell::launch(*shell::find_app("Culebra"));
+    shell::open_in_editor("C:\\Documents\\notes.txt");
+    desktop.text("never saved");
+    const Pid editor_pid = t.find_by_name("Editor"), game = t.find_by_name("Culebra");
+    CHECK(editor_pid != proc::kNone && game != proc::kNone && t.count() == before + 2);
+    CHECK(shell::power_down());
+    wait(1000);
+    // The game closed when asked; the Editor asks, and nobody answers.
+    CHECK(!t.alive(game) && t.alive(editor_pid) && desktop.windows_of(editor_pid) == 2);
+    for (int second = 1; second < 20; second++) {
+        wait(1000000);
+        CHECK(shell::shutting_down() && !desktop.taken_over() && desktop.windows_of(editor_pid) == 2);
+    }
+    wait(1000000); // the twentieth: KILL, acted on at the end of the same tick
+    CHECK(!t.alive(editor_pid) && desktop.window_count() == 0 && t.count() == before);
+    CHECK(shell::shutting_down());
+    wait(100000);
+    CHECK(desktop.taken_over()); // the fade has begun
+    for (int i = 0; i < 40 && !shell::powered_down(); i++) {
+        wait(60000);
+    }
+    CHECK(shell::powered_down() && t.count() == before);
+    // The text was not saved.
+    char text[64] = {};
+    size_t n = 0;
+    CHECK(storage.read_file("C:\\Documents\\notes.txt", text, sizeof(text) - 1, n) == ports::FsError::Ok);
+    CHECK(strstr(text, "never saved") == nullptr);
+}
+
 int main()
 {
     test_table();
@@ -1189,6 +1232,7 @@ int main()
     desktop.set_animations(false);
     test_shell();
     test_taskbar();
+    test_shut_down_forces();
     if (failures == 0) {
         printf("all tests passed\n");
     }

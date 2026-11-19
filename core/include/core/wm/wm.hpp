@@ -113,8 +113,20 @@ public:
     // open. Not counted as any program's.
     void set_memory(ports::Memory *memory) { memory_ = memory; }
 
-    // Sets the pointer up and paints the whole screen.
-    void start();
+    // Sets the pointer up and paints the whole screen. With an arrival
+    // other than AtOnce the desktop fades in instead (backlog item 74), the
+    // way Shut Down fades it out: the screen shows the plain desktop (at
+    // once, or what it shows now fades into it first), rests, and then
+    // what the desktop has on it comes up in kFadeLevels steps. Until that
+    // is over nothing else paints and input is ignored. The steps are
+    // timers: they begin when tick() is first called.
+    enum class Arrival : uint8_t { AtOnce, FromColour, FromPicture };
+    void start(Arrival arrival = Arrival::AtOnce);
+    bool arriving() const { return arrive_stage_ != Arriving::No; }
+    static constexpr uint32_t kFadeStepUs = 60000; // one level of colour
+    static constexpr int kFadeLevels = 7;          // red and green have eight levels
+    static constexpr int kFadeRestSteps = 5;       // the plain desktop stays this many steps
+    ~Wm();
 
     // The process table, and the process that owns the server itself (its
     // own timers, and the panels' calls when a panel names no owner). With
@@ -140,6 +152,7 @@ public:
         desktop_pid_ = desktop;
     }
     proc::Table *processes() const { return procs_; }
+    proc::Pid desktop_pid() const { return desktop_pid_; }
     // The panels of the desktop shell. `owner` is the process the panel is
     // called as. nullptr takes the panel away: its place shows the
     // background and takes no clicks. Windows stay as they are, and so does
@@ -205,6 +218,17 @@ public:
     using ScreenFn = void (*)(gfx::Canvas &c, void *context);
     void take_over(ScreenFn paint, void *context);
     bool taken_over() const { return screen_fn_ != nullptr; }
+    // The first part of the same, for a picture that fades away (Shut
+    // Down): the screen is taken, and what it shows stays as it is until
+    // fade_step() changes it or take_over() names who paints it.
+    void hold_screen();
+    // On a taken screen: every pixel moves one level of red and of green,
+    // and one of blue if `blue`, towards what the plain desktop shows at
+    // its place (`to_backdrop`) or towards the colour `to`. In place: there
+    // is no second picture to mix from. Blue has half the levels, so a fade
+    // of seven steps asks for it on the even ones. False: nothing changed,
+    // the picture is there.
+    bool fade_step(bool to_backdrop, gfx::Colour to, bool blue);
     // Time the UI task has spent handling input, timers and painting since
     // start-up, in µs (wraps): the desktop's share of the processor.
     uint32_t busy_us() const { return busy_us_; }
@@ -559,6 +583,21 @@ private:
     void *attention_context_ = nullptr;
     ScreenFn screen_fn_ = nullptr;
     void *screen_context_ = nullptr;
+    // The desktop fading in (start()).
+    enum class Arriving : uint8_t { No, Picture, Rest, Rising };
+    Arriving arrive_stage_ = Arriving::No;
+    int arrive_step_ = 0;
+    int arrive_timer_ = 0;
+    uint8_t *arrive_copy_ = nullptr; // the desktop's picture while it rises; the Memory port's
+    static void arrive_tick(void *self);
+    void arrive_step();
+    void arrived();
+    // Where the desktop, the windows and the menus are painted: the screen,
+    // or the picture kept while the desktop rises.
+    uint8_t *paint_pixels()
+    {
+        return arrive_stage_ == Arriving::Rest && arrive_copy_ != nullptr ? arrive_copy_ : display_.pixels();
+    }
     void event_done(uint32_t start);
 
     // Processes.

@@ -109,8 +109,6 @@ void test_failed_check()
     CHECK(red_in_line(8) && red_in_line(12) && !red_in_line(3));
 }
 
-// The splash is the approved drawing, pixel for pixel: the PNG in
-// docs/look/boot/, read with our own decoder.
 struct Rows : image::RowSink {
     uint8_t *out;
     void row(int y, const uint8_t *rgb) override
@@ -149,26 +147,6 @@ void read_approved(const char *look_folder, const char *name, uint8_t *approved)
     d.close();
 }
 
-void test_splash_matches_approved(const char *look_folder)
-{
-    static uint8_t approved[640 * 480];
-    read_approved(look_folder, "boot-e-colour-ribbon.png", approved);
-    host::MemoryDisplay display(640, 480);
-    host::HostSystem system;
-    host::HostMemory memory;
-    host::FixedClock clock;
-    shell::BootIo io{display, system, memory, clock, nullptr, nullptr, nullptr, nullptr};
-    shell::show_splash(io, false);
-    int differ = 0;
-    for (int i = 0; i < 640 * 480; i++) {
-        differ += display.pixels()[i] != approved[i];
-    }
-    if (differ != 0) {
-        printf("the splash differs from the approved drawing in %d pixels\n", differ);
-    }
-    CHECK(differ == 0);
-}
-
 // The self-test screen, given the values the drawing shows, is the approved
 // drawing pixel for pixel.
 void test_self_test_matches_approved(const char *look_folder)
@@ -204,8 +182,8 @@ public:
     uint32_t now = 0;
 };
 
-// The self-test waits for the monitor; a key skips the waiting and the
-// splash; the fast start draws nothing and logs its checks.
+// The self-test waits for the monitor; a key skips the waiting; the fast
+// start draws nothing and logs its checks.
 void test_waiting_and_skipping()
 {
     host::MemoryDisplay display(640, 480);
@@ -218,18 +196,6 @@ void test_waiting_and_skipping()
     io.hold_s = 0;
     shell::run_self_test(io, true);
     CHECK(clock.now >= 4000000 + 6 * 120 * 1300 && clock.now < 9000000 && !io.skipped);
-    clock.now = 0;
-    io.splash_ms = 800;
-    shell::show_splash(io, true);
-    CHECK(clock.now >= io.splash_ms * 1000 && clock.now < io.splash_ms * 1000 + 100000);
-    // The default: no splash at all, nothing drawn and no time spent.
-    std::vector<uint8_t> shown(display.pixels(), display.pixels() + 640 * 480);
-    io.splash_ms = 0;
-    clock.now = 0;
-    display.pixels()[0] = 0x5A;
-    shell::show_splash(io, true);
-    CHECK(clock.now < 10000 && display.pixels()[0] == 0x5A);
-    display.pixels()[0] = shown[0];
     // The countdown: five more seconds, "Booting in 1" last.
     io.hold_s = 5;
     clock.now = 0;
@@ -237,7 +203,7 @@ void test_waiting_and_skipping()
     shell::run_self_test(io, true);
     CHECK(clock.now >= 5000000 && !io.skipped);
 
-    // A key during the wait: the self-test ends early, the splash is not shown.
+    // A key during the wait: the self-test ends early.
     static int polls = 0;
     shell::BootIo skip_io{display, system, memory, clock, nullptr, nullptr, nullptr, nullptr};
     skip_io.video_start_us = clock.now;
@@ -247,8 +213,6 @@ void test_waiting_and_skipping()
     shell::run_self_test(skip_io, true);
     CHECK(skip_io.skipped && clock.now - start < 2000000);
     std::vector<uint8_t> before(display.pixels(), display.pixels() + 640 * 480);
-    shell::show_splash(skip_io, true);
-    CHECK(memcmp(before.data(), display.pixels(), before.size()) == 0); // nothing drawn
 
     // Fast start: nothing drawn, every check logged, the failure counted.
     NoFlashSystem broken;
@@ -283,10 +247,9 @@ int main(int argc, char **argv)
     test_failed_check();
     test_waiting_and_skipping();
     if (argc > 1) {
-        test_splash_matches_approved(argv[1]);
         test_self_test_matches_approved(argv[1]);
     } else {
-        printf("no docs/look/boot folder given: splash not compared\n");
+        printf("no docs/look/boot folder given: the self-test not compared\n");
         failures++;
     }
     if (failures == 0) {

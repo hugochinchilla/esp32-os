@@ -1907,6 +1907,37 @@ static void test_panels()
     bar.seen.clear();
     server.set_time(10, 30, 0);
     CHECK(bar.seen == "C ");
+    // After that, news once for each minute that ends and none in between:
+    // the clock is not painted again to show what it shows already.
+    bar.seen.clear();
+    clock.now += 1000000;
+    server.tick();
+    clock.now += 58000000;
+    server.tick();
+    CHECK(bar.seen.empty());
+    clock.now += 1000000;
+    server.tick();
+    clock.now += 1000000;
+    server.tick();
+    CHECK(bar.seen == "C ");
+    // The same from the start, before anyone has set the time: nothing in
+    // the first second (a remote viewer was sent the clock again for it).
+    {
+        host::MemoryDisplay display2{640, 480};
+        wm::Wm fresh{display2, pointer, clock};
+        ProbePanel bar2(fresh, wm::PanelPlace::Bar, 0xE0);
+        fresh.set_panel(wm::PanelPlace::Bar, &bar2);
+        fresh.start();
+        bar2.seen.clear();
+        clock.now += 1000000;
+        fresh.tick();
+        clock.now += 58000000;
+        fresh.tick();
+        CHECK(bar2.seen.empty());
+        clock.now += 1000000;
+        fresh.tick();
+        CHECK(bar2.seen == "C ");
+    }
 
     // A panel taken away in the middle of a press: the rest of the press
     // goes nowhere, and its place is background again.
@@ -2084,8 +2115,147 @@ static void test_tabs()
     CHECK(rig.no_stale_pixels());
 }
 
+/* ---- The desktop fades in (backlog item 74) ------------------------------- */
+
+static bool plain_picture(const host::MemoryDisplay &d)
+{
+    // The plain desktop repeats every 8 pixels both ways.
+    const uint8_t *px = const_cast<host::MemoryDisplay &>(d).pixels();
+    for (int y = 0; y < 480; y++) {
+        for (int x = 0; x < 640; x++) {
+            if (px[y * 640 + x] != px[(y & 7) * 640 + (x & 7)]) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+static void test_arrival()
+{
+    const size_t size = 640 * 480;
+    const auto picture = [size](Rig &r) { return Bytes(r.display.pixels(), r.display.pixels() + size); };
+    // A Start menu and two icons, so that there is something to come up.
+    static wm::MenuItem items[1] = {{"&Run...", nullptr, nullptr, nullptr, nullptr, 0}};
+    static wm::Menu menu = {items, 1};
+    static desk::Icon icons[2] = {{"One", nullptr, nullptr, nullptr}, {"Two", nullptr, nullptr, nullptr}};
+    const auto dress = [](Rig &r) {
+        r.wm.set_start_menu(&menu, "Chinchilla");
+        r.desk_icons.set_icons(icons, 2);
+    };
+    // What the desktop looks like when it is shown at once, and what Shut
+    // Down's fade makes of that, step by step.
+    Rig once;
+    dress(once);
+    once.wm.start();
+    CHECK(!once.wm.arriving() && !once.wm.taken_over());
+    const Bytes whole = picture(once);
+    std::vector<Bytes> leaving;
+    once.wm.hold_screen();
+    for (int step = 1; step <= 7; step++) {
+        once.wm.fade_step(true, gfx::kBlack, step % 2 == 0);
+        leaving.push_back(picture(once));
+    }
+    const Bytes plain = leaving.back();
+
+    // Out of the plain colour: it shows from start(), rests five steps,
+    // and the desktop comes up in seven, Shut Down's fade backwards.
+    {
+        host::HostMemory memory;
+        Rig r;
+        dress(r);
+        r.wm.set_memory(&memory);
+        int damaged = 0;
+        r.wm.set_damage_listener([](const gfx::Rect &, void *n) { ++*static_cast<int *>(n); }, &damaged);
+        r.wm.start(wm::Wm::Arrival::FromColour);
+        CHECK(r.wm.arriving() && r.wm.taken_over());
+        CHECK(!r.pointer.state().visible);
+        CHECK(plain_picture(r.display) && picture(r) == plain);
+        CHECK(damaged == 1);
+        CHECK(memory.in_use() == 0);
+        // Input is ignored: a click on the Start button opens nothing.
+        const Rect sb = r.bar.button(-1);
+        r.click(sb.x + 10, sb.y + 10);
+        CHECK(!r.wm.menu_open());
+        for (int step = 1; step <= wm::Wm::kFadeRestSteps; step++) {
+            r.wait(wm::Wm::kFadeStepUs);
+            CHECK(picture(r) == plain);
+        }
+        CHECK(memory.in_use() == 1 && memory.bytes_in_use() == size); // the desktop's picture, kept for the fade
+        for (int step = 1; step <= 7; step++) {
+            damaged = 0;
+            r.wait(wm::Wm::kFadeStepUs);
+            if (step < 7) {
+                CHECK(r.wm.arriving());
+                CHECK(picture(r) == leaving[static_cast<size_t>(6 - step)]);
+                CHECK(damaged == 1);
+            }
+        }
+        CHECK(picture(r) == whole);
+        CHECK(!r.wm.arriving() && !r.wm.taken_over());
+        CHECK(r.pointer.state().visible);
+        CHECK(memory.in_use() == 0);
+        // And the desktop works.
+        r.click(sb.x + 10, sb.y + 10);
+        CHECK(r.wm.menu_open());
+    }
+
+    // No memory for the picture: the desktop at once when the rest is over.
+    {
+        Rig r;
+        dress(r);
+        r.wm.start(wm::Wm::Arrival::FromColour);
+        for (int step = 1; step < wm::Wm::kFadeRestSteps; step++) {
+            r.wait(wm::Wm::kFadeStepUs);
+        }
+        CHECK(picture(r) == plain && r.wm.arriving());
+        r.wait(wm::Wm::kFadeStepUs);
+        CHECK(picture(r) == whole && !r.wm.arriving() && r.pointer.state().visible);
+    }
+
+    // Out of what the screen shows (a start-up screen): that fades into
+    // the plain desktop first.
+    {
+        host::HostMemory memory;
+        Rig r;
+        dress(r);
+        r.wm.set_memory(&memory);
+        memset(r.display.pixels(), gfx::kWhite, size);
+        r.wm.start(wm::Wm::Arrival::FromPicture);
+        CHECK(r.display.pixels()[0] == gfx::kWhite && r.wm.arriving());
+        r.wait(wm::Wm::kFadeStepUs);
+        CHECK(r.display.pixels()[0] != gfx::kWhite && picture(r) != plain);
+        for (int step = 2; step <= 7; step++) {
+            r.wait(wm::Wm::kFadeStepUs);
+        }
+        CHECK(picture(r) == plain);
+        for (int step = 1; step <= wm::Wm::kFadeRestSteps + 7; step++) {
+            r.wait(wm::Wm::kFadeStepUs);
+        }
+        CHECK(picture(r) == whole && !r.wm.arriving());
+        CHECK(memory.in_use() == 0);
+    }
+
+    // A machine switched off in the middle: the picture is given back.
+    {
+        host::HostMemory memory;
+        {
+            Rig r;
+            dress(r);
+            r.wm.set_memory(&memory);
+            r.wm.start(wm::Wm::Arrival::FromColour);
+            for (int step = 1; step <= wm::Wm::kFadeRestSteps + 2; step++) {
+                r.wait(wm::Wm::kFadeStepUs);
+            }
+            CHECK(memory.in_use() == 1);
+        }
+        CHECK(memory.in_use() == 0);
+    }
+}
+
 int main()
 {
+    test_arrival();
     test_video_mode();
     test_tabs();
     test_rect_list();

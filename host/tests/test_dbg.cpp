@@ -182,6 +182,7 @@ struct Rig {
     {
         Bytes frame = make_frame(type, seq, payload);
         protocol.feed(frame.data(), frame.size());
+        protocol.answer_waiting();
         return wire.frames();
     }
 };
@@ -276,8 +277,12 @@ static void test_fault()
     got = rig.request(dbg::kFault, 3, {3, static_cast<uint8_t>(editor), 0});
     CHECK(got.size() == 1 && got[0].payload == Bytes({dbg::kOk}));
     CHECK(rig.system.fault_requested == 3 && rig.system.fault_pid == editor);
+    // Wait: asleep for ever, the hang whose record says where.
+    got = rig.request(dbg::kFault, 4, {4});
+    CHECK(got.size() == 1 && got[0].payload == Bytes({dbg::kOk}));
+    CHECK(rig.system.fault_requested == 4);
     rig.system.fault_requested = -1;
-    for (const Bytes &bad : {Bytes{}, Bytes{4}, Bytes{0, 1}, Bytes{2, 99, 0}}) {
+    for (const Bytes &bad : {Bytes{}, Bytes{5}, Bytes{0, 1}, Bytes{2, 99, 0}}) {
         got = rig.request(dbg::kFault, 3, bad);
         CHECK(got.size() == 1 && got[0].payload == Bytes({dbg::kBadArguments}));
     }
@@ -422,6 +427,53 @@ static void check_screenshot(Rig &rig, const Bytes &request = {}, const uint8_t 
     uint32_t crc = static_cast<uint32_t>(tail[2]) | (static_cast<uint32_t>(tail[3]) << 8) |
                    (static_cast<uint32_t>(tail[4]) << 16) | (static_cast<uint32_t>(tail[5]) << 24);
     CHECK(crc == dbg::crc32(picture.data(), picture.size()));
+}
+
+// A screenshot is answered when the loop asks for it, and only the last of
+// those that waited: the computer asks again only after giving one up, and
+// answering each in turn kept the board behind until the watchdog restarted
+// it (docs/journal/2026-11-19-screenshot-backlog.md).
+static void test_screenshot_waits()
+{
+    Rig rig;
+    memset(rig.display.pixels(), 0x1F, 640 * 480);
+    CHECK(!rig.protocol.answer_waiting()); // nothing asked
+
+    // Three requests and a ping in one piece of serial bytes.
+    Bytes bytes;
+    for (uint8_t seq : {10, 11, 12}) {
+        const Bytes frame = make_frame(dbg::kScreenshot, seq, {dbg::kAcceptBackReference});
+        bytes.insert(bytes.end(), frame.begin(), frame.end());
+    }
+    const Bytes ping = make_frame(dbg::kPing, 13, {});
+    bytes.insert(bytes.end(), ping.begin(), ping.end());
+    rig.protocol.feed(bytes.data(), bytes.size());
+    auto got = rig.wire.frames();
+    CHECK(got.size() == 1 && got[0].type == (dbg::kPing | dbg::kReplyBit) && got[0].seq == 13);
+    CHECK(rig.protocol.shots_given_up() == 2);
+
+    // One picture, for the last request.
+    CHECK(rig.protocol.answer_waiting());
+    got = rig.wire.frames();
+    CHECK(got.size() >= 3);
+    int heads = 0, ends = 0;
+    for (const Frame &f : got) {
+        CHECK(f.seq == 12);
+        heads += f.type == (dbg::kScreenshot | dbg::kReplyBit);
+        ends += f.type == dbg::kShotEnd;
+    }
+    CHECK(heads == 1 && ends == 1);
+    CHECK(!rig.protocol.answer_waiting()); // once
+    CHECK(rig.wire.frames().empty());
+
+    // A request that arrives in pieces over several feeds waits the same.
+    const Bytes one = make_frame(dbg::kScreenshot, 14, {});
+    rig.protocol.feed(one.data(), 3);
+    CHECK(!rig.protocol.answer_waiting());
+    rig.protocol.feed(one.data() + 3, one.size() - 3);
+    CHECK(rig.wire.frames().empty());
+    CHECK(rig.protocol.answer_waiting());
+    CHECK(rig.wire.frames().front().seq == 14 && rig.protocol.shots_given_up() == 2);
 }
 
 static void test_screenshot()
@@ -608,6 +660,7 @@ int main()
     test_tasks();
     test_fault();
     test_bad_frames();
+    test_screenshot_waits();
     test_screenshot();
     test_compose_pointer();
     test_screenshot_pointer();

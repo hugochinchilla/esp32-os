@@ -45,7 +45,7 @@ enum FrameType : uint8_t {
     kFileDelete = 0x10, // a file or an empty folder
     kFileMakeFolder = 0x11,
     kBootScreen = 0x12,
-    kMemoryReport = 0x13, // text: heaps and task stacks // draw a start-up screen now (0 self-test, 1 splash); Repaint brings the desktop back
+    kMemoryReport = 0x13, // text: heaps and task stacks // draw a start-up screen now (0 self-test, 3 the error screen); Repaint brings the desktop back
     kTasks = 0x14,        // the kernel's tasks: state, priority, core, run time, stack
     kFault = 0x15,        // a fault on purpose: hang, bad pointer or abort, charged to a process
     kLogRead = 0x16,      // a piece of the system log (dmesg) from a position
@@ -84,8 +84,22 @@ public:
              ports::Pointer &pointer, ports::InputSink &input, ports::System &system,
              const char *firmware_name);
 
-    // Bytes received from the PC, in any size of pieces.
+    // Bytes received from the PC, in any size of pieces. Every request in
+    // them is answered before this returns, except a screenshot.
     void feed(const uint8_t *data, size_t size);
+
+    // Sends the screenshot that was asked for, if one was; returns whether
+    // it did. The loop calls this after it has fed everything that had
+    // arrived. A screenshot is the one answer that takes long (0.2 to 1 s
+    // of the caller's time on the board, as fast as the serial line takes
+    // it), so it is not sent from inside feed(): of several requests that
+    // waited, only the last is answered. The computer sends a new one only
+    // when it has given the one before up, and answering each in turn kept
+    // the board behind for good, and the desktop's loop silent until the
+    // watchdog restarted it (docs/journal/2026-11-19-screenshot-backlog.md).
+    bool answer_waiting();
+    // Screenshot requests never answered because a later one was waiting.
+    uint32_t shots_given_up() const { return shots_given_up_; }
 
     // Announces the board after start-up.
     void send_hello();
@@ -99,7 +113,7 @@ public:
     void set_desktop(ports::Desktop *desktop) { desktop_ = desktop; }
     // Optional: the drives for the file commands.
     void set_storage(fs::Storage *storage) { storage_ = storage; }
-    // Draws start-up screen `which` (0 self-test, 1 splash, 3 the error
+    // Draws start-up screen `which` (0 self-test, 3 the error
     // screen after a crash) on request.
     void set_boot_screens(void (*show)(int which, void *context), void *context)
     {
@@ -171,6 +185,11 @@ private:
     bool idle_seen_ = false;  // line_idle() was called since the last byte
     uint32_t idle_since_ = 0;
     uint32_t console_bytes_ = 0;
+
+    bool shot_waiting_ = false; // a screenshot request not yet answered
+    uint8_t shot_seq_ = 0;
+    uint8_t shot_flags_ = 0;
+    uint32_t shots_given_up_ = 0;
 
     bool overflow_ = false;
     size_t rx_size_ = 0;

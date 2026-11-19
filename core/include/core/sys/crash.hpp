@@ -40,10 +40,10 @@ struct CrashRecord {
     uint32_t waited_ms;        // Hang: how long the task had been silent
     uint32_t pc;               // Panic: where the processor was
     uint32_t address;          // Panic: the address it could not use, if that was the fault
-    uint32_t trace[kTraceSize]; // Panic: the chain of calls, innermost first
+    uint32_t trace[kTraceSize]; // Panic, and Hang when it could be read: the chain of calls, innermost first
     char program[24];          // the process's name; "" if none
     char task[16];             // the kernel task
-    char reason[48];           // Panic and Reset: the processor's or chip's word for it
+    char reason[48];           // Panic and Reset: the processor's or chip's word for it. Hang: what the task was doing
     uint8_t core;              // the processor it happened on, or kNoCore
     uint8_t reserved[3];
     uint32_t checksum;         // over everything before it

@@ -44,7 +44,8 @@ uint8_t *vga_framebuffer(void);
 /* Number of frames sent to the monitor since start. */
 uint32_t vga_frame_count(void);
 
-/* Scanout timing since the last reset (see vga.c). */
+/* Scanout timing since the last reset or change of mode (see vga.c). */
+#define VGA_SCAN_PLACES 8
 typedef struct {
     uint32_t refills;         /* bounce buffers filled */
     uint32_t late;            /* refills started more than 32 us after their slot */
@@ -53,6 +54,8 @@ typedef struct {
     uint32_t max_fill_cycles; /* longest refill */
     uint32_t histogram[6];    /* refill intervals: <200, <300, <340, <400, <640, more us */
     uint32_t last_gap_pos;    /* where the last long gap between refills was */
+    uint32_t max_fill_at[VGA_SCAN_PLACES]; /* longest refill of each of the frame's first pieces, from the top */
+    uint32_t max_ahead_cycles; /* longest copy made in the vertical blank (0: the mode makes none) */
 } vga_scan_stats_t;
 void vga_scan_stats(vga_scan_stats_t *out, bool reset);
 

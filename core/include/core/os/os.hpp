@@ -187,9 +187,11 @@ struct SaverRun {
     uint32_t slowest_us; // the slowest frame
 };
 SaverRun last_saver_run();
-// Asks every program to close and, if all did, shows the screen that says
-// the power can go. False: one of them has a question open, and it is
-// brought forward.
+// Starts Shut Down (shell::power_down): every program is asked to close,
+// the system waits for those that ask a question first and ends what is
+// still open after 20 seconds, then the picture fades to the screen that
+// says the power can go. Returns at once; a program that says no calls it
+// off. False: this machine has no Shut Down.
 bool shut_down();
 // Starts one of the system's own programs by its name ("About Chinchilla"),
 // or brings it forward if it runs. False: there is none of that name.
@@ -326,7 +328,7 @@ struct Kit {
     ports::System *system = nullptr;
     fs::Storage *storage = nullptr;
     ports::Memory *memory = nullptr;
-    bool (*shut_down)() = nullptr; // closes every program and takes the screen
+    bool (*shut_down)() = nullptr; // starts Shut Down: programs close, the picture fades, the last screen
     bool (*launch)(const char *program) = nullptr; // a row of the program table, by name
     sh::TerminalSession *(*open_session)(ports::ByteSink &device, const char *&why) = nullptr;
 };

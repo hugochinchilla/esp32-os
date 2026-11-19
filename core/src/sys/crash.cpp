@@ -148,9 +148,15 @@ size_t crash_details(const CrashRecord &r, char *out, size_t capacity, const cha
         t.add("Uptime  : %u h %u min %u s%s", static_cast<unsigned>(s / 3600), static_cast<unsigned>(s / 60 % 60),
               static_cast<unsigned>(s % 60), eol);
     }
+    if (r.kind == CrashKind::Hang && r.reason[0] != 0) {
+        // The part of its loop the task had begun and never finished.
+        t.add("Doing   : %s%s", r.reason, eol);
+    }
     if (r.kind == CrashKind::Panic) {
         t.add("Where   : PC 0x%08lX, address 0x%08lX%s", static_cast<unsigned long>(r.pc),
               static_cast<unsigned long>(r.address), eol);
+    }
+    if (r.kind != CrashKind::Reset) {
         for (int i = 0; i < r.trace_count; i++) {
             if (i % 5 == 0) {
                 t.add("%s", i == 0 ? "Trace   :" : "         ");

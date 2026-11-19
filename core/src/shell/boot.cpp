@@ -92,7 +92,6 @@ BootSettings boot_settings(const fs::Storage &storage)
     BootSettings s;
     s.fastboot = ini.get_bool("boot", "fastboot", false);
     s.monitor_wait_ms = ms(ini.get_int("boot", "monitor_wait_ms", static_cast<int>(kMonitorWaitMs)));
-    s.splash_ms = ms(ini.get_int("boot", "splash_ms", static_cast<int>(kSplashMs)));
     const int hold = ini.get_int("boot", "selftest_hold_s", static_cast<int>(kSelfTestHoldS));
     s.hold_s = hold < 0 ? 0u : (hold > 60 ? 60u : static_cast<uint32_t>(hold));
     const int pace = ini.get_int("boot", "selftest_pace", static_cast<int>(kSelfTestPace));
@@ -203,24 +202,22 @@ MemoryTestResult test_memory(ports::Memory &memory, ports::Clock &clock, uint32_
     return r;
 }
 
-// The approved splash (docs/look/boot/boot-e-colour-ribbon.png), drawn the way
-// option_c() in tools/mockup/boot_drafts.py draws it.
+// The mascot's face, as the start-up screens draw it.
 namespace {
 
-const char *const kSplashMascot[16] = {
+const char *const kMascot[16] = {
     "................", ".GGG........GGG.", "GPPPG......GPPPG", "GPPPG.GGGG.GPPPG",
     "GPPPGGLLLLGGPPPG", ".GGGLLLLLLLLGGG.", "..GLLLLLLLLLLG..", "..GLKLLLLLLKLG..",
     "..GLKLLLLLLKLG..", "..GLLLLNNLLLLG..", "D.GLLLLNNLLLLG.D", ".DDGLLLLLLLLGDD.",
     "D..GGLLLLLLGG..D", "....GGGGGGGG....", "................", "................"};
 
 // `on_its_back`: drawn upside down, for the error screen.
-void splash_mascot(gfx::Canvas &c, int x, int y, int s, gfx::Colour outline = gfx::kDarkGrey,
-                   gfx::Colour fur = gfx::kWhite, bool on_its_back = false)
+void mascot(gfx::Canvas &c, int x, int y, int s, gfx::Colour outline, gfx::Colour fur, bool on_its_back = false)
 {
     for (int r = 0; r < 16; r++) {
         for (int q = 0; q < 16; q++) {
             gfx::Colour col;
-            switch (kSplashMascot[on_its_back ? 15 - r : r][q]) {
+            switch (kMascot[on_its_back ? 15 - r : r][q]) {
             case 'G':
             case 'D': col = outline; break;
             case 'L': col = fur; break;
@@ -234,66 +231,11 @@ void splash_mascot(gfx::Canvas &c, int x, int y, int s, gfx::Colour outline = gf
     }
 }
 
-void wide_text(gfx::Canvas &c, const gfx::WideFont &f, int x, int y, const char *s, gfx::Colour col)
-{
-    for (; *s != 0; s++, x += f.width) {
-        const uint8_t *g = f.glyph(*s);
-        if (g == nullptr) {
-            continue;
-        }
-        for (int row = 0; row < f.height; row++) {
-            const uint8_t *bits = g + row * f.bytes_per_row;
-            for (int q = 0; q < f.width; q++) {
-                if (bits[q / 8] & (0x80 >> (q % 8))) {
-                    c.fill({x + q, y + row, 1, 1}, col);
-                }
-            }
-        }
-    }
-}
-
-// The nine resistors as a progress row: three reds, three greens, three
-// blues; the first `lit` in colour, the rest dark with a grey border.
-void nine(gfx::Canvas &c, int x, int y, int size, int gap, int lit)
-{
-    const gfx::Colour cols[9] = {gfx::rgb(7, 0, 0), gfx::rgb(5, 0, 0), gfx::rgb(3, 0, 0),
-                                 gfx::rgb(0, 7, 0), gfx::rgb(0, 5, 0), gfx::rgb(0, 3, 0),
-                                 gfx::rgb(0, 0, 3), gfx::rgb(0, 0, 2), gfx::rgb(0, 0, 1)};
-    for (int i = 0; i < 9; i++) {
-        const gfx::Rect r = {x + i * (size + gap), y, size, size};
-        c.fill(r, i < lit ? gfx::kWhite : gfx::kDarkGrey); // the border
-        c.fill({r.x + 1, r.y + 1, size - 2, size - 2}, i < lit ? cols[i] : gfx::rgb(1, 1, 0));
-    }
-}
-
 } // namespace
 
 void draw_mascot(gfx::Canvas &c, int x, int y, int scale, gfx::Colour outline, gfx::Colour fur)
 {
-    splash_mascot(c, x, y, scale, outline, fur);
-}
-
-void show_splash(BootIo &io, bool hold)
-{
-    if (hold && (io.skipped || io.splash_ms == 0)) {
-        return; // straight to the desktop (splash_ms = 0: not shown at all)
-    }
-    Screen s(io.display);
-    gfx::Canvas c = s.canvas();
-    c.fill({0, 0, io.display.width(), io.display.height()}, gfx::kWhite);
-    splash_mascot(c, 70, 130, 11);
-    wide_text(c, gfx::kSpleen32x64, 270, 150, "Chinchilla", gfx::kBlack);
-    wide_text(c, gfx::kSpleen12x24, 274, 222, "ninety-six", gfx::rgb(0, 0, 2));
-    c.text(274, 262, "A small desktop for a small computer", gfx::kDarkGrey);
-    // The ribbon: all 256 colours in 16 rows of 16, 40 x 6 pixels each.
-    for (int v = 0; v < 256; v++) {
-        const int r = v >> 5, g = (v >> 2) & 7, b = v & 3;
-        c.fill({(g * 2 + (b >> 1)) * 40, 380 + (r * 2 + (b & 1)) * 6, 40, 6}, static_cast<gfx::Colour>(v));
-    }
-    nine(c, 274, 300, 12, 6, 4);
-    if (hold) {
-        wait_until(io, io.clock.micros() + io.splash_ms * 1000);
-    }
+    mascot(c, x, y, scale, outline, fur);
 }
 
 // ---- The self-test screen: the approved drawing (docs/look/boot/
@@ -341,7 +283,7 @@ void line(gfx::Canvas &c, int index, const char *s, gfx::Colour colour)
 void frame(gfx::Canvas &c, int w, int h, const char *version)
 {
     c.fill({0, 0, w, h}, kBlackC);
-    splash_mascot(c, w - 16 * 5 - 24, 16, 5, kGreyC, kWhiteC);
+    mascot(c, w - 16 * 5 - 24, 16, 5, kGreyC, kWhiteC);
     char t[48];
     snprintf(t, sizeof(t), "Chinchilla BIOS %s", version);
     line(c, 0, t, kWhiteC);
@@ -566,7 +508,7 @@ void draw_crash_screen(gfx::Canvas &c, int w, int h, const sys::CrashRecord &rec
                        uint32_t seconds_left)
 {
     c.fill({0, 0, w, h}, kBlackC);
-    splash_mascot(c, w - 16 * 5 - 24, 16, 5, kGreyC, kWhiteC, true);
+    mascot(c, w - 16 * 5 - 24, 16, 5, kGreyC, kWhiteC, true);
     line(c, 0, "Chinchilla had to restart", kWhiteC);
     line(c, 1, "The last session ended badly. This is what was written down:", kGreyC);
     c.fill({kLeft, kFirstY + 2 * kStepY + 6, 60 * 8, 2}, kRedC);

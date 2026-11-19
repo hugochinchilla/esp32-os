@@ -174,11 +174,11 @@ int main(int argc, char **argv)
                                      const ssize_t got = read(link_fd, bytes, sizeof(bytes));
                                      if (got > 0) {
                                          link->feed(bytes, static_cast<size_t>(got));
+                                         link->answer_waiting();
                                      }
                                  },
                                  nullptr, nullptr};
     shell::run_self_test(boot_io);
-    shell::show_splash(boot_io);
     protocol.set_boot_screens(
         [](int which, void *) {
             if (which == 0) {
@@ -187,8 +187,6 @@ int main(int argc, char **argv)
                 sys::CrashRecord sample; // the PC has no crashes of its own to show
                 sys::crash_sample(sample);
                 shell::show_crash_screen(boot_io, sample, true, false);
-            } else {
-                shell::show_splash(boot_io, false);
             }
         },
         nullptr);
@@ -509,6 +507,7 @@ int main(int argc, char **argv)
         const ssize_t got = read(fd, buffer, sizeof(buffer));
         if (got > 0) {
             protocol.feed(buffer, static_cast<size_t>(got));
+            protocol.answer_waiting();
         } else {
             protocol.line_idle();
         }

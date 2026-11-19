@@ -102,7 +102,7 @@ offsets in `build/flash_args` first.
 | `dmesg`, `monitor` | the board's log |
 | `ls`, `get`, `put`, `rm`, `mkdir` | files on C: (`put build/programs/hello.app 'C:\hello.app'`) |
 | `fault hang\|pointer\|abort\|slow [--pid N]` | fail on purpose; report in `C:\crash.txt` |
-| `boot selftest\|splash\|fast-next\|crash` | start-up screens; `fast-next` before flashing |
+| `boot selftest\|fast-next\|crash` | start-up screens; `fast-next` before flashing |
 | `screenshot`, `key`, `type`, `text`, `mouse` | drive and photograph the UI |
 | `repaint` | time a full repaint (steady, about 13.9 ms on main) |
 | `reboot [--fast]` | restart |

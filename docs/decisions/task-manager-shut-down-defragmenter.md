@@ -35,6 +35,9 @@ only; not yet run on the board. Each is easy to change. Pictures:
   code in the firmware adapter; it can replace this without changing the
   window. On the PC the video share is 0 and free memory is a fixed,
   plausible figure.
+- (2026-11-19: what follows about Shut Down calling itself off, and the
+  night sky, was changed by "The Shut Down sequence",
+  `shut-down-sequence.md`. The dialog and the wording are as below.)
 - Shut Down: the dialog now has Shut Down (the default), Restart and
   Cancel. Shut Down asks every program to close as its close button would.
   An unsaved file in the Editor calls it off and leaves the Editor's

@@ -370,6 +370,41 @@ void test_busy_time()
 
 /* ---- Shut Down --------------------------------------------------------------------- */
 
+// The fade, a step at a time, for as long as `stage` says.
+template <class F> int steps_while(F stage)
+{
+    int steps = 0;
+    while (stage() && steps < 100) {
+        wait(60000);
+        steps++;
+    }
+    return steps;
+}
+
+bool plain_desktop()
+{
+    // The plain desktop repeats every 8 pixels both ways.
+    const uint8_t *px = display.pixels();
+    for (int y = 0; y < 480; y++) {
+        for (int x = 0; x < 640; x++) {
+            if (px[y * 640 + x] != px[(y & 7) * 640 + (x & 7)]) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+int pixels_of(gfx::Colour c)
+{
+    const uint8_t *px = display.pixels();
+    int n = 0;
+    for (int i = 0; i < 640 * 480; i++) {
+        n += px[i] == c;
+    }
+    return n;
+}
+
 void test_power_down()
 {
     close_all();
@@ -377,32 +412,79 @@ void test_power_down()
     shell::open_in_editor("C:\\Documents\\notes.txt");
     desktop.text("keep me?");
 
-    // Unsaved changes call the shut-down off: the Editor's question shows.
+    // Shut Down asks every program to close. Welcome goes; the Editor has
+    // unsaved changes and asks, and Shut Down waits for the answer.
     shell::shut_down_dialog();
     key(wm::key::Enter); // Shut Down is the default button
-    CHECK(!shell::powered_down() && !desktop.taken_over());
-    CHECK(strcmp(title(), "Editor") == 0);       // "Save changes?"
-    CHECK(find("Shut Down Chinchilla") == nullptr);
-    // While that question is open, Shut Down only brings it forward.
-    CHECK(!shell::power_down());
+    wait(1000);
+    CHECK(shell::shutting_down() && !shell::powered_down() && !desktop.taken_over());
+    CHECK(strcmp(title(), "Editor") == 0); // "Save changes?"
+    CHECK(find("Shut Down Chinchilla") == nullptr && find("Welcome") == nullptr);
+    CHECK(desktop.window_count() == 2);
+    // It waits, and choosing Shut Down again changes nothing.
+    wait(3000000);
+    CHECK(shell::power_down() && shell::shutting_down() && desktop.window_count() == 2);
     CHECK(strcmp(title(), "Editor") == 0);
-    letter('n', kAlt); // No: the Editor closes without saving
-    CHECK(desktop.window_count() == 0);
+    // Cancel: the Editor stays, and Shut Down is off.
+    key(wm::key::Escape);
+    wait(100000);
+    CHECK(!shell::shutting_down() && !shell::powered_down() && !desktop.taken_over());
+    CHECK(desktop.window_count() == 1 && find("notes.txt* - Editor") != nullptr);
+    wait(30000000); // and stays off: nothing is ended later
+    CHECK(desktop.window_count() == 1 && !desktop.taken_over());
 
-    // Now it goes through, by Alt+S this time.
+    // Again, by Alt+S this time, and No to the question: the Editor closes
+    // without saving and the rest follows by itself.
     shell::launch(*shell::find_app("Welcome"));
     shell::shut_down_dialog();
     letter('s', kAlt);
-    CHECK(shell::powered_down() && desktop.taken_over());
+    wait(1000);
+    CHECK(shell::shutting_down() && strcmp(title(), "Editor") == 0);
+    CHECK(pointer.state().visible);
+    letter('n', kAlt);
+    CHECK(desktop.window_count() == 0 && !desktop.taken_over());
+    const int taskbar_grey = pixels_of(gfx::kGrey);
+    CHECK(taskbar_grey > 10000 && !plain_desktop());
+    wait(100000);
+    // The picture is kept and fades: the icons and the taskbar into the
+    // plain desktop, in seven steps at most.
+    CHECK(desktop.taken_over() && shell::shutting_down() && !shell::powered_down());
     CHECK(desktop.window_count() == 0);
     CHECK(!pointer.state().visible);
-    const uint8_t *px = display.pixels();
-    CHECK(px[479 * 640] == gfx::rgb(0, 0, 1) && px[479 * 640 + 639] == gfx::rgb(0, 0, 1)); // no taskbar
-    int white = 0;
-    for (int i = 0; i < 640 * 480; i++) {
-        white += px[i] == gfx::kWhite;
+    CHECK(pixels_of(gfx::kGrey) == taskbar_grey); // nothing has moved yet
+    wait(60000);
+    CHECK(pixels_of(gfx::kGrey) == 0 && !plain_desktop()); // one step on
+    // Ctrl+Alt+Del and the rest of the keyboard do nothing meanwhile.
+    ctrl_alt_del();
+    key(wm::key::Enter);
+    CHECK(desktop.window_count() == 0 && !system_.reboot_requested);
+    const int to_plain = steps_while([] { return !plain_desktop(); });
+    CHECK(to_plain >= 3 && to_plain <= 6);
+    CHECK(pixels_of(gfx::kBlack) == 0);
+    // It rests there a moment, then goes to black.
+    const std::string plain = screen();
+    wait(60000);
+    wait(60000);
+    CHECK(plain == screen());
+    const int to_black = steps_while([] { return pixels_of(gfx::kBlack) != 640 * 480; });
+    CHECK(to_black >= 5 && to_black <= 12); // the rest, then as many steps as the desktop's colour is from black
+    CHECK(shell::shutting_down());
+    // Out of the black comes the last screen, in seven steps again.
+    int last = 0, rising = 0;
+    while (!shell::powered_down() && rising < 20) {
+        wait(60000);
+        rising++;
+        const int lit = 640 * 480 - pixels_of(gfx::kBlack);
+        CHECK(lit >= last);
+        last = lit;
     }
-    CHECK(white > 5000); // the mascot and the sentence
+    CHECK(rising >= 7 && rising <= 10); // the steps left of the fade to black, and its own seven
+    CHECK(shell::powered_down() && !shell::shutting_down() && desktop.taken_over());
+    wait(60000);
+    const uint8_t *px = display.pixels();
+    CHECK(px[0] == gfx::kBlack && px[479 * 640] == gfx::kBlack && px[479 * 640 + 639] == gfx::kBlack); // full black, no taskbar
+    CHECK(pixels_of(gfx::kWhite) > 5000); // the mascot and the sentence
+    CHECK(pixels_of(gfx::rgb(0, 0, 1)) == 0); // the night sky's blue is gone
 
     // The screen stays whatever happens: keys, text, the mouse, timers,
     // a repaint asked for by the debug link.

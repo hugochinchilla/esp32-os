@@ -462,18 +462,20 @@ class Board:
         return found
 
     def boot_screen(self, which):
-        """Shows a start-up screen again ("selftest" runs the checks again,
-        "splash"); repaint() brings the desktop back."""
-        self.request(BOOT_SCREEN, bytes([{"selftest": 0, "splash": 1, "fast-next": 2, "crash": 3}[which]]))
+        """Shows a start-up screen again ("selftest" runs the checks again);
+        repaint() brings the desktop back."""
+        self.request(BOOT_SCREEN, bytes([{"selftest": 0, "fast-next": 2, "crash": 3}[which]]))
 
     def fault(self, kind, pid=0):
         """Makes the board fail on purpose: "hang" (the desktop's loop spins
         until the watchdog restarts the board), "pointer" (a write through a
-        null pointer), "abort", or "slow" (busy for five seconds, then it
-        carries on: nothing fails). With a PID, as if that program had done it.
+        null pointer), "abort", "slow" (busy for five seconds, then it
+        carries on: nothing fails), or "wait" (the desktop's loop sleeps for
+        ever: a hang whose record says where it waited). With a PID, as if
+        that program had done it.
         The board replies first; but for "slow", it is then gone until it
         restarts."""
-        args = bytes([{"hang": 0, "pointer": 1, "abort": 2, "slow": 3}[kind]])
+        args = bytes([{"hang": 0, "pointer": 1, "abort": 2, "slow": 3, "wait": 4}[kind]])
         self.request(FAULT, args + (struct.pack("<H", pid) if pid else b""))
 
     # ---- Wi-Fi
@@ -1093,15 +1095,16 @@ def main(argv=None):
                    help="seconds between the two readings behind the %%NOW column (default 1; 0: one reading)")
     p.add_argument("--json", action="store_true", help="the last reading as JSON")
     p = sub.add_parser("boot", help="show a start-up screen again (repaint brings the desktop back)")
-    p.add_argument("screen", choices=["selftest", "splash", "fast-next", "crash"],
+    p.add_argument("screen", choices=["selftest", "fast-next", "crash"],
                    help="fast-next: show nothing, make the next start a fast one (for before flashing). "
                         "crash: the error screen, with the last crash of this start or a made-up one")
     p = sub.add_parser("fault", help="make the board fail on purpose, to try the watchdog and the error screen "
                                      "(the report is then in C:\\crash.txt)")
-    p.add_argument("kind", choices=["hang", "pointer", "abort", "slow"],
+    p.add_argument("kind", choices=["hang", "pointer", "abort", "slow", "wait"],
                    help="hang: the desktop's loop spins until the watchdog restarts the board. "
                         "pointer: a write through a null pointer. abort: abort(). "
-                        "slow: busy for five seconds, then it carries on")
+                        "slow: busy for five seconds, then it carries on. "
+                        "wait: the loop sleeps for ever, the hang of a program that waits")
     p.add_argument("--pid", type=int, default=0, help="as if this program had done it (see dbg.py windows)")
     p = sub.add_parser("wifi", help="Wi-Fi: status, scan, connect (asks for the password), disconnect, forget")
     p.add_argument("action", nargs="?", default="status",

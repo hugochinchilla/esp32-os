@@ -318,8 +318,51 @@ fs::Storage storage;
 wm::Wm desktop(display, pointer, clock_);
 
 const int16_t kBoot[4] = {1, 2, 3, 4}, kClose[3] = {5, 6, 7}, kAlert[2] = {8, 9}, kError[5] = {1, 1, 1, 1, 1},
-              kBell[1] = {3};
-const sound::Clip kClips[sound::kIds] = {{kBoot, 4}, {kClose, 3}, {kAlert, 2}, {kError, 5}, {kBell, 1}};
+              kBell[1] = {3}, kGames[6] = {};
+const sound::Clip kClips[sound::kIds] = {{kBoot, 4},      {kClose, 3},     {kAlert, 2},     {kError, 5},
+                                         {kBell, 1},      {&kGames[0], 1}, {&kGames[1], 1}, {&kGames[2], 1},
+                                         {&kGames[3], 1}, {&kGames[4], 1}, {&kGames[5], 1}};
+
+void press(uint16_t usage)
+{
+    desktop.key(usage, true);
+    desktop.key(usage, false);
+}
+
+// Culebra (backlog item 70): a berry eaten and the game's end are heard;
+// steering, pausing and a new game are not.
+void test_culebra_sounds(host::RecordingSound &out)
+{
+    using games::Snake;
+    const size_t before = out.played.size();
+    shell::open_culebra();
+    const Snake &g = shell::culebra_game();
+    const uint16_t keys[4] = {wm::key::Up, wm::key::Right, wm::key::Down, wm::key::Left};
+    for (int steps = 0; steps < 600 && g.berries() < 1 && g.state() != Snake::State::Over; steps++) {
+        const int dx = g.berry_col() - g.head_col(), dy = g.berry_row() - g.head_row();
+        const int want = dx != 0 ? (dx > 0 ? 1 : 3) : (dy > 0 ? 2 : 0);
+        // Not back onto its own neck: around, when the berry is behind.
+        const int col = g.head_col() + (want == 1) - (want == 3), row = g.head_row() + (want == 2) - (want == 0);
+        press(g.at(col, row).kind == Snake::Kind::Body ? keys[(want + 1) & 3] : keys[want]);
+        CHECK(g.berries() > 0 || out.played.size() == before);
+        clock_.now += 130000;
+        desktop.tick();
+    }
+    CHECK(g.berries() == 1 && out.played.size() == before + 1 && out.played.back() == &kGames[3]);
+    // Into the wall.
+    for (int steps = 0; steps < 100 && g.state() == Snake::State::Playing; steps++) {
+        clock_.now += 130000;
+        desktop.tick();
+    }
+    CHECK(g.state() == Snake::State::Over && out.played.back() == &kGames[4]);
+    const size_t after = out.played.size();
+    press(wm::key::Space); // a new game: nothing
+    CHECK(out.played.size() == after);
+    desktop.key(wm::key::LeftAlt, true);
+    press(wm::key::F4);
+    desktop.key(wm::key::LeftAlt, false);
+    CHECK(desktop.window_count() == 0);
+}
 
 void test_system_sounds()
 {
@@ -367,10 +410,22 @@ void test_system_sounds()
     desktop.key(wm::key::Enter, false);
     CHECK(desktop.window_count() == 0);
 
-    // Shut Down: the closing melody, once, with the last screen.
-    CHECK(shell::power_down() && shell::powered_down());
+    CHECK(strcmp(sound::name(sound::Id::Crumple), "crumple") == 0 && sound::clip(sound::Id::Crumple).samples == &kGames[5]);
+    test_culebra_sounds(out);
+    out.played.resize(4);
+
+    // Shut Down: the closing melody, once, as the picture begins to fade
+    // (backlog item 60); it plays over the fade and the last screen.
+    CHECK(shell::power_down() && out.played.size() == 4);
+    clock_.now += 1000;
+    desktop.tick();
+    CHECK(desktop.taken_over() && !shell::powered_down());
     CHECK(out.played.size() == 5 && out.played[4] == kClose);
-    CHECK(shell::power_down());
+    for (int i = 0; i < 40 && !shell::powered_down(); i++) {
+        clock_.now += 60000;
+        desktop.tick();
+    }
+    CHECK(shell::powered_down() && shell::power_down());
     CHECK(out.played.size() == 5);
 
     // The output taken away again: silence.

@@ -372,9 +372,13 @@ void test_desktop_calls()
 
     CHECK(os::network() == nullptr); // this machine has no radio
 
-    // Shut Down with nothing open: the screen is taken (what stops it is in
-    // test_system). Last: there is no way back from it.
-    CHECK(os::shut_down() && desktop.taken_over());
+    // Shut Down with nothing open: the screen is taken at the desktop's
+    // next tick (what holds it up is in test_system). Last: there is no
+    // way back from it.
+    CHECK(os::shut_down() && !desktop.taken_over());
+    clock_.now += 1000;
+    desktop.tick();
+    CHECK(desktop.taken_over());
 }
 
 } // namespace
