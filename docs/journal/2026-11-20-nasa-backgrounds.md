@@ -69,6 +69,15 @@ screen in use), all in `C:\pictures` with the size in the name, or a folder
   not been seen in the board's 256 colours; a board turn opens them in the
   Picture viewer.
 
+## On the board (2026-11-20, commit ca0ccea)
+
+Passed. `tools/flash.py` copied the 15 files in 152.7 s, and C: has
+3,320 KB free afterwards. Three photographs opened in the Picture viewer at
+their sizes, decoded in 1.07 to 1.45 s each. `mascot blinks.gif` shows with
+no error; the screenshots caught the eyes open only (they are shut for
+150 ms in every three seconds). No refill missed, and the memory comes back
+when the viewer closes. The merge waits for the owner.
+
 ## What is left
 
 - Using one as the desktop's background, and choosing it: a later item.
