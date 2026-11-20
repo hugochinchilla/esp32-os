@@ -16,6 +16,7 @@ set(CORE_SRCS
     src/image/bmp.cpp
     src/image/convert.cpp
     src/image/decoder.cpp
+    src/image/gif.cpp
     src/image/inflate.cpp
     src/image/jpeg.cpp
     src/image/png.cpp

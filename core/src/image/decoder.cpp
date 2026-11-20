@@ -1,15 +1,9 @@
 #include <cstring>
+#include <new>
 
 #include "internal.hpp"
 
 namespace image {
-
-namespace {
-
-// The reader lives here, next to the pool, so a Decoder needs nothing else.
-Reader g_reader; // ponytail: one picture is decoded at a time (one UI task)
-
-} // namespace
 
 const char *error_text(Error e)
 {
@@ -32,7 +26,7 @@ const char *error_text(Error e)
 void *Decoder::allocate(size_t bytes)
 {
     bytes = (bytes + 7) & ~static_cast<size_t>(7);
-    if (pool_ == nullptr || used_ + bytes > kPoolBytes) {
+    if (pool_ == nullptr || bytes > pool_bytes_ || used_ > pool_bytes_ - bytes) {
         return nullptr;
     }
     void *p = pool_ + used_;
@@ -47,6 +41,56 @@ void Decoder::release(ports::Memory &memory)
         memory.release(pool_);
         pool_ = nullptr;
     }
+}
+
+void Decoder::use_pool(ports::Memory &memory, size_t bytes)
+{
+    if (bytes != pool_bytes_) {
+        release(memory);
+        pool_bytes_ = bytes;
+    }
+}
+
+int Decoder::frame_ms() const
+{
+    return format_ != nullptr ? format_->frame_ms() : 0;
+}
+
+bool Decoder::more_frames() const
+{
+    return format_ != nullptr && done_ && next_row_ == end_row_ && format_->more();
+}
+
+Error Decoder::next_frame()
+{
+    if (!more_frames()) {
+        return Error::Malformed;
+    }
+    const Error e = format_->next();
+    if (e == Error::None) {
+        next_row_ = 0;
+        end_row_ = info_.height;
+        done_ = false;
+    }
+    return e;
+}
+
+void Decoder::changed(int part[4]) const
+{
+    part[0] = part[1] = part[2] = part[3] = 0;
+    if (format_ != nullptr) {
+        format_->changed(part);
+    }
+}
+
+void Decoder::only_rows(int first, int rows)
+{
+    if (format_ == nullptr || done_ || next_row_ != 0 || first < 0 || rows <= 0 || first + rows > info_.height) {
+        return;
+    }
+    format_->from_row(first);
+    next_row_ = first;
+    end_row_ = first + rows;
 }
 
 Error Decoder::open(const fs::Storage &storage, const char *path, ports::Memory &memory, Info &info,
@@ -66,23 +110,33 @@ Error Decoder::open(Source &source, ports::Memory &memory, Info &info, const uin
         close();
     }
     if (pool_ == nullptr) {
-        pool_ = static_cast<uint8_t *>(memory.allocate(kPoolBytes));
+        pool_ = static_cast<uint8_t *>(memory.allocate(pool_bytes_));
         if (pool_ == nullptr) {
             close();
             return Error::NoMemory;
         }
     }
     used_ = 0;
-    g_reader.attach(source);
-    const int a = g_reader.byte(), b = g_reader.byte();
-    g_reader.seek(0);
+    void *place = allocate(sizeof(Reader));
+    if (place == nullptr) {
+        close();
+        return Error::NoMemory;
+    }
+    reader_ = new (place) Reader;
+    Reader &r = *reader_;
+    r.attach(source);
+    r.seek(0); // the source may have been read before
+    const int a = r.byte(), b = r.byte();
+    r.seek(0);
     static const uint8_t white[3] = {255, 255, 255};
     if (a == 'B' && b == 'M') {
-        format_ = make_bmp(*this, g_reader);
+        format_ = make_bmp(*this, r);
     } else if (a == 0x89 && b == 'P') {
-        format_ = make_png(*this, g_reader, background != nullptr ? background : white);
+        format_ = make_png(*this, r, background != nullptr ? background : white);
     } else if (a == 0xFF && b == 0xD8) {
-        format_ = make_jpeg(*this, g_reader);
+        format_ = make_jpeg(*this, r);
+    } else if (a == 'G' && b == 'I') {
+        format_ = make_gif(*this, r, background != nullptr ? background : white);
     } else {
         close();
         return a < 0 ? Error::Malformed : Error::Unsupported;
@@ -105,6 +159,7 @@ Error Decoder::open(Source &source, ports::Memory &memory, Info &info, const uin
     }
     info = info_;
     next_row_ = 0;
+    end_row_ = info_.height;
     done_ = false;
     return Error::None;
 }
@@ -112,13 +167,16 @@ Error Decoder::open(Source &source, ports::Memory &memory, Info &info, const uin
 Error Decoder::step(RowSink &sink, int rows)
 {
     for (int i = 0; i < rows && !done_; i++) {
+        if (!format_->prepare()) {
+            continue; // not a row yet, but a turn of work all the same
+        }
         const Error e = format_->next_row(rgb_);
         if (e != Error::None) {
             done_ = true;
             return e;
         }
         sink.row(next_row_, rgb_);
-        if (++next_row_ == info_.height) {
+        if (++next_row_ == end_row_) {
             done_ = true;
         }
     }

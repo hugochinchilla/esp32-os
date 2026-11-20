@@ -2,10 +2,10 @@
 """Makes pictures for Chinchilla, all generated here (no outside artwork):
 a test card, colour bars, gradients, the mascot enlarged and a synthetic
 landscape that stands in for a photo. Standard library only; includes small
-PNG, BMP and baseline JPEG writers.
+PNG, BMP, baseline JPEG and GIF writers.
 
   python3 tools/gen_pictures.py tests DIR     unit-test pictures + expected pixels + manifest
-  python3 tools/gen_pictures.py bench DIR     640x480 pictures in each format, for the board
+  python3 tools/gen_pictures.py bench DIR     640x480 pictures in each format and GIFs that move, for the board
   python3 tools/gen_pictures.py embed FILE    the RAM disk samples as a C++ source file
 """
 import math
@@ -302,6 +302,150 @@ AC_CHROMA = ([0, 2, 1, 2, 4, 4, 3, 4, 7, 5, 4, 4, 0, 1, 2, 0x77], bytes.fromhex(
     "a3a4a5a6a7a8a9aab2b3b4b5b6b7b8b9bac2c3c4c5c6c7c8c9cad2d3d4d5d6d7d8d9dae2e3e4e5e6e7e8e9eaf2f3f4f5f6f7f8f9fa"))
 
 
+def gif_lzw(indices, min_code, deferred=False):
+    """LZW as GIF packs it: codes of growing width, low bits first. With
+    `deferred`, no clear code is sent when the table fills (some encoders
+    go on with the table as it is)."""
+    clear, end = 1 << min_code, (1 << min_code) + 1
+    out, acc, nbits = bytearray(), 0, 0
+    width = min_code + 1
+
+    def put(code):
+        nonlocal acc, nbits
+        acc |= code << nbits
+        nbits += width
+        while nbits >= 8:
+            out.append(acc & 255)
+            acc >>= 8
+            nbits -= 8
+
+    table = {(i,): i for i in range(clear)}
+    nxt = end + 1
+    put(clear)
+    cur = ()
+    for px in indices:
+        if cur + (px,) in table:
+            cur += (px,)
+            continue
+        put(table[cur])
+        if nxt < 4096:
+            table[cur + (px,)] = nxt
+            nxt += 1
+            if nxt > (1 << width) and width < 12:
+                width += 1
+        elif not deferred:
+            put(clear)
+            table = {(i,): i for i in range(clear)}
+            nxt, width = end + 1, min_code + 1
+        cur = (px,)
+    if cur:
+        put(table[cur])
+    put(end)
+    if nbits:
+        out.append(acc & 255)
+    return bytes(out)
+
+
+def write_gif(path, rows, palette, interlace=False, transparent=None, screen=None, offset=(0, 0),
+              local=False, version=b"89a", deferred=False, extras=False, more=None):
+    """rows of colour numbers. `screen`: the size in the file's header, if
+    not the picture's. `local`: the colours go with the picture and the file
+    has none of its own. `extras`: a comment and a loop count before the
+    picture. `more`: a second picture after the first (an animation)."""
+    h, w = len(rows), len(rows[0])
+    bits = max(1, (len(palette) - 1).bit_length())
+    table = bytes(c for p in palette for c in p) + bytes(3 * ((1 << bits) - len(palette)))
+    sw, sh = screen or (w, h)
+    data = b"GIF" + version + struct.pack("<HHBBB", sw, sh, 0 if local else 0x80 | (bits - 1), 0, 0)
+    if not local:
+        data += table
+    if extras:
+        data += b"\x21\xFF\x0BNETSCAPE2.0\x03\x01\x00\x00\x00"
+        data += b"\x21\xFE\x0Ea test picture\x00"
+
+    def picture(rows):
+        out = b""
+        if transparent is not None or more:
+            out += b"\x21\xF9\x04" + struct.pack("<BHB", 1 if transparent is not None else 0, 10,
+                                                  transparent or 0) + b"\x00"
+        out += b"\x2C" + struct.pack("<HHHHB", offset[0], offset[1], w, h,
+                                     (0x80 | (bits - 1) if local else 0) | (0x40 if interlace else 0))
+        if local:
+            out += table
+        order = range(h)
+        if interlace:
+            order = [y for first, step in ((0, 8), (4, 8), (2, 4), (1, 2)) for y in range(first, h, step)]
+        min_code = max(2, bits)
+        lzw = gif_lzw([px for y in order for px in rows[y]], min_code, deferred)
+        out += bytes([min_code])
+        for i in range(0, len(lzw), 255):
+            out += bytes([len(lzw[i:i + 255])]) + lzw[i:i + 255]
+        return out + b"\x00"
+
+    data += picture(rows)
+    if more:
+        data += picture(more)
+    with open(path, "wb") as f:
+        f.write(data + b"\x3B")
+
+
+def gif_table(palette):
+    bits = max(1, (len(palette) - 1).bit_length())
+    return bits, bytes(c for p in palette for c in p) + bytes(3 * ((1 << bits) - len(palette)))
+
+
+def write_gif_animation(path, screen, palette, frames, loops=None):
+    """An animated GIF. `frames`: dicts with `rows` (colour numbers) and,
+    as wanted, `at` (x, y), `transparent`, `dispose` (0 to 3), `delay`
+    (hundredths of a second), `palette` (its own colours), `interlace`.
+    `loops`: Netscape's count (0: for ever); None: no such extension.
+    Returns what each picture must look like once laid on the ones before,
+    over white: rows of (r, g, b)."""
+    sw, sh = screen
+    bits, table = gif_table(palette)
+    data = b"GIF89a" + struct.pack("<HHBBB", sw, sh, 0x80 | (bits - 1), 0, 0) + table
+    if loops is not None:
+        data += b"\x21\xFF\x0BNETSCAPE2.0\x03\x01" + struct.pack("<H", loops) + b"\x00"
+    white = (255, 255, 255)
+    canvas = [[white] * sw for _ in range(sh)]
+    shown = []
+    for f in frames:
+        rows = f["rows"]
+        h, w = len(rows), len(rows[0])
+        x0, y0 = f.get("at", (0, 0))
+        tr = f.get("transparent")
+        colours = f.get("palette", palette)
+        data += b"\x21\xF9\x04" + struct.pack("<BHB", (f.get("dispose", 0) << 2) | (1 if tr is not None else 0),
+                                              f.get("delay", 0), tr or 0) + b"\x00"
+        fbits, ftable = gif_table(colours)
+        own = "palette" in f
+        data += b"\x2C" + struct.pack("<HHHHB", x0, y0, w, h,
+                                      (0x80 | (fbits - 1) if own else 0) | (0x40 if f.get("interlace") else 0))
+        if own:
+            data += ftable
+        order = range(h)
+        if f.get("interlace"):
+            order = [y for first, step in ((0, 8), (4, 8), (2, 4), (1, 2)) for y in range(first, h, step)]
+        min_code = max(2, fbits)
+        lzw = gif_lzw([px for y in order for px in rows[y]], min_code)
+        data += bytes([min_code])
+        for i in range(0, len(lzw), 255):
+            data += bytes([len(lzw[i:i + 255])]) + lzw[i:i + 255]
+        data += b"\x00"
+        for y in range(h):
+            for x in range(w):
+                if rows[y][x] != tr and x0 + x < sw and y0 + y < sh:
+                    canvas[y0 + y][x0 + x] = colours[rows[y][x]]
+        shown.append([list(row) for row in canvas])
+        if f.get("dispose") == 2:
+            for y in range(y0, min(sh, y0 + h)):
+                for x in range(x0, min(sw, x0 + w)):
+                    canvas[y][x] = white
+    with open(path, "wb") as f:
+        f.write(data + b"\x3B")
+    return shown
+
+
 def huff_codes(table):
     bits, vals = table
     codes, code, k = {}, 0, 0
@@ -540,6 +684,86 @@ def make_tests(folder):
     write_jpeg(os.path.join(folder, "progressive.jpg"), photo, progressive_marker=True)
     manifest.append("progressive.jpg error Unsupported")
 
+    # GIF: every colour depth, interlaced, a transparent colour (over
+    # white), a picture smaller than its screen, its own colours, the old
+    # version, enough pixels to fill the code table (with and without a
+    # clear code), an animation (its first picture), extensions in front.
+    def gif(name, idx, colours, expect=None, **kw):
+        write_gif(os.path.join(folder, name), idx, colours, **kw)
+        exact(name, expect or [[colours[i] for i in row] for row in idx])
+
+    for d in (1, 2, 4, 8):
+        n = 1 << d
+        idx = [[(x + y * 3) % n for x in range(w)] for y in range(h)]
+        gif("gif%d.gif" % d, idx, pal[:n])
+    idx = [[(x * 5 + y * 11) % 200 for x in range(w)] for y in range(h)]
+    gif("gif-interlaced.gif", idx, pal[:200], interlace=True)
+    gif("gif-interlaced-short.gif", idx[:3], pal[:200], interlace=True)
+    gif("gif-87a.gif", idx, pal[:200], version=b"87a")
+    gif("gif-local.gif", idx, pal[:200], local=True, extras=True)
+    white = (255, 255, 255)
+    gif("gif-transparent.gif", idx, pal[:200], transparent=7,
+        expect=[[white if i == 7 else pal[i] for i in row] for row in idx])
+    placed = [[white] * 50 for _ in range(40)]
+    for y in range(h):
+        for x in range(w):
+            placed[y + 6][x + 9] = pal[idx[y][x]]
+    gif("gif-placed.gif", idx, pal[:200], screen=(50, 40), offset=(9, 6), expect=placed)
+    gif("gif-placed-interlaced.gif", idx, pal[:200], screen=(50, 40), offset=(9, 6), interlace=True, expect=placed)
+    # The screen too small: it grows to hold the picture.
+    grown = [[white] * (9 + w) for _ in range(6)] + [[white] * 9 + [pal[i] for i in row] for row in idx]
+    gif("gif-small-screen.gif", idx, pal[:200], screen=(8, 8), offset=(9, 6), expect=grown)
+    big = [[(x * x + y * 7 + (x * y) % 13) % 256 for x in range(160)] for y in range(120)]
+    gif("gif-full-table.gif", big, pal)
+    gif("gif-deferred-clear.gif", big, pal, deferred=True)
+    gif("gif-big-interlaced.gif", big, pal, interlace=True)
+    second = [[(i + 1) % 200 for i in row] for row in idx]
+    gif("gif-animated.gif", idx, pal[:200], more=second, extras=True)
+    # Animations: the pictures each must show in turn, how long each stays
+    # (ms) and how many times round (0: for ever).
+    def animation(name, screen, frames, loops=None, colours=None):
+        shown = write_gif_animation(os.path.join(folder, name), screen, colours or pal[:200], frames, loops)
+        for i, rows in enumerate(shown):
+            with open(os.path.join(folder, "%s.%d.rgb" % (name, i)), "wb") as f:
+                f.write(raw_rgb(rows))
+        delays = [f.get("delay", 0) * 10 for f in frames]
+        manifest.append("%s frames %d %d %d %d %s" % (
+            name, screen[0], screen[1], len(frames), 1 if loops is None else loops and loops + 1,
+            " ".join(str(d if d >= 20 else 100) for d in delays)))
+
+    def patch(pw, ph, k):
+        return [[(x * 3 + y * 5 + k) % 200 for x in range(pw)] for y in range(ph)]
+
+    # Patches laid on the first picture, some pixels see-through, for ever.
+    animation("anim-patches.gif", (w, h), [
+        {"rows": idx, "delay": 5},
+        {"rows": patch(12, 9, 3), "at": (4, 6), "transparent": 9},
+        {"rows": patch(20, 5, 40), "at": (15, 20), "delay": 20, "dispose": 1},
+    ], loops=0)
+    # A picture that asks to be taken away again, one with its own colours,
+    # one interlaced; three times round. The first does not fill the screen.
+    own = [(255 - i, i, (i * 5) % 256) for i in range(64)]
+    animation("anim-dispose.gif", (50, 40), [
+        {"rows": idx, "at": (9, 6), "delay": 3},
+        {"rows": patch(16, 16, 7), "at": (2, 2), "dispose": 2, "delay": 7},
+        {"rows": [[(x + y) % 64 for x in range(30)] for y in range(11)], "at": (10, 25), "palette": own, "delay": 4},
+        {"rows": patch(21, 19, 90), "at": (25, 3), "interlace": True, "transparent": 90, "dispose": 3, "delay": 30},
+    ], loops=2)
+    # No word about going round: once. The second picture sticks out of the screen.
+    animation("anim-once.gif", (w, h), [
+        {"rows": idx, "delay": 10},
+        {"rows": patch(30, 30, 1), "at": (20, 10), "delay": 10},
+    ])
+    # A screen too large to be played in the decoder's usual working memory.
+    animation("anim-large.gif", (420, 300), [
+        {"rows": [[(x // 7 + y // 5) % 16 for x in range(420)] for y in range(300)], "delay": 10},
+        {"rows": patch(40, 40, 0), "at": (100, 100), "delay": 10},
+    ], loops=0, colours=pal[:200])
+
+    with open(os.path.join(folder, "gif-empty.gif"), "wb") as f:
+        f.write(b"GIF89a" + struct.pack("<HHBBB", 4, 4, 0x80, 0, 0) + bytes(6) + b"\x3B")
+    manifest.append("gif-empty.gif error Malformed")
+
     with open(os.path.join(folder, "not-a-picture.png"), "wb") as f:
         f.write(b"hello, this is text\n")
     manifest.append("not-a-picture.png error Unsupported")
@@ -700,6 +924,63 @@ def make_bench(folder):
     write_png(os.path.join(folder, "testcard640.png"), test_card(640, 480), "rgb8")
     write_png(os.path.join(folder, "bars640.png"), colour_bars(640, 480), "rgb8")
     write_jpeg(os.path.join(folder, "gradient640.jpg"), gradient(640, 480), quality=90, sampling="444")
+    # GIFs: the photo in the board's own 256 colours, plain and interlaced,
+    # and three animations with a page that shows them (gifs.htm).
+    board = [(r * 255 // 7, g * 255 // 7, b * 255 // 3) for r in range(8) for g in range(8) for b in range(4)]
+    idx = [[((r * 7 + 127) // 255) * 32 + ((g * 7 + 127) // 255) * 4 + (b * 3 + 127) // 255 for r, g, b in row]
+           for row in photo]
+    write_gif(os.path.join(folder, "landscape640.gif"), idx, board)
+    write_gif(os.path.join(folder, "landscape640i.gif"), idx, board, interlace=True)
+    colours = [(255, 0, 255), (0, 0, 0), (255, 255, 255), (200, 40, 40), (40, 90, 200), (250, 200, 40), (40, 160, 80),
+               (120, 120, 120)]
+
+    def disc(size, k, of):
+        """A dot going round a ring, on a see-through square."""
+        rows = [[0] * size for _ in range(size)]
+        cx = size / 2 + math.cos(k * 2 * math.pi / of) * size * 0.34
+        cy = size / 2 + math.sin(k * 2 * math.pi / of) * size * 0.34
+        for y in range(size):
+            for x in range(size):
+                ring = math.hypot(x - size / 2, y - size / 2)
+                if math.hypot(x - cx, y - cy) < size * 0.12:
+                    rows[y][x] = 3
+                elif abs(ring - size * 0.34) < 1.5:
+                    rows[y][x] = 7
+        return rows
+
+    write_gif_animation(os.path.join(folder, "spinner.gif"), (96, 96), colours,
+                        [{"rows": disc(96, k, 12), "transparent": 0, "dispose": 2, "delay": 8} for k in range(12)],
+                        loops=0)
+    # A banner of 468x60: a block that crosses it, 21 pixels at a time. Each
+    # picture after the first is a patch: the block where it now is, and
+    # the banner's blue where it was.
+    banner = [[4 if 2 <= y < 58 and 2 <= x < 466 else 1 for x in range(468)] for y in range(60)]
+    frames = [{"rows": banner, "delay": 10}]
+    for k in range(20):
+        back = 21 if k > 0 else 0
+        patch = [[5 if x >= back else 4 for x in range(back + 40)] for _ in range(40)]
+        frames.append({"rows": patch, "at": (14 + k * 21 - back, 10), "delay": 10})
+    write_gif_animation(os.path.join(folder, "banner.gif"), (468, 60), colours, frames, loops=0)
+    # The whole screen, 640x480: more than the usual working memory plays.
+    # Each picture after the first is a patch of the photo itself with the
+    # ring and the dot drawn on it, so the dot of the picture before goes
+    # and there is one dot at any time.
+    def nearest(r, g, b):
+        return ((r * 7 + 127) // 255) * 32 + ((g * 7 + 127) // 255) * 4 + (b * 3 + 127) // 255
+
+    marks = {3: nearest(*colours[3]), 7: nearest(*colours[7])}
+    frames = [{"rows": idx, "palette": board, "delay": 50}]
+    for k in range(4):
+        patch = [[marks.get(v, idx[160 + y][240 + x]) for x, v in enumerate(row)]
+                 for y, row in enumerate(disc(160, k, 4))]
+        frames.append({"rows": patch, "palette": board, "at": (240, 160), "delay": 50})
+    write_gif_animation(os.path.join(folder, "landscape640-moving.gif"), (640, 480), colours, frames, loops=0)
+    with open(os.path.join(folder, "gifs.htm"), "w") as f:
+        f.write("<title>GIFs that move</title><body bgcolor=\"#FFFFCC\"><h2>GIFs that move</h2>"
+                "<p><img src=\"banner.gif\" alt=\"A banner\"></p>"
+                "<p>Three of the same, each with its own time: <img src=\"spinner.gif\" alt=\"spinner\"> "
+                "<img src=\"spinner.gif\" width=48 height=48 alt=\"spinner\"> <img src=\"spinner.gif\" alt=\"spinner\"></p>"
+                "<p>And the still one, small: <img src=\"landscape640i.gif\" width=160 height=120 alt=\"hills\"></p>")
     with open(os.path.join(folder, "landscape640.rgb"), "wb") as f:
         f.write(raw_rgb(photo))
     print("bench pictures in", folder)

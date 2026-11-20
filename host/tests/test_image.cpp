@@ -92,6 +92,107 @@ image::Error error_named(const std::string &s)
     return image::Error::Malformed;
 }
 
+// An animated GIF: each picture in turn against the pixels the generator
+// worked out, how long each stays, and that it stops after the last time
+// round. A screen too large for the usual working memory shows its first
+// picture, and plays once the decoder is given what animation_pool() says.
+int test_animation(image::Decoder &d, const std::string &name, std::istringstream &in)
+{
+    int w = 0, h = 0, count = 0, rounds = 0;
+    in >> w >> h >> count >> rounds;
+    std::vector<int> delays(count);
+    for (int &ms : delays) {
+        in >> ms;
+    }
+    const std::string path = "D:\\" + name;
+    image::Info info;
+    Collect got;
+    image::Error e = decode(d, path.c_str(), info, got);
+    CHECK(e == image::Error::None && info.several && info.width == w && info.height == h);
+    const bool large = !info.animated;
+    CHECK(large == (name == "anim-large.gif"));
+    if (large) {
+        CHECK(got.pixels == read_all(folder + "/" + name + ".0.rgb"));
+        CHECK(!d.more_frames() && d.next_frame() != image::Error::None);
+        CHECK(image::animation_pool(w, h) > image::kPoolBytes);
+        d.use_pool(memory, image::animation_pool(w, h));
+        got = Collect();
+        e = decode(d, path.c_str(), info, got);
+        CHECK(e == image::Error::None && info.animated);
+    }
+    const int total = rounds == 0 ? count * 2 + 1 : count * rounds; // "for ever": a little over twice
+    for (int i = 0; i < total && e == image::Error::None; i++) {
+        const int f = i % count;
+        if (got.pixels != read_all(folder + "/" + name + "." + std::to_string(f) + ".rgb") || got.rows != h || !got.in_order) {
+            printf("  %s: picture %d (the %dth shown) is not as expected\n", name.c_str(), f, i);
+            failures++;
+        }
+        CHECK(d.frame_ms() == delays[f]);
+        if (i + 1 == total) {
+            CHECK(d.more_frames() == (rounds == 0));
+            break;
+        }
+        CHECK(d.more_frames());
+        e = d.next_frame();
+        CHECK(e == image::Error::None);
+        got = Collect();
+        got.width = w;
+        while (!d.done() && e == image::Error::None) {
+            e = d.step(got, 5);
+        }
+        CHECK(e == image::Error::None);
+    }
+    // Again, as a program plays it that keeps the picture before: only the
+    // rows of the part that changed are asked for, and nothing outside
+    // that part is different.
+    got = Collect();
+    e = decode(d, path.c_str(), info, got);
+    std::vector<uint8_t> kept = got.pixels;
+    struct Rows : image::RowSink {
+        std::vector<uint8_t> *to = nullptr;
+        int width = 0, rows = 0;
+        void row(int y, const uint8_t *rgb) override
+        {
+            memcpy(to->data() + static_cast<size_t>(y) * width * 3, rgb, static_cast<size_t>(width) * 3);
+            rows++;
+        }
+    };
+    for (int i = 1; i < count * 2 + 2 && e == image::Error::None && d.more_frames(); i++) {
+        const std::vector<uint8_t> before = kept;
+        e = d.next_frame();
+        int part[4];
+        d.changed(part);
+        CHECK(part[0] >= 0 && part[1] >= 0 && part[0] + part[2] <= w && part[1] + part[3] <= h);
+        Rows rows;
+        rows.to = &kept;
+        rows.width = w;
+        if (part[3] > 0) {
+            d.only_rows(part[1], part[3]);
+        }
+        while (!d.done() && e == image::Error::None) {
+            e = d.step(rows, 5);
+        }
+        CHECK(e == image::Error::None && rows.rows == (part[3] > 0 ? part[3] : h));
+        const std::vector<uint8_t> want = read_all(folder + "/" + name + "." + std::to_string(i % count) + ".rgb");
+        bool same = kept == want, inside = true;
+        for (int y = 0; y < h && want.size() == before.size(); y++) {
+            for (int x = 0; x < w; x++) {
+                const bool in = x >= part[0] && x < part[0] + part[2] && y >= part[1] && y < part[1] + part[3];
+                inside = inside && (in || memcmp(&want[(y * w + x) * 3], &before[(y * w + x) * 3], 3) == 0);
+            }
+        }
+        if (!same || !inside) {
+            printf("  %s: picture %d by its changed part: %s\n", name.c_str(), i % count,
+                   same ? "a change outside the part" : "not as expected");
+            failures++;
+        }
+    }
+    if (large) {
+        d.use_pool(memory, image::kPoolBytes);
+    }
+    return 1;
+}
+
 void test_manifest()
 {
     std::ifstream m(folder + "/manifest.txt");
@@ -106,6 +207,10 @@ void test_manifest()
         image::Info info;
         Collect got;
         const image::Error e = decode(d, path.c_str(), info, got);
+        if (kind == "frames") {
+            checked += test_animation(d, name, in);
+            continue;
+        }
         if (kind == "error") {
             std::string want;
             in >> want;
@@ -171,9 +276,16 @@ void test_damaged()
                 .write(reinterpret_cast<const char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
             image::Info info;
             Collect got;
-            const image::Error e = decode(d, "D:\\damaged.bin", info, got);
+            image::Error e = decode(d, "D:\\damaged.bin", info, got);
             errors += e != image::Error::None;
             runs++;
+            // What is left of an animation plays on without harm.
+            for (int n = 0; n < 12 && e == image::Error::None && d.more_frames(); n++) {
+                e = d.next_frame();
+                while (!d.done() && e == image::Error::None) {
+                    e = d.step(got, 7);
+                }
+            }
         };
         for (int cut = 0; cut < 24; cut++) {
             std::vector<uint8_t> b(good.begin(), good.begin() + static_cast<long>(good.size() * cut / 24));
@@ -253,6 +365,54 @@ void test_converter()
 }
 
 
+// A part of a picture converted alone, over what was there, gives what
+// converting the whole changed picture gives: same size and shrunk, with
+// each dither that allows it; the others refuse.
+void test_converter_part()
+{
+    static image::Converter conv;
+    CHECK(conv.ready(memory));
+    const int w = 61, h = 47;
+    std::vector<uint8_t> a(w * h * 3), b;
+    std::mt19937 random(5);
+    for (uint8_t &v : a) {
+        v = static_cast<uint8_t>(random());
+    }
+    b = a;
+    const int px = 17, py = 9, pw = 23, ph = 14;
+    for (int y = py; y < py + ph; y++) {
+        for (int x = px; x < px + pw; x++) {
+            b[(y * w + x) * 3 + 1] ^= 0xFF;
+        }
+    }
+    const int sizes[3][2] = {{w, h}, {40, 31}, {13, 5}};
+    for (const auto &size : sizes) {
+        for (int i = 0; i < image::kDitherCount; i++) {
+            const auto d = static_cast<image::Dither>(i);
+            std::vector<uint8_t> whole(size[0] * size[1]), part(size[0] * size[1]);
+            conv.begin(w, h, size[0], size[1], part.data(), d);
+            for (int y = 0; y < h; y++) {
+                conv.row(y, &a[y * w * 3]);
+            }
+            conv.begin(w, h, size[0], size[1], whole.data(), d);
+            for (int y = 0; y < h; y++) {
+                conv.row(y, &b[y * w * 3]);
+            }
+            int first = 0, rows = 0, made[4];
+            const bool can = conv.begin_part(w, h, size[0], size[1], part.data(), d, px, py, pw, ph, first, rows, made);
+            CHECK(can == (image::steady(d) == d));
+            if (!can) {
+                continue;
+            }
+            CHECK(first <= py && first + rows >= py + ph && rows <= h);
+            for (int y = first; y < first + rows; y++) {
+                conv.row(y, &b[y * w * 3]);
+            }
+            CHECK(part == whole);
+        }
+    }
+}
+
 // Each dither: the same as tools/dither.py on a small picture, the same
 // twice, board colours stay flat, flat colours keep their average.
 void test_dithers()
@@ -323,6 +483,7 @@ int main(int argc, char **argv)
     static host::FolderVolume volume(folder);
     storage.mount('D', volume);
     test_converter();
+    test_converter_part();
     test_dithers();
     test_manifest();
     test_too_wide();

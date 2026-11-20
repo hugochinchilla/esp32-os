@@ -1,4 +1,4 @@
-// Picture decoding: BMP, PNG and baseline JPEG, written for this project.
+// Picture decoding: BMP, PNG, baseline JPEG and GIF, written for this project.
 //
 // A picture is decoded a few rows at a time and handed over row by row, top
 // to bottom, as 8-bit RGB, so the whole decoded picture never has to be in
@@ -16,7 +16,7 @@
 
 namespace image {
 
-enum class Format : uint8_t { Unknown, Bmp, Png, Jpeg };
+enum class Format : uint8_t { Unknown, Bmp, Png, Jpeg, Gif };
 
 enum class Error : uint8_t {
     None,
@@ -34,6 +34,8 @@ struct Info {
     int height = 0;
     Format format = Format::Unknown;
     char detail[40] = ""; // "PNG, 8-bit RGB"
+    bool several = false;  // the file holds more than one picture (an animated GIF)
+    bool animated = false; // and they can be played, with Decoder::next_frame()
 };
 
 // Receives the decoded rows.
@@ -53,6 +55,11 @@ constexpr int kMaxHeight = 16384;
 constexpr size_t kPoolBytes = 384 * 1024;
 
 class FormatDecoder; // one per format, inside
+class Reader;
+
+// The working memory an animation with a screen of this size needs to be
+// played (see Decoder::use_pool()).
+size_t animation_pool(int width, int height);
 
 // Where a picture's bytes come from: something that is read in order and
 // can be put at a place. A program hands in one over a file it has opened
@@ -72,21 +79,44 @@ public:
     // Made and ended in the system's code, not in the caller's: a program
     // file then needs none of what the decoder itself asks for.
     Decoder();
-    // Opens a picture and reads its header. Transparent parts of PNGs are
-    // shown over `background` (RGB).
+    // Opens a picture and reads its header. Transparent parts of PNGs and
+    // GIFs are shown over `background` (RGB).
     Error open(const fs::Storage &storage, const char *path, ports::Memory &memory, Info &info,
                const uint8_t background[3] = nullptr);
     // The same from a source the caller keeps until close(): the decoder
     // reads from it and does not close it.
     Error open(Source &source, ports::Memory &memory, Info &info, const uint8_t background[3] = nullptr);
     // Decodes up to `rows` more rows into `sink`. Error::None until done or
-    // failed; check done().
+    // failed; check done(). It may give fewer rows, or none, while work is
+    // done that has to come before them (an interlaced GIF).
     Error step(RowSink &sink, int rows);
     bool done() const { return done_; }
     int rows_done() const { return next_row_; }
     void close();
     // Closes, and gives the working memory back to where open() got it.
     void release(ports::Memory &memory);
+    // Working memory of another size than kPoolBytes for the pictures
+    // opened from now on: more, for an animation whose screen is too large
+    // to be played in the usual pool (Info::several without Info::animated),
+    // or less, for a small one that will be kept open. Releases.
+    void use_pool(ports::Memory &memory, size_t bytes);
+
+    // An animation (Info::animated). Once a picture is done(): how long it
+    // stays, in milliseconds, and whether another follows (not after the
+    // last one of the last time round).
+    int frame_ms() const;
+    bool more_frames() const;
+    // Begins the next picture: step() gives the whole of it from row 0,
+    // the file's patch laid on what was there. The source must still be
+    // readable. After an error the animation is over; the picture shown
+    // stays good.
+    Error next_frame();
+    // After next_frame(): the part of the picture that may differ from
+    // the one before it (x, y, w, h). A program that kept the one before
+    // can then ask for those rows alone, or any others: step() gives
+    // `rows` rows from `first` and is done().
+    void changed(int part[4]) const;
+    void only_rows(int first, int rows);
     ~Decoder();
 
     // Working memory, for the format decoders: a bump allocator over the pool.
@@ -106,11 +136,14 @@ private:
     };
     OwnFile own_;
     uint8_t *pool_ = nullptr;
+    size_t pool_bytes_ = kPoolBytes;
     size_t used_ = 0;
+    Reader *reader_ = nullptr; // in the pool
     FormatDecoder *format_ = nullptr;
     uint8_t *rgb_ = nullptr; // one decoded row
     Info info_;
     int next_row_ = 0;
+    int end_row_ = 0; // one past the last row to give
     bool done_ = true;
 };
 

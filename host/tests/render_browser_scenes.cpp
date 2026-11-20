@@ -14,6 +14,8 @@
 #include "core/shell/shell.hpp"
 #include "core/wm/wm.hpp"
 #include "../host_adapters.hpp"
+#include "../../programs/test_hooks.hpp"
+#include "test_gif.hpp"
 
 namespace {
 
@@ -110,6 +112,7 @@ private:
 };
 
 TableWeb web;
+fs::Storage *storage_ = nullptr;
 
 std::string page(const std::string &html)
 {
@@ -290,12 +293,16 @@ void scenes()
     key(wm::key::Enter);
     wait(300);
     CHECK(strcmp(title(), "FrogFind! - Vizcacha") == 0);
-    // The page, and then its picture: a GIF, which stays a box.
+    // The page, and then its picture: an animated GIF, see-through around the frog.
     CHECK(web.asked.size() == 3 && web.asked[0] == "frogfind.com/" && web.asked[1] == "www.frogfind.com/" &&
           web.asked[2] == "www.frogfind.com/img/frogfind.gif");
     CHECK(web.agent.find("Mozilla/4.0 (compatible;") == 0);
     CHECK(web.in_use() == 0 && os::tcp::open_connections() == 0);
     save("61-browser-frogfind");
+    // The frog is an animation: 800 ms with its eyes open, 150 ms shut.
+    wait(700);
+    save("61a-browser-frogfind-blink");
+    wait(150);
 
     // A search: a click in the page's field, the words, Enter.
     click(330, 348);
@@ -384,6 +391,33 @@ void scenes()
     wait(100);
     CHECK(desktop.active() == nullptr);
     CHECK(web.in_use() == 0 && os::tcp::open_connections() == 0);
+
+    // The frog again, from the drive, in the Picture viewer: it blinks
+    // there too, 800 ms open and 150 ms shut.
+    shell::open_picture("C:\\Documents\\frog.gif");
+    wait(50);
+    shell::finish_picture();
+    save("74-viewer-gif");
+    wait(800);
+    save("75-viewer-gif-blink");
+    wait(160);
+    save("76-viewer-gif-open-again");
+
+    // The same frog at 640x480: more than the decoder's usual working
+    // memory can play, so the viewer gives it more. Fitted to the window.
+    {
+        const std::string big = test_gif::frog(640, 480, true);
+        CHECK(storage_->write_file("C:\\Documents\\big.gif", big.data(), big.size()) == ports::FsError::Ok);
+    }
+    shell::open_picture("C:\\Documents\\big.gif");
+    wait(50);
+    shell::finish_picture();
+    save("77-viewer-gif-large");
+    wait(800);
+    save("78-viewer-gif-large-blink");
+    key(wm::key::F4, true);
+    wait(100);
+    CHECK(desktop.active() == nullptr);
 }
 
 } // namespace
@@ -400,8 +434,10 @@ int main(int argc, char **argv)
     static fs::Storage storage;
     static fs::MemoryVolume ram_disk(memory.allocate(1 << 20), 1 << 20, "RAM disk");
     storage.mount('C', ram_disk);
+    storage_ = &storage;
     web.pages["frogfind.com/"] = "HTTP/1.1 301 Moved Permanently\r\nLocation: http://www.frogfind.com/\r\n\r\n";
     web.pages["www.frogfind.com/"] = page(kFrogHome);
+    web.pages["www.frogfind.com/img/frogfind.gif"] = answer("image/gif", test_gif::frog(174, 80, true));
     web.pages["www.frogfind.com/?q=chinchilla"] = page(frog_results());
     web.pages["www.frogfind.com/read?a=x&k=Q9FS"] = page(kArticle);
     web.pages["andes.example/album.html"] = page(
@@ -432,6 +468,8 @@ int main(int argc, char **argv)
     CHECK(storage.write_file("C:\\Documents\\album.htm", album, strlen(album)) == ports::FsError::Ok);
     const std::string hills = bmp(160, 100);
     CHECK(storage.write_file("C:\\Documents\\hills.bmp", hills.data(), hills.size()) == ports::FsError::Ok);
+    const std::string frog = test_gif::frog(174, 80, true);
+    CHECK(storage.write_file("C:\\Documents\\frog.gif", frog.data(), frog.size()) == ports::FsError::Ok);
     const size_t before = memory.bytes_in_use();
     scenes();
     CHECK(memory.bytes_in_use() == before); // the browser gave back all it took

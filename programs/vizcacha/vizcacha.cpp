@@ -9,6 +9,7 @@
 // keys in it, and where the browser has been.
 #include <cstdio>
 #include <cstring>
+#include <new>
 #include <strings.h>
 
 #include "core/app/app.hpp"
@@ -41,12 +42,23 @@ constexpr int kMaxPictures = 24;
 constexpr size_t kMaxPictureBytes = 1536 * 1024;
 constexpr int kMaxPictureHeight = 2000;
 constexpr uint32_t kDecodeSliceUs = 8000; // of decoding in one turn of the timer
+// While pictures move the timer turns faster, with a shorter slice: the page's
+// own turn is too slow a beat for an animation of 10 or 12 pictures a second.
+constexpr uint32_t kAnimateUs = 10000;
+constexpr uint32_t kAnimateSliceUs = 6000;
 
 // A picture that has come: a board colour for each pixel.
 struct Loaded {
     uint8_t *pixels;
     uint16_t w, h;
 };
+
+// ponytail: how many of a page's pictures may move at once, and how much
+// memory they may take between them (each one's file and the working
+// memory that plays it). The rest show their first picture, still.
+constexpr int kMaxAnimations = 6;
+constexpr size_t kMaxAnimationBytes = 768 * 1024;
+constexpr uint64_t kReportUs = 5000000; // into a page's animations, one line in the system's log
 
 // A picture's bytes in memory, as the decoder reads them.
 struct FromBytes final : image::Source {
@@ -67,6 +79,20 @@ struct FromBytes final : image::Source {
     }
     const uint8_t *bytes = nullptr;
     size_t size = 0, at = 0;
+};
+
+// A picture of the page that moves (an animated GIF): its file, kept, and
+// a decoder of its own that stays open on it between one picture of the
+// animation and the next.
+struct Animation {
+    image::Decoder decoder;
+    FromBytes source;
+    uint8_t *bytes = nullptr;
+    size_t memory = 0;     // what it counts for against kMaxAnimationBytes
+    int picture = -1;      // which of the page's pictures it is
+    int src_w = 0, src_h = 0;
+    uint64_t frame_us = 0; // when the picture shown was due
+    int made[4] = {};      // the part of it being made again: x, y, w, h
 };
 
 // The system's outgoing connections, as the fetch wants them.
@@ -152,8 +178,8 @@ public:
 
     ~BrowserWindow()
     {
-        stop_timer();
         forget_pictures();
+        stop_timer();
     }
 
     // Opens an address as if it had been typed.
@@ -522,6 +548,7 @@ private:
     static void tick(void *self) { static_cast<BrowserWindow *>(self)->poll(); }
     void poll()
     {
+        animate();
         if (!fetch_.busy()) {
             if (picture_at_ >= 0) {
                 poll_picture();
@@ -741,6 +768,9 @@ private:
     void poll_picture()
     {
         if (decoding_ == nullptr) {
+            if (animating_ >= 0) {
+                return; // the converter is busy with a picture that moves: next turn
+            }
             const www::Fetch::State now = picture_fetch_.poll(static_cast<uint32_t>(os::now_us()));
             if (now == www::Fetch::State::Done && picture_fetch_.status() < 400 && !picture_fetch_.cut() &&
                 begin_decode(picture_fetch_.body(), picture_fetch_.size())) {
@@ -755,14 +785,15 @@ private:
         }
         const uint64_t start = os::now_us();
         image::Error e = image::Error::None;
-        while (!decoder_.done() && e == image::Error::None && os::now_us() - start < kDecodeSliceUs) {
-            e = decoder_.step(converter_, 4);
+        image::Decoder &decoder = starting_ != nullptr ? starting_->decoder : decoder_;
+        while (!decoder.done() && e == image::Error::None && os::now_us() - start < kDecodeSliceUs) {
+            e = decoder.step(converter_, 4);
         }
         if (e != image::Error::None) {
             end_decode(false);
             pictures_failed_++;
             next_picture();
-        } else if (decoder_.done()) {
+        } else if (decoder.done()) {
             end_decode(true);
             next_picture();
         }
@@ -825,8 +856,166 @@ private:
         memset(decoding_, doc_.background(), pixels);
         decode_w_ = static_cast<int>(w);
         decode_h_ = static_cast<int>(h);
-        converter_.begin(info.width, info.height, decode_w_, decode_h_, decoding_, image::Dither::FloydSteinberg);
+        // A file of several pictures gets a decoder of its own, which
+        // decodes the first one too, if there is room for one more.
+        if (info.several && begin_animation(bytes, size, info, behind)) {
+            decoder_.release(os::memory());
+        }
+        converter_.begin(info.width, info.height, decode_w_, decode_h_, decoding_,
+                         starting_ != nullptr ? image::Dither::Bayer4 : image::Dither::FloydSteinberg);
         return true;
+    }
+
+    /* ---- Pictures that move ---- */
+
+    // A decoder for the animation in these bytes, with a copy of them and
+    // working memory of the size its screen needs. False if the page has
+    // its fill of them or there is no memory: the picture then stays still.
+    bool begin_animation(const uint8_t *bytes, size_t size, const image::Info &info, const uint8_t behind[3])
+    {
+        const size_t pool = image::animation_pool(info.width, info.height);
+        if (animation_count_ == kMaxAnimations || animation_bytes_ + pool + size > kMaxAnimationBytes) {
+            return false;
+        }
+        void *place = os::allocate(sizeof(Animation));
+        if (place == nullptr) {
+            return false;
+        }
+        Animation *a = new (place) Animation;
+        a->bytes = static_cast<uint8_t *>(os::allocate(size));
+        image::Info again;
+        if (a->bytes != nullptr) {
+            memcpy(a->bytes, bytes, size);
+            a->source.bytes = a->bytes;
+            a->source.size = size;
+            a->decoder.use_pool(os::memory(), pool);
+        }
+        if (a->bytes == nullptr || a->decoder.open(a->source, os::memory(), again, behind) != image::Error::None ||
+            !again.animated) {
+            end_animation(a);
+            return false;
+        }
+        a->memory = pool + size;
+        a->src_w = info.width;
+        a->src_h = info.height;
+        starting_ = a;
+        return true;
+    }
+
+    void end_animation(Animation *a)
+    {
+        a->decoder.release(os::memory());
+        os::release(a->bytes);
+        a->~Animation();
+        os::release(a);
+    }
+
+    // Where a picture of the page is in the window, whether or not it shows.
+    gfx::Rect picture_place(int picture) const
+    {
+        for (int i = 0; i < doc_.item_count(); i++) {
+            const www::Item &item = doc_.item(i);
+            if (item.kind == www::Kind::Image && item.extra == picture) {
+                return {item.x, item.y - top_, item.w, item.h};
+            }
+        }
+        return {0, 0, 0, 0};
+    }
+    gfx::Rect picture_on_screen(int picture) const { return picture_place(picture).intersect(page_size()); }
+
+    // From the timer: the pictures that move. One is decoded at a time (the
+    // converter is one), a slice a turn, and painted when it is whole. A
+    // picture whose time has come is begun when nothing else is being
+    // decoded; one that cannot be seen waits.
+    void animate()
+    {
+        const uint64_t now = os::now_us();
+        if (animating_ >= 0) {
+            animation_slice(now);
+            return;
+        }
+        if (decoding_ != nullptr || !on_screen()) {
+            return;
+        }
+        for (int i = 0; i < animation_count_ && animating_ < 0; i++) {
+            Animation &a = *animations_[i];
+            const uint64_t stay = static_cast<uint64_t>(a.decoder.frame_ms()) * 1000;
+            if (now - a.frame_us < stay) {
+                continue;
+            }
+            const Loaded &to = loaded_[a.picture];
+            if (picture_on_screen(a.picture).empty() || !converter_.ready(os::memory())) {
+                a.frame_us = now;
+                continue;
+            }
+            // Counted from when it was due, so that a late turn does not
+            // slow the whole; unless it has fallen behind.
+            a.frame_us = now - a.frame_us > 2 * stay ? now : a.frame_us + stay;
+            if (a.decoder.next_frame() != image::Error::None) {
+                drop_animation(i--); // damage further on: what is shown stays
+                continue;
+            }
+            // Only what this picture changes is converted and painted.
+            int part[4], first = 0, rows = 0;
+            a.decoder.changed(part);
+            if (converter_.begin_part(a.src_w, a.src_h, to.w, to.h, to.pixels, image::Dither::Bayer4, part[0], part[1],
+                                      part[2], part[3], first, rows, a.made)) {
+                a.decoder.only_rows(first, rows);
+            } else {
+                converter_.begin(a.src_w, a.src_h, to.w, to.h, to.pixels, image::Dither::Bayer4);
+                a.made[0] = a.made[1] = 0;
+                a.made[2] = to.w;
+                a.made[3] = to.h;
+            }
+            animating_ = i;
+            animation_slice(now);
+        }
+    }
+
+    void animation_slice(uint64_t start)
+    {
+        Animation &a = *animations_[animating_];
+        image::Error e = image::Error::None;
+        while (!a.decoder.done() && e == image::Error::None && os::now_us() - start < kAnimateSliceUs) {
+            e = a.decoder.step(converter_, 4);
+        }
+        played_us_ += static_cast<uint32_t>(os::now_us() - start);
+        if (e == image::Error::None && !a.decoder.done()) {
+            return;
+        }
+        const int which = animating_;
+        animating_ = -1;
+        played_++;
+        // Once a page, five seconds after its first animation began: how
+        // it is going, for whoever measures.
+        if (played_since_ != 0 && os::now_us() - played_since_ >= kReportUs) {
+            char line[112];
+            snprintf(line, sizeof(line), "vizcacha: %d animations, %d pictures in %u ms, %u ms of them decoding",
+                     animation_count_, played_, static_cast<unsigned>((os::now_us() - played_since_) / 1000),
+                     static_cast<unsigned>(played_us_ / 1000));
+            os::log(line);
+            played_since_ = 0;
+        }
+        if (e == image::Error::None) {
+            const gfx::Rect at = picture_place(a.picture);
+            page_.redraw(gfx::Rect(at.x + a.made[0], at.y + a.made[1], a.made[2], a.made[3])
+                             .intersect(at)
+                             .intersect(page_size()));
+        }
+        if (e != image::Error::None || !a.decoder.more_frames()) {
+            drop_animation(which); // the end: the last picture stays
+        }
+    }
+
+    // The picture stays as it is; what played it is given back.
+    void drop_animation(int index)
+    {
+        animation_bytes_ -= animations_[index]->memory;
+        end_animation(animations_[index]);
+        for (int i = index + 1; i < animation_count_; i++) {
+            animations_[i - 1] = animations_[i];
+        }
+        animation_count_--;
     }
 
     // Gives back what decoding borrowed. `shown`: the picture is whole and
@@ -834,8 +1023,30 @@ private:
     void end_decode(bool shown)
     {
         decoder_.release(os::memory());
+        // A picture that will move: it plays from now, if it came whole.
+        if (starting_ != nullptr) {
+            if (shown && decoding_ != nullptr && starting_->decoder.more_frames()) {
+                starting_->picture = picture_at_;
+                starting_->frame_us = os::now_us();
+                animation_bytes_ += starting_->memory;
+                animations_[animation_count_++] = starting_;
+                if (animation_count_ == 1) {
+                    // The first of the page: the timer's faster beat from now.
+                    os::stop_timer(timer_);
+                    timer_ = os::start_timer(kAnimateUs, kAnimateUs, &BrowserWindow::tick, this);
+                    played_ = 0;
+                    played_us_ = 0;
+                    played_since_ = starting_->frame_us;
+                }
+            } else {
+                end_animation(starting_);
+            }
+            starting_ = nullptr;
+        }
         if (converting_) {
-            converter_.release(os::memory());
+            if (animation_count_ == 0) { // they go on needing it
+                converter_.release(os::memory());
+            }
             converting_ = false;
         }
         picture_fetch_.stop();
@@ -885,6 +1096,11 @@ private:
     void forget_pictures()
     {
         stop_picture();
+        while (animation_count_ > 0) {
+            drop_animation(animation_count_ - 1);
+        }
+        animating_ = -1;
+        converter_.release(os::memory());
         for (int i = 0; i < loaded_count_; i++) {
             os::release(loaded_[i].pixels);
         }
@@ -963,9 +1179,10 @@ private:
             update_buttons();
         }
     }
+    // The timer has nothing more to do, unless pictures are moving.
     void stop_timer()
     {
-        if (timer_ != 0) {
+        if (timer_ != 0 && animation_count_ == 0) {
             os::stop_timer(timer_);
             timer_ = 0;
         }
@@ -1413,6 +1630,14 @@ private:
     void *file_bytes_ = nullptr;
     uint8_t *decoding_ = nullptr; // the pixels of the picture being decoded
     int decode_w_ = 0, decode_h_ = 0;
+    Animation *animations_[kMaxAnimations] = {}; // the pictures of the page that move
+    int animation_count_ = 0;
+    size_t animation_bytes_ = 0;
+    Animation *starting_ = nullptr; // the one whose first picture is being decoded
+    int animating_ = -1;            // the one whose next picture is being decoded; -1 for none
+    int played_ = 0;                // pictures shown since the page's first animation began, for the log
+    uint32_t played_us_ = 0;        // and the time spent decoding them
+    uint64_t played_since_ = 0;     // 0 once the log has its line
 
     char current_[www::kMaxUrl] = "";  // the page shown
     char loading_[www::kMaxUrl] = "";

@@ -86,6 +86,20 @@ public:
     virtual Error header(Info &info) = 0;
     // The next row into `rgb` (width x 3 bytes).
     virtual Error next_row(uint8_t *rgb) = 0;
+    // A bounded piece of whatever has to be done before the next row can
+    // be given; true once next_row() may be called. Most formats need none.
+    virtual bool prepare() { return true; }
+    // An animation: how long the picture just given stays, whether another
+    // follows it, and on to that one (its rows then come from the top).
+    virtual int frame_ms() { return 0; }
+    virtual bool more() { return false; }
+    virtual Error next() { return Error::Unsupported; }
+    // After next(): the part of the picture that may differ from the one
+    // before (x, y, w, h), and the rows next_row() is to give from now:
+    // `first` and those after it. Any rows may be asked for, as the whole
+    // picture is kept.
+    virtual void changed(int part[4]) { part[0] = part[1] = part[2] = part[3] = 0; }
+    virtual void from_row(int first) { (void)first; }
 
 protected:
     ~FormatDecoder() = default;
@@ -94,5 +108,6 @@ protected:
 FormatDecoder *make_bmp(Decoder &d, Reader &r);
 FormatDecoder *make_png(Decoder &d, Reader &r, const uint8_t background[3]);
 FormatDecoder *make_jpeg(Decoder &d, Reader &r);
+FormatDecoder *make_gif(Decoder &d, Reader &r, const uint8_t background[3]);
 
 } // namespace image
