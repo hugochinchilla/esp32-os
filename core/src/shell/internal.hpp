@@ -1,6 +1,7 @@
 // Shared between the shell's source files.
 #pragma once
 
+#include <cstddef>
 #include <cstdio>
 #include <new>
 #include <type_traits>
@@ -198,6 +199,17 @@ gfx::Rect centred(const wm::Wm &wm, int w, int h);
 
 // Puts the desktop background in place with its settings (display.cpp).
 void install_display();
+// Text into a fixed array, cut to what fits.
+template <size_t N> void keep_text(char (&to)[N], const char *from)
+{
+    size_t n = 0;
+    while (n < N - 1 && from[n] != '\0') {
+        to[n] = from[n];
+        n++;
+    }
+    to[n] = '\0';
+}
+
 // The desktop's picture (wallpaper.cpp; backlog item 87). install_wallpaper()
 // before install_display(), which names the picture the settings hold.
 void install_wallpaper();

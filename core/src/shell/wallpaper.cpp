@@ -202,7 +202,12 @@ void wallpaper_file(const char *path, int width, int height, char *out, int capa
     char sister[fs::kMaxPath];
     const bool there = wallpaper_for_screen(path, width, height, sister, sizeof(sister)) &&
                        storage().stat(sister, entry) == ports::FsError::Ok && !entry.folder;
-    snprintf(out, static_cast<size_t>(capacity), "%s", there ? sister : path);
+    const char *from = there ? sister : path;
+    int n = 0;
+    for (; n < capacity - 1 && from[n] != '\0'; n++) {
+        out[n] = from[n];
+    }
+    out[n] = '\0';
 }
 
 bool wallpaper_for_screen(const char *path, int width, int height, char *out, int capacity)
@@ -324,7 +329,7 @@ void loaded(void *, uint32_t result, bool)
     FittedPicture old = g_picture;
     g_picture = l.picture;
     l.picture = {};
-    snprintf(g_file, sizeof(g_file), "%s", l.file);
+    keep_text(g_file, l.file);
     g_size = l.size;
     g_modified = l.modified;
     g_made_w = l.width;
@@ -346,7 +351,7 @@ void start_load()
     }
     Load &l = g_load;
     l = {};
-    snprintf(l.path, sizeof(l.path), "%s", g_path);
+    keep_text(l.path, g_path);
     // The mode asked for, which the screen may not be in yet (at start-up
     // the settings name it before the first picture).
     const ports::VideoMode mode = os::video_mode_at(os::video_mode());
@@ -357,7 +362,7 @@ void start_load()
     l.background[1] = colour.g;
     l.background[2] = colour.b;
     l.how = g_how;
-    snprintf(l.shown, sizeof(l.shown), "%s", g_file);
+    keep_text(l.shown, g_file);
     l.shown_how = g_shown_how;
     l.shown_size = g_size;
     l.shown_modified = g_modified;
@@ -406,7 +411,7 @@ void set_wallpaper(const char *path, os::Wallpaper how)
     if (strcmp(path, g_path) == 0 && (how == g_how || path[0] == '\0')) {
         return; // Display says what it holds whenever it closes
     }
-    snprintf(g_path, sizeof(g_path), "%s", path);
+    keep_text(g_path, path);
     g_how = how;
     if (g_path[0] == '\0') {
         take_down();

@@ -101,7 +101,8 @@ file lists each):
 
 ## How it was tested
 
-On the PC only. 59 of 59 tests pass.
+On the PC, 59 of 59 tests pass. The firmware compiles and links in the
+cloud (ESP-IDF v5.5; 12 programs checked, 0 names missing); it has not run.
 
 - `test_shell`, `test_wallpaper`: with tasks and a queue as on the board.
   The sister file for each mode; nothing read when the same picture is
@@ -132,6 +133,9 @@ a remote screen makes of a dithered desktop are all for the board turn.
   for 800x600 a moment later, when the saved mode was applied. The mode is
   now set before the picture is asked for, and the service asks for "the
   mode wanted", not the one the screen is in.
+- The board's compiler turned down what the PC's let pass: `snprintf` with
+  `"%s"` from one 160-byte path into another "may be truncated". The
+  copies are a small `keep_text` now.
 - Icon labels are white with a black shadow and stay readable on a
   photograph; on a busy tiled picture they are as hard to read as they
   were in 1995.

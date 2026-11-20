@@ -487,7 +487,7 @@ public:
         // What the desktop shows now, to start from and to go back to.
         before_ = read_settings(settings_);
         colour_ = before_.colour;
-        snprintf(picture_, sizeof(picture_), "%s", before_.picture);
+        keep_text(picture_, before_.picture);
         position_ = before_.position;
         set_radio_value(kPositionGroup, static_cast<int>(position_));
         colours_.select(named(colour_)); // if it is one of the list's own, else no cell
@@ -652,7 +652,7 @@ private:
     static void picture_picked(const char *path, void *context)
     {
         auto *d = static_cast<DisplayDialog *>(context);
-        snprintf(d->picture_, sizeof(d->picture_), "%s", path);
+        keep_text(d->picture_, path);
         d->sync();
         d->show_small_picture(true);
     }
@@ -769,7 +769,7 @@ private:
     {
         char text[32];
         if (named(colour_) >= 0) {
-            snprintf(text, sizeof(text), "%s", kColours[named(colour_)].name);
+            keep_text(text, kColours[named(colour_)].name);
         } else {
             snprintf(text, sizeof(text), "#%02X%02X%02X%s", colour_.r, colour_.g, colour_.b,
                      is_exact(colour_) ? "" : " (dithered)");
@@ -797,7 +797,7 @@ private:
     Choice picked() const
     {
         Choice c = {colour_, patterns_.selected(), themes_.selected() < 0 ? 0 : themes_.selected(), "", position_};
-        snprintf(c.picture, sizeof(c.picture), "%s", picture_);
+        keep_text(c.picture, picture_);
         return c;
     }
 
