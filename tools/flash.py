@@ -151,7 +151,7 @@ def wanted_files(programs_dir, wad="auto", wad_path=None):
     for path in sorted(glob.glob(os.path.join(programs_dir, "*.app"))):
         out.append(Wanted("C:\\Programs\\" + os.path.basename(path), os.path.relpath(path, REPO),
                           lambda path=path: read_file(path)))
-    import gen_pictures  # the pictures are drawn here, and two are NASA's (third_party/samples)
+    import gen_pictures  # the pictures are drawn here, and the photographs are NASA's (third_party/samples)
     pictures = {}
 
     def picture(name):
@@ -159,7 +159,7 @@ def wanted_files(programs_dir, wad="auto", wad_path=None):
             pictures.update(gen_pictures.samples())
         return pictures[name]
 
-    for name in gen_pictures.SAMPLE_NAMES:
+    for name in gen_pictures.sample_names():
         out.append(Wanted("C:\\pictures\\" + name, "tools/gen_pictures.py", lambda name=name: picture(name)))
     if wad == "yes" or (wad == "auto" and (wad_path or os.path.isdir(WAD["needs"]))):
         out.append(Wanted(WAD["to"], wad_path or "fetched", lambda: fetch_wad(wad_path),

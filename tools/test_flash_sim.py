@@ -134,15 +134,17 @@ def main():
         board.close()
     finally:
         sim.kill()
-    # The set from a build folder: programs, the five pictures, and the game
-    # data only when asked for or when the Doom program is there.
+    # The set from a build folder: programs, the five small pictures, the
+    # seven photographs at two sizes, and the game data only when asked for
+    # or when the Doom program is there.
     build = tempfile.mkdtemp()
     with open(os.path.join(build, "hello.app"), "wb") as f:
         f.write(hello)
     doom = os.path.isdir(flash.WAD["needs"])
     paths = [w.to for w in flash.wanted_files(build)]
     assert paths[0] == "C:\\Programs\\hello.app" and "C:\\pictures\\earthrise.jpg" in paths
-    assert len(paths) == 6 + doom and (flash.WAD["to"] in paths) == doom
+    assert "C:\\pictures\\mir over clouds 800x600.jpg" in paths and "C:\\pictures\\mascot blinks.gif" in paths
+    assert len(paths) == 1 + 5 + 14 + doom and (flash.WAD["to"] in paths) == doom
     wad = flash.wanted_files(build, "yes")[-1]
     assert (wad.to, wad.size, wad.mark) == (flash.WAD["to"], 4196020, flash.WAD["sha256"][:16])
     assert flash.WAD["to"] not in [w.to for w in flash.wanted_files(build, "no", "some.wad")]

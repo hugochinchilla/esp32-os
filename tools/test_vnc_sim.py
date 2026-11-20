@@ -524,7 +524,7 @@ def main():
             updates += 1
         else:
             raise AssertionError("no Picture viewer in the Start menu")
-        board.text("landscape.jpg")
+        board.text("earthrise.jpg")
         board.tap("enter")
         for _ in range(40):  # it decodes a little at a time
             v.request(1)

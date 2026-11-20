@@ -573,6 +573,7 @@ void Machine::start()
     ports::DirEntry first;
     if (storage_.entry("C:\\", 0, first) == ports::FsError::NotFound) {
         fs::add_samples(storage_, 'C');
+        fs::add_backgrounds(storage_, 'C');
     }
     // The programs are files in C:\Programs, as on the board. Here the
     // build made them beside this program (programs/*.app) and they are
