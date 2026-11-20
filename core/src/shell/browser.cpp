@@ -55,6 +55,7 @@ struct Loaded {
 // memory that plays it). The rest show their first picture, still.
 constexpr int kMaxAnimations = 6;
 constexpr size_t kMaxAnimationBytes = 768 * 1024;
+constexpr uint64_t kReportUs = 5000000; // into a page's animations, one line in the system's log
 
 // A picture's bytes in memory, as the decoder reads them.
 struct FromBytes final : image::Source {
@@ -962,11 +963,23 @@ private:
         while (!a.decoder.done() && e == image::Error::None && os::now_us() - start < kDecodeSliceUs) {
             e = a.decoder.step(converter_, 4);
         }
+        played_us_ += static_cast<uint32_t>(os::now_us() - start);
         if (e == image::Error::None && !a.decoder.done()) {
             return;
         }
         const int which = animating_;
         animating_ = -1;
+        played_++;
+        // Once a page, five seconds after its first animation began: how
+        // it is going, for whoever measures.
+        if (played_since_ != 0 && os::now_us() - played_since_ >= kReportUs) {
+            char line[112];
+            snprintf(line, sizeof(line), "vizcacha: %d animations, %d pictures in %u ms, %u ms of them decoding",
+                     animation_count_, played_, static_cast<unsigned>((os::now_us() - played_since_) / 1000),
+                     static_cast<unsigned>(played_us_ / 1000));
+            os::log(line);
+            played_since_ = 0;
+        }
         if (e == image::Error::None) {
             page_.redraw(picture_on_screen(a.picture));
         }
@@ -998,6 +1011,11 @@ private:
                 starting_->frame_us = os::now_us();
                 animation_bytes_ += starting_->memory;
                 animations_[animation_count_++] = starting_;
+                if (animation_count_ == 1) {
+                    played_ = 0;
+                    played_us_ = 0;
+                    played_since_ = starting_->frame_us;
+                }
             } else {
                 end_animation(starting_);
             }
@@ -1595,6 +1613,9 @@ private:
     size_t animation_bytes_ = 0;
     Animation *starting_ = nullptr; // the one whose first picture is being decoded
     int animating_ = -1;            // the one whose next picture is being decoded; -1 for none
+    int played_ = 0;                // pictures shown since the page's first animation began, for the log
+    uint32_t played_us_ = 0;        // and the time spent decoding them
+    uint64_t played_since_ = 0;     // 0 once the log has its line
 
     char current_[www::kMaxUrl] = "";  // the page shown
     char loading_[www::kMaxUrl] = "";

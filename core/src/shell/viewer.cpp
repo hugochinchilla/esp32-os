@@ -22,6 +22,7 @@ constexpr uint32_t kSliceUs = 8000;          // decoding time per timer tick
 constexpr uint32_t kTickUs = 15000;
 // The most working memory taken to play an animation: a screen of 800x600.
 const size_t kMaxAnimationPool = image::animation_pool(800, 600);
+constexpr uint64_t kReportUs = 5000000; // into an animation, one line in the system's log
 constexpr gfx::Colour kBackground = gfx::kDarkGrey;
 constexpr uint8_t kBackgroundRgb[3] = {73, 73, 73}; // shows through transparent PNGs and GIFs
 
@@ -406,6 +407,9 @@ private:
                 v->playing_ = true; // the file stays open and the timer goes on
                 v->waiting_ = true;
                 v->frame_us_ = os::now_us();
+                v->played_ = 0;
+                v->played_us_ = 0;
+                v->played_since_ = v->frame_us_;
             } else {
                 v->stop();
             }
@@ -446,11 +450,22 @@ private:
         while (!decoder_.done() && e == image::Error::None && os::now_us() - now < kSliceUs) {
             e = decoder_.step(converter_, 4);
         }
+        played_us_ += static_cast<uint32_t>(os::now_us() - now);
         if (e != image::Error::None) {
             stop();
         } else if (decoder_.done()) {
             waiting_ = true;
             view_.redraw(picture_rect().intersect(area()));
+            // Once, five seconds in: how it is going, for whoever measures.
+            played_++;
+            if (played_since_ != 0 && os::now_us() - played_since_ >= kReportUs) {
+                char line[96];
+                snprintf(line, sizeof(line), "viewer: animation, %d pictures in %u ms, %u ms of them decoding", played_,
+                         static_cast<unsigned>((os::now_us() - played_since_) / 1000),
+                         static_cast<unsigned>(played_us_ / 1000));
+                os::log(line);
+                played_since_ = 0;
+            }
             if (!decoder_.more_frames()) {
                 stop();
             }
@@ -530,6 +545,9 @@ private:
     uint64_t started_us_ = 0;
     bool playing_ = false, waiting_ = false; // an animation: on, and between two pictures
     uint64_t frame_us_ = 0;                  // when the picture shown was due
+    int played_ = 0;                         // pictures shown since it began, for the log
+    uint32_t played_us_ = 0;                 // and the time spent decoding them
+    uint64_t played_since_ = 0;              // 0 once the log has its line
     bool fit_ = true;
     image::Dither dither_ = image::Dither::FloydSteinberg; // and in settings.ini
     bool settings_read_ = false;

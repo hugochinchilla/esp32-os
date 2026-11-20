@@ -113,6 +113,10 @@ Vizcacha:
 
 `image::steady()` picks the dither for a picture that moves.
 
+For measuring on the board, each program writes one line in the system's
+log five seconds into an animation: how many pictures it showed and how
+much of the time went into decoding them (`dmesg`).
+
 `tools/gen_pictures.py` has a GIF writer (its own LZW) and makes:
 
 - for the tests, 17 still GIFs, 16 with the pixels each must decode to
