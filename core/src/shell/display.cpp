@@ -1,7 +1,8 @@
 // The Display dialog, in two tabs. Appearance: the theme (the look of
 // windows, buttons and the taskbar), and the desktop's colour and the
-// pattern over it. Resolution: the screen's mode, 640 x 480 or 800 x 600
-// (backlog item 68). A preview stands over both. Opened from Start >
+// pattern over it, and a picture file shown over them (backlog item 87;
+// the desktop's half of that is wallpaper.cpp). Resolution: the screen's
+// mode, 640 x 480 or 800 x 600 (backlog item 68). A preview stands over both. Opened from Start >
 // Settings > Display and by a right click on the desktop. Kept in
 // C:\.config\desktop.ini, [look], [background] and [screen].
 //
@@ -21,6 +22,8 @@
 #include "core/app/app.hpp"
 #include "core/fs/ini.hpp"
 #include "core/gfx/art.hpp"
+#include "core/image/image.hpp"
+#include "core/job/job.hpp"
 #include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
 #include "internal.hpp"
@@ -108,7 +111,14 @@ struct Choice {
     Rgb colour = kColours[0].rgb;
     int pattern = 0;
     int theme = 0;
+    char picture[fs::kMaxPath] = ""; // the file shown over the colour; "": none
+    os::Wallpaper position = os::Wallpaper::Centre; // and where it stands
 };
+
+// Where the picture stands, as the settings file names it, in the order of
+// os::Wallpaper.
+constexpr const char *kPositions[] = {"centre", "tile", "stretch"};
+constexpr int kPositionCount = 3;
 
 // The pattern's ink: the colour a good deal darker, or lighter when the
 // colour is too dark for that to show.
@@ -140,6 +150,7 @@ void apply(const Choice &c)
 {
     os::set_theme(c.theme);
     os::set_backdrop(backdrop_for(c.colour, c.pattern));
+    os::set_wallpaper(c.picture, c.position);
 }
 
 // "#RRGGBB", as a colour that has no name is kept.
@@ -179,6 +190,16 @@ Choice read_settings(fs::Ini &ini)
     if (ini.get("look", "theme", value, sizeof(value)) && gfx::theme_named(value) >= 0) {
         c.theme = gfx::theme_named(value);
     }
+    if (!ini.get("background", "picture", c.picture, sizeof(c.picture))) {
+        c.picture[0] = '\0';
+    }
+    if (ini.get("background", "position", value, sizeof(value))) {
+        for (int i = 0; i < kPositionCount; i++) {
+            if (strcmp(value, kPositions[i]) == 0) {
+                c.position = static_cast<os::Wallpaper>(i);
+            }
+        }
+    }
     return c;
 }
 
@@ -190,6 +211,8 @@ void write_settings(fs::Ini &ini, const Choice &c)
     snprintf(hex, sizeof(hex), "#%02X%02X%02X", c.colour.r, c.colour.g, c.colour.b);
     ini.set("background", "colour", named(c.colour) >= 0 ? kColours[named(c.colour)].key : hex);
     ini.set("background", "pattern", kPatterns[c.pattern].key);
+    ini.set("background", "picture", c.picture);
+    ini.set("background", "position", kPositions[static_cast<int>(c.position)]);
     ini.set("look", "theme", gfx::theme_at(c.theme).key);
     save_settings("desktop", ini);
 }
@@ -197,8 +220,11 @@ void write_settings(fs::Ini &ini, const Choice &c)
 // The preview: a small screen with the colour and pattern picked, and a
 // window and a taskbar in the colours of the theme picked. `size`: of the
 // picture it is painted in. `fine`: the screen is one of more pixels than the
-// first mode, so everything on it is drawn smaller.
-void paint_preview(app::Canvas &c, const Rect &size, Rgb colour, int pattern, const gfx::Theme &look, bool fine)
+// first mode, so everything on it is drawn smaller. `picture`: the desktop's,
+// made as small as that screen, nullptr for none; `tiled`: side by side.
+constexpr int kGlassWidth = 114; // the small screen's, inside its case and edge
+void paint_preview(app::Canvas &c, const Rect &size, Rgb colour, int pattern, const gfx::Theme &look, bool fine,
+                   const gfx::Bitmap *picture, bool tiled)
 {
     c.fill({0, 0, size.w, size.h}, gfx::face());
     // The monitor: a case, the screen, a foot.
@@ -212,6 +238,18 @@ void paint_preview(app::Canvas &c, const Rect &size, Rgb colour, int pattern, co
         c.fill_rgb(glass, b.colour);
     } else {
         c.fill_pattern(glass, b.colour, b.ink, b.pattern);
+    }
+    if (picture != nullptr) {
+        app::Canvas inside = c.sub(glass); // one a little too tall loses its edges
+        if (tiled) {
+            for (int y = 0; y < glass.h; y += picture->height) {
+                for (int x = 0; x < glass.w; x += picture->width) {
+                    inside.blit(*picture, x, y);
+                }
+            }
+        } else {
+            inside.blit(*picture, (glass.w - picture->width) / 2, (glass.h - picture->height) / 2);
+        }
     }
     // The taskbar, with its Start button.
     const bool flat = look.flat();
@@ -395,16 +433,21 @@ enum Page { kAppearance, kResolution };
 
 // Where everything is. The tabs' frame holds the pages; the preview is on
 // both, and the three buttons are under the frame.
-constexpr Rect kTabsPlace = {6, 6, 360, 344};
+constexpr Rect kTabsPlace = {6, 6, 360, 374};
 constexpr Rect kPreview = {14, 32, 148, 114};
 constexpr Rect kNowhere = {0, 0, 0, 0}; // of a control on the page that is not shown
 // Appearance.
 constexpr Rect kThemeLabel = {174, 34, 60, 14}, kThemes = {174, 52, 188, 60};
-constexpr Rect kGroup = {14, 152, 348, 190};
+constexpr Rect kGroup = {14, 152, 348, 220};
 constexpr Rect kColourLabel = {24, 172, 60, 14}, kColourName = {86, 172, 180, 14};
 constexpr Rect kColourGrid = {24, 188, 328, 52}, kOther = {277, 167, 75, 21};
 constexpr Rect kPatternLabel = {24, 246, 60, 14}, kPatternName = {86, 246, 266, 14};
-constexpr Rect kPatternGrid = {24, 262, 328, 72};
+constexpr Rect kPatternGrid = {24, 262, 328, 52};
+constexpr Rect kPictureLabel = {24, 325, 60, 14}, kPictureName = {86, 325, 106, 14};
+constexpr Rect kBrowse = {196, 320, 75, 21}, kNoPicture = {277, 320, 75, 21};
+constexpr Rect kPositionLabel = {24, 348, 60, 14};
+constexpr Rect kCentre = {86, 346, 80, 18}, kTile = {176, 346, 70, 18}, kStretch = {256, 346, 90, 18};
+constexpr int kPositionGroup = 0; // of the radio buttons
 // Resolution.
 constexpr Rect kModeLabel = {174, 34, 180, 14}, kModes = {174, 52, 188, 60};
 constexpr Rect kFacts = {14, 156, 348, 62}, kNote = {14, 226, 348, 14};
@@ -423,25 +466,43 @@ public:
           other_(button(kOther, "&Other...")),
           pattern_label_(label(kPatternLabel, "&Pattern:")),
           pattern_name_(plain(kPatternName)),
-          patterns_(grid(kPatternGrid, 5, kPatternCount, 65, 36)),
+          patterns_(grid(kPatternGrid, 5, kPatternCount, 65, 26)),
+          picture_label_(label(kPictureLabel, "Pict&ure:")),
+          picture_name_(plain(kPictureName)),
+          browse_(button(kBrowse, "&Browse...")),
+          no_picture_(button(kNoPicture, "&None")),
+          position_label_(label(kPositionLabel, "Pos&ition:")),
+          centre_(radio(kCentre, "Centre", kPositionGroup, static_cast<int>(os::Wallpaper::Centre))),
+          tile_(radio(kTile, "Tile", kPositionGroup, static_cast<int>(os::Wallpaper::Tile))),
+          stretch_(radio(kStretch, "Stretch", kPositionGroup, static_cast<int>(os::Wallpaper::Stretch))),
           mode_label_(label(kNowhere, "&Screen area:")),
           modes_(list(kNowhere, mode_names_.names, mode_names_.count)),
           facts_(text_area(kNowhere, facts_text_)),
           note_(label(kNowhere, "A change asks to be kept. With no answer it is undone.")),
-          ok_(button({129, 358, 75, 23}, "OK")),
-          cancel_(button({210, 358, 75, 23}, "Cancel")),
-          apply_(button({291, 358, 75, 23}, "&Apply"))
+          ok_(button({129, 388, 75, 23}, "OK")),
+          cancel_(button({210, 388, 75, 23}, "Cancel")),
+          apply_(button({291, 388, 75, 23}, "&Apply"))
     {
         set_default(ok_);
         // What the desktop shows now, to start from and to go back to.
         before_ = read_settings(settings_);
         colour_ = before_.colour;
+        snprintf(picture_, sizeof(picture_), "%s", before_.picture);
+        position_ = before_.position;
+        set_radio_value(kPositionGroup, static_cast<int>(position_));
         colours_.select(named(colour_)); // if it is one of the list's own, else no cell
         patterns_.select(before_.pattern);
         themes_.select(before_.theme);
         modes_.select(os::video_mode());
         sync();
         set_focus(colours_);
+        show_small_picture(false);
+    }
+    // After the job, if one was at work: the process waits for it.
+    ~DisplayDialog() override
+    {
+        release_fitted(small_);
+        release_fitted(job_.out);
     }
 
     void command(app::Control which) override
@@ -450,6 +511,18 @@ public:
             // Other...: the 256 colours, in the colour dialog that any
             // program can ask for (colour_dialog.cpp), over this one.
             colour_dialog(number(), gfx::nearest(colour_), &DisplayDialog::other_picked, this);
+        } else if (which == browse_) {
+            // Browse...: the Open dialog that any program asks for, over
+            // this one, in the folder of the picture named or of the samples.
+            char folder[fs::kMaxPath] = "C:\\pictures";
+            if (picture_[0] != '\0') {
+                fs::path::parent(picture_, folder, sizeof(folder));
+            }
+            open_file_dialog(number(), folder, &DisplayDialog::picture_picked, this);
+        } else if (which == no_picture_) {
+            picture_[0] = '\0';
+            sync();
+            show_small_picture(false);
         } else if (which == ok_) {
             before_ = picked();
             write_settings(settings_, before_);
@@ -474,14 +547,22 @@ public:
         if (which == colours_) {
             colour_ = kColours[colours_.selected()].rgb;
         }
+        const auto position = static_cast<os::Wallpaper>(radio_value(kPositionGroup));
+        const bool moved = position != position_;
+        position_ = position;
         sync();
+        if (which == modes_ || moved) {
+            show_small_picture(false); // as that screen would show it, standing so
+        }
     }
 
     void paint_in(app::Control, app::Canvas &c) override
     {
         const int mode = modes_.selected() < 0 ? 0 : modes_.selected();
+        const gfx::Bitmap small = {small_.width, small_.height, small_.pixels, -1};
         paint_preview(c, kPreview, colour_, patterns_.selected(), gfx::theme_at(themes_.selected()),
-                      os::video_mode_at(mode).width > os::video_mode_at(0).width);
+                      os::video_mode_at(mode).width > os::video_mode_at(0).width,
+                      small_.pixels != nullptr ? &small : nullptr, small_tiled_);
     }
     void paint_cell(app::Control which, int index, const Rect &cell, app::Canvas &c) override
     {
@@ -522,6 +603,18 @@ public:
                 set_focus(patterns_);
                 return true;
             }
+            if (appearance && (letter == 'u' || letter == 'U' || letter == 'b' || letter == 'B')) {
+                browse_.press();
+                return true;
+            }
+            if (appearance && (letter == 'i' || letter == 'I')) {
+                set_focus(position_ == os::Wallpaper::Tile ? tile_ : position_ == os::Wallpaper::Stretch ? stretch_ : centre_);
+                return true;
+            }
+            if (appearance && (letter == 'n' || letter == 'N')) {
+                no_picture_.press();
+                return true;
+            }
             if (!appearance && (letter == 's' || letter == 'S')) {
                 set_focus(modes_);
                 return true;
@@ -535,7 +628,11 @@ public:
     }
 
     // Closed without OK: what Apply showed is taken back.
-    void closed() override { apply(before_); }
+    void closed() override
+    {
+        closed_ = true;
+        apply(before_);
+    }
 
     // The mode was not kept: the list shows the one the screen is in again.
     void mode_went_back()
@@ -552,6 +649,94 @@ private:
         d->colours_.select(named(d->colour_));
         d->sync();
     }
+    static void picture_picked(const char *path, void *context)
+    {
+        auto *d = static_cast<DisplayDialog *>(context);
+        snprintf(d->picture_, sizeof(d->picture_), "%s", path);
+        d->sync();
+        d->show_small_picture(true);
+    }
+
+    // The picture named, as small as the small screen, made by a job (a
+    // photograph is seconds of decoding on the board). `say`: tell if it
+    // cannot be shown, as for a file just picked; the one the settings name
+    // may be gone without a word, as on the desktop.
+    struct SmallJob {
+        char file[fs::kMaxPath];
+        int width, height; // of the screen it is for
+        uint8_t background[3];
+        os::Wallpaper position;
+        FittedPicture out;
+        image::Error error;
+    };
+    void show_small_picture(bool say)
+    {
+        say_ = say_ || say;
+        if (job_busy_) {
+            job_again_ = true;
+            return;
+        }
+        release_fitted(small_);
+        preview_.redraw();
+        if (picture_[0] == '\0') {
+            say_ = false;
+            return;
+        }
+        const ports::VideoMode m = os::video_mode_at(modes_.selected() < 0 ? 0 : modes_.selected());
+        wallpaper_file(picture_, m.width, m.height, job_.file, sizeof(job_.file));
+        job_.width = m.width;
+        job_.height = m.height;
+        job_.position = position_;
+        job_.background[0] = colour_.r;
+        job_.background[1] = colour_.g;
+        job_.background[2] = colour_.b;
+        job::Spec spec;
+        spec.name = "display";
+        spec.work = &DisplayDialog::small_work;
+        spec.done = &DisplayDialog::small_done;
+        spec.context = this;
+        spec.stack_bytes = 12 * 1024;
+        job_busy_ = true; // without tasks the job is over when start_job() returns
+        if (!os::start_job(spec)) {
+            job_busy_ = false;
+            say_ = false;
+        }
+    }
+    static uint32_t small_work(const job::Job &job, void *context)
+    {
+        SmallJob &j = static_cast<DisplayDialog *>(context)->job_;
+        j.error = decode_fitted(j.file, j.width, j.height, j.position == os::Wallpaper::Stretch, kGlassWidth, j.width,
+                                j.background, &job, j.out);
+        return 0;
+    }
+    static void small_done(void *context, uint32_t, bool)
+    {
+        auto *d = static_cast<DisplayDialog *>(context);
+        d->job_busy_ = false;
+        if (d->closed_) {
+            return; // the destructor gives the picture back
+        }
+        if (d->job_again_) {
+            d->job_again_ = false;
+            release_fitted(d->job_.out);
+            d->show_small_picture(false);
+            return;
+        }
+        d->small_ = d->job_.out;
+        d->small_tiled_ = d->job_.position == os::Wallpaper::Tile;
+        d->job_.out = {};
+        d->preview_.redraw();
+        if (d->say_ && d->job_.error != image::Error::None) {
+            // Not a picture the desktop can show: not taken.
+            char text[160];
+            snprintf(text, sizeof(text), "Cannot show %s:\n%s.", fs::path::name(d->picture_),
+                     image::error_text(d->job_.error));
+            d->picture_[0] = '\0';
+            d->sync();
+            message_box("Display", text);
+        }
+        d->say_ = false;
+    }
     // The controls of the page in front get their places; the others none.
     void show_page(int page)
     {
@@ -566,6 +751,14 @@ private:
         pattern_label_.place(a ? kPatternLabel : kNowhere);
         pattern_name_.place(a ? kPatternName : kNowhere);
         patterns_.place(a ? kPatternGrid : kNowhere);
+        picture_label_.place(a ? kPictureLabel : kNowhere);
+        picture_name_.place(a ? kPictureName : kNowhere);
+        browse_.place(a ? kBrowse : kNowhere);
+        no_picture_.place(a ? kNoPicture : kNowhere);
+        position_label_.place(a ? kPositionLabel : kNowhere);
+        centre_.place(a ? kCentre : kNowhere);
+        tile_.place(a ? kTile : kNowhere);
+        stretch_.place(a ? kStretch : kNowhere);
         mode_label_.place(a ? kNowhere : kModeLabel);
         modes_.place(a ? kNowhere : kModes);
         facts_.place(a ? kNowhere : kFacts);
@@ -583,6 +776,8 @@ private:
         }
         colour_name_.set(text);
         pattern_name_.set(kPatterns[patterns_.selected()].name);
+        picture_name_.set(picture_[0] != '\0' ? fs::path::name(picture_) : "(None)");
+        no_picture_.set_enabled(picture_[0] != '\0');
         patterns_.redraw(); // the patterns are shown in the colour picked
         // What the mode picked costs, in the machine's own figures.
         const ports::VideoMode m = os::video_mode_at(modes_.selected() < 0 ? 0 : modes_.selected());
@@ -599,9 +794,20 @@ private:
         facts_.set_text(facts_text_);
         preview_.redraw();
     }
-    Choice picked() const { return {colour_, patterns_.selected(), themes_.selected() < 0 ? 0 : themes_.selected()}; }
+    Choice picked() const
+    {
+        Choice c = {colour_, patterns_.selected(), themes_.selected() < 0 ? 0 : themes_.selected(), "", position_};
+        snprintf(c.picture, sizeof(c.picture), "%s", picture_);
+        return c;
+    }
 
     Rgb colour_ = kColours[0].rgb;
+    char picture_[fs::kMaxPath] = "";
+    os::Wallpaper position_ = os::Wallpaper::Centre;
+    bool small_tiled_ = false;
+    FittedPicture small_; // it on the small screen; the Memory port's
+    SmallJob job_ = {};   // the job's while job_busy_
+    bool job_busy_ = false, job_again_ = false, say_ = false, closed_ = false;
     Choice before_; // what the settings file holds
     fs::Ini settings_;
     ThemeNames theme_names_; // before the list that shows them
@@ -619,6 +825,11 @@ private:
     app::Label pattern_label_;
     app::Plain pattern_name_;
     app::Grid patterns_;
+    app::Label picture_label_;
+    app::Plain picture_name_;
+    app::Button browse_, no_picture_;
+    app::Label position_label_;
+    app::RadioButton centre_, tile_, stretch_;
     app::Label mode_label_;
     app::ListBox modes_;
     app::TextArea facts_;
@@ -644,7 +855,7 @@ void display_dialog()
     app::Look look;
     look.title = "Display";
     look.width = 380;
-    look.height = 416;
+    look.height = 446;
     look.icon = &gfx::display_icon_16();
     look.flags = app::kDialog;
     g_dialog = app::open<DisplayDialog>(look);
@@ -656,9 +867,10 @@ void display_dialog()
 void install_display()
 {
     fs::Ini ini;
-    apply(read_settings(ini));
+    const Choice choice = read_settings(ini);
     // The screen's mode, if one was kept and this screen has it. The desktop
-    // changes to it before its first picture.
+    // changes to it before its first picture. Before the desktop's picture
+    // is asked for, which is made for the mode asked.
     char want[24], key[24];
     if (ini.get("screen", "mode", want, sizeof(want))) {
         for (int i = 0; i < os::video_mode_count(); i++) {
@@ -668,6 +880,7 @@ void install_display()
             }
         }
     }
+    apply(choice);
 }
 
 } // namespace shell

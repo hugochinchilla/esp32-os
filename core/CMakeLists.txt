@@ -71,6 +71,7 @@ set(CORE_SRCS
     src/shell/apps.cpp
     src/shell/programs.cpp
     src/shell/welcome.cpp
+    src/shell/wallpaper.cpp
     src/shell/bluetooth.cpp
     src/shell/bluetooth_service.cpp
     src/shell/boot.cpp

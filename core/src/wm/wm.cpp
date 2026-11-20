@@ -223,8 +223,8 @@ void Wm::arrive_step()
         return;
     }
     if (arrive_stage_ == Arriving::Rest) {
-        if (arrive_step_ < kFadeRestSteps) {
-            return;
+        if (arrive_step_ < kFadeRestSteps || (arrive_hold_ && arrive_step_ < kFadeHoldSteps)) {
+            return; // the rest, and then the desktop's picture if it is still being read
         }
         // The desktop as it is now, painted once into a picture of its own
         // that lasts as long as the fade: the screen has no second picture
@@ -2649,7 +2649,7 @@ void Wm::paint(bool painter)
         } else {
             // No bar: the background shows in its strip.
             Canvas strip(paint_pixels(), width_, height_, region_, taskbar());
-            fill_backdrop(strip, {0, 0, width_, height_});
+            paint_backdrop(strip, {0, 0, width_, height_});
         }
     }
 
@@ -2748,6 +2748,9 @@ void Wm::change_mode()
             w.resized();
         }
     }
+    if (screen_changed_fn_ != nullptr) {
+        screen_changed_fn_(screen_changed_context_);
+    }
     tell_panels(PanelNews::Screen);
     if (mode_fn_ != nullptr) {
         mode_fn_(mode_context_);
@@ -2762,6 +2765,42 @@ void Wm::set_theme(int index)
         gfx::use_theme(index);
         invalidate({0, 0, width_, height_});
     }
+}
+
+void Wm::set_wallpaper(const uint8_t *pixels, int width, int height, bool tiled)
+{
+    wallpaper_ = {pixels != nullptr ? width : 0, pixels != nullptr ? height : 0, pixels, -1};
+    wallpaper_tiled_ = tiled;
+    invalidate({0, 0, width_, height_});
+}
+
+void Wm::paint_backdrop(Canvas &c, const Rect &r) const
+{
+    if (wallpaper_.pixels != nullptr && wallpaper_tiled_) {
+        // Only the copies that `r` touches.
+        const int w = wallpaper_.width, h = wallpaper_.height;
+        const Rect on = r.intersect({0, 0, width_, height_});
+        for (int y = on.y / h * h; y < on.bottom(); y += h) {
+            for (int x = on.x / w * w; x < on.right(); x += w) {
+                c.copy(wallpaper_, x, y, on);
+            }
+        }
+        return;
+    }
+    const Rect picture = {(width_ - wallpaper_.width) / 2, (height_ - wallpaper_.height) / 2, wallpaper_.width,
+                          wallpaper_.height};
+    const Rect shown = r.intersect(picture);
+    if (wallpaper_.pixels == nullptr || shown.empty()) {
+        fill_backdrop(c, r);
+        return;
+    }
+    // The colour around the picture, each pixel once: above, below, left
+    // and right of the part of it that `r` holds.
+    fill_backdrop(c, {r.x, r.y, r.w, shown.y - r.y});
+    fill_backdrop(c, {r.x, shown.bottom(), r.w, r.bottom() - shown.bottom()});
+    fill_backdrop(c, {r.x, shown.y, shown.x - r.x, shown.h});
+    fill_backdrop(c, {shown.right(), shown.y, r.right() - shown.right(), shown.h});
+    c.copy(wallpaper_, picture.x, picture.y, shown);
 }
 
 void Wm::fill_backdrop(Canvas &c, const Rect &r) const
@@ -2788,7 +2827,7 @@ void Wm::paint_desktop(const RectList &clip)
     }
     const Rect screen = {0, 0, width_, height_};
     Canvas plain(paint_pixels(), width_, height_, clip, screen);
-    fill_backdrop(plain, screen);
+    paint_backdrop(plain, screen);
 }
 
 void Wm::paint_window(Window &w, const RectList &clip)

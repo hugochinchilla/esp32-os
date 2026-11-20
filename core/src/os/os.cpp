@@ -393,6 +393,14 @@ void set_backdrop(const wm::Wm::Backdrop &backdrop)
     g_kit.wm->set_backdrop(backdrop);
 }
 
+void set_wallpaper(const char *path, Wallpaper how)
+{
+    const prog::InCall in_call;
+    if (g_kit.set_wallpaper != nullptr) {
+        g_kit.set_wallpaper(path, how);
+    }
+}
+
 void set_theme(int index)
 {
     const prog::InCall in_call;

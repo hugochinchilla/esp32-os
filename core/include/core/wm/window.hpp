@@ -171,7 +171,7 @@ public:
     static constexpr int kTitleHeight = 18;
     static constexpr int kClientTop = 24;     // from the frame's top edge
     static constexpr int kMenuBarHeight = 18; // below the title, when there is one
-    static constexpr int kMaxWidgets = 24;
+    static constexpr int kMaxWidgets = 32;
     static constexpr int kMinWidth = 128;
 
     Window(const char *title, const Rect &frame, const gfx::Bitmap *icon)

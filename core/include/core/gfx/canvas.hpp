@@ -124,6 +124,9 @@ public:
     int text_opaque(int x, int y, const char *s, Colour fg, Rgb bg, int caret_x = -1);
     // A bitmap with its clear pixels in `bg`, each pixel written once.
     void blit_opaque(const Bitmap &b, int x, int y, Colour bg);
+    // The part of a bitmap, laid at (x, y), that falls inside `part`: whole
+    // rows copied, no clear pixels. For a large picture (the desktop's).
+    void copy(const Bitmap &b, int x, int y, const Rect &part);
     // `area` without `hole`: up to four rectangles.
     void fill_around(const Rect &area, const Rect &hole, Colour c);
 

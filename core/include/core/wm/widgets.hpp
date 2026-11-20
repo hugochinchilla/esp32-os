@@ -97,8 +97,12 @@ private:
 // Radio buttons share an int: each button sets it to its own value.
 class RadioButton : public Widget {
 public:
-    RadioButton(const Rect &r, const char *text, int *group, int value)
-        : Widget(r), text_(text), group_(group), value_(value)
+    using Callback = void (*)(RadioButton &button, void *context);
+
+    // `on_change` is told when this one becomes the chosen one.
+    RadioButton(const Rect &r, const char *text, int *group, int value, Callback on_change = nullptr,
+                void *context = nullptr)
+        : Widget(r), text_(text), group_(group), value_(value), on_change_(on_change), context_(context)
     {
     }
     void paint(gfx::Canvas &c) override;
@@ -115,6 +119,8 @@ private:
     const char *text_;
     int *group_;
     int value_;
+    Callback on_change_;
+    void *context_;
 };
 
 // One line of editable text. Latin-1 inside, UTF-8 in and out.
