@@ -480,6 +480,8 @@ protected:
     void set_focus(const Control &control) { os::ui::set_focus(number_, control.number()); }
     Control focus() const { return {number_, os::ui::focus(number_)}; }
     void set_title(const char *title) { os::ui::set_title(number_, title); } // must stay valid
+    // The file (or the like) this window shows: see os::ui::set_document.
+    void set_document(const char *path) { os::ui::set_document(number_, path); } // must stay valid
     void set_icon(const gfx::Bitmap *icon) { os::ui::set_icon(number_, icon); }
     // The window was opened with kMenuBar; the table must stay valid.
     void set_menu_bar(const wm::MenuBar *bar) { os::ui::set_menu_bar(number_, bar); }
@@ -605,19 +607,39 @@ inline bool bring_forward(Number number) { return os::ui::alive(number) && os::u
 
 } // namespace app
 
-// The way into a program that is built by itself and loaded from a file
-// (backlog item 27): `APP_MAIN(int argc, char **argv) { ... }`. The system
-// calls it once, as the program's own process; 0 says it started. A
-// built-in program has a row in the program table instead.
-#define APP_MAIN extern "C" __attribute__((visibility("default"), used)) int app_main
-
-// What the program says of itself, kept at the front of its file
+// The way into a program (backlog item 27; programs/):
+// `APP_MAIN(int argc, char **argv) { ... }`. The system calls it once, as
+// the program's own process; 0 says it started. argv[0] is the program's
+// file and argv[1], if there is one, what it was asked to open (a path, an
+// address); both last until the program's process ends.
+//
+// What the program says of itself is kept at the front of its file
 // (core/app/file.hpp): its name, the stack its task asks for in bytes (0:
-// the least) and, if it has them, its pictures. Once in a program:
+// the least) and, if it has them, its pictures. Once in a program, before
+// APP_MAIN:
 //   APP_INFO(app::file_info("Hello", 0, kSmall, kInks));
 // A file without it is not a program.
+//
+// A program is built by itself into a file the machine's loader takes
+// (tools/build_programs.sh). Where the machine cannot load code, the same
+// source is compiled into the system with APP_LINKED set to the file's
+// name, and these two put it on the list of core/app/linked.hpp instead.
+#ifdef APP_LINKED
+#include "core/app/linked.hpp"
+#define APP_INFO(...) static constexpr app::FileInfo app_info = __VA_ARGS__;
+#define APP_MAIN                                                                               \
+    static int app_main_linked(int, char **);                                                  \
+    namespace {                                                                                \
+    const struct AppLinked {                                                                   \
+        AppLinked() { app::add_linked({APP_LINKED, &app_info, &app_main_linked}); }            \
+    } app_linked;                                                                              \
+    }                                                                                          \
+    static int app_main_linked
+#else
+#define APP_MAIN extern "C" __attribute__((visibility("default"), used)) int app_main
 #define APP_INFO(...)                                                                          \
     extern "C" {                                                                               \
     extern const app::FileInfo app_info __attribute__((visibility("default")));               \
     __attribute__((used, section(".appinfo"))) constexpr app::FileInfo app_info = __VA_ARGS__; \
     }
+#endif

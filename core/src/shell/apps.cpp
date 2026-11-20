@@ -4,17 +4,12 @@
 
 #include "core/prog/prog.hpp"
 #include "core/gfx/art.hpp"
-#include "core/shell/defrag.hpp"
 #include "core/shell/shell.hpp"
 #include "internal.hpp"
 
 namespace shell {
 
 namespace {
-
-void open_editor() { open_in_editor(nullptr); }
-void open_viewer() { open_picture(nullptr); }
-void open_file_manager() { open_folder(nullptr); }
 
 // Each program with the function that gives its icon (icons are built on
 // first use, so the table is filled once).
@@ -28,23 +23,11 @@ struct Entry {
 constexpr uint32_t kRoomy = 8 * 1024;
 const Entry kApps[] = {
     {{"About Chinchilla", nullptr, &open_about, false, true}, &gfx::mascot_16},
-#ifndef CHINCHILLA_GAMES_IN_FILES // on the board they are files in C:\Programs (backlog item 27)
-    {{"Cactus Patch", nullptr, &open_cactus_patch, false, true}, &gfx::cactus_icon_16},
-    {{"Chess", nullptr, &open_chess, false, true, 6 * 1024}, &gfx::chess_icon_16},
-    {{"Culebra", nullptr, &open_culebra, false, true}, &gfx::snake_icon_16},
-#endif
-    {{"Defragmenter", nullptr, &open_defragmenter, false, true, kRoomy}, &gfx::defrag_icon_16},
-    {{"Editor", nullptr, &open_editor, true, true, kRoomy}, &gfx::editor_icon_16},
-    {{"File manager", nullptr, &open_file_manager, false, true, kRoomy}, &gfx::files_icon_16},
-    {{"Picture viewer", nullptr, &open_viewer, false, true, kRoomy}, &gfx::viewer_icon_16},
     {{"Task Manager", nullptr, &open_task_manager, false, true, kRoomy}, &gfx::tasks_icon_16},
-    {{"Terminal", nullptr, &open_terminal, true}, &gfx::terminal_icon_16},
     // A page is read, laid out and fetched on its task, with addresses of
     // 600 bytes on the stack at several depths. ponytail: a first figure,
     // to be trimmed with what the board measures.
-    {{"Vizcacha", nullptr, &open_browser_home, false, true, 12 * 1024}, &gfx::browser_icon_16},
     {{"Welcome", nullptr, &open_welcome, false, true}, &gfx::welcome_icon_16},
-    {{"Widget gallery", nullptr, &open_gallery, false, true}, &gfx::gallery_icon_16},
 };
 constexpr int kAppCount = sizeof(kApps) / sizeof(kApps[0]);
 

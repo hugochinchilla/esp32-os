@@ -44,10 +44,10 @@ public:
         bytes_ = size;
         return module;
     }
-    int enter(void *module) override
+    int enter(void *module, int argc, char **argv) override
     {
         auto *way_in = reinterpret_cast<int (*)(int, char **)>(dlsym(module, "app_main"));
-        return way_in(0, nullptr);
+        return way_in(argc, argv);
     }
     // The PC's loader does not say: the size of the file stands in.
     size_t bytes(void *) override { return bytes_; }

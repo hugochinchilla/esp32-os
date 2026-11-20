@@ -6,6 +6,7 @@
 #include "core/app/app.hpp"
 #include "core/gfx/art.hpp"
 #include "core/shell/shell.hpp"
+#include "art.hpp"
 #include "internal.hpp"
 
 namespace shell {
@@ -89,7 +90,7 @@ private:
     static constexpr int kSize = 0; // the group of the three radio buttons
     static GalleryWindow &self(void *context) { return *static_cast<GalleryWindow *>(context); }
     static void menu_close(void *context) { self(context).close(); }
-    static void menu_about(void *) { open_about(); }
+    static void menu_about(void *) { os::launch("About Chinchilla"); }
     static void toggle_bold(void *context) { self(context).bold_.set_checked(!self(context).bold_.checked()); }
     // The hourglass on demand, to look at: over the controls, and the window
     // answers as before.
@@ -127,28 +128,30 @@ private:
     const wm::MenuBar bar_ = {entries_, 3};
 };
 
-app::Number g_window = app::kNone; // the one there may be: a number, dead once it has closed
-
 } // namespace
 
-void open_gallery()
+} // namespace shell
+
+// The Widget gallery is a program kept in a file (backlog item 27): not
+// part of the system.
+APP_INFO(app::file_info("Widget gallery", 0, art::kSmall, art::kSmallInks, art::kLarge, art::kLargeInks));
+
+namespace {
+// The window's icon: the header's own pixels are not in memory with the
+// program, so they are made again here from the same rows.
+constexpr app::Icon16 kWindowIcon = app::icon16(art::kSmall, art::kSmallInks);
+} // namespace
+
+APP_MAIN(int, char **)
 {
-    const AsProgram as("Widget gallery");
-    if (app::bring_forward(g_window)) {
-        return;
-    }
+    static const gfx::Bitmap icon = {16, 16, kWindowIcon.pixels, app::kClearInk};
     app::Look look;
     look.title = "Widget gallery";
     look.x = 120;
     look.y = 60;
     look.width = 460;
     look.height = 316;
-    look.icon = &gfx::gallery_icon_16();
+    look.icon = &icon;
     look.flags = app::kMenuBar;
-    g_window = app::open<GalleryWindow>(look);
-    if (g_window == app::kNone) {
-        no_memory_for("Widget gallery");
-    }
+    return app::open<shell::GalleryWindow>(look) != app::kNone ? 0 : 1;
 }
-
-} // namespace shell

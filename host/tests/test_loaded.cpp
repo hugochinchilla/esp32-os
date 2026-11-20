@@ -18,6 +18,7 @@
 #include "core/shell/shell.hpp"
 #include "core/wm/wm.hpp"
 #include "../dl_loader.hpp"
+#include "../program_files.hpp"
 #include "../host_adapters.hpp"
 
 static int failures = 0;
@@ -59,17 +60,18 @@ const char *title() { return desktop.active() != nullptr ? desktop.active()->tit
 int main(int argc, char **argv)
 {
     setvbuf(stdout, nullptr, _IONBF, 0); // a crash must not swallow the failures before it
-    if (argc < 5) {
-        printf("usage: test_loaded hello.app culebra.app cactus_patch.app chess.app\n");
+    if (argc < 2) {
+        printf("usage: test_loaded <the folder of the program files the build made>\n");
         return 2;
     }
-    std::ifstream file(argv[1], std::ios::binary);
+    const std::string folder = argv[1];
+    std::ifstream file(folder + "/hello.app", std::ios::binary);
     const std::vector<char> program((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
     CHECK(!program.empty());
 
     // Room for the largest program in its PC form (Chess, with the checkers
     // built in, is most of a megabyte).
-    static fs::MemoryVolume disk(memory.allocate(4 << 20), 4 << 20, "RAM disk");
+    static fs::MemoryVolume disk(memory.allocate(16 << 20), 16 << 20, "RAM disk");
     storage.mount('C', disk);
     shell::start(desktop, system_, storage, memory);
     desktop.start();
@@ -151,13 +153,23 @@ int main(int argc, char **argv)
     wait(10000);
     CHECK(loader.loaded == 0 && t.count() == processes && os::blocks_out() == blocks);
 
-    // Start > Programs: the program files of C:\Programs, after the
-    // built-in ones, by the names and pictures they give themselves. Found
+    // Start > Programs: the program files of C:\Programs, among the
+    // system's own, by the names and pictures they give themselves. Found
     // as the menu opens; gone from it when the file has gone.
     desktop.open_start_menu();
     const wm::Menu *programs = desktop.popup_menu(0)->items[0].submenu;
-    const int built_in = programs->count;
+    const int before = programs->count;
     desktop.close_menus();
+    // The list is in the order of the names: where "Hello" is in it.
+    const auto hello_entry = [&]() -> const wm::MenuItem * {
+        for (int i = 0; i < programs->count; i++) {
+            if (strcmp(programs->items[i].label, "Hello") == 0) {
+                return &programs->items[i];
+            }
+        }
+        return nullptr;
+    };
+    CHECK(hello_entry() == nullptr);
     // The folder tools/flash.py makes on the board; nothing else makes it.
     CHECK(storage.make_folder("C:\\Programs") == ports::FsError::Ok);
     CHECK(storage.write_file("C:\\Programs\\hello.app", program.data(), program.size()) == ports::FsError::Ok);
@@ -165,12 +177,12 @@ int main(int argc, char **argv)
     CHECK(storage.write_file("C:\\Programs\\broken.app", "not a program", 13) == ports::FsError::Ok);
     for (int round = 0; round < 2; round++) { // the second time from what it remembers
         desktop.open_start_menu();
-        CHECK(programs->count == built_in + 1);
-        const wm::MenuItem &entry = programs->items[built_in];
-        CHECK(strcmp(entry.label, "Hello") == 0 && entry.icon != nullptr && entry.icon->pixels[17] == gfx::kBlack);
+        CHECK(programs->count == before + 1 && hello_entry() != nullptr);
+        const wm::MenuItem &entry = *hello_entry();
+        CHECK(entry.icon != nullptr && entry.icon->pixels[17] == gfx::kBlack);
         desktop.close_menus();
     }
-    programs->items[built_in].action(programs->items[built_in].context);
+    hello_entry()->action(hello_entry()->context);
     wait(10000);
     CHECK(loader.loaded == 1 && strcmp(title(), "Hello") == 0);
     desktop.close(*desktop.active());
@@ -179,12 +191,13 @@ int main(int argc, char **argv)
     CHECK(loader.loaded == 0);
     CHECK(storage.remove("C:\\Programs\\hello.app") == ports::FsError::Ok);
     desktop.open_start_menu();
-    CHECK(programs->count == built_in);
+    CHECK(programs->count == before && hello_entry() == nullptr);
     desktop.close_menus();
     CHECK(t.count() == processes);
 
-    // The two games in the form the board has them in: a file each, with
-    // the name and the pictures of the built-in ones, one copy at a time.
+    // The games: a file each, with the name and the pictures the system's
+    // own art has for them, one copy at a time.
+    static const char *const kFiles[3] = {"/culebra.app", "/cactus_patch.app", "/chess.app"};
     static const char *const kNames[3] = {"Culebra", "Cactus Patch", "Chess"};
     static const char *const kPaths[3] = {"C:\\Programs\\culebra.app", "C:\\Programs\\cactus_patch.app",
                                           "C:\\Programs\\chess.app"};
@@ -193,7 +206,7 @@ int main(int argc, char **argv)
     for (int game = 0; game < 3; game++) {
         const char *const name = kNames[game];
         const char *const path = kPaths[game];
-        std::ifstream in(argv[2 + game], std::ios::binary);
+        std::ifstream in(folder + kFiles[game], std::ios::binary);
         const std::vector<char> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
         CHECK(!bytes.empty() && storage.write_file(path, bytes.data(), bytes.size()) == ports::FsError::Ok);
         CHECK(shell::program_info(path, info) && strcmp(info.title, name) == 0);
@@ -250,6 +263,39 @@ int main(int argc, char **argv)
     wait(10000);
     CHECK(!t.alive(threaded) && tasks.ended == 1 && prog::runner().tasks() == 0 && loader.loaded == 0);
     prog::runner().set_tasks(nullptr, nullptr, 0);
+
+    // What the Linux program does as it starts (host/program_files.hpp):
+    // the program files the build made are copied to C:\Programs, where
+    // they changed, and the system then has every program of programs/ to
+    // start by its name.
+    CHECK(host::install_program_files(storage, folder.c_str(), shell::kProgramsFolder) >= 4);
+    CHECK(host::install_program_files(storage, folder.c_str(), shell::kProgramsFolder) == 0);
+    CHECK(storage.write_file("C:\\Programs\\hello.app", "old", 3) == ports::FsError::Ok);
+    CHECK(host::install_program_files(storage, folder.c_str(), shell::kProgramsFolder) == 1);
+    CHECK(host::install_program_files(storage, "/no/such/folder", shell::kProgramsFolder) == 0);
+    for (const char *name : {"Hello", "Culebra", "Cactus Patch", "Chess"}) {
+        const shell::Program *found = shell::find_program(name);
+        CHECK(found != nullptr && found->built_in == nullptr && found->path != nullptr);
+    }
+    CHECK(shell::find_program("cule", true) != nullptr && shell::find_program("c", true) == nullptr);
+    // A later word of the name, and the name of the file, find it too
+    // (the board, 2026-11-20: Run "gallery" found nothing).
+    const shell::Program *gallery = shell::find_program("gallery", true);
+    CHECK(gallery != nullptr && strcmp(gallery->name, "Widget gallery") == 0);
+    CHECK(shell::find_program("gallery") == nullptr); // not without or_start
+    const shell::Program *viewer = shell::find_program("viewer", true);
+    CHECK(viewer != nullptr && strcmp(viewer->name, "Picture viewer") == 0);
+    const shell::Program *files = shell::find_program("file_manager", true);
+    CHECK(files != nullptr && strcmp(files->name, "File manager") == 0);
+    CHECK(shell::find_program("manager", true) == nullptr); // the File manager's and the Task Manager's
+    CHECK(shell::find_program("patch", true) != nullptr);
+    CHECK(os::launch("Culebra"));
+    wait(10000);
+    CHECK(loader.loaded == 1 && strcmp(title(), "Culebra") == 0);
+    desktop.close(*desktop.active());
+    wait(10000);
+    wait(10000);
+    CHECK(loader.loaded == 0 && t.count() == processes);
 
     if (failures == 0) {
         printf("loaded: all passed\n");

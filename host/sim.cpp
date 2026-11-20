@@ -24,7 +24,9 @@
 #include "core/sh/console.hpp"
 #include "core/shell/boot.hpp"
 #include "core/sys/log.hpp"
+#include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
+#include "../programs/test_hooks.hpp"
 #include "core/net/posix_dialer.hpp"
 #include "core/net/posix_tcp.hpp"
 #include "core/os/tcp.hpp"
@@ -303,7 +305,7 @@ int main(int argc, char **argv)
             os::install_dialer(&dialer);
             shell::start(screen, *parts.system, storage, memory);
             shell::open_demo_windows(); // what the debug-tool tests drive
-            parts.protocol->set_counters(shell::picture_timings(), shell::kPictureTimings);
+            parts.protocol->set_counters(os::counters(), os::kCounters);
             screen.start();
             return true;
         },

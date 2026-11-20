@@ -13,6 +13,7 @@
 #include "core/proc/table.hpp"
 #include "core/prog/prog.hpp"
 #include "core/shell/shell.hpp"
+#include "../../programs/test_hooks.hpp"
 #include "core/wm/wm.hpp"
 #include "../host_adapters.hpp"
 
@@ -235,7 +236,7 @@ void test_process_list()
 
     // A program with a window: the window is its main one, it is in front,
     // nothing blocks it, and Term closes it.
-    shell::open_culebra();
+    shell::start_program("Culebra");
     wait(10000);
     wm::Window *w = desktop.active();
     CHECK(w != nullptr);
@@ -291,10 +292,10 @@ void test_programs_give_back()
 {
     const uint32_t blocks = os::blocks_out(), bytes = os::bytes_out();
     int opened = 0;
-    for (int i = 0; i < shell::app_count(); i++) {
-        const shell::App &app = shell::app(i);
+    for (int i = 0; i < shell::program_count(); i++) {
+        const shell::Program &app = shell::program(i); // the system's own and the files alike
         wm::Window *before = desktop.active();
-        shell::launch(app);
+        shell::start_program(app.name);
         wait(10000);
         wm::Window *w = desktop.active();
         if (w == nullptr || w == before) {
@@ -993,7 +994,7 @@ void test_programs_on_tasks()
     wait(1100000); // the Task Manager's list fills on its timer
     CHECK(runner.tasks() == 4 && strcmp(title(), "Task Manager") == 0);
     // One program's menu opens another: the gallery's Help, About.
-    shell::launch(*shell::find_app("Widget gallery"));
+    shell::start_program("Widget gallery");
     const proc::Pid gallery = t.find_by_name("Widget gallery");
     CHECK(runner.has_task(gallery) && runner.tasks() == 5);
     desktop.key(wm::key::LeftAlt, true); // Alt+H: Help, and its one entry

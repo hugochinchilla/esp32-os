@@ -16,12 +16,8 @@ const Bitmap &editor_icon_16(); // notepad and pencil
 const Bitmap &editor_icon_32();
 const Bitmap &files_icon_16(); // the File manager: an open folder with papers
 const Bitmap &files_icon_32();
-const Bitmap &viewer_icon_16(); // the Picture viewer: a painting on an easel
-const Bitmap &viewer_icon_32();
 const Bitmap &tasks_icon_16(); // the Task Manager
 const Bitmap &tasks_icon_32();
-const Bitmap &defrag_icon_16();
-const Bitmap &defrag_icon_32();
 const Bitmap &snake_icon_16(); // Culebra
 const Bitmap &terminal_icon_16(); // the Terminal
 const Bitmap &snake_icon_32();
@@ -40,12 +36,9 @@ const Bitmap &settings_icon_16();
 const Bitmap &settings_icon_32();
 const Bitmap &welcome_icon_16();
 const Bitmap &welcome_icon_32();
-const Bitmap &gallery_icon_16(); // Widget gallery
-const Bitmap &gallery_icon_32();
 const Bitmap &power_icon_16(); // Shut Down
 const Bitmap &power_icon_32();
 const Bitmap &run_icon_16();
-const Bitmap &browser_icon_16(); // the web browser: a globe
 const Bitmap &run_icon_32();
 const Bitmap &service_icon_16(); // a process with no window
 const Bitmap &service_icon_32();

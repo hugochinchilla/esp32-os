@@ -72,11 +72,11 @@ public:
         return module;
     }
 
-    int enter(void *module) override
+    int enter(void *module, int argc, char **argv) override
     {
         // Its static objects are made, then its way in is called. What the
         // way in returns is not passed on by the loader.
-        return esp_elf_request(&static_cast<Module *>(module)->elf, 0, 0, nullptr);
+        return esp_elf_request(&static_cast<Module *>(module)->elf, 0, argc, argv);
     }
 
     size_t bytes(void *module) override { return static_cast<Module *>(module)->bytes; }

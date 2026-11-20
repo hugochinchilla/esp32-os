@@ -12,6 +12,7 @@
 #include "core/proc/table.hpp"
 #include "core/desk/desk.hpp"
 #include "core/shell/shell.hpp"
+#include "../../programs/test_hooks.hpp"
 #include "core/wm/widgets.hpp"
 #include "core/wm/wm.hpp"
 #include "../fake_wifi.hpp"
@@ -855,12 +856,12 @@ void test_shell()
 
     // A program launched gets the next PID, the launcher as its parent, and
     // its window. Launching it again is the same process.
-    shell::launch(*shell::find_app("Welcome"));
+    shell::start_program("Welcome");
     const proc::Process *welcome = process("Welcome");
     CHECK(welcome != nullptr && welcome->pid == 3 && welcome->is(proc::kWindowed) && !welcome->is(proc::kSystem));
     CHECK(welcome != nullptr && welcome->parent == proc::kRoot); // launched from outside any process
     CHECK(find("Welcome to Chinchilla")->owner() == 3 && desktop.windows_of(3) == 1);
-    shell::launch(*shell::find_app("Welcome"));
+    shell::start_program("Welcome");
     CHECK(t.count() == 3 && desktop.window_count() == 1);
 
     // From the Start menu the parent is the taskbar, whose menu it is: Ctrl+Esc, Programs,
@@ -877,7 +878,7 @@ void test_shell()
     key(wm::key::Enter); // OK
     CHECK(process("About Chinchilla") == nullptr && t.count() == 3 && process("Welcome") != nullptr);
     // Started again it is a new process with a new number.
-    shell::launch(*shell::find_app("About Chinchilla"));
+    shell::start_program("About Chinchilla");
     CHECK(process("About Chinchilla") != nullptr && process("About Chinchilla")->pid == 5);
     close_all();
     CHECK(t.count() == 2);
@@ -939,8 +940,8 @@ void test_shell()
     // Culebra and the process goes.
     close_all();
     CHECK(t.count() == 2);
-    shell::open_culebra();
-    shell::launch(*shell::find_app("Widget gallery"));
+    shell::start_program("Culebra");
+    shell::start_program("Widget gallery");
     const Pid culebra = t.find_by_name("Culebra"), gallery = t.find_by_name("Widget gallery");
     CHECK(culebra != proc::kNone && gallery == culebra + 1);
     key(wm::key::Delete, kCtrl | kAlt);
@@ -1184,7 +1185,7 @@ void test_shut_down_forces()
     close_all();
     wait(10000);
     const int before = t.count();
-    shell::launch(*shell::find_app("Culebra"));
+    shell::start_program("Culebra");
     shell::open_in_editor("C:\\Documents\\notes.txt");
     desktop.text("never saved");
     const Pid editor_pid = t.find_by_name("Editor"), game = t.find_by_name("Culebra");

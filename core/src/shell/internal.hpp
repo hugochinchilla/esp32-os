@@ -10,6 +10,7 @@
 #include "core/os/os.hpp"
 #include "core/ports.hpp"
 #include "core/proc/table.hpp"
+#include "core/shell/files.hpp"
 #include "core/sh/terminal_session.hpp"
 #include "core/wm/wm.hpp"
 
@@ -172,6 +173,13 @@ void set_tray_icon(int place, const gfx::Bitmap *icon, void (*click)(void *conte
 // after it ended too often to be restarted. False if it runs.
 bool start_taskbar_again();
 
+// What os::accept_open does (loaded.cpp): the program asking takes one more
+// thing to open while it runs.
+void accept_open(os::OpenFn opened);
+// Brings forward the window of `program` that shows `path`
+// (wm::Window::document), if there is one.
+bool show_document(const char *program, const char *path);
+
 // A terminal session for the process asking (sessions.cpp): what
 // os::open_session does.
 sh::TerminalSession *open_session(ports::ByteSink &device, const char *&why);
@@ -185,11 +193,6 @@ void start_bluetooth();
 // Centres a window of the given size in the work area.
 gfx::Rect centred(const wm::Wm &wm, int w, int h);
 
-// The web browser (browser.cpp): its Start menu entry.
-void open_browser_home();
-
-// Cactus Patch (cactus_patch.cpp): its Start menu entry.
-void open_cactus_patch();
 
 // Puts the desktop background in place with its settings (display.cpp).
 void install_display();
@@ -200,71 +203,17 @@ void install_screen_saver();
 // power-down screen.
 void attention_key(void *context);
 
-// The Trash (trash.cpp): C:\.trash, with C:\.config\trash.ini remembering
-// where each entry came from.
-constexpr const char *kTrashFolder = "C:\\.trash";
-bool in_trash(const char *path);  // C:\.trash or inside it
-bool trashable(const char *path); // on C:, not a drive, not in the Trash
-ports::FsError to_trash(const char *path);
-ports::FsError remove_tree(const char *path, int depth = 0); // for good
-int trash_count();
-ports::FsError empty_trash();
-bool trash_origin(const char *name, char *out, int capacity);
-ports::FsError restore_from_trash(const char *name);
-// Drag and drop between folders (same drive); into the Trash trashes.
-ports::FsError move_to_folder(const char *path, const char *folder);
-// A name for `name` not taken in `folder`: itself, else "name (2).ext"...
-bool free_name_in(const char *folder, const char *name, bool is_folder, char *out, int capacity);
-// What a file command acts on (backlog items 54 and 55): entries of one
-// folder, by name. The names are the caller's and need only last the call.
-struct Selection {
-    const char *folder;
-    const char *const *names;
-    int count;
-};
-// The Delete command: asks once, for all of them, then moves them to the
-// Trash (on C:) or deletes them for good (in the Trash, on other drives).
-void delete_asking(const char *path);
-void delete_asking(const Selection &s);
-// Copy and Cut (file_ops.cpp): onto the clipboard, as files.
-void copy_files(const Selection &s, bool cut);
-// Whether Paste would do anything in `folder`: there are files on the
-// clipboard, and it is a folder that takes them (not My Board, not the
-// Trash).
-bool can_paste(const char *folder);
-// Paste: what is on the clipboard is copied into `folder`, or moved there
-// if it was cut, by a job of the asker's; a name taken there is numbered,
-// nothing is replaced. `window` shows the hourglass meanwhile
-// (os::kNoWindow: none does). It says what went wrong, if anything.
-void paste_files(const char *folder, int window);
 // Dragged to the Trash: moved without asking on C:, asks elsewhere.
 void drop_in_trash(const char *path);
 void open_trash();
 void open_about();   // about.cpp
 void open_welcome(); // welcome.cpp
-void open_gallery(); // gallery.cpp
-// The folders that changed, as fs::Storage's notices told (desktop.cpp):
-// their keys (fs::path::key), or `all` when there were more than fit.
-struct FolderKeys {
-    uint32_t key[8] = {};
-    int count = 0;
-    bool all = false;
-    // True if `folder` may be one of them.
-    bool has(const char *folder) const
-    {
-        uint32_t k = fs::path::key(folder);
-        k = k != 0 ? k : 1;
-        for (int i = 0; i < count; i++) {
-            if (key[i] == k) {
-                return true;
-            }
-        }
-        return all;
-    }
-};
-// The File manager's windows on those folders, or inside them, read their
-// folders again (file_manager.cpp). Nobody calls this after moving or
-// deleting a file: the notice does.
-void refresh_folder_windows(const FolderKeys &changed);
+// The folders that changed, as fs::Storage's notices told (desktop.cpp).
+using FolderKeys = os::file::Changes;
+// What os::file::watch does (loaded.cpp): the program asking is told of
+// the folders that change from now on; tell_watchers() tells them all,
+// each as itself.
+void watch_files(os::file::ChangedFn changed);
+void tell_watchers(const FolderKeys &changed);
 
 } // namespace shell

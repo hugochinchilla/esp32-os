@@ -279,7 +279,7 @@ const char *const kArticle =
 
 void scenes()
 {
-    shell::open_browser(nullptr);
+    shell::start_program("Vizcacha");
     wait(50);
     CHECK(strcmp(title(), "Home - Vizcacha") == 0);
     save("60-browser-home");

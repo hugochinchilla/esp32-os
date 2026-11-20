@@ -186,6 +186,12 @@ public:
     // The process that opened the window (0: none, or no process table).
     int owner() const { return owner_; }
     const char *title() const { return title_; }
+    // What the window shows, if it shows a file or the like: its path, as
+    // the program was asked to open it ("": nothing to name). The text
+    // must stay valid. The system reads it to bring this window forward
+    // instead of opening the same thing twice.
+    const char *document() const { return document_; }
+    void set_document(const char *path) { document_ = path != nullptr ? path : ""; }
     const gfx::Bitmap *icon() const { return icon_; }
     const Rect &frame() const { return frame_; } // screen coordinates
     Rect client() const;                         // screen coordinates
@@ -320,6 +326,7 @@ private:
     friend class Wm;
 
     const char *title_;
+    const char *document_ = "";
     const gfx::Bitmap *icon_;
     Rect frame_;
     Rect restore_;               // frame before maximising

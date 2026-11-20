@@ -17,30 +17,88 @@
 
 namespace shell {
 
-namespace {
-
-// The program with this name, in any case; else the only one whose name
-// starts with it ("edit" for the Editor, not "c" for two programs).
-const App *program_named(const char *name)
+// A folder in the File manager, which is a program file (nullptr: My
+// Board). It opens a window for it, or brings forward the one that shows
+// it.
+void open_folder(const char *path)
 {
-    const size_t length = strlen(name);
-    if (length == 0) {
-        return nullptr;
-    }
-    const App *starts = nullptr;
-    int count = 0;
-    for (int i = 0; i < app_count(); i++) {
-        const App &a = app(i);
-        if (strcasecmp(a.name, name) == 0) {
-            return &a;
-        }
-        if (strncasecmp(a.name, name, length) == 0) {
-            starts = &a;
-            count++;
-        }
-    }
-    return count == 1 ? starts : nullptr;
+    start_program("File manager", path);
 }
+
+// The Trash is the File manager on C:\.trash.
+void open_trash() { open_folder(kTrashFolder); }
+
+// What opens what, by extension: 1 the Editor, 2 the Picture viewer, 3 a
+// program that is loaded and run, 4 the web browser, 0 nothing.
+static int program_kind(const char *path)
+{
+    static const char *const kText[] = {"txt", "log", "ini", "md"};
+    static const char *const kPictures[] = {"bmp", "png", "jpg", "jpeg"};
+    if (is_program_file(path)) {
+        return 3;
+    }
+    char ext[8];
+    fs::path::extension(path, ext, sizeof(ext));
+    for (const char *e : kText) {
+        if (strcmp(ext, e) == 0) {
+            return 1;
+        }
+    }
+    for (const char *e : kPictures) {
+        if (strcmp(ext, e) == 0) {
+            return 2;
+        }
+    }
+    if (strcmp(ext, "htm") == 0 || strcmp(ext, "html") == 0) {
+        return 4;
+    }
+    return 0;
+}
+
+bool has_program_for(const char *path) { return program_kind(path) != 0; }
+
+const char *file_kind(const char *path)
+{
+    static const char *const kKinds[] = {nullptr, "Text", "Picture", "Program", "Web page"};
+    return kKinds[program_kind(path)];
+}
+
+bool open_file(const char *path)
+{
+    switch (program_kind(path)) {
+    case 1:
+        open_in_editor(path);
+        return true;
+    case 2:
+        open_picture(path);
+        return true;
+    case 3: {
+        // A program in a file: loaded and run.
+        static char text[200];
+        char why[120];
+        if (!run_file(path, why, sizeof(why))) {
+            snprintf(text, sizeof(text), "'%s' could not be run:\n%s.", fs::path::name(path), why);
+            message_box("Run", text);
+        }
+        return true;
+    }
+    case 4:
+        start_program("Vizcacha", path);
+        return true;
+    default:
+        break;
+    }
+    char ext[8];
+    fs::path::extension(path, ext, sizeof(ext));
+    static char text[160];
+    snprintf(text, sizeof(text), "There is no program for %s%s files yet.", ext[0] ? "." : "",
+             ext[0] ? ext : "these");
+    message_box(fs::path::name(path), text);
+    return false;
+}
+
+
+namespace {
 
 bool open_path(const char *full, char *why, size_t capacity)
 {
@@ -103,8 +161,8 @@ public:
         open_in_editor(full_path);
         return true;
     }
-    int program_count() override { return app_count(); }
-    const char *program_name(int index) override { return app(index).name; }
+    int program_count() override { return shell::program_count(); }
+    const char *program_name(int index) override { return program(index).name; }
 };
 
 /* ---- The Run dialog ---------------------------------------------------------------- */
@@ -234,9 +292,45 @@ bool run_text(const char *typed, const char *folder, char *why, size_t capacity,
         return true;
     }
     if (programs) {
-        if (const App *a = program_named(text)) {
-            launch(*a);
-            return true;
+        if (const Program *found = find_program(text, true)) {
+            char reason[96] = "";
+            if (start_program(*found, nullptr, reason, sizeof(reason))) {
+                return true;
+            }
+            snprintf(why, capacity, "Cannot run %s:\n%s.", text, reason);
+            return false;
+        }
+        // A program and what it is to open: "editor readme.txt",
+        // "vizcacha http://example.com". A program's name may have spaces
+        // of its own, so the longest beginning that names one is it. A
+        // file of the drives goes as its whole path, anything else (an
+        // address) as it was typed.
+        for (size_t at = length; at-- > 1;) {
+            if (text[at] != ' ') {
+                continue;
+            }
+            text[at] = 0;
+            const Program *found = find_program(text, true);
+            if (found == nullptr) {
+                text[at] = ' ';
+                continue;
+            }
+            const char *argument = text + at + 1;
+            while (*argument == ' ') {
+                argument++;
+            }
+            char full[fs::kMaxPath];
+            fs::DirEntry entry;
+            if (sh::path::resolve(folder, argument, full, sizeof(full)) &&
+                os::file::stat(full, entry) == ports::FsError::Ok) {
+                argument = full;
+            }
+            char reason[96] = "";
+            if (start_program(*found, argument, reason, sizeof(reason))) {
+                return true;
+            }
+            snprintf(why, capacity, "Cannot run %s:\n%s.", text, reason);
+            return false;
         }
     }
     if (paths) {
@@ -273,6 +367,12 @@ void run_dialog()
         no_memory_for("Run");
     }
 }
+
+// The Editor is a program file; what the desktop, the File manager and the
+// command shell's `edit` want of it is this.
+void open_in_editor(const char *path) { start_program("Editor", path); }
+// The same for the Picture viewer: with no picture it asks for one.
+void open_picture(const char *path) { start_program("Picture viewer", path); }
 
 sh::Desktop &desktop_for_sessions()
 {

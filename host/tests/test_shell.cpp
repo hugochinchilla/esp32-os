@@ -227,6 +227,17 @@ void test_editor()
     CHECK(strcmp(title(), "copia.txt - Editor") == 0);
     CHECK(no_stale_pixels());
     key(wm::key::F4, 4);
+
+    // Run with a program and what it is to open: a name in the folder
+    // asked from, a whole path, and a program whose name has a space.
+    char why[160] = "";
+    CHECK(shell::run_text("editor a.txt", "C:\\Documents", why, sizeof(why)));
+    CHECK(strcmp(title(), "a.txt - Editor") == 0);
+    key(wm::key::F4, 4);
+    CHECK(shell::run_text("edit C:\\Documents\\copia.txt", "C:\\", why, sizeof(why)));
+    CHECK(strcmp(title(), "copia.txt - Editor") == 0);
+    key(wm::key::F4, 4);
+    CHECK(!shell::run_text("nothing a.txt", "C:\\Documents", why, sizeof(why)));
 }
 
 void test_file_manager()
@@ -250,6 +261,17 @@ void test_file_manager()
     desktop.text("trastos");
     key(wm::key::Enter);
     CHECK(!exists("C:\\Documents\\cosas") && exists("C:\\Documents\\trastos\\inside.txt"));
+
+    // A name that is taken is refused and nothing is written over (the
+    // board, 2026-11-20: renaming a file to the name of another lost the
+    // other). The folder, onto a file's name.
+    const std::string kept = file("C:\\Documents\\a.txt");
+    key(0x3B);
+    desktop.text("a.txt");
+    key(wm::key::Enter);
+    CHECK(strcmp(title(), "Rename") == 0 && desktop.active()->dialog()); // "There is already..."
+    key(wm::key::Enter);
+    CHECK(exists("C:\\Documents\\trastos\\inside.txt") && file("C:\\Documents\\a.txt") == kept);
 
     // Delete it, contents and all, after saying Yes.
     key(wm::key::Delete);

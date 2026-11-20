@@ -5,6 +5,7 @@
 #include "core/input/bluetooth.hpp"
 #include "core/net/wifi.hpp"
 
+#include <cstdio>
 #include <cstring>
 #include <initializer_list>
 
@@ -242,6 +243,25 @@ void Protocol::handle_frame(const uint8_t *frame, size_t size)
         desktop_->set_animations(args[0] != 0);
         reply(type, seq, kOk, nullptr, 0);
         break;
+
+    case kProcesses: {
+        // A line each: pid, parent, bytes held, jobs, name. As many as fit.
+        static char text[kMaxReplyPayload];
+        size_t n = 0;
+        const proc::Table &table = proc::table();
+        for (int i = 0; i < table.count(); i++) {
+            const proc::Process &p = table.at(i);
+            const int wrote = snprintf(text + n, sizeof(text) - n, "%u %u %u %u %s\n", static_cast<unsigned>(p.pid),
+                                       static_cast<unsigned>(p.parent), static_cast<unsigned>(p.memory),
+                                       static_cast<unsigned>(p.jobs), p.name);
+            if (wrote <= 0 || n + static_cast<size_t>(wrote) >= sizeof(text) - 1) {
+                break;
+            }
+            n += static_cast<size_t>(wrote);
+        }
+        reply(type, seq, kOk, reinterpret_cast<const uint8_t *>(text), static_cast<uint16_t>(n));
+        break;
+    }
 
     case kMemoryReport: {
         static char text[kMaxReplyPayload];

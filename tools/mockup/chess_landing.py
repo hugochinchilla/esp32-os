@@ -4,7 +4,7 @@
 chess window's reference picture, plays the knight from c6 to e5 and moves
 only the landing square. Offsets are whole pixels, as the board draws them.
 The owner chose B, drop and bounce; the game's table of heights
-(kLanding in core/src/shell/chess.cpp) is drop() below at 60 steps a second.
+(kLanding in programs/chess/chess.cpp) is drop() below at 60 steps a second.
 
     python3 tools/mockup/chess_landing.py <folder>      writes <folder>/*.gif
 """

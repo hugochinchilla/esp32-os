@@ -13,6 +13,7 @@
 #include "core/net/wifi.hpp"
 #include "core/proc/table.hpp"
 #include "core/shell/shell.hpp"
+#include "../../programs/test_hooks.hpp"
 #include "core/wm/widgets.hpp"
 #include "core/wm/wm.hpp"
 #include "../fake_bluetooth.hpp"
@@ -255,19 +256,25 @@ int processes_named(const char *name)
 void test_programs()
 {
     proc::Table &t = proc::table();
-    // What the OS itself holds, from start-up: the clipboard. Nothing else
-    // may be left over by anything below.
+    // What the OS itself holds, from start-up: the clipboard, and what the
+    // desktop keeps of the program files once it has listed them. Nothing
+    // else may be left over by anything below.
+    const int programs = shell::program_count();
     const int base = memory.in_use();
     const size_t base_bytes = memory.bytes_in_use();
-    CHECK(t.count() == 2 && desktop.window_count() == 0);
+    CHECK(t.count() == 2 && desktop.window_count() == 0 && programs >= 10);
 
-    // Every program on the Start menu: while open it holds memory; closed,
-    // it holds none, and its process is gone. Twice over, so the second run
-    // is a new program and not the first one found again.
+    // Every program on the Start menu, the system's own and the files of
+    // C:\Programs alike: while open it holds memory; closed, it holds none,
+    // and its process is gone. Twice over, so the second run is a new
+    // program and not the first one found again.
     for (int round = 0; round < 2; round++) {
-        for (int i = 0; i < shell::app_count(); i++) {
-            const shell::App &app = shell::app(i);
-            shell::launch(app);
+        for (int i = 0; i < shell::program_count(); i++) {
+            const std::string name = shell::program(i).name;
+            const struct {
+                const char *name;
+            } app = {name.c_str()};
+            shell::start_program(app.name);
             wait(1000000);
             CHECK(desktop.window_count() >= 1 && memory.in_use() > base);
             CHECK(processes_named(app.name) == 1);
@@ -330,11 +337,10 @@ void test_editors()
     const int base = memory.in_use();
 
     // Each launch is another Editor: its own process, window and text.
-    const shell::App &app = *shell::find_app("Editor");
-    shell::launch(app);
+    shell::start_program("Editor");
     wm::Window *first = desktop.active();
     desktop.text("one");
-    shell::launch(app);
+    shell::start_program("Editor");
     wm::Window *second = desktop.active();
     CHECK(first != second && first != nullptr && second != nullptr);
     CHECK(processes_named("Editor") == 2 && first->owner() != second->owner());
@@ -353,10 +359,10 @@ void test_editors()
 
     // No limit of the Editor's own (the owner's decision): a fifth opens,
     // as long as there is memory, and gives it all back when it closes.
-    shell::launch(app);
+    shell::start_program("Editor");
     CHECK(processes_named("Editor") == 4);
     const int four = memory.in_use();
-    shell::launch(app);
+    shell::start_program("Editor");
     CHECK(processes_named("Editor") == 5 && strcmp(title(), "Untitled - Editor") == 0);
     key(wm::key::F4, kAlt);
     wait(10000);
@@ -595,8 +601,12 @@ void test_no_memory()
     for (int i = 0; i < shell::app_count(); i++) {
         shell::launch(shell::app(i));
     }
-    shell::launch(*shell::find_app("Editor"));
-    shell::launch(*shell::find_app("Editor"));
+    shell::start_program("Editor");
+    shell::start_program("Editor");
+    shell::start_program("Picture viewer");
+    shell::start_program("Terminal");
+    shell::start_program("Vizcacha");
+    shell::open_folder(nullptr); // My Board
     shell::open_trash();
     shell::display_dialog();
     shell::screen_saver_dialog();
@@ -605,7 +615,7 @@ void test_no_memory()
     CHECK(many > wm::Wm::kFirstWindows);
     wait(10000);
     const int rows = t.count();
-    shell::launch(*shell::find_app("Editor"));
+    shell::start_program("Editor");
     shell::open_folder("C:\\Documents\\Desktop"); // a fourth folder window
     shell::message_box("Note", "There is room for this.");
     wait(10000);
@@ -622,8 +632,7 @@ void test_no_memory()
 // in memory.
 void test_settings_survive()
 {
-    const shell::App &culebra = *shell::find_app("Culebra");
-    shell::launch(culebra);
+    shell::start_program("Culebra");
     letter('g', kAlt);
     letter('s'); // Speed
     letter('s'); // Slow
@@ -633,13 +642,12 @@ void test_settings_survive()
     CHECK(storage.read_file("C:\\.config\\culebra.ini", text, sizeof(text) - 1, n) == ports::FsError::Ok);
     text[n] = 0;
     CHECK(strstr(text, "speed = slow") != nullptr);
-    const shell::App &cactus = *shell::find_app("Cactus Patch");
-    shell::launch(cactus);
+    shell::start_program("Cactus Patch");
     const int small = desktop.active()->frame().w;
     letter('g', kAlt);
     letter('m'); // Medium
     key(wm::key::F4, kAlt);
-    shell::launch(cactus);
+    shell::start_program("Cactus Patch");
     CHECK(desktop.active()->frame().w > small && shell::cactus_patch_field().cols() == 16);
     letter('g', kAlt);
     letter('s');

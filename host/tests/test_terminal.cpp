@@ -17,6 +17,7 @@
 #include "core/proc/table.hpp"
 #include "core/shell/boot.hpp"
 #include "core/shell/shell.hpp"
+#include "../../programs/test_hooks.hpp"
 #include "core/tty/screen.hpp"
 #include "core/wm/widgets.hpp"
 #include "core/wm/wm.hpp"
@@ -127,19 +128,20 @@ int count(const char *program)
 
 void test_terminal()
 {
-    const shell::App *app = shell::find_app("Terminal");
-    CHECK(app != nullptr && app->icon != nullptr && app->many);
+    const shell::Program *program = shell::find_program("Terminal");
+    CHECK(program != nullptr && program->icon != nullptr && !program->built_in);
     CHECK(shell::terminal_screen() == nullptr);
     const int blocks = memory.in_use();
 
     // It opens with the greeting and a prompt, as a process of its own.
-    shell::launch(*app);
+    shell::start_program("Terminal");
     desktop.update();
     CHECK(strcmp(title(), "Terminal") == 0 && count("Terminal") == 1);
-    // Two processes and four blocks: the window with its grid (the emulator),
-    // the grid's picture and the scroll bar,
+    // Two processes and five blocks: the window with its grid (the emulator),
+    // the grid's picture and the scroll bar, the words the program was
+    // started with,
     // and the session it is the terminal of, with the TTY and the shell.
-    CHECK(memory.in_use() == blocks + 4 && count("sh") == 1);
+    CHECK(memory.in_use() == blocks + 5 && count("sh") == 1);
     {
         const proc::Process *sh = proc::table().find(proc::table().find_by_name("sh"));
         CHECK(sh != nullptr && sh->parent == desktop.active()->owner() && !sh->is(proc::kWindowed));
@@ -247,30 +249,33 @@ void test_terminal()
 
     // A second and a third Terminal, each its own session and process; a
     // fourth is refused.
-    shell::launch(*app);
+    shell::start_program("Terminal");
     desktop.update();
-    CHECK(count("Terminal") == 2 && count("sh") == 2 && memory.in_use() == blocks + 8);
+    CHECK(count("Terminal") == 2 && count("sh") == 2 && memory.in_use() == blocks + 10);
     CHECK_ROW(3, "C:\\>"); // the new one is in front, in its own folder
     CHECK(no_stale_pixels()); // the first one's cursor is a line now
-    shell::launch(*app);
+    shell::start_program("Terminal");
     desktop.update();
     CHECK(count("Terminal") == 3);
-    shell::launch(*app);
+    shell::start_program("Terminal");
     desktop.update();
-    CHECK(count("Terminal") == 3 && strcmp(title(), "Terminal") == 0);
+    // The fourth is a process only while it says so.
+    CHECK(count("Terminal") == 4 && count("sh") == 3 && strcmp(title(), "Terminal") == 0);
     CHECK(desktop.active() != nullptr && desktop.active()->dialog()); // "Three Terminals are open already."
     key(wm::key::Enter);
+    wait(20000);
+    CHECK(count("Terminal") == 3);
     CHECK(no_stale_pixels());
 
     // exit closes the window and ends the process; the memory comes back.
     enter("exit");
     wait(20000);
-    CHECK(count("Terminal") == 2 && count("sh") == 2 && memory.in_use() == blocks + 8);
+    CHECK(count("Terminal") == 2 && count("sh") == 2 && memory.in_use() == blocks + 10);
     // Ctrl+D on an empty line does the same.
     CHECK(strcmp(title(), "Terminal") == 0);
     key(wm::key::A + 3, wm::key::LeftCtrl);
     wait(20000);
-    CHECK(count("Terminal") == 1 && count("sh") == 1 && memory.in_use() == blocks + 4);
+    CHECK(count("Terminal") == 1 && count("sh") == 1 && memory.in_use() == blocks + 5);
     // The first one is still where it was left.
     CHECK(row(24) == "C:\\Documents>");
     // It can end itself by number, like any other process.
@@ -284,21 +289,21 @@ void test_terminal()
 
     // The other way round: the session is ended by its own number, from
     // inside or by anyone (TERM or KILL), and its window closes with it.
-    shell::launch(*app);
+    shell::start_program("Terminal");
     desktop.update();
     snprintf(line, sizeof line, "kill %d", proc::table().find_by_name("sh"));
     enter(line);
     wait(20000);
     CHECK(count("Terminal") == 0 && count("sh") == 0 && desktop.window_count() == 0);
     CHECK(memory.in_use() == blocks);
-    shell::launch(*app);
+    shell::start_program("Terminal");
     desktop.update();
     CHECK(proc::table().signal(proc::table().find_by_name("sh"), proc::Signal::Kill) == proc::Sent::Ok);
     wait(20000);
     CHECK(count("Terminal") == 0 && count("sh") == 0 && memory.in_use() == blocks);
 
     // The close button's way (Alt+F4), with a half-typed line.
-    shell::launch(*app);
+    shell::start_program("Terminal");
     desktop.update();
     type("half a li");
     key(0x3D, wm::key::LeftAlt); // F4
@@ -341,7 +346,7 @@ void click(int x, int y)
 void test_size_and_scroll_bar()
 {
     close_everything();
-    shell::launch(*shell::find_app("Terminal"));
+    shell::start_program("Terminal");
     wm::Window *w = desktop.active();
     CHECK(w != nullptr && w->resizable());
     const tty::Screen *s = shell::terminal_screen();
@@ -458,7 +463,7 @@ void test_run()
     CHECK(memory.in_use() == blocks);
 
     // From a Terminal: run, open and edit put windows on the desktop.
-    shell::launch(*shell::find_app("Terminal"));
+    shell::start_program("Terminal");
     wm::Window *terminal = desktop.active();
     enter("run editor");
     CHECK(strcmp(title(), "Untitled - Editor") == 0);
@@ -577,12 +582,11 @@ void test_terminal_on_a_task()
         kits[i].answered = &kit_events[2 * i + 1];
     }
     shell::set_session_kits(kits, 3);
-    const shell::App *app = shell::find_app("Terminal");
     const int blocks = memory.in_use();
 
     // It opens at once; the greeting and the prompt come from the session's
     // task a moment later.
-    shell::launch(*app);
+    shell::start_program("Terminal");
     CHECK(strcmp(title(), "Terminal") == 0 && count("Terminal") == 1);
     // The task is the session's, not the window's.
     const proc::Pid pid = proc::table().find_by_name("sh");
@@ -694,7 +698,7 @@ void test_terminal_on_a_task()
 
     // The close button while the session waits for a line: the window is
     // gone at once, the rest when the session has noticed.
-    shell::launch(*app);
+    shell::start_program("Terminal");
     CHECK(settle([] { return locked_row(3) == "C:\\>"; }));
     key(wm::key::F4, wm::key::LeftAlt);
     CHECK(desktop.window_count() == 0);
@@ -704,7 +708,7 @@ void test_terminal_on_a_task()
     CHECK(job::jobs().running() == 0 && memory.in_use() == blocks);
 
     // End Task with force, in the middle of a command.
-    shell::launch(*app);
+    shell::start_program("Terminal");
     CHECK(settle([] { return locked_row(3) == "C:\\>"; }));
     const proc::Pid second = desktop.active()->owner();
     enter("cat big.txt");
@@ -714,13 +718,13 @@ void test_terminal_on_a_task()
 
     // The session ended from outside, in the middle of a command: its
     // window closes when the shell has stopped.
-    shell::launch(*app);
+    shell::start_program("Terminal");
     CHECK(settle([] { return locked_row(3) == "C:\\>"; }));
     enter("cat big.txt");
     CHECK(proc::table().signal(proc::table().find_by_name("sh"), proc::Signal::Kill) == proc::Sent::Ok);
     CHECK(settle([&] { return count("Terminal") == 0 && count("sh") == 0; }));
     CHECK(desktop.window_count() == 0 && job::jobs().running() == 0 && memory.in_use() == blocks);
-    shell::launch(*app);
+    shell::start_program("Terminal");
     CHECK(settle([] { return locked_row(3) == "C:\\>"; }));
     CHECK(proc::table().signal(proc::table().find_by_name("sh"), proc::Signal::Term) == proc::Sent::Ok);
     CHECK(settle([&] { return count("Terminal") == 0 && count("sh") == 0; }));
@@ -728,13 +732,13 @@ void test_terminal_on_a_task()
 
     // Three at once, each with its own session; a fourth is refused.
     for (int i = 0; i < 3; i++) {
-        shell::launch(*app);
+        shell::start_program("Terminal");
     }
     CHECK(count("Terminal") == 3 && job::jobs().running() == 3);
     CHECK(settle([] { return locked_row(3) == "C:\\>"; }));
     enter("echo third");
     CHECK(settle([] { return locked_row(4) == "third"; }));
-    shell::launch(*app);
+    shell::start_program("Terminal");
     CHECK(strcmp(title(), "Terminal") == 0 && desktop.active()->modal()); // the message
     key(wm::key::Enter);
     while (desktop.active() != nullptr) {

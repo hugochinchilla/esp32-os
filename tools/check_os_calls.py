@@ -5,6 +5,7 @@ A program that has moved asks the system only through os::, so it may not
 name the window manager, the drives, the System port or the process table
 itself. This fails if one of the moved files does, and says how far the move
 has got. To move a program: change its calls, then add its file to MOVED.
+The programs kept in files (programs/) are all checked the same way.
 
     python3 tools/check_os_calls.py [repository]
 """
@@ -15,18 +16,10 @@ import sys
 # Programs (files of core/src/shell) that use only the OS calls.
 MOVED = [
     "about.cpp",
-    "browser.cpp",
-    "cactus_patch.cpp",
-    "chess.cpp",
     "colour_dialog.cpp",
-    "culebra.cpp",
-    "defrag.cpp",
     "dialogs.cpp",
     "display.cpp",
-    "editor.cpp",
-    "file_manager.cpp",
     "file_ops.cpp",
-    "gallery.cpp",
     "bluetooth.cpp",
     "network.cpp",
     "run.cpp",
@@ -35,17 +28,8 @@ MOVED = [
     "settings.cpp",
     "shutdown.cpp",
     "task_manager.cpp",
-    "terminal.cpp",
     "trash.cpp",
-    "viewer.cpp",
     "welcome.cpp",
-]
-
-# Programs kept elsewhere that are held to the same: from the repository's
-# root. (The engine of programs/doom is not ours and asks for nothing by
-# itself: all it asks goes through this one file.)
-MOVED_ELSEWHERE = [
-    "programs/doom/doom.cpp",
 ]
 
 # Not programs: the desktop itself, what it keeps running (the network, the
@@ -59,6 +43,7 @@ SYSTEM = [
     "loaded.cpp",
     "network_service.cpp",
     "power.cpp",
+    "programs.cpp",
     "sessions.cpp",
 ]
 
@@ -88,10 +73,10 @@ def main():
         if name not in files:
             print(f"{name}: listed in tools/check_os_calls.py but not in core/src/shell")
             bad += 1
-    for name in MOVED + MOVED_ELSEWHERE:
-        if name not in files and name not in MOVED_ELSEWHERE:
+    for name in MOVED:
+        if name not in files:
             continue
-        shown = name if name in MOVED_ELSEWHERE else f"core/src/shell/{name}"
+        shown = f"core/src/shell/{name}"
         with open(os.path.join(root, shown), encoding="utf-8") as f:
             lines = strip_comments(f.read()).split("\n")
         for number, line in enumerate(lines, 1):
@@ -100,6 +85,23 @@ def main():
                     print(f"{shown}:{number}: {line.strip()}")
                     print(f"    a program that has moved to the OS calls uses {instead}")
                     bad += 1
+    # The programs kept in files (programs/) are compiled apart from the
+    # system: all of them keep to the OS calls, with no list to be on.
+    apart = os.path.join(root, "programs")
+    for program in sorted(os.listdir(apart)):
+        if not os.path.isdir(os.path.join(apart, program)):
+            continue
+        for name in sorted(os.listdir(os.path.join(apart, program))):
+            if not name.endswith((".cpp", ".hpp")):
+                continue
+            with open(os.path.join(apart, program, name), encoding="utf-8") as f:
+                lines = strip_comments(f.read()).split("\n")
+            for number, line in enumerate(lines, 1):
+                for pattern, instead in FORBIDDEN:
+                    if re.search(pattern, line):
+                        print(f"programs/{program}/{name}:{number}: {line.strip()}")
+                        print(f"    a program uses {instead}")
+                        bad += 1
     programs = [f for f in files if f not in SYSTEM]
     left = [f for f in programs if f not in MOVED]
     print(f"OS calls: {len(programs) - len(left)} of {len(programs)} programs moved")

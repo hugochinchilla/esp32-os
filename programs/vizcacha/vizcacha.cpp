@@ -13,7 +13,6 @@
 
 #include "core/app/app.hpp"
 #include "core/fs/ini.hpp"
-#include "core/gfx/art.hpp"
 #include "core/os/os.hpp"
 #include "core/os/tcp.hpp"
 #include "core/shell/shell.hpp"
@@ -22,7 +21,7 @@
 #include "core/www/html.hpp"
 #include "core/www/http.hpp"
 #include "core/www/url.hpp"
-#include "internal.hpp"
+#include "art.hpp"
 
 namespace shell {
 
@@ -1442,38 +1441,48 @@ private:
 
 } // namespace
 
-void open_browser(const char *address)
+// Started again while it runs: the address it was asked for, in the window
+// that is open (none: the window as it is).
+static void open_another(const char *address)
 {
-    // On the browser's own task where it has one: whoever asks (the File
-    // manager, with a page on a drive) lends neither its process nor its
-    // stack to the reading of a page.
-    const PathArg given(address);
-    in_program(kName, [given] {
-        const char *address = given.get();
-        if (!app::bring_forward(g_browser)) {
-            app::Look look;
-            look.title = kName;
-            look.width = 600;
-            look.height = 420;
-            look.icon = &gfx::browser_icon_16();
-            look.flags = app::kMenuBar;
-            g_browser = app::open<BrowserWindow>(look);
-            if (g_browser == app::kNone) {
-                no_memory_for(kName);
-                return;
-            }
-            if (address == nullptr) {
-                address = kHome;
-            }
-        }
-        if (address != nullptr) {
-            if (BrowserWindow *w = app::program<BrowserWindow>(g_browser)) {
-                w->open_typed(address);
-            }
-        }
-    });
+    app::bring_forward(g_browser);
+    if (address == nullptr) {
+        return;
+    }
+    if (BrowserWindow *w = app::program<BrowserWindow>(g_browser)) {
+        w->open_typed(address);
+    }
 }
 
-void open_browser_home() { open_browser(nullptr); }
-
 } // namespace shell
+
+// On a task of its own where the machine has them (the stack it asks
+// for): the reading of a page is long work.
+APP_INFO(app::file_info("Vizcacha", 12 * 1024, art::kSmall, art::kSmallInks));
+
+namespace {
+// The window's icon: the header's own pixels are not in memory with the
+// program, so they are made again here from the same rows.
+constexpr app::Icon16 kWindowIcon = app::icon16(art::kSmall, art::kSmallInks);
+} // namespace
+
+// argv[1], if there is one, is an address or the path of a page on a
+// drive; without it the home page.
+APP_MAIN(int argc, char **argv)
+{
+    static const gfx::Bitmap icon = {16, 16, kWindowIcon.pixels, app::kClearInk};
+    app::Look look;
+    look.title = "Vizcacha";
+    look.width = 600;
+    look.height = 420;
+    look.icon = &icon;
+    look.flags = app::kMenuBar;
+    shell::g_browser = app::open<shell::BrowserWindow>(look);
+    if (shell::g_browser == app::kNone) {
+        shell::message_box("Vizcacha", "There is not enough memory to open Vizcacha.");
+        return 0; // said: the system has nothing to add
+    }
+    os::accept_open(&shell::open_another);
+    shell::open_another(argc > 1 ? argv[1] : "about:home");
+    return 0;
+}

@@ -118,6 +118,18 @@ template <int N> constexpr Icon16 icon16(const char *const (&rows)[16], const In
     return icon;
 }
 
+// For a program that needs no task of its own: its windows are served by
+// whoever serves the desktop's (the UI task), as a program built into the
+// system could choose. Only for one that never works for long in an event:
+// the Terminal, whose session has the task.
+//   APP_INFO(app::no_task(app::file_info(..., 0, ...)));
+constexpr uint32_t kNoTask = 0xFFFFFFFF; // in the header's `stack`
+constexpr FileInfo no_task(FileInfo info)
+{
+    info.stack = kNoTask;
+    return info;
+}
+
 // For a program that may run several copies at a time:
 //   APP_INFO(app::many(app::file_info(...)));
 constexpr FileInfo many(FileInfo info)

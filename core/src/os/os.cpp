@@ -460,10 +460,47 @@ bool shut_down()
     return g_kit.shut_down != nullptr && g_kit.shut_down();
 }
 
-bool launch(const char *program)
+void accept_open(OpenFn opened)
 {
     const prog::InCall in_call;
-    return g_kit.launch != nullptr && g_kit.launch(program);
+    if (g_kit.accept_open != nullptr) {
+        g_kit.accept_open(opened);
+    }
+}
+
+namespace file {
+
+bool Changes::has(const char *folder) const
+{
+    uint32_t k = fs::path::key(folder);
+    k = k != 0 ? k : 1;
+    for (int i = 0; i < count; i++) {
+        if (key[i] == k) {
+            return true;
+        }
+    }
+    return all;
+}
+
+void watch(ChangedFn changed)
+{
+    if (g_kit.watch_files != nullptr) {
+        g_kit.watch_files(changed);
+    }
+}
+
+} // namespace file
+
+uint32_t *counters()
+{
+    static uint32_t figures[kCounters] = {};
+    return figures;
+}
+
+bool launch(const char *program, const char *argument)
+{
+    const prog::InCall in_call;
+    return g_kit.launch != nullptr && g_kit.launch(program, argument);
 }
 
 /* ---- The network ---------------------------------------------------------------- */

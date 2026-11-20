@@ -4,7 +4,7 @@ date: 2026-11-17
 by: owner
 status: decided
 area: system
-summary: "Native code loaded from C:, with no protection; the file format and the loader (backlog 27). How the files get there was replaced by backlog 77"
+summary: "Native code loaded from C:, with no protection; the file format and the loader (backlog 27). How the files get there: backlog 77; which programs: backlog 82"
 ---
 
 # Programs loaded from files
@@ -47,9 +47,10 @@ The rest is the agent's, to confirm:
   that mark it, or none for now.
 - What a loaded program takes in memory is counted as its process's.
 - It is unloaded after its process has ended, its last window is
-  destroyed and its task has gone. 1 MB a file, eight at a time.
+  destroyed and its task has gone. 1 MB a file, eight at a time (sixteen since backlog 82).
 - **Start > Programs lists the program files of `C:\Programs`**, after
-  the built-in programs, flat, by the name and picture of each header;
+  the built-in programs (since backlog 82: among them, in the order of the
+  names), flat, by the name and picture of each header;
   the folder is read as the menu opens. Put to the owner on a card
   (2026-11-17), answer pending; the others: subfolders as submenus, or
   the menu left alone. In the File manager a `.app` has one picture for
@@ -68,7 +69,10 @@ The rest is the agent's, to confirm:
   them). A bundled program deleted by the user comes back at the next
   start.
 
-- **Culebra and Cactus Patch are files on the board and built in on the
+- (Replaced on 2026-11-19 by [The programs leave the
+  firmware](programs-out-of-the-firmware.md), backlog 82: every machine has
+  the programs as files; kept as the record.)
+  **Culebra and Cactus Patch are files on the board and built in on the
   PC** (the owner's choice on a card, 2026-11-17: "Archivo en placa,
   integrado en PC"): one source with two forms (`APP_FILE`). Rejected: a
   file everywhere (the browser build cannot load files and would lose

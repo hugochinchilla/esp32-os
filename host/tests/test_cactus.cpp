@@ -9,6 +9,7 @@
 #include "core/fs/memory_volume.hpp"
 #include "core/games/cactus.hpp"
 #include "core/shell/shell.hpp"
+#include "../../programs/test_hooks.hpp"
 #include "core/wm/wm.hpp"
 #include "../host_adapters.hpp"
 
@@ -282,9 +283,9 @@ void start_desktop()
 void test_window()
 {
     start_desktop();
-    const shell::App *app = shell::find_app("Cactus Patch");
-    CHECK(app != nullptr && app->icon != nullptr);
-    shell::launch(*app);
+    const shell::Program *app = shell::find_program("Cactus Patch");
+    CHECK(app != nullptr && app->icon != nullptr && app->built_in == nullptr);
+    shell::start_program("Cactus Patch");
     desktop.update();
     CHECK(game() != nullptr && desktop.active() == game());
     CactusField &f = shell::cactus_patch_field();
@@ -440,8 +441,8 @@ void test_window()
     wait_seconds(2);
     // The program ended with its window: this is a new one, with a new
     // field. The size comes back from its settings file.
-    CHECK(shell::find_app("Cactus Patch") != nullptr && proc::table().find_by_name("Cactus Patch") == proc::kNone);
-    shell::launch(*app);
+    CHECK(shell::find_program("Cactus Patch") != nullptr && proc::table().find_by_name("Cactus Patch") == proc::kNone);
+    shell::start_program("Cactus Patch");
     CactusField &f2 = shell::cactus_patch_field();
     CHECK(game() != nullptr && f2.state() == State::Ready && shell::cactus_patch_seconds() == 0);
     CHECK(f2.cols() == 30); // the size is kept
@@ -472,7 +473,7 @@ int write_pictures(const std::string &folder)
     while (desktop.window_count() > 0) {
         desktop.close(*desktop.window_at(0));
     }
-    shell::launch(*shell::find_app("Cactus Patch"));
+    shell::start_program("Cactus Patch");
     CactusField &f = shell::cactus_patch_field();
     save("50-cactus-new-game");
 
