@@ -622,7 +622,7 @@ const gfx::Bitmap *file_picture(const char *name, bool folder)
             return &gfx::text_icon_32();
         }
     }
-    for (const char *e : {"png", "jpg", "jpeg", "bmp"}) {
+    for (const char *e : {"png", "jpg", "jpeg", "bmp", "gif"}) {
         if (strcmp(ext, e) == 0) {
             return &gfx::picture_icon_32();
         }

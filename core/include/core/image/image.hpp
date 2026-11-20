@@ -1,4 +1,4 @@
-// Picture decoding: BMP, PNG and baseline JPEG, written for this project.
+// Picture decoding: BMP, PNG, baseline JPEG and GIF, written for this project.
 //
 // A picture is decoded a few rows at a time and handed over row by row, top
 // to bottom, as 8-bit RGB, so the whole decoded picture never has to be in
@@ -16,7 +16,7 @@
 
 namespace image {
 
-enum class Format : uint8_t { Unknown, Bmp, Png, Jpeg };
+enum class Format : uint8_t { Unknown, Bmp, Png, Jpeg, Gif };
 
 enum class Error : uint8_t {
     None,
@@ -69,15 +69,16 @@ protected:
 
 class Decoder {
 public:
-    // Opens a picture and reads its header. Transparent parts of PNGs are
-    // shown over `background` (RGB).
+    // Opens a picture and reads its header. Transparent parts of PNGs and
+    // GIFs are shown over `background` (RGB).
     Error open(const fs::Storage &storage, const char *path, ports::Memory &memory, Info &info,
                const uint8_t background[3] = nullptr);
     // The same from a source the caller keeps until close(): the decoder
     // reads from it and does not close it.
     Error open(Source &source, ports::Memory &memory, Info &info, const uint8_t background[3] = nullptr);
     // Decodes up to `rows` more rows into `sink`. Error::None until done or
-    // failed; check done().
+    // failed; check done(). It may give fewer rows, or none, while work is
+    // done that has to come before them (an interlaced GIF).
     Error step(RowSink &sink, int rows);
     bool done() const { return done_; }
     int rows_done() const { return next_row_; }

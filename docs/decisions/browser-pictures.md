@@ -4,7 +4,7 @@ date: 2026-11-18
 by: owner+agent
 status: decided
 area: programs
-summary: "Vizcacha shows a page's PNG, JPEG and BMP pictures, fetched after the text and fitted to the page; GIF stays a box (backlog 53)"
+summary: "Vizcacha shows a page's PNG, JPEG, BMP and GIF pictures, fetched after the text and fitted to the page (backlog 53, 84)"
 ---
 
 # Pictures in Vizcacha
@@ -15,8 +15,10 @@ options (in pages; only when opened; in pages with GIF; none) and chose
 pictures inside pages (2026-11-18). The details below are the agent's.
 
 - Pictures are drawn inside the page, with the decoders the Picture viewer
-  already has: PNG, JPEG, BMP. A GIF keeps its box with the `alt` text:
-  there is no GIF decoder, and writing one is a piece of work of its own.
+  already has: PNG, JPEG, BMP. A GIF kept its box with the `alt` text
+  until 2026-11-20, when the owner asked for a GIF decoder (backlog 84,
+  [GIF pictures](gif-pictures.md)): since then a GIF is drawn like the
+  others, its transparent parts showing the page's colour.
 - The text comes first. The pictures are fetched after it, one at a time,
   from the same timer, and each appears when it is whole. Not chosen:
   several at once (connections are four in the machine) and drawing a

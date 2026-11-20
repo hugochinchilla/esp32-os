@@ -163,6 +163,92 @@ std::string bmp(int width, int height)
     return out;
 }
 
+// A picture made here: an interlaced GIF with a transparent background, a
+// frog's face. The LZW is the plainest there is: a clear code often enough
+// that every code stays 9 bits wide and stands for one pixel.
+std::string gif(int width, int height)
+{
+    std::string out = "GIF89a";
+    const auto put16 = [&out](int v) {
+        out += static_cast<char>(v & 255);
+        out += static_cast<char>(v >> 8);
+    };
+    put16(width);
+    put16(height);
+    out += std::string("\xF2\x00\x00", 3); // its own colours, 8 of them
+    const uint8_t colours[8][3] = {{255, 0, 255}, {40, 150, 60}, {20, 90, 40}, {255, 255, 255},
+                                   {0, 0, 0},     {230, 90, 90}, {0, 0, 0},    {0, 0, 0}};
+    out.append(reinterpret_cast<const char *>(colours), sizeof(colours));
+    out += std::string("\x21\xF9\x04\x01\x00\x00\x00\x00", 8); // colour 0 is transparent
+    out += ',';
+    put16(0);
+    put16(0);
+    put16(width);
+    put16(height);
+    out += '\x40'; // interlaced
+    out += '\x08';
+    const auto pixel = [width, height](int x, int y) -> int {
+        const auto inside = [x, y](int cx, int cy, int rx, int ry) {
+            const long dx = x - cx, dy = y - cy;
+            return dx * dx * ry * ry + dy * dy * rx * rx < static_cast<long>(rx) * rx * ry * ry;
+        };
+        const int cx = width / 2, cy = height * 5 / 8, eye = height / 5;
+        for (int side = -1; side <= 1; side += 2) {
+            const int ex = cx + side * width / 6, ey = height / 4;
+            if (inside(ex, ey, eye / 3, eye / 3)) {
+                return 4;
+            }
+            if (inside(ex, ey, eye * 3 / 4, eye * 3 / 4)) {
+                return 3;
+            }
+            if (inside(ex, ey, eye, eye)) {
+                return 2;
+            }
+        }
+        if (inside(cx, cy + height / 10, width / 5, height / 16)) {
+            return 5;
+        }
+        if (inside(cx, cy, width * 3 / 10 - 3, height * 3 / 8 - 3)) {
+            return 1;
+        }
+        return inside(cx, cy, width * 3 / 10, height * 3 / 8) ? 2 : 0;
+    };
+    std::string data;
+    uint32_t bits = 0;
+    int nbits = 0, since_clear = 0;
+    const auto code = [&](uint32_t c) {
+        bits |= c << nbits;
+        for (nbits += 9; nbits >= 8; nbits -= 8, bits >>= 8) {
+            data += static_cast<char>(bits & 255);
+        }
+    };
+    code(256);
+    static const int first[4] = {0, 4, 2, 1}, step[4] = {8, 8, 4, 2};
+    for (int pass = 0; pass < 4; pass++) {
+        for (int y = first[pass]; y < height; y += step[pass]) {
+            for (int x = 0; x < width; x++) {
+                if (++since_clear == 250) {
+                    code(256);
+                    since_clear = 1;
+                }
+                code(static_cast<uint32_t>(pixel(x, y)));
+            }
+        }
+    }
+    code(257);
+    if (nbits > 0) {
+        data += static_cast<char>(bits & 255);
+    }
+    for (size_t at = 0; at < data.size(); at += 255) {
+        const size_t n = data.size() - at < 255 ? data.size() - at : 255;
+        out += static_cast<char>(n);
+        out.append(data, at, n);
+    }
+    out += '\0';
+    out += ';';
+    return out;
+}
+
 void save(const char *name)
 {
     desktop.update();
@@ -290,7 +376,7 @@ void scenes()
     key(wm::key::Enter);
     wait(300);
     CHECK(strcmp(title(), "FrogFind! - Vizcacha") == 0);
-    // The page, and then its picture: a GIF, which stays a box.
+    // The page, and then its picture: a GIF, see-through around the frog.
     CHECK(web.asked.size() == 3 && web.asked[0] == "frogfind.com/" && web.asked[1] == "www.frogfind.com/" &&
           web.asked[2] == "www.frogfind.com/img/frogfind.gif");
     CHECK(web.agent.find("Mozilla/4.0 (compatible;") == 0);
@@ -402,6 +488,7 @@ int main(int argc, char **argv)
     storage.mount('C', ram_disk);
     web.pages["frogfind.com/"] = "HTTP/1.1 301 Moved Permanently\r\nLocation: http://www.frogfind.com/\r\n\r\n";
     web.pages["www.frogfind.com/"] = page(kFrogHome);
+    web.pages["www.frogfind.com/img/frogfind.gif"] = answer("image/gif", gif(174, 80));
     web.pages["www.frogfind.com/?q=chinchilla"] = page(frog_results());
     web.pages["www.frogfind.com/read?a=x&k=Q9FS"] = page(kArticle);
     web.pages["andes.example/album.html"] = page(

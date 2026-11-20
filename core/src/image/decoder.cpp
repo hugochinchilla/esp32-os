@@ -83,6 +83,8 @@ Error Decoder::open(Source &source, ports::Memory &memory, Info &info, const uin
         format_ = make_png(*this, g_reader, background != nullptr ? background : white);
     } else if (a == 0xFF && b == 0xD8) {
         format_ = make_jpeg(*this, g_reader);
+    } else if (a == 'G' && b == 'I') {
+        format_ = make_gif(*this, g_reader, background != nullptr ? background : white);
     } else {
         close();
         return a < 0 ? Error::Malformed : Error::Unsupported;
@@ -112,6 +114,9 @@ Error Decoder::open(Source &source, ports::Memory &memory, Info &info, const uin
 Error Decoder::step(RowSink &sink, int rows)
 {
     for (int i = 0; i < rows && !done_; i++) {
+        if (!format_->prepare()) {
+            continue; // not a row yet, but a turn of work all the same
+        }
         const Error e = format_->next_row(rgb_);
         if (e != Error::None) {
             done_ = true;

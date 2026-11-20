@@ -1,4 +1,4 @@
-// The Picture viewer: BMP, PNG and JPEG, decoded in slices from a timer so
+// The Picture viewer: BMP, PNG, JPEG and GIF, decoded in slices from a timer so
 // the desktop stays responsive and the picture appears as it is decoded.
 #include <cstdio>
 #include <cstring>
@@ -19,7 +19,7 @@ constexpr int kMaxShown = 1600 * 1200;      // actual size up to this many pixel
 constexpr uint32_t kSliceUs = 8000;          // decoding time per timer tick
 constexpr uint32_t kTickUs = 15000;
 constexpr gfx::Colour kBackground = gfx::kDarkGrey;
-constexpr uint8_t kBackgroundRgb[3] = {73, 73, 73}; // shows through transparent PNGs
+constexpr uint8_t kBackgroundRgb[3] = {73, 73, 73}; // shows through transparent PNGs and GIFs
 
 const char *const *dither_names()
 {

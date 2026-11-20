@@ -86,6 +86,9 @@ public:
     virtual Error header(Info &info) = 0;
     // The next row into `rgb` (width x 3 bytes).
     virtual Error next_row(uint8_t *rgb) = 0;
+    // A bounded piece of whatever has to be done before the next row can
+    // be given; true once next_row() may be called. Most formats need none.
+    virtual bool prepare() { return true; }
 
 protected:
     ~FormatDecoder() = default;
@@ -94,5 +97,6 @@ protected:
 FormatDecoder *make_bmp(Decoder &d, Reader &r);
 FormatDecoder *make_png(Decoder &d, Reader &r, const uint8_t background[3]);
 FormatDecoder *make_jpeg(Decoder &d, Reader &r);
+FormatDecoder *make_gif(Decoder &d, Reader &r, const uint8_t background[3]);
 
 } // namespace image

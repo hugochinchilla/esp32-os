@@ -1104,7 +1104,7 @@ void open_folder(const char *path)
 static int program_kind(const char *path)
 {
     static const char *const kText[] = {"txt", "log", "ini", "md"};
-    static const char *const kPictures[] = {"bmp", "png", "jpg", "jpeg"};
+    static const char *const kPictures[] = {"bmp", "png", "jpg", "jpeg", "gif"};
     if (is_program_file(path)) {
         return 3;
     }
