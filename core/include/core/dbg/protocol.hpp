@@ -52,6 +52,7 @@ enum FrameType : uint8_t {
     kFrames = 0x17,       // the desktop's frames over budget (sys::Frames); bit 0 of the argument starts the count again
     kPaintBench = 0x18,   // text: how long each kind of drawing and each window takes (Wm::paint_bench)
     kVideoMode = 0x19,    // the screen's modes; with an argument, changes to that one
+    kProcesses = 0x1A,    // text: the process table, a line each (pid, parent, memory, flags, name)
     kWifi = 0x20,       // Wi-Fi: status, scan, list, connect, disconnect, forget
     kBluetooth = 0x21,  // Bluetooth keyboards and mice: list, pair, forget, pairing by itself, listening
     // Sent by the board without being asked.

@@ -99,6 +99,14 @@ def main():
             raise AssertionError("fetched a file the board has")
         known = flash.Wanted("C:\\Programs\\DATA.BIN", "test", never, mark=flash.stamp(big), size=len(big))
         assert flash.sync(board, first[:2] + [known], say=lines.append) == (0, 0, 0)
+        # The same with the board's list gone (the board, 2026-11-20: the
+        # game data was sent again at every run, six minutes each): a file
+        # of the known name and size is it, and goes back on the list.
+        board.rm(flash.MANIFEST)
+        assert flash.sync(board, first[:2] + [known], say=lines.append) == (2, 0, len(hello) + len(card))
+        assert flash.parse_manifest(board.get(flash.MANIFEST).decode())["C:\\Programs\\DATA.BIN"] == \
+            (flash.stamp(big), len(big))
+        assert "not in the board's list" in lines[-1]
         # One changed (same size), one deleted on the board, one of another
         # size on the board: those three are sent, each once.
         hello2 = hello.replace(b"hello", b"HELLO")

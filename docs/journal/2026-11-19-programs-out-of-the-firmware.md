@@ -337,6 +337,49 @@ without Doom), because much of what a program is made of was never its
 own: the window manager, the widgets, the decoders and the file system
 stay.
 
+## After the first board turn (2026-11-20)
+
+The board ran the branch at `fac6291`. The fifteen programs are in Start >
+Programs and open, the memory comes back, and the Linux program starts on
+the laptop. Six things were reported; what was done with each:
+
+- **Run "gallery" found nothing.** The program is called Widget gallery,
+  and Run looked for a name that starts with what was typed. The board
+  request itself had promised "gallery", wrongly. Run, the shell's `run`
+  and Run with an argument now also take the name of the program's file
+  ("gallery", "viewer", "file_manager") and, when no name starts so, the
+  only name with a later word that does ("gallery", "patch", "viewer";
+  not "manager", which two have).
+- **The File manager had 3,120 bytes of its 8 KB of stack never used.**
+  12 KB now. The stack is internal memory, which fell to 40,288 bytes
+  with three Terminals open, so it is not made larger than that without
+  a measurement: the next turn reads both figures again.
+- **`flash.py --files-only` sent the game data at every run**, six
+  minutes each. Not reproduced on the PC: the tool's test, with a file
+  whose sum and size are known beforehand, sends nothing the second time.
+  Two things were done. A file whose name, size and sum are fixed (the
+  game data only) is taken as there when the board has a file of that
+  name and exactly that size, whatever the board's list says: the list
+  can be lost, or the tool stopped during the six minutes, after which
+  it had already struck the file off the list. And the tool now says why
+  it sends each file ("not on the board", "1234 bytes on the board",
+  "not in the board's list", "changed"), so the next run names the cause
+  if it happens again.
+- **`cactus_patch.app` has no date in Details.** Not this change's: it is
+  the first file the tool sends, three seconds after the start, before
+  the network has told the board the date, and a file written without a
+  date shows none. Backlog item 83.
+- **FrogFind's logo is not shown** ("One picture could not be shown").
+  Not this change's either: the logo is a GIF and there is no GIF
+  decoder, as the journal of the pictures in pages says ("GIF stays a
+  box", 2026-11-18).
+- **`dbg.py` had no `ps` and no `counters`**, which the board requests
+  asked for. Both exist now: `ps` is a new request of the debug link
+  (0x1A: the process table as text, a line each), `counters` prints the
+  three figures of `os::counters()` that `stats` already carried.
+
+PC: 59 of 59, with new checks for each of the three that are code.
+
 ## What is left
 
 - The board has run none of this. Two turns are asked for: steps 1 to 3

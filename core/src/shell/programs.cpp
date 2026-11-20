@@ -153,18 +153,44 @@ const Program *find_program(const char *name, bool or_start)
         return nullptr;
     }
     const int count = program_count();
-    const Program *starts = nullptr;
-    int found = 0;
+    const Program *starts = nullptr, *word = nullptr;
+    int found = 0, words = 0;
     for (int i = 0; i < count; i++) {
-        if (strcasecmp(g_list[i].name, name) == 0) {
+        const char *whole = g_list[i].name;
+        if (strcasecmp(whole, name) == 0) {
             return &g_list[i];
         }
-        if (or_start && strncasecmp(g_list[i].name, name, length) == 0) {
+        if (!or_start) {
+            continue;
+        }
+        // Its file's name without ".app" is a name too: "viewer", "gallery".
+        if (g_list[i].path != nullptr) {
+            const char *file = fs::path::name(g_list[i].path);
+            if (strncasecmp(file, name, length) == 0 && strcasecmp(file + length, ".app") == 0) {
+                return &g_list[i];
+            }
+        }
+        if (strncasecmp(whole, name, length) == 0) {
             starts = &g_list[i];
             found++;
+            continue;
+        }
+        // A later word of the name: "gallery" for the Widget gallery,
+        // "manager" for nothing, since two have it.
+        for (const char *at = strchr(whole, ' '); at != nullptr; at = strchr(at + 1, ' ')) {
+            if (strncasecmp(at + 1, name, length) == 0) {
+                word = &g_list[i];
+                words++;
+                break;
+            }
         }
     }
-    return found == 1 ? starts : nullptr;
+    // The only name that starts so; failing that, the only one with a
+    // word that does.
+    if (found != 0) {
+        return found == 1 ? starts : nullptr;
+    }
+    return words == 1 ? word : nullptr;
 }
 
 bool start_program(const Program &program, const char *argument, char *why, size_t capacity)

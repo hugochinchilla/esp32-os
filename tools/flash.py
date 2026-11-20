@@ -87,6 +87,9 @@ class Wanted:
     def __init__(self, to, source, data, mark=None, size=None):
         self.to, self.source, self._data, self._bytes = to, source, data, None
         self._mark, self._size = mark, size
+        # One file only can have this name and this size (the game data,
+        # checked by its sum when it was fetched).
+        self.fixed = mark is not None and size is not None
 
     def data(self):
         if self._bytes is None:
@@ -206,6 +209,7 @@ def sync(board, wanted, keep=(), say=print):
         board.put(MANIFEST, format_manifest(listed))
 
     sent = deleted = total = 0
+    noted = False
     paths = {w.to for w in wanted}
     for path in sorted(set(listed) - paths - set(keep)):
         try:
@@ -216,8 +220,27 @@ def sync(board, wanted, keep=(), say=print):
             pass  # gone already
         del listed[path]
     for w in wanted:
-        if listed.get(w.to) == (w.mark, w.size) and there.get(w.to.lower()) == w.size:
+        on_board = there.get(w.to.lower())
+        if w.fixed and on_board == w.size:
+            # The game data: 4 MB and six minutes over this wire. A file of
+            # that name and exactly that size is it, whatever the list says
+            # (a list lost, or a copy that this tool was stopped in the
+            # middle of after the board had the whole file).
+            if listed.get(w.to) != (w.mark, w.size):
+                listed[w.to] = (w.mark, w.size)
+                noted = True
             continue
+        if listed.get(w.to) == (w.mark, w.size) and on_board == w.size:
+            continue
+        # Why it is sent, so that a file sent every time can be explained.
+        if on_board is None:
+            why = "not on the board"
+        elif on_board != w.size:
+            why = "%d bytes on the board" % on_board
+        elif w.to not in listed:
+            why = "not in the board's list"
+        else:
+            why = "changed"
         data = w.data()
         start = time.monotonic()
         last = [start]
@@ -233,12 +256,12 @@ def sync(board, wanted, keep=(), say=print):
             record()
         board.put(w.to, data, progress=progress)
         listed[w.to] = (stamp(data), len(data))
-        say("copied   %s (%d bytes, %.1f s)" % (w.to, len(data), time.monotonic() - start))
+        say("copied   %s (%d bytes, %.1f s; %s)" % (w.to, len(data), time.monotonic() - start, why))
         sent += 1
         total += len(data)
         if len(data) > 256 * 1024:
             record()  # a long copy is not lost to what fails after it
-    if sent or deleted or MANIFEST.lower() not in there:
+    if sent or deleted or noted or MANIFEST.lower() not in there:
         record()
     return sent, deleted, total
 

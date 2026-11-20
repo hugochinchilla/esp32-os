@@ -278,6 +278,17 @@ int main(int argc, char **argv)
         CHECK(found != nullptr && found->built_in == nullptr && found->path != nullptr);
     }
     CHECK(shell::find_program("cule", true) != nullptr && shell::find_program("c", true) == nullptr);
+    // A later word of the name, and the name of the file, find it too
+    // (the board, 2026-11-20: Run "gallery" found nothing).
+    const shell::Program *gallery = shell::find_program("gallery", true);
+    CHECK(gallery != nullptr && strcmp(gallery->name, "Widget gallery") == 0);
+    CHECK(shell::find_program("gallery") == nullptr); // not without or_start
+    const shell::Program *viewer = shell::find_program("viewer", true);
+    CHECK(viewer != nullptr && strcmp(viewer->name, "Picture viewer") == 0);
+    const shell::Program *files = shell::find_program("file_manager", true);
+    CHECK(files != nullptr && strcmp(files->name, "File manager") == 0);
+    CHECK(shell::find_program("manager", true) == nullptr); // the File manager's and the Task Manager's
+    CHECK(shell::find_program("patch", true) != nullptr);
     CHECK(os::launch("Culebra"));
     wait(10000);
     CHECK(loader.loaded == 1 && strcmp(title(), "Culebra") == 0);

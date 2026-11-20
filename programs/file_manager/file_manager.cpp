@@ -1100,8 +1100,10 @@ static void open_another(const char *path)
 } // namespace shell
 
 // One copy, with a window for each folder. On a task of its own where the
-// machine has them: the file system's code runs on its stack too.
-APP_INFO(app::file_info("File manager", 8 * 1024, art::kSmall, art::kSmallInks, art::kLarge, art::kLargeInks));
+// machine has them: the file system's code runs on its stack too. 12 KB:
+// with 8 the board measured 3,120 bytes never used after its first turn,
+// and a deep folder copy or the details of a long folder had not run yet.
+APP_INFO(app::file_info("File manager", 12 * 1024, art::kSmall, art::kSmallInks, art::kLarge, art::kLargeInks));
 
 // argv[1], if there is one, is the folder to show; without it My Board.
 APP_MAIN(int argc, char **argv)
