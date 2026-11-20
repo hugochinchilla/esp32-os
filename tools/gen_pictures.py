@@ -962,9 +962,18 @@ def make_bench(folder):
         frames.append({"rows": patch, "at": (14 + k * 21 - back, 10), "delay": 10})
     write_gif_animation(os.path.join(folder, "banner.gif"), (468, 60), colours, frames, loops=0)
     # The whole screen, 640x480: more than the usual working memory plays.
+    # Each picture after the first is a patch of the photo itself with the
+    # ring and the dot drawn on it, so the dot of the picture before goes
+    # and there is one dot at any time.
+    def nearest(r, g, b):
+        return ((r * 7 + 127) // 255) * 32 + ((g * 7 + 127) // 255) * 4 + (b * 3 + 127) // 255
+
+    marks = {3: nearest(*colours[3]), 7: nearest(*colours[7])}
     frames = [{"rows": idx, "palette": board, "delay": 50}]
     for k in range(4):
-        frames.append({"rows": disc(160, k, 4), "at": (240, 160), "transparent": 0, "delay": 50})
+        patch = [[marks.get(v, idx[160 + y][240 + x]) for x, v in enumerate(row)]
+                 for y, row in enumerate(disc(160, k, 4))]
+        frames.append({"rows": patch, "palette": board, "at": (240, 160), "delay": 50})
     write_gif_animation(os.path.join(folder, "landscape640-moving.gif"), (640, 480), colours, frames, loops=0)
     with open(os.path.join(folder, "gifs.htm"), "w") as f:
         f.write("<title>GIFs that move</title><body bgcolor=\"#FFFFCC\"><h2>GIFs that move</h2>"

@@ -157,7 +157,7 @@ int test_animation(image::Decoder &d, const std::string &name, std::istringstrea
             rows++;
         }
     };
-    for (int i = 1; i < count + 2 && e == image::Error::None && d.more_frames(); i++) {
+    for (int i = 1; i < count * 2 + 2 && e == image::Error::None && d.more_frames(); i++) {
         const std::vector<uint8_t> before = kept;
         e = d.next_frame();
         int part[4];

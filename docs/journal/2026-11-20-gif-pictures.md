@@ -268,6 +268,33 @@ What the figures say and do not say:
   round again, only what the later pictures touched is converted, since
   the first picture comes back exactly as it was shown the first time.
 
+## On the board, the third time
+
+The third turn (`d2deeb1`) was not merged. Banner, spinner and the page
+were right and the figures better (the large GIF at 10 pictures in 5362 ms
+with 645 ms of decoding, the page at about 39 pictures a second), but
+`landscape640-moving.gif` showed two red dots after 6 s and three half a
+second later, where the request said one.
+
+The laptop thread's guess was the change of the turn before: that going
+round again repaints too little. It was the test file, and the request,
+the same mistake as the banner's trail in the first turn. The four dot
+pictures were see-through patches that said "leave it", so the file itself
+asks for one dot, then two, three and four, and for none when it starts
+again; two and then three is what a right decoder shows at 6 s. Pillow
+draws the same file the same way (0, 1, 2, 3, 4 dots).
+
+- The generator now makes each of those pictures a patch of the photo
+  itself, in the photo's 256 colours, with the ring and the dot drawn on
+  it. One dot at any time; Pillow counts 1162 red pixels in each picture
+  after the first and nothing different outside the patch. It also puts a
+  patch with a table of its own on the board for the first time.
+- The PC test that plays by changed parts went on for one picture past the
+  first round. It now goes past the second, so that what is named as
+  changed when a round starts is checked after a round that itself began
+  that way.
+- Nothing in `core/` changed.
+
 ## What was learned
 
 - The format needs very little. What takes thought is all at the edges:
@@ -282,14 +309,17 @@ What the figures say and do not say:
   later pictures change (Culebra's berries, the minute on the taskbar).
   The viewer's animation scenes went to the end of the browser's program
   instead.
+- Twice a board turn failed on a test file that asked for what was seen.
+  A file made for a board check is drawn with another decoder (Pillow),
+  picture by picture, before the request says what to expect.
 
 ## What is left
 
 - Nobody has looked at it on the monitor yet: both board turns were
   judged from screenshots and figures. Whether the pointer and the menus
   feel as quick with a page of animations open is the owner's to say.
-- The change made after the second turn (going round again) has only run
-  on the PC. It rides with the next board turn of this branch.
+- The corrected large test file has only been drawn by Pillow and by the
+  PC decoder; a fourth board turn looks at it.
 - "Restore to previous" is treated as "leave it". If a file that matters
   uses it, the patch has to be saved before it is drawn.
 - A page's animation is decoded even when another window covers it.
