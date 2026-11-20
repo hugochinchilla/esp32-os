@@ -7,6 +7,7 @@
 #include "core/games/cactus.hpp"
 #include "core/games/chess.hpp"
 #include "core/games/snake.hpp"
+#include "core/gfx/canvas.hpp"
 #include "core/tty/screen.hpp"
 
 namespace shell {
@@ -37,3 +38,14 @@ const char *chess_status();
 void chess_refresh();
 
 } // namespace shell
+
+namespace pincel {
+
+// Pincel: the sheet of the one that is open (nullptr: none is), and the
+// two colours it draws with.
+struct Sheet;
+const Sheet *test_sheet();
+gfx::Colour test_ink();
+gfx::Colour test_paper();
+
+} // namespace pincel
