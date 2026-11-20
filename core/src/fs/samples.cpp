@@ -10,19 +10,30 @@
 
 namespace fs {
 
+static void add(Storage &storage, char drive, const SampleFile *files, int count)
+{
+    const char root[4] = {drive, ':', '\\', 0};
+    for (int i = 0; i < count; i++) {
+        char rel[96];
+        char p[kMaxPath];
+        snprintf(rel, sizeof(rel), "pictures\\%s", files[i].name);
+        path::join(root, rel, p, sizeof(p));
+        storage.write_file(p, files[i].data, files[i].size);
+    }
+}
+
 void add_samples(Storage &storage, char drive)
 {
     add_first_files(storage, drive);
     // Pictures made by tools/gen_pictures.py, and two NASA photographs
     // (public domain, see third_party/samples/README.md).
-    const char root[4] = {drive, ':', '\\', 0};
-    for (int i = 0; i < kSamplePictureCount; i++) {
-        char rel[96];
-        char p[kMaxPath];
-        snprintf(rel, sizeof(rel), "pictures\\%s", kSamplePictures[i].name);
-        path::join(root, rel, p, sizeof(p));
-        storage.write_file(p, kSamplePictures[i].data, kSamplePictures[i].size);
-    }
+    add(storage, drive, kSamplePictures, kSamplePictureCount);
+}
+
+// NASA's too, and in the same list of sources.
+void add_backgrounds(Storage &storage, char drive)
+{
+    add(storage, drive, kBackgroundPictures, kBackgroundPictureCount);
 }
 
 } // namespace fs
