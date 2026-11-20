@@ -378,28 +378,28 @@ int main(int argc, char **argv)
     key(wm::key::Escape);
 
     // Pictures, all from the keyboard so the board can replay it. First a
-    // damaged copy of landscape.jpg (its first half), as tools put it there.
+    // damaged copy of earthrise.jpg (its first half), as tools put it there.
     static uint8_t bytes[16384];
     size_t size = 0;
-    storage.read_file("C:\\pictures\\landscape.jpg", bytes, sizeof(bytes), size);
+    storage.read_file("C:\\pictures\\earthrise.jpg", bytes, sizeof(bytes), size);
     storage.write_file("C:\\pictures\\broken.jpg", bytes, size / 2);
 
     // Up to C:, into pictures: blue marble.png, broken.jpg, earthrise.jpg,
-    // landscape.jpg, mascot.bmp, test card.png.
+    // mascot blinks.gif, mascot.bmp, test card.png.
     key(wm::key::Backspace);
     key(wm::key::Home);
     key(wm::key::Right); // Documents, pictures
     key(wm::key::Enter);
     save("23-pictures-folder");
 
-    // Open landscape.jpg (the fourth) in the Picture viewer, decoded to the end.
+    // Open earthrise.jpg (the third) in the Picture viewer, decoded to the end.
     key(wm::key::Home);
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 2; i++) {
         key(wm::key::Right);
     }
     key(wm::key::Enter);
     shell::finish_picture();
-    save("24-viewer-landscape");
+    save("24-viewer-earthrise");
 
     // The View menu (Alt+V) with Dithering open (D), then Bayer 4x4
     // and no dither from it.
@@ -432,7 +432,7 @@ int main(int argc, char **argv)
     shell::finish_picture();
 
     // Smaller window: fitted, then actual size with scroll bars.
-    const gfx::Rect vf = find("landscape.jpg - Picture viewer")->frame();
+    const gfx::Rect vf = find("earthrise.jpg - Picture viewer")->frame();
     mouse(vf.right() - 2, vf.bottom() - 2, 0);
     mouse(vf.right() - 2, vf.bottom() - 2, 1);
     mouse(vf.right() - 162, vf.bottom() - 122, 1);
@@ -723,9 +723,12 @@ int main(int argc, char **argv)
         static uint8_t bytes[64 * 1024];
         size_t size = 0;
         storage.read_file("C:\\pictures\\mascot.bmp", bytes, sizeof(bytes), size);
-        storage.write_file("C:\\pictures\\small.bmp", bytes, size);
-        storage.read_file("C:\\pictures\\landscape.jpg", bytes, sizeof(bytes), size);
-        storage.write_file("C:\\pictures\\wall.jpg", bytes, size);
+        check(storage.write_file("C:\\pictures\\small.bmp", bytes, size) == ports::FsError::Ok && size > 0,
+              "the small picture is written");
+        // The photograph is one of the samples, under another name while
+        // it is the desktop's: it has to go and come back.
+        check(storage.rename("C:\\pictures\\earthrise.jpg", "C:\\pictures\\wall.jpg") == ports::FsError::Ok,
+              "the photograph has its name");
         settled();
         shell::display_dialog();
         key(0x05, true);                // Alt+B: Browse...
@@ -785,9 +788,9 @@ int main(int argc, char **argv)
         storage.rename("C:\\pictures\\moved.jpg", "C:\\pictures\\wall.jpg");
         settled();
         check(desktop.wallpaper().pixels != nullptr, "the file back: the picture");
-        storage.remove("C:\\pictures\\wall.jpg");
+        storage.rename("C:\\pictures\\wall.jpg", "C:\\pictures\\earthrise.jpg");
         settled();
-        check(desktop.wallpaper().pixels == nullptr, "the file deleted: the colour");
+        check(desktop.wallpaper().pixels == nullptr, "the file given its old name: the colour");
         // Not a picture: said, and not taken.
         shell::display_dialog();
         key(0x05, true);

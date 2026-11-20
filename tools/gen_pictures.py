@@ -793,7 +793,14 @@ def make_tests(folder):
 
 
 # The sample pictures, in the order they are embedded.
-SAMPLE_NAMES = ("test card.png", "landscape.jpg", "mascot.bmp", "earthrise.jpg", "blue marble.png")
+SAMPLE_NAMES = ("test card.png", "mascot.bmp", "mascot blinks.gif", "earthrise.jpg", "blue marble.png")
+# And the photographs that fill the screen, each at two sizes
+# (tools/gen_photos.py): "mir over clouds 800x600.jpg".
+
+
+def sample_names():
+    import gen_photos
+    return SAMPLE_NAMES + tuple(gen_photos.BACKGROUND_NAMES)
 
 
 def samples():
@@ -804,14 +811,23 @@ def samples():
     tmp = "/tmp/chinchilla-samples"
     os.makedirs(tmp, exist_ok=True)
     write_png(tmp + "/test card.png", test_card(320, 240), "rgb8")
-    write_jpeg(tmp + "/landscape.jpg", landscape(320, 240), quality=75)
     idx_rows = mascot(128, 128)
     pal = sorted(set(c for row in idx_rows for c in row))
     write_bmp(tmp + "/mascot.bmp", [[pal.index(c) for c in row] for row in idx_rows], 4,
               palette=pal + [(0, 0, 0)] * (16 - len(pal)))
+    # The mascot again as a GIF that moves: three seconds looking, then the
+    # eyes shut for a moment. The second picture is a patch, the band of
+    # the eyes with their upper half the fur's white.
+    pal = list(MASCOT_INK.values())
+    grid = [[pal.index(MASCOT_INK[MASCOT[y * 16 // 128][x * 16 // 128]]) for x in range(128)] for y in range(128)]
+    shut = [[pal.index(MASCOT_INK["L"]) for _ in range(64)] for _ in range(8)]
+    write_gif_animation(tmp + "/mascot blinks.gif", (128, 128), pal, [
+        {"rows": grid, "delay": 300},
+        {"rows": shut, "at": (32, 56), "delay": 15},
+    ], loops=0)
     import gen_photos  # public-domain NASA photographs, see third_party/samples/
     gen_photos.main(tmp)
-    for name in SAMPLE_NAMES:
+    for name in sample_names():
         with open(tmp + "/" + name, "rb") as f:
             out[name] = f.read()
     return out
@@ -829,10 +845,17 @@ def make_embed(path):
             for j in range(0, len(data), 20):
                 f.write("    " + ", ".join("%d" % b for b in data[j:j + 20]) + ",\n")
             f.write("};\n\n")
-        f.write("} // namespace\n\nconst SampleFile kSamplePictures[] = {\n")
-        for i, (name, data) in enumerate(files.items()):
-            f.write('    {"%s", kFile%d, sizeof(kFile%d)},\n' % (name, i, i))
-        f.write("};\nconst int kSamplePictureCount = %d;\n\n} // namespace fs\n" % len(files))
+        # Two lists: the small ones, which every new drive of a PC program
+        # and of a test gets, and the photographs that fill the screen.
+        f.write("} // namespace\n")
+        for table, count, names in (("kSamplePictures", "kSamplePictureCount", SAMPLE_NAMES),
+                                    ("kBackgroundPictures", "kBackgroundPictureCount", sample_names()[len(SAMPLE_NAMES):])):
+            f.write("\nconst SampleFile %s[] = {\n" % table)
+            for i, name in enumerate(files):
+                if name in names:
+                    f.write('    {"%s", kFile%d, sizeof(kFile%d)},\n' % (name, i, i))
+            f.write("};\nconst int %s = %d;\n" % (count, len(names)))
+        f.write("\n} // namespace fs\n")
     print("%s: %s" % (path, ", ".join("%s %d bytes" % (n, len(d)) for n, d in files.items())))
 
 
@@ -904,7 +927,7 @@ def make_dither_eval(folder):
     pics = [("sky", sky(320, 240)), ("skin", skin(320, 240)), ("grey-ramp", grey_ramp(320, 240)),
             ("test-card", test_card(320, 240)), ("text-on-photo", text_on_photo(320, 240)),
             ("landscape", landscape(320, 240))]
-    for name, original, crop, size, kind in gen_photos.PHOTOS:
+    for name, original, crop, size, kind in gen_photos.PHOTOS[:2]:  # not the ones that fill the screen
         rows = gen_photos.rgb_rows(os.path.join(gen_photos.HERE, original), crop, size)
         pics.append((name.split(".")[0].replace(" ", "-"), rows))
     with open(os.path.join(folder, "list.txt"), "w") as lst:

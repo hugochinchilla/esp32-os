@@ -301,14 +301,14 @@ void test_programs()
     CHECK(memory.bytes_in_use() - base_bytes > 576 * 1024);
     key(wm::key::F4, kAlt);
     CHECK(memory.in_use() == base && memory.bytes_in_use() == base_bytes);
-    shell::open_picture("C:\\pictures\\landscape.jpg");
+    shell::open_picture("C:\\pictures\\earthrise.jpg");
     shell::finish_picture();
     CHECK(strstr(title(), "Picture viewer") != nullptr);
     CHECK(memory.bytes_in_use() - base_bytes > 1600 * 1200);
     key(wm::key::F4, kAlt);
     CHECK(memory.in_use() == base && memory.bytes_in_use() == base_bytes);
     // Closed while still decoding: the timer stops and nothing is left.
-    shell::open_picture("C:\\pictures\\landscape.jpg");
+    shell::open_picture("C:\\pictures\\earthrise.jpg");
     key(wm::key::F4, kAlt);
     wait(1000000);
     CHECK(memory.in_use() == base && desktop.timers_of(0) == 0);
@@ -524,7 +524,7 @@ void test_dialogs()
 
     // The Picture viewer's Options and the Network panel's password dialog
     // are made for one showing as well.
-    shell::open_picture("C:\\pictures\\landscape.jpg");
+    shell::open_picture("C:\\pictures\\earthrise.jpg");
     shell::finish_picture();
     const int viewer = memory.in_use();
     letter('v', kAlt);
@@ -584,7 +584,7 @@ void test_no_memory()
     key(wm::key::Enter);
     wait(10000);
     CHECK(desktop.window_count() == 0 && t.count() == 2 && memory.in_use() == base);
-    shell::open_picture("C:\\pictures\\landscape.jpg");
+    shell::open_picture("C:\\pictures\\earthrise.jpg");
     CHECK(strcmp(title(), "Picture viewer") == 0);
     key(wm::key::Enter);
     wait(10000);

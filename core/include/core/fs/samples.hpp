@@ -14,5 +14,9 @@ struct SampleFile {
 
 extern const SampleFile kSamplePictures[];
 extern const int kSamplePictureCount;
+// The photographs that fill the screen, each at 800x600 and at 640x480
+// (backlog item 85): about 930 KB, more than the drive of a test holds.
+extern const SampleFile kBackgroundPictures[];
+extern const int kBackgroundPictureCount;
 
 } // namespace fs

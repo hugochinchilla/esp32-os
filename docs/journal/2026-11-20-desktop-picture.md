@@ -159,6 +159,14 @@ The board turn of 2026-11-20 (commit f5669c7; a batch with items 85 and
   eye; the mode was changed with `dbg.py mode`, not through Resolution
   and Keep.
 
+## Brought up to `main`
+
+The owner said yes to merging, 2026-11-20. `main` had taken the NASA
+photographs (item 85) and Pincel (item 86) meanwhile: the scenes now use
+`earthrise.jpg`, which took `landscape.jpg`'s place among the samples
+(renamed for the test and back, not copied), the reference pictures were
+made again, and the PC tests are 61 of 61.
+
 ## What was learned
 
 - The fades needed no change: they already treated "the plain desktop" as

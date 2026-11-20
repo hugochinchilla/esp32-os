@@ -7,8 +7,8 @@ ESP32-S3, with VGA output from GPIO pins, Wi-Fi, and USB keyboard and mouse.
 
 Status: **the desktop runs on the board.** Overlapping, resizable windows in
 the 98 look with menus, a taskbar with a clock and the Start menu, desktop
-icons, widgets, an Editor, a File manager and a Picture viewer (BMP, PNG,
-baseline JPEG, GIF), files on the flash (LittleFS, kept across restarts), a
+icons, widgets, an Editor, a File manager, a Picture viewer (BMP, PNG,
+baseline JPEG, GIF) and a drawing program, files on the flash (LittleFS, kept across restarts), a
 start-up self-test, plus a debug protocol for screenshots,
 injected input and file transfer.
 
