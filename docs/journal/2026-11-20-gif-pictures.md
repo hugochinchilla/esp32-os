@@ -353,3 +353,15 @@ before did not do with this code.
   of the Earth) will be shown to him before any goes in.
 - No sample GIF is in C:\pictures yet; one comes with item 85, so that the
   folder's reference pictures change once.
+
+## On the board, the fifth time (2026-11-20, commit 356eb3e)
+
+`main` with item 82 merged in (the Picture viewer and Vizcacha are program
+files). Both load with no name refused. A double click on `banner.gif` in the
+File manager opens the viewer with one moving block (48 pictures in 5004 ms).
+`landscape640-moving.gif` shows one dot at a time in two screenshots half a
+second apart (10 pictures in 5362 ms, 698 ms decoding); closing the viewer
+gives back the internal memory (132,739 bytes free before and after).
+`gifs.htm` in Vizcacha: one block on the banner and one dot on each spinner,
+"4 animations, 201 pictures in 5018 ms, 1770 ms of them decoding"; memory
+back after closing. No missed refill. Merged into `main`.
