@@ -345,7 +345,9 @@ bool run_file(const char *path, char *why, size_t capacity, const char *argument
     // A program has a task of its own where the machine has tasks (backlog
     // item 26), with the stack its header asks for. Without one (none here,
     // none left) it runs on the caller's.
-    prog::runner().start(pid, info.stack);
+    if (info.stack != app::kNoTask) {
+        prog::runner().start(pid, info.stack);
+    }
     // Its way in, as itself. It opens its window and returns; a program
     // that opens none ends at once and is swept away. One that is late
     // coming back is left to it: the sweep sees how it went.

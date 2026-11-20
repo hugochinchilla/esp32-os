@@ -638,6 +638,10 @@ void test_files()
     CHECK(m.contents("C:\\docs\\sub\\Moved.TXT") == "beta, with no line end" && !m.exists("C:\\docs\\Moved.TXT"));
     CHECK_TEXT(run(m, s, "mv new.txt a.txt"), ""); // onto a file: it takes its place
     CHECK(m.contents("C:\\docs\\a.txt") == "" && !m.exists("C:\\docs\\new.txt"));
+    // ren gives a new name and takes none that is taken: both stay.
+    CHECK_TEXT(run(m, s, "ren a.txt b.txt", 1), "ren: C:\\docs\\b.txt: already exists\n");
+    CHECK_TEXT(run(m, s, "rename a.txt B.TXT", 1), "rename: C:\\docs\\B.TXT: already exists\n");
+    CHECK(m.contents("C:\\docs\\a.txt") == "" && m.exists("C:\\docs\\b.txt"));
     CHECK_TEXT(run(m, s, "mv sub\\deep Deep2"), "");
     CHECK(m.contents("C:\\docs\\Deep2\\d.txt") == "deep" && !m.exists("C:\\docs\\sub\\deep"));
     CHECK_TEXT(run(m, s, "rename Deep2 deep2"), "");

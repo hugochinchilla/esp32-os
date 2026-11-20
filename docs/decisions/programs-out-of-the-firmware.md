@@ -97,6 +97,10 @@ The rest is the agent's, to confirm:
 - **A program's figures for the debug link are the system's**
   (`os::counters()`): the firmware cannot read a variable of a program
   that is a file.
+- **A program file may go without a task of its own**
+  (`app::no_task`): its windows are served on the UI task, as a program
+  built into the system could choose. For a program that never works for
+  long in an event; the Terminal is the only one.
 - **The decoders of pictures stay in the firmware** (the desktop's
   background uses them); the Picture viewer asks for them by name
   (`image::`). The quick launch's three pictures (File manager, Editor,

@@ -420,6 +420,42 @@ once `dbg.py tasks` has shown what it uses after a deep copy.
 
 PC: 59 of 59, with a File manager test that renames onto a taken name.
 
+## After the third board turn (2026-11-20)
+
+At `5ddf6e5` the File manager's rename, a folder's, Paste and the drags
+were right, and opening `C:\Programs` in Details went from 1,157 to 773
+ms (paths are no longer looked up by reading folders). Two things were
+left.
+
+**The shell's `ren` still wrote over a file.** That one was written so:
+`ren`, `rename`, `mv` and `move` are one command, and the command shell's
+journal (2026-11-17) chose "`mv a b` where `b` is a file replaces it in
+one step, as Unix does; DOS would ask". The drive's fix did not touch it
+because it calls `replace`, not `rename`. The options:
+
+- (a) `ren` and `rename` refuse a name that is taken ("already exists");
+  `mv` and `move` keep replacing, as Unix does and as was chosen. Built:
+  the word that means "give a new name" loses nothing, and the one a
+  script uses to put a file in place of another still does it.
+- (b) All four refuse; a file is replaced with `rm` first. Safest, and it
+  takes back the choice of 2026-11-17.
+- (c) All four replace, as it was: the board's finding stands.
+
+Built (a) and put to the owner on a card, since (b) reverses a recorded
+choice.
+
+**The Terminal still had a task of its own**, 4 KB each: a stack of 0 in
+a program's header does not mean "no task" but "the least there is". A
+program built into the system could go without one (the Terminal's row
+did); a file could not say so. It can now: `app::no_task(...)` writes a
+value in the header's stack that the loader takes as "serve its windows
+where the desktop's are served". Only the Terminal uses it.
+
+**The File manager's stack is 10 KB**, from what the board measured:
+about 5.1 KB used after drags, the Trash, Paste and a copy of 355 KB.
+
+PC: 59 of 59, with `ren` onto a taken name in the shell's test.
+
 ## What is left
 
 - The board has run none of this. Two turns are asked for: steps 1 to 3
