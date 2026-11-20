@@ -34,6 +34,8 @@ struct Info {
     int height = 0;
     Format format = Format::Unknown;
     char detail[40] = ""; // "PNG, 8-bit RGB"
+    bool several = false;  // the file holds more than one picture (an animated GIF)
+    bool animated = false; // and they can be played, with Decoder::next_frame()
 };
 
 // Receives the decoded rows.
@@ -53,6 +55,11 @@ constexpr int kMaxHeight = 16384;
 constexpr size_t kPoolBytes = 384 * 1024;
 
 class FormatDecoder; // one per format, inside
+class Reader;
+
+// The working memory an animation with a screen of this size needs to be
+// played (see Decoder::use_pool()).
+size_t animation_pool(int width, int height);
 
 // Where a picture's bytes come from: something that is read in order and
 // can be put at a place. A program hands in one over a file it has opened
@@ -85,6 +92,22 @@ public:
     void close();
     // Closes, and gives the working memory back to where open() got it.
     void release(ports::Memory &memory);
+    // Working memory of another size than kPoolBytes for the pictures
+    // opened from now on: more, for an animation whose screen is too large
+    // to be played in the usual pool (Info::several without Info::animated),
+    // or less, for a small one that will be kept open. Releases.
+    void use_pool(ports::Memory &memory, size_t bytes);
+
+    // An animation (Info::animated). Once a picture is done(): how long it
+    // stays, in milliseconds, and whether another follows (not after the
+    // last one of the last time round).
+    int frame_ms() const;
+    bool more_frames() const;
+    // Begins the next picture: step() gives the whole of it from row 0,
+    // the file's patch laid on what was there. The source must still be
+    // readable. After an error the animation is over; the picture shown
+    // stays good.
+    Error next_frame();
     ~Decoder() { close(); }
 
     // Working memory, for the format decoders: a bump allocator over the pool.
@@ -104,7 +127,9 @@ private:
     };
     OwnFile own_;
     uint8_t *pool_ = nullptr;
+    size_t pool_bytes_ = kPoolBytes;
     size_t used_ = 0;
+    Reader *reader_ = nullptr; // in the pool
     FormatDecoder *format_ = nullptr;
     uint8_t *rgb_ = nullptr; // one decoded row
     Info info_;

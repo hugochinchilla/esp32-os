@@ -92,6 +92,62 @@ image::Error error_named(const std::string &s)
     return image::Error::Malformed;
 }
 
+// An animated GIF: each picture in turn against the pixels the generator
+// worked out, how long each stays, and that it stops after the last time
+// round. A screen too large for the usual working memory shows its first
+// picture, and plays once the decoder is given what animation_pool() says.
+int test_animation(image::Decoder &d, const std::string &name, std::istringstream &in)
+{
+    int w = 0, h = 0, count = 0, rounds = 0;
+    in >> w >> h >> count >> rounds;
+    std::vector<int> delays(count);
+    for (int &ms : delays) {
+        in >> ms;
+    }
+    const std::string path = "D:\\" + name;
+    image::Info info;
+    Collect got;
+    image::Error e = decode(d, path.c_str(), info, got);
+    CHECK(e == image::Error::None && info.several && info.width == w && info.height == h);
+    const bool large = !info.animated;
+    CHECK(large == (name == "anim-large.gif"));
+    if (large) {
+        CHECK(got.pixels == read_all(folder + "/" + name + ".0.rgb"));
+        CHECK(!d.more_frames() && d.next_frame() != image::Error::None);
+        CHECK(image::animation_pool(w, h) > image::kPoolBytes);
+        d.use_pool(memory, image::animation_pool(w, h));
+        got = Collect();
+        e = decode(d, path.c_str(), info, got);
+        CHECK(e == image::Error::None && info.animated);
+    }
+    const int total = rounds == 0 ? count * 2 + 1 : count * rounds; // "for ever": a little over twice
+    for (int i = 0; i < total && e == image::Error::None; i++) {
+        const int f = i % count;
+        if (got.pixels != read_all(folder + "/" + name + "." + std::to_string(f) + ".rgb") || got.rows != h || !got.in_order) {
+            printf("  %s: picture %d (the %dth shown) is not as expected\n", name.c_str(), f, i);
+            failures++;
+        }
+        CHECK(d.frame_ms() == delays[f]);
+        if (i + 1 == total) {
+            CHECK(d.more_frames() == (rounds == 0));
+            break;
+        }
+        CHECK(d.more_frames());
+        e = d.next_frame();
+        CHECK(e == image::Error::None);
+        got = Collect();
+        got.width = w;
+        while (!d.done() && e == image::Error::None) {
+            e = d.step(got, 5);
+        }
+        CHECK(e == image::Error::None);
+    }
+    if (large) {
+        d.use_pool(memory, image::kPoolBytes);
+    }
+    return 1;
+}
+
 void test_manifest()
 {
     std::ifstream m(folder + "/manifest.txt");
@@ -106,6 +162,10 @@ void test_manifest()
         image::Info info;
         Collect got;
         const image::Error e = decode(d, path.c_str(), info, got);
+        if (kind == "frames") {
+            checked += test_animation(d, name, in);
+            continue;
+        }
         if (kind == "error") {
             std::string want;
             in >> want;
@@ -171,9 +231,16 @@ void test_damaged()
                 .write(reinterpret_cast<const char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
             image::Info info;
             Collect got;
-            const image::Error e = decode(d, "D:\\damaged.bin", info, got);
+            image::Error e = decode(d, "D:\\damaged.bin", info, got);
             errors += e != image::Error::None;
             runs++;
+            // What is left of an animation plays on without harm.
+            for (int n = 0; n < 12 && e == image::Error::None && d.more_frames(); n++) {
+                e = d.next_frame();
+                while (!d.done() && e == image::Error::None) {
+                    e = d.step(got, 7);
+                }
+            }
         };
         for (int cut = 0; cut < 24; cut++) {
             std::vector<uint8_t> b(good.begin(), good.begin() + static_cast<long>(good.size() * cut / 24));

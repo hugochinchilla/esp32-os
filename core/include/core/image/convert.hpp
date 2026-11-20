@@ -33,6 +33,11 @@ struct DitherInfo {
     const char *description; // one line
 };
 const DitherInfo &dither_info(Dither d);
+// The dither for a picture that moves, when `d` is the one chosen. Error
+// diffusion carries the errors of the part that changes through the parts
+// that do not, which then shimmer; those become Bayer4. The ordered ones
+// give a pixel the same colour whatever is around it, and stay.
+Dither steady(Dither d);
 
 // A RowSink that turns each row into board colours in `out`. Shrinking uses
 // a box filter (the average of the source pixels each one covers); the same

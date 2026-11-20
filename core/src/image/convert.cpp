@@ -83,6 +83,11 @@ constexpr Bayer8 kBayer8;
 
 } // namespace
 
+Dither steady(Dither d)
+{
+    return d <= Dither::BlueNoise ? d : Dither::Bayer4;
+}
+
 const DitherInfo &dither_info(Dither d)
 {
     const int i = static_cast<int>(d);

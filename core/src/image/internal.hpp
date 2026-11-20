@@ -89,6 +89,11 @@ public:
     // A bounded piece of whatever has to be done before the next row can
     // be given; true once next_row() may be called. Most formats need none.
     virtual bool prepare() { return true; }
+    // An animation: how long the picture just given stays, whether another
+    // follows it, and on to that one (its rows then come from the top).
+    virtual int frame_ms() { return 0; }
+    virtual bool more() { return false; }
+    virtual Error next() { return Error::Unsupported; }
 
 protected:
     ~FormatDecoder() = default;

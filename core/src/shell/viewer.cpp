@@ -1,5 +1,7 @@
 // The Picture viewer: BMP, PNG, JPEG and GIF, decoded in slices from a timer so
-// the desktop stays responsive and the picture appears as it is decoded.
+// the desktop stays responsive and the picture appears as it is decoded. An
+// animated GIF plays: the file stays open and the same timer decodes each
+// picture when its time comes.
 #include <cstdio>
 #include <cstring>
 
@@ -18,6 +20,8 @@ namespace {
 constexpr int kMaxShown = 1600 * 1200;      // actual size up to this many pixels
 constexpr uint32_t kSliceUs = 8000;          // decoding time per timer tick
 constexpr uint32_t kTickUs = 15000;
+// The most working memory taken to play an animation: a screen of 800x600.
+const size_t kMaxAnimationPool = image::animation_pool(800, 600);
 constexpr gfx::Colour kBackground = gfx::kDarkGrey;
 constexpr uint8_t kBackgroundRgb[3] = {73, 73, 73}; // shows through transparent PNGs and GIFs
 
@@ -214,10 +218,11 @@ public:
         free_program_memory(shown_);
     }
 
-    // For tests and the debug link: decodes to the end at once.
+    // For tests and the debug link: decodes to the end at once (of an
+    // animation, to the end of its first picture).
     void finish()
     {
-        while (timer_ != 0) {
+        while (timer_ != 0 && !playing_) {
             slice(this);
         }
     }
@@ -293,6 +298,7 @@ private:
             os::stop_timer(timer_);
             timer_ = 0;
         }
+        playing_ = false;
         decoder_.close();
         if (source_.file != os::file::kNoFile) {
             os::file::close(source_.file);
@@ -305,9 +311,23 @@ private:
         stop();
         // The file is this program's, held while the picture is decoded a
         // piece at a time; the decoder only reads from it.
-        const image::Error e = os::file::open(path_, ports::OpenMode::Read, source_.file) == ports::FsError::Ok
-                                   ? decoder_.open(source_, program_port(), info_, kBackgroundRgb)
-                                   : image::Error::NotFound;
+        decoder_.use_pool(program_port(), image::kPoolBytes);
+        image::Error e = os::file::open(path_, ports::OpenMode::Read, source_.file) == ports::FsError::Ok
+                             ? decoder_.open(source_, program_port(), info_, kBackgroundRgb)
+                             : image::Error::NotFound;
+        // An animation too large for the usual working memory: more of it,
+        // while this picture is open, if that is not asking too much.
+        const size_t pool = image::animation_pool(info_.width, info_.height);
+        if (e == image::Error::None && info_.several && !info_.animated && pool <= kMaxAnimationPool) {
+            decoder_.use_pool(program_port(), pool);
+            image::Info again;
+            if (decoder_.open(source_, program_port(), again, kBackgroundRgb) == image::Error::None) {
+                info_ = again;
+            } else { // no memory for it: the first picture, still
+                decoder_.use_pool(program_port(), image::kPoolBytes);
+                e = decoder_.open(source_, program_port(), info_, kBackgroundRgb);
+            }
+        }
         snprintf(title_, sizeof(title_), "%s - Picture viewer", fs::path::name(path_));
         set_title(title_);
         if (e != image::Error::None) {
@@ -335,7 +355,7 @@ private:
         h = h < 1 ? 1 : h;
         shown_w_ = w;
         shown_h_ = h;
-        converter_.begin(info_.width, info_.height, w, h, shown_, dither_);
+        converter_.begin(info_.width, info_.height, w, h, shown_, info_.animated ? image::steady(dither_) : dither_);
         show(shown_, w, h);
         started_us_ = os::now_us();
         busy_us_ = 0;
@@ -350,6 +370,10 @@ private:
     {
         auto *v = static_cast<ViewerWindow *>(context);
         const uint64_t start = os::now_us();
+        if (v->playing_) {
+            v->play(start);
+            return;
+        }
         const int before = v->converter_.rows_done();
         image::Error e = image::Error::None;
         while (!v->decoder_.done() && os::now_us() - start < kSliceUs) {
@@ -378,7 +402,13 @@ private:
         if (v->decoder_.done()) {
             g_timings[0] = v->busy_us_;
             g_timings[1] = static_cast<uint32_t>(os::now_us() - v->started_us_);
-            v->stop();
+            if (v->decoder_.more_frames()) {
+                v->playing_ = true; // the file stays open and the timer goes on
+                v->waiting_ = true;
+                v->frame_us_ = os::now_us();
+            } else {
+                v->stop();
+            }
             char text[120];
             snprintf(text, sizeof(text), "%s   %d x %d   %s%s", fs::path::name(v->path_), v->info_.width,
                      v->info_.height, v->info_.detail,
@@ -388,6 +418,42 @@ private:
             char text[60];
             snprintf(text, sizeof(text), "Loading... %d%%", v->decoder_.rows_done() * 100 / v->info_.height);
             v->set_status(text);
+        }
+    }
+
+    // An animation, from the timer. Waiting: when the picture shown has
+    // stayed its time, on to the next. Otherwise: a slice of decoding it,
+    // and the whole of it painted when it is done, not row by row, so that
+    // no picture is seen half made.
+    void play(uint64_t now)
+    {
+        if (waiting_) {
+            const uint64_t stay = static_cast<uint64_t>(decoder_.frame_ms()) * 1000;
+            if (now - frame_us_ < stay) {
+                return;
+            }
+            // Times are counted from when each picture was due, so that a
+            // late tick does not slow the whole; unless it has fallen behind.
+            frame_us_ = now - frame_us_ > 2 * stay ? now : frame_us_ + stay;
+            if (!decoder_.more_frames() || decoder_.next_frame() != image::Error::None) {
+                stop(); // the end, or damage further on: what is shown stays
+                return;
+            }
+            converter_.begin(info_.width, info_.height, shown_w_, shown_h_, shown_, image::steady(dither_));
+            waiting_ = false;
+        }
+        image::Error e = image::Error::None;
+        while (!decoder_.done() && e == image::Error::None && os::now_us() - now < kSliceUs) {
+            e = decoder_.step(converter_, 4);
+        }
+        if (e != image::Error::None) {
+            stop();
+        } else if (decoder_.done()) {
+            waiting_ = true;
+            view_.redraw(picture_rect().intersect(area()));
+            if (!decoder_.more_frames()) {
+                stop();
+            }
         }
     }
 
@@ -462,6 +528,8 @@ private:
     int shown_w_ = 0, shown_h_ = 0;
     int timer_ = 0;
     uint64_t started_us_ = 0;
+    bool playing_ = false, waiting_ = false; // an animation: on, and between two pictures
+    uint64_t frame_us_ = 0;                  // when the picture shown was due
     bool fit_ = true;
     image::Dither dither_ = image::Dither::FloydSteinberg; // and in settings.ini
     bool settings_read_ = false;

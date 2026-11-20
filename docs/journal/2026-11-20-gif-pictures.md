@@ -40,13 +40,22 @@ Whether animations move was put to the owner on a card:
 
 | | What | Cost |
 | --- | --- | --- |
-| **First picture now, animation after** (recommended) | GIFs are shown still in both programs; animation becomes a backlog item on the same decoder | This branch |
-| Animated at once | The viewer and the pages play animations | Much more: each picture of an animation is a patch laid on the one before, so the whole screen of the GIF has to be kept, the pictures kept or decoded again and again, and it wants measuring on the board |
-| Never animated | Still pictures only, and nothing in the backlog | This branch |
+| First picture now, animation after (recommended) | GIFs are shown still in both programs; animation becomes a backlog item on the same decoder | The first sitting |
+| **Animated at once** (chosen) | The viewer and the pages play animations | Much more: each picture of an animation is a patch laid on the one before, so the whole screen of the GIF has to be kept, and it wants measuring on the board |
+| Never animated | Still pictures only, and nothing in the backlog | The first sitting |
 
-Not answered when this was written. The work below is what all three need.
+The still decoder was built and pushed while the card waited (PR 92). The
+owner answered an hour and a half later: "Animados desde ya en los dos".
 
-For interlaced files, chosen by the agent:
+How an animation is kept, chosen by the agent:
+
+| | What | Cost |
+| --- | --- | --- |
+| **One screen, decoded again each time** (chosen) | The decoder keeps the GIF's screen as RGB and lays each picture on it; the program converts the whole screen to board colours for each picture | Processor time for every picture, for as long as it plays. Memory: the file and 3 bytes a pixel, whatever the length |
+| Every picture kept once converted | Decode once, then only copy | Memory by the number of pictures: a banner of 468x60 with 21 pictures is 590 KB against 107 KB. A second set of limits and what to do past them |
+| The screen kept in board colours, patches converted alone | Less to convert per picture | A patch shrunk or dithered alone does not join its surroundings: seams. And see-through pixels inside a shrunk patch |
+
+For interlaced still files, chosen by the agent:
 
 | | What | Cost |
 | --- | --- | --- |
@@ -56,59 +65,128 @@ For interlaced files, chosen by the agent:
 
 ## What was built
 
-- `core/src/image/gif.cpp`: GIF87a and GIF89a. The file's colours or the
-  picture's own; 2 to 256 colours; a transparent colour; the picture placed
-  on a larger screen; interlacing; extensions before the picture skipped
-  (comments, the loop count of an animation). LZW with its tables inside
-  the decoder's object (17 KB of the pool), codes up to 12 bits, a full
-  table that goes on without a clear code. Integers only.
+The decoder, `core/src/image/gif.cpp` (556 lines):
+
+- GIF87a and GIF89a. The file's colours or a picture's own; 2 to 256
+  colours; a transparent colour; a picture placed on a larger screen;
+  interlacing; extensions skipped. LZW with its tables inside the
+  decoder's object (18 KB of the pool), codes up to 12 bits, a full table
+  that goes on without a clear code. Integers only.
 - `FormatDecoder::prepare()`: a bounded piece of work before a row can be
   given. `Decoder::step` calls it and counts it as a turn, so the callers'
-  time slices hold. The GIF decoder uses it to decode an interlaced picture
-  4096 pixels at a time; without it the first row of a 640x480 interlaced
-  GIF would have been one long stop.
-- `.gif` opens in the Picture viewer from the File manager and has the
-  picture icon on the desktop.
-- `tools/gen_pictures.py` has a GIF writer (its own LZW) and makes 17 test
-  GIFs, 16 with the pixels each must decode to: 1, 2, 4 and 8 bits; interlaced,
-  one of three rows; 87a; its own colours with extensions in front;
-  transparent; placed on a larger screen, plain and interlaced; a screen
-  too small; 160x120 pictures that fill the code table, with a clear code,
-  without one, and interlaced; an animation of two pictures; and a file
-  with no picture, which must say "damaged".
+  time slices hold. The GIF decoder uses it to decode 4096 pixels at a
+  time ahead of the rows: an interlaced picture, or a picture of an
+  animation onto its screen.
+- Animations. When the file is opened the decoder passes over the first
+  picture's data to see whether another follows (`Info::several`); if so
+  and the screen fits the working memory as RGB, it can be played
+  (`Info::animated`). `Decoder::next_frame()` goes on to the next picture,
+  `frame_ms()` says how long the one shown stays, `more_frames()` whether
+  another follows. Times, times round and what a picture leaves behind
+  are as [the decision](../decisions/gif-pictures.md) says.
+- `Decoder::use_pool()` gives a decoder working memory of another size,
+  and `image::animation_pool(w, h)` says how much an animation needs.
+- The reader (the 1 KB buffer over the file) was one for the whole system,
+  "one picture is decoded at a time". Animations in a page stay open side
+  by side, so each decoder now has its own, in its pool.
+
+The Picture viewer:
+
+- `.gif` opens in it from the File manager and has the picture icon on the
+  desktop.
+- An animation plays: the file stays open, and the timer that decoded the
+  picture goes on, starting the next picture when the one shown has stayed
+  its time. For a screen larger than the usual pool plays, the viewer
+  opens the file again with the memory it needs, up to 800x600.
+- The status line says "GIF, 8 colours, animated".
+
+Vizcacha:
+
+- Nothing changed for still GIFs: it tells a picture by its bytes.
+- A file of several pictures gets an `Animation`: a copy of the file, a
+  decoder with working memory sized to it, and the place of its pixels in
+  the page. The page's timer, which used to stop when the page was whole,
+  goes on while there is one. One picture is decoded at a time (there is
+  one converter) and painted when it is whole; only its rectangle of the
+  page is painted again.
+- Everything goes back when another page is shown or the window closes.
+
+`image::steady()` picks the dither for a picture that moves.
+
+`tools/gen_pictures.py` has a GIF writer (its own LZW) and makes:
+
+- for the tests, 17 still GIFs, 16 with the pixels each must decode to
+  (1, 2, 4 and 8 bits; interlaced, one of three rows; 87a; its own colours
+  with extensions in front; transparent; placed on a larger screen, plain
+  and interlaced; a screen too small; 160x120 pictures that fill the code
+  table, with a clear code, without one, and interlaced; the first picture
+  of an animation) and one with no picture, which must say "damaged";
+- four animations with every picture they must show, the times and the
+  times round: patches with see-through pixels, for ever; a picture taken
+  away again, one with its own colours, an interlaced patch, three times
+  round, on a screen the first picture does not fill; one that plays once
+  and whose second picture sticks out of the screen; one of 420x300, too
+  large for the usual pool;
+- for the board (`bench`), the landscape as a GIF plain and interlaced, a
+  spinner of 12 pictures, a 468x60 banner of 21, a 640x480 animation, and
+  `gifs.htm`, a page that shows them.
 
 ## How it was tested
 
 On the PC only. Not compiled for the board, and not run on it.
 
-- `test_image`: the 16 GIFs decode to exactly the expected pixels. Each of
-  the 17 is
-  also cut short at 24 places and has bytes changed at random 40 times,
-  under the address and undefined-behaviour checks: every decode ends or
-  gives an error.
+- `test_image`: the 16 GIFs decode to exactly the expected pixels. The
+  four animations are played picture by picture against the expected
+  pixels, with the time of each, to the end of the last time round (a
+  little over twice round for "for ever"); the large one first shows its
+  first picture and says it cannot be played, then plays with the memory
+  `animation_pool()` asks for. Every file is also cut short at 24 places
+  and has bytes changed at random 40 times, and what is left of an
+  animation is played on, under the address and undefined-behaviour
+  checks: every decode ends or gives an error.
 - The test GIFs were written by this project's writer and read by this
   project's decoder, which proves little if both are wrong the same way. So
-  they were also opened once with Pillow, by hand: 13 of the 16 gave the
-  same pixels. The other three are the ones with screen left uncovered,
+  they were also opened once with Pillow, by hand. The still ones: 13 of
+  the 16 gave the same pixels; the other three have screen left uncovered,
   which Pillow paints with the file's background colour and we, like web
-  browsers, leave see-through.
-- `render_browser_scenes` now serves FrogFind's home page a logo: an
-  interlaced GIF with a transparent background, made in the test (a frog's
-  face, drawn there). Reference pictures `61-browser-frogfind` and
-  `62-browser-typing` changed: the box with the `alt` text is the frog.
+  browsers, leave see-through. The animations: the same pictures, with the
+  same exception where a patch was taken away again, and one more where a
+  picture sticks out of the screen.
+- `render_browser_scenes`: FrogFind's logo is now a GIF made in the test
+  (`host/tests/test_gif.hpp`), a frog's face on a transparent background,
+  interlaced, that blinks: 800 ms open, 150 ms shut. Scenes 61 and 62
+  changed (the box with the `alt` text is the frog) and 61a is new (eyes
+  shut, 700 ms later). The same file opens from the drive in the Picture
+  viewer (74 to 76: open, shut, open again), and at 640x480 (77, 78),
+  which needs the larger working memory. The test still ends with every
+  byte given back.
 - All 58 PC tests pass.
 
 ## What was learned
 
-- The format needs very little: the decoder is 320 lines, against 513 for
-  JPEG. What takes thought is all at the edges: files whose screen is
-  smaller than their picture, tables that fill, rows out of order.
+- The format needs very little. What takes thought is all at the edges:
+  files whose screen is smaller than their picture, tables that fill, rows
+  out of order, and above all what "the background" means, where the file
+  format says one thing and every browser does another.
+- Error diffusion and animation do not go together: the errors of the part
+  that changes run through the parts that do not. Animations are dithered
+  with a pattern instead, and it shows in the reference pictures: the
+  frog's flat green has another grain than it had as a still picture.
+- Adding scenes in the middle of `render_scenes` moves its clock, and 14
+  later pictures change (Culebra's berries, the minute on the taskbar).
+  The viewer's animation scenes went to the end of the browser's program
+  instead.
 
 ## What is left
 
-- The owner's answer about animation.
-- The board: nothing here has run on it. Wanted there: the time to decode a
-  GIF against a PNG of the same picture, and `tools/dbg.py misses` after.
+- The board: nothing here has run on it. Wanted there: the time to decode
+  a GIF against a PNG of the same picture, how many pictures a second the
+  spinner, the banner and the 640x480 animation really get, what the
+  desktop feels like meanwhile, and `tools/dbg.py misses` and `frames`
+  after. A request is with the coordinator.
+- "Restore to previous" is treated as "leave it". If a file that matters
+  uses it, the patch has to be saved before it is drawn.
+- A page's animation is decoded even when another window covers it.
 - Item 85, the NASA photographs. The cloud machine this was written on may
   only reach `frogfind.com`, so nothing could be fetched from
   `images.nasa.gov`; the owner was asked to allow `images-api.nasa.gov` and
