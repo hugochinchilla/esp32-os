@@ -171,5 +171,8 @@ void add_first_files(Storage &storage, char drive);
 // The same and the sample pictures (core/fs/samples.hpp), for where nothing
 // is copied afterwards: the PC programs, the browser version, the tests.
 void add_samples(Storage &storage, char drive);
+// And the photographs that fill the screen, for the PC program and the
+// browser version; the tests' small drives go without.
+void add_backgrounds(Storage &storage, char drive);
 
 } // namespace fs
