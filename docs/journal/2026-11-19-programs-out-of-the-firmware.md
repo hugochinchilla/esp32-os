@@ -442,7 +442,8 @@ because it calls `replace`, not `rename`. The options:
 - (c) All four replace, as it was: the board's finding stands.
 
 Built (a) and put to the owner on a card, since (b) reverses a recorded
-choice.
+choice. The owner chose (a) the next morning: "ren rechaza, mv
+reemplaza".
 
 **The Terminal still had a task of its own**, 4 KB each: a stack of 0 in
 a program's header does not mean "no task" but "the least there is". A
