@@ -43,6 +43,10 @@ constexpr int kMaxPictures = 24;
 constexpr size_t kMaxPictureBytes = 1536 * 1024;
 constexpr int kMaxPictureHeight = 2000;
 constexpr uint32_t kDecodeSliceUs = 8000; // of decoding in one turn of the timer
+// While pictures move the timer turns faster, with a shorter slice: the page's
+// own turn is too slow a beat for an animation of 10 or 12 pictures a second.
+constexpr uint32_t kAnimateUs = 10000;
+constexpr uint32_t kAnimateSliceUs = 6000;
 
 // A picture that has come: a board colour for each pixel.
 struct Loaded {
@@ -89,6 +93,7 @@ struct Animation {
     int picture = -1;      // which of the page's pictures it is
     int src_w = 0, src_h = 0;
     uint64_t frame_us = 0; // when the picture shown was due
+    int made[4] = {};      // the part of it being made again: x, y, w, h
 };
 
 // The system's outgoing connections, as the fetch wants them.
@@ -906,17 +911,18 @@ private:
         os::release(a);
     }
 
-    // Where a picture of the page is in the window, if any of it shows.
-    gfx::Rect picture_on_screen(int picture) const
+    // Where a picture of the page is in the window, whether or not it shows.
+    gfx::Rect picture_place(int picture) const
     {
         for (int i = 0; i < doc_.item_count(); i++) {
             const www::Item &item = doc_.item(i);
             if (item.kind == www::Kind::Image && item.extra == picture) {
-                return gfx::Rect(item.x, item.y - top_, item.w, item.h).intersect(page_size());
+                return {item.x, item.y - top_, item.w, item.h};
             }
         }
         return {0, 0, 0, 0};
     }
+    gfx::Rect picture_on_screen(int picture) const { return picture_place(picture).intersect(page_size()); }
 
     // From the timer: the pictures that move. One is decoded at a time (the
     // converter is one), a slice a turn, and painted when it is whole. A
@@ -950,7 +956,18 @@ private:
                 drop_animation(i--); // damage further on: what is shown stays
                 continue;
             }
-            converter_.begin(a.src_w, a.src_h, to.w, to.h, to.pixels, image::Dither::Bayer4);
+            // Only what this picture changes is converted and painted.
+            int part[4], first = 0, rows = 0;
+            a.decoder.changed(part);
+            if (converter_.begin_part(a.src_w, a.src_h, to.w, to.h, to.pixels, image::Dither::Bayer4, part[0], part[1],
+                                      part[2], part[3], first, rows, a.made)) {
+                a.decoder.only_rows(first, rows);
+            } else {
+                converter_.begin(a.src_w, a.src_h, to.w, to.h, to.pixels, image::Dither::Bayer4);
+                a.made[0] = a.made[1] = 0;
+                a.made[2] = to.w;
+                a.made[3] = to.h;
+            }
             animating_ = i;
             animation_slice(now);
         }
@@ -960,7 +977,7 @@ private:
     {
         Animation &a = *animations_[animating_];
         image::Error e = image::Error::None;
-        while (!a.decoder.done() && e == image::Error::None && os::now_us() - start < kDecodeSliceUs) {
+        while (!a.decoder.done() && e == image::Error::None && os::now_us() - start < kAnimateSliceUs) {
             e = a.decoder.step(converter_, 4);
         }
         played_us_ += static_cast<uint32_t>(os::now_us() - start);
@@ -981,7 +998,10 @@ private:
             played_since_ = 0;
         }
         if (e == image::Error::None) {
-            page_.redraw(picture_on_screen(a.picture));
+            const gfx::Rect at = picture_place(a.picture);
+            page_.redraw(gfx::Rect(at.x + a.made[0], at.y + a.made[1], a.made[2], a.made[3])
+                             .intersect(at)
+                             .intersect(page_size()));
         }
         if (e != image::Error::None || !a.decoder.more_frames()) {
             drop_animation(which); // the end: the last picture stays
@@ -1012,6 +1032,9 @@ private:
                 animation_bytes_ += starting_->memory;
                 animations_[animation_count_++] = starting_;
                 if (animation_count_ == 1) {
+                    // The first of the page: the timer's faster beat from now.
+                    os::stop_timer(timer_);
+                    timer_ = os::start_timer(kAnimateUs, kAnimateUs, &BrowserWindow::tick, this);
                     played_ = 0;
                     played_us_ = 0;
                     played_since_ = starting_->frame_us;

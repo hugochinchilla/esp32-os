@@ -443,7 +443,18 @@ private:
                 stop(); // the end, or damage further on: what is shown stays
                 return;
             }
-            converter_.begin(info_.width, info_.height, shown_w_, shown_h_, shown_, image::steady(dither_));
+            // Only what this picture changes is converted and painted.
+            int part[4], first = 0, rows = 0;
+            decoder_.changed(part);
+            if (converter_.begin_part(info_.width, info_.height, shown_w_, shown_h_, shown_, image::steady(dither_),
+                                      part[0], part[1], part[2], part[3], first, rows, made_)) {
+                decoder_.only_rows(first, rows);
+            } else {
+                converter_.begin(info_.width, info_.height, shown_w_, shown_h_, shown_, image::steady(dither_));
+                made_[0] = made_[1] = 0;
+                made_[2] = shown_w_;
+                made_[3] = shown_h_;
+            }
             waiting_ = false;
         }
         image::Error e = image::Error::None;
@@ -455,7 +466,8 @@ private:
             stop();
         } else if (decoder_.done()) {
             waiting_ = true;
-            view_.redraw(picture_rect().intersect(area()));
+            const gfx::Rect at = picture_rect();
+            view_.redraw(gfx::Rect(at.x + made_[0], at.y + made_[1], made_[2], made_[3]).intersect(area()));
             // Once, five seconds in: how it is going, for whoever measures.
             played_++;
             if (played_since_ != 0 && os::now_us() - played_since_ >= kReportUs) {
@@ -545,6 +557,7 @@ private:
     uint64_t started_us_ = 0;
     bool playing_ = false, waiting_ = false; // an animation: on, and between two pictures
     uint64_t frame_us_ = 0;                  // when the picture shown was due
+    int made_[4] = {};                       // the part of it being made again: x, y, w, h
     int played_ = 0;                         // pictures shown since it began, for the log
     uint32_t played_us_ = 0;                 // and the time spent decoding them
     uint64_t played_since_ = 0;              // 0 once the log has its line

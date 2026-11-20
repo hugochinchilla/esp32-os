@@ -108,6 +108,12 @@ public:
     // readable. After an error the animation is over; the picture shown
     // stays good.
     Error next_frame();
+    // After next_frame(): the part of the picture that may differ from
+    // the one before it (x, y, w, h). A program that kept the one before
+    // can then ask for those rows alone, or any others: step() gives
+    // `rows` rows from `first` and is done().
+    void changed(int part[4]) const;
+    void only_rows(int first, int rows);
     ~Decoder() { close(); }
 
     // Working memory, for the format decoders: a bump allocator over the pool.
@@ -134,6 +140,7 @@ private:
     uint8_t *rgb_ = nullptr; // one decoded row
     Info info_;
     int next_row_ = 0;
+    int end_row_ = 0; // one past the last row to give
     bool done_ = true;
 };
 

@@ -52,12 +52,23 @@ public:
     void release(ports::Memory &memory);
     // dst_w x dst_h colours into `out`, from a src_w x src_h picture.
     void begin(int src_w, int src_h, int dst_w, int dst_h, uint8_t *out, Dither dither);
+    // The same, for a picture already in `out` of which only the part
+    // x, y, w, h (of the source) has changed: the next picture of an
+    // animation. Only the result's pixels that part reaches are made
+    // again. `first_row` and `rows` come back as the source rows to hand
+    // to row(), whole rows as ever; `part` as what changed in the result
+    // (x, y, w, h). Only with a dither that gives a pixel the same colour
+    // whatever is around it (see steady()); false, and nothing begun, with
+    // another.
+    bool begin_part(int src_w, int src_h, int dst_w, int dst_h, uint8_t *out, Dither dither, int x, int y, int w,
+                    int h, int &first_row, int &rows, int part[4]);
     void row(int y, const uint8_t *rgb) override;
     int rows_done() const { return dy_; } // finished rows of the result
 
 private:
     static constexpr int kMargin = 2; // error columns beyond each edge
     void emit();
+    void output();
     void diffuse(const int *avg_row);
 
     uint32_t *sums_ = nullptr;   // per result column, R G B
@@ -67,6 +78,8 @@ private:
     uint8_t *out_ = nullptr;
     Dither dither_ = Dither::Bayer4;
     int dy_ = 0;        // result row being gathered
+    int end_y_ = 0;     // one past the last result row to make
+    int x0_ = 0, x1_ = 0; // the result columns to make
     int rows_in_ = 0;   // source rows added to it
     int *avg_ = nullptr; // the averaged row, R G B
 };

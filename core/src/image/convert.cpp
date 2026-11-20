@@ -126,6 +126,9 @@ void Converter::begin(int src_w, int src_h, int dst_w, int dst_h, uint8_t *out, 
     out_ = out;
     dither_ = dither;
     dy_ = 0;
+    end_y_ = dst_h_;
+    x0_ = 0;
+    x1_ = dst_w_;
     rows_in_ = 0;
     for (int x = 0; x <= dst_w_; x++) {
         col_start_[x] = static_cast<uint16_t>(static_cast<int64_t>(x) * src_w_ / dst_w_);
@@ -134,12 +137,56 @@ void Converter::begin(int src_w, int src_h, int dst_w, int dst_h, uint8_t *out, 
     memset(errors_, 0, sizeof(int16_t) * (dst_w_ + 2 * kMargin) * 3 * 3);
 }
 
+bool Converter::begin_part(int src_w, int src_h, int dst_w, int dst_h, uint8_t *out, Dither dither, int x, int y,
+                           int w, int h, int &first_row, int &rows, int part[4])
+{
+    if (steady(dither) != dither || w <= 0 || h <= 0 || x < 0 || y < 0 || x + w > src_w || y + h > src_h) {
+        return false;
+    }
+    begin(src_w, src_h, dst_w, dst_h, out, dither);
+    // The result rows and columns whose source pixels include the part's
+    // first and last.
+    const auto row_start = [this](int d) { return static_cast<int>(static_cast<int64_t>(d) * src_h_ / dst_h_); };
+    const auto holding = [](int at, int count, const auto &start) {
+        int lo = 0, hi = count - 1;
+        while (lo < hi) { // the last one that starts at or before `at`
+            const int mid = (lo + hi + 1) / 2;
+            if (start(mid) <= at) {
+                lo = mid;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        return lo;
+    };
+    const auto col_start = [this](int d) { return static_cast<int>(col_start_[d]); };
+    dy_ = holding(y, dst_h_, row_start);
+    end_y_ = holding(y + h - 1, dst_h_, row_start) + 1;
+    x0_ = holding(x, dst_w_, col_start);
+    x1_ = holding(x + w - 1, dst_w_, col_start) + 1;
+    first_row = row_start(dy_);
+    rows = row_start(end_y_) - first_row;
+    part[0] = x0_;
+    part[1] = dy_;
+    part[2] = x1_ - x0_;
+    part[3] = end_y_ - dy_;
+    return true;
+}
+
 void Converter::row(int y, const uint8_t *rgb)
 {
-    if (dy_ >= dst_h_) {
+    if (dy_ >= end_y_) {
         return;
     }
-    for (int x = 0; x < dst_w_; x++) {
+    if (src_w_ == dst_w_ && src_h_ == dst_h_) {
+        // The same size: no sums to gather, the row is its own average.
+        for (int i = x0_ * 3; i < x1_ * 3; i++) {
+            avg_[i] = rgb[i];
+        }
+        output();
+        return;
+    }
+    for (int x = x0_; x < x1_; x++) {
         uint32_t r = 0, g = 0, b = 0;
         for (int sx = col_start_[x]; sx < col_start_[x + 1]; sx++) {
             r += rgb[sx * 3];
@@ -160,13 +207,21 @@ void Converter::row(int y, const uint8_t *rgb)
 
 void Converter::emit()
 {
-    uint8_t *o = out_ + static_cast<size_t>(dy_) * dst_w_;
-    for (int x = 0; x < dst_w_; x++) {
+    for (int x = x0_; x < x1_; x++) {
         const uint32_t area = static_cast<uint32_t>(col_start_[x + 1] - col_start_[x]) * rows_in_;
         for (int c = 0; c < 3; c++) {
             avg_[x * 3 + c] = static_cast<int>((sums_[x * 3 + c] + area / 2) / area);
         }
     }
+    memset(sums_ + x0_ * 3, 0, sizeof(uint32_t) * (x1_ - x0_) * 3);
+    rows_in_ = 0;
+    output();
+}
+
+// The averaged row in avg_ becomes a row of the result.
+void Converter::output()
+{
+    uint8_t *o = out_ + static_cast<size_t>(dy_) * dst_w_;
     const unsigned y = static_cast<unsigned>(dy_);
     switch (dither_) {
     case Dither::None:
@@ -174,7 +229,7 @@ void Converter::emit()
     case Dither::Bayer4:
     case Dither::Bayer8:
     case Dither::BlueNoise:
-        for (int x = 0; x < dst_w_; x++) {
+        for (int x = x0_; x < x1_; x++) {
             const gfx::Rgb c = {static_cast<uint8_t>(avg_[x * 3]), static_cast<uint8_t>(avg_[x * 3 + 1]),
                                 static_cast<uint8_t>(avg_[x * 3 + 2])};
             const unsigned ux = static_cast<unsigned>(x);
@@ -191,8 +246,6 @@ void Converter::emit()
         diffuse(avg_);
         break;
     }
-    memset(sums_, 0, sizeof(uint32_t) * dst_w_ * 3);
-    rows_in_ = 0;
     dy_++;
 }
 

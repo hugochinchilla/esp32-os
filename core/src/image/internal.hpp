@@ -94,6 +94,12 @@ public:
     virtual int frame_ms() { return 0; }
     virtual bool more() { return false; }
     virtual Error next() { return Error::Unsupported; }
+    // After next(): the part of the picture that may differ from the one
+    // before (x, y, w, h), and the rows next_row() is to give from now:
+    // `first` and those after it. Any rows may be asked for, as the whole
+    // picture is kept.
+    virtual void changed(int part[4]) { part[0] = part[1] = part[2] = part[3] = 0; }
+    virtual void from_row(int first) { (void)first; }
 
 protected:
     ~FormatDecoder() = default;

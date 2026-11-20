@@ -58,7 +58,7 @@ int Decoder::frame_ms() const
 
 bool Decoder::more_frames() const
 {
-    return format_ != nullptr && done_ && next_row_ == info_.height && format_->more();
+    return format_ != nullptr && done_ && next_row_ == end_row_ && format_->more();
 }
 
 Error Decoder::next_frame()
@@ -69,9 +69,28 @@ Error Decoder::next_frame()
     const Error e = format_->next();
     if (e == Error::None) {
         next_row_ = 0;
+        end_row_ = info_.height;
         done_ = false;
     }
     return e;
+}
+
+void Decoder::changed(int part[4]) const
+{
+    part[0] = part[1] = part[2] = part[3] = 0;
+    if (format_ != nullptr) {
+        format_->changed(part);
+    }
+}
+
+void Decoder::only_rows(int first, int rows)
+{
+    if (format_ == nullptr || done_ || next_row_ != 0 || first < 0 || rows <= 0 || first + rows > info_.height) {
+        return;
+    }
+    format_->from_row(first);
+    next_row_ = first;
+    end_row_ = first + rows;
 }
 
 Error Decoder::open(const fs::Storage &storage, const char *path, ports::Memory &memory, Info &info,
@@ -140,6 +159,7 @@ Error Decoder::open(Source &source, ports::Memory &memory, Info &info, const uin
     }
     info = info_;
     next_row_ = 0;
+    end_row_ = info_.height;
     done_ = false;
     return Error::None;
 }
@@ -156,7 +176,7 @@ Error Decoder::step(RowSink &sink, int rows)
             return e;
         }
         sink.row(next_row_, rgb_);
-        if (++next_row_ == info_.height) {
+        if (++next_row_ == end_row_) {
             done_ = true;
         }
     }

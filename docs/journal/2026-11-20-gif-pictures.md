@@ -166,6 +166,70 @@ On the PC only. Not compiled for the board, and not run on it.
   byte given back.
 - All 58 PC tests pass.
 
+## On the board, the first time
+
+A board turn ran commit `8a704a3` the same morning. It compiled at the
+first try (1,737,744 bytes), GIFs showed and moved, memory came back to the
+byte after every cycle (free internal 132,759, external 6,006,292), and no
+video refill was missed. The figures:
+
+| | Asked | Got |
+| --- | --- | --- |
+| `landscape640.png`, decoding | | 1,154 ms |
+| `landscape640.gif`, decoding | | 710 ms |
+| `landscape640i.gif` (interlaced), decoding | | 690 ms |
+| `spinner.gif` in the viewer (96x96, every picture whole) | 12.5 a second | 12.4, 17.6 ms of decoding each |
+| `banner.gif` in the viewer (468x60, patches) | 10 | 9.9, 29 ms each |
+| `landscape640-moving.gif` in the viewer | 2 | 1.8, 220 ms each; maximised 1.4, 290 ms each |
+| `gifs.htm` in Vizcacha, four animations | 47.5 | 4.9, 33 ms each |
+
+Three things were reported as wrong.
+
+- **"The banner leaves a trail in Vizcacha": the test file's fault, not the
+  browser's.** `banner.gif` was written here with patches that drew the
+  block at its new place and did not cover the old one, which was 21
+  pixels to the left and 15 pixels outside the patch. Pillow shows the same
+  trail of stripes from the same file. The writer now makes each patch
+  reach back over where the block was.
+- **The page at 5 pictures a second, not 47.5.** Not the decoding as such
+  but when it was allowed: the page's timer turned every 30 ms and gave
+  8 ms to one animation at a time, so a picture of 33 ms took four turns,
+  and four animations waited on each other. And 33 ms was far too much for
+  a patch of 52x40: the whole screen of the GIF was converted for every
+  picture.
+- **The 640x480 animation under 2 a second**, for the same last reason:
+  307,200 pixels converted to move 25,600.
+
+What was changed:
+
+- **Only what a picture changes is converted and painted.** After
+  `next_frame()` the decoder says which part of the screen may differ
+  (`Decoder::changed`: the new patch, and the old one if it was taken
+  away) and gives only the rows asked for (`only_rows`).
+  `Converter::begin_part` makes again only the result's pixels that part
+  reaches, shrunk or not. That works because a pattern dither gives a
+  pixel the same colour whatever is around it; it is one more reason for
+  animations not to use error diffusion. The banner's 28,080 pixels a
+  picture become 2,440, the large animation's 307,200 become 25,600. The
+  spinner, whose every picture is the whole 96x96, gains nothing here.
+- **A picture shown at its own size is not averaged.** The converter
+  summed and divided every pixel even when one source pixel made one
+  result pixel. That path now copies the row. This is for every picture,
+  moving or not, PNG and JPEG too.
+- **While a page has animations its timer turns every 10 ms** with 6 ms of
+  decoding a turn, instead of every 30 ms with 8.
+- Smaller things: the decoder decodes 1024 pixels ahead per turn, not
+  4096 (the longest slice had been 12.8 ms against the 8 asked); the
+  screen is cleared a row at a time, not a pixel at a time.
+
+Tested on the PC: a part converted alone gives the same pixels as the
+whole picture converted, at the same size and shrunk, for the five pattern
+dithers, and the six others refuse; the four test animations played by
+their changed parts give the expected pictures, and nothing changes
+outside the part the decoder names; every reference picture is as it was,
+the frog's included. How much faster the board is, only the board can say:
+a second request is with the coordinator.
+
 ## What was learned
 
 - The format needs very little. What takes thought is all at the edges:
@@ -191,6 +255,8 @@ On the PC only. Not compiled for the board, and not run on it.
 - "Restore to previous" is treated as "leave it". If a file that matters
   uses it, the patch has to be saved before it is drawn.
 - A page's animation is decoded even when another window covers it.
+- An animation whose every picture is the whole screen (the spinner)
+  still costs a whole conversion each time.
 - Item 85, the NASA photographs. The cloud machine this was written on may
   only reach `frogfind.com`, so nothing could be fetched from
   `images.nasa.gov`; the owner was asked to allow `images-api.nasa.gov` and

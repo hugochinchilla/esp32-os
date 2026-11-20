@@ -47,6 +47,10 @@ The rest is the agent's, to confirm:
   converted (memory by the number of pictures, and a second set of limits).
   If the board cannot keep up, the animation runs slower than the file
   says; a picture is painted when it is whole, never half made.
+- **Only the part a picture changes is converted and painted again**,
+  since the first board turn (2026-11-20), where converting the whole
+  screen for every picture gave 5 pictures a second in a page that asked
+  for 47. While a page has animations its timer turns every 10 ms.
 - **Memory limits.** The decoder's usual 384 KB plays a screen of up to
   about 124,000 pixels (400x300). The Picture viewer asks for more for a
   larger one, up to 800x600 (1.46 MB), while that picture is open. In a

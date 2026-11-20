@@ -951,13 +951,15 @@ def make_bench(folder):
     write_gif_animation(os.path.join(folder, "spinner.gif"), (96, 96), colours,
                         [{"rows": disc(96, k, 12), "transparent": 0, "dispose": 2, "delay": 8} for k in range(12)],
                         loops=0)
-    # A banner of 468x60: a block that crosses it, only the block's patch
-    # in each picture after the first.
+    # A banner of 468x60: a block that crosses it, 21 pixels at a time. Each
+    # picture after the first is a patch: the block where it now is, and
+    # the banner's blue where it was.
     banner = [[4 if 2 <= y < 58 and 2 <= x < 466 else 1 for x in range(468)] for y in range(60)]
     frames = [{"rows": banner, "delay": 10}]
     for k in range(20):
-        patch = [[5 if 6 <= x < 46 else 4 for x in range(52)] for _ in range(40)]
-        frames.append({"rows": patch, "at": (8 + k * 21, 10), "delay": 10})
+        back = 21 if k > 0 else 0
+        patch = [[5 if x >= back else 4 for x in range(back + 40)] for _ in range(40)]
+        frames.append({"rows": patch, "at": (14 + k * 21 - back, 10), "delay": 10})
     write_gif_animation(os.path.join(folder, "banner.gif"), (468, 60), colours, frames, loops=0)
     # The whole screen, 640x480: more than the usual working memory plays.
     frames = [{"rows": idx, "palette": board, "delay": 50}]

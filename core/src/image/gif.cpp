@@ -23,7 +23,7 @@ namespace image {
 namespace {
 
 constexpr int kCodes = 4096;        // LZW codes are at most 12 bits
-constexpr int kPrepareSlice = 4096; // pixels decoded ahead of the rows per prepare()
+constexpr int kPrepareSlice = 1024; // pixels decoded ahead of the rows per prepare()
 
 class Gif final : public FormatDecoder {
 public:
@@ -169,15 +169,20 @@ public:
         }
         const uint32_t at = next_at_;
         next_at_ = 0;
-        if (at == first_at_) { // round again
+        const bool round = at == first_at_;
+        int was[4] = {0, 0, 0, 0}; // what the last picture gives back, clipped to the screen
+        if (round) {
             clear_canvas();
             frame_ = 0;
         } else {
             if (disposal_ == 2) { // "restore to background": its patch is see-through again
-                for (int y = y_; y < y_ + fh_ && y < h_; y++) {
-                    for (int x = x_; x < x_ + fw_ && x < w_; x++) {
-                        memcpy(canvas_ + (static_cast<size_t>(y) * static_cast<size_t>(w_) + static_cast<size_t>(x)) * 3,
-                               bg_, 3);
+                clip(x_, y_, fw_, fh_, was);
+                for (int y = was[1]; y < was[1] + was[3]; y++) {
+                    uint8_t *o = canvas_ + (static_cast<size_t>(y) * static_cast<size_t>(w_) + static_cast<size_t>(was[0])) * 3;
+                    for (int x = 0; x < was[2]; x++, o += 3) {
+                        o[0] = bg_[0];
+                        o[1] = bg_[1];
+                        o[2] = bg_[2];
                     }
                 }
             }
@@ -191,10 +196,38 @@ public:
             return e;
         }
         out_y_ = 0;
+        // What may now differ from the picture before: the new patch and
+        // what the last one gave back; going round again, everything.
+        clip(x_, y_, fw_, fh_, changed_);
+        if (round) {
+            clip(0, 0, w_, h_, changed_);
+        } else if (was[2] > 0 && was[3] > 0) {
+            const int x0 = was[0] < changed_[0] || changed_[2] == 0 ? was[0] : changed_[0];
+            const int y0 = was[1] < changed_[1] || changed_[3] == 0 ? was[1] : changed_[1];
+            const int x1 = was[0] + was[2] > changed_[0] + changed_[2] ? was[0] + was[2] : changed_[0] + changed_[2];
+            const int y1 = was[1] + was[3] > changed_[1] + changed_[3] ? was[1] + was[3] : changed_[1] + changed_[3];
+            changed_[0] = x0;
+            changed_[1] = y0;
+            changed_[2] = x1 - x0;
+            changed_[3] = y1 - y0;
+        }
         return Error::None;
     }
 
+    void changed(int part[4]) override { memcpy(part, changed_, sizeof(changed_)); }
+    void from_row(int first) override { out_y_ = first; }
+
 private:
+    // x, y, w, h cut to the screen; w and h 0 if none of it is on it.
+    void clip(int x, int y, int w, int h, int out[4]) const
+    {
+        const int x1 = x + w < w_ ? x + w : w_, y1 = y + h < h_ ? y + h : h_;
+        out[0] = x < w_ ? x : w_;
+        out[1] = y < h_ ? y : h_;
+        out[2] = x1 > out[0] ? x1 - out[0] : 0;
+        out[3] = y1 > out[1] ? y1 - out[1] : 0;
+    }
+
     size_t pixel_count() const { return static_cast<size_t>(w_) * static_cast<size_t>(h_); }
 
     // Reads on to the next picture in the file, past the extensions before
@@ -330,10 +363,15 @@ private:
         return another;
     }
 
+    // The first row pixel by pixel, the others copied from it.
     void clear_canvas()
     {
-        for (size_t i = 0, n = pixel_count(); i < n; i++) {
-            memcpy(canvas_ + i * 3, bg_, 3);
+        const size_t row = static_cast<size_t>(w_) * 3;
+        for (int x = 0; x < w_; x++) {
+            memcpy(canvas_ + x * 3, bg_, 3);
+        }
+        for (int y = 1; y < h_; y++) {
+            memcpy(canvas_ + static_cast<size_t>(y) * row, canvas_, row);
         }
     }
 
@@ -523,6 +561,7 @@ private:
     uint32_t first_at_ = 0;     // where the first picture's blocks begin in the file
     uint32_t next_at_ = 0;      // where the next picture's begin; 0: there is none
     int frame_ = 0, delay_ms_ = 100, disposal_ = 0;
+    int changed_[4] = {}; // of the screen, by the picture in hand: x, y, w, h
     bool loops_known_ = false, forever_ = false;
     int rounds_left_ = 0; // more times round, after this one
 
