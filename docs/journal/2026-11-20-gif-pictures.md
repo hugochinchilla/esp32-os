@@ -295,6 +295,14 @@ draws the same file the same way (0, 1, 2, 3, 4 dots).
   that way.
 - Nothing in `core/` changed.
 
+## On the board, the fourth time
+
+`67d94fb` passed: it builds at 1,739,264 bytes, the viewer shows one red
+dot in every screenshot at the default size and maximised, and the hills
+are whole. A repaint takes 14.4 ms, no refill was missed and the memory
+comes back. The large GIF: 10 pictures in 5380 ms with 697 ms of decoding,
+and in 5372 ms with 762 ms maximised. The merge waits for the owner.
+
 ## What was learned
 
 - The format needs very little. What takes thought is all at the edges:
@@ -318,8 +326,6 @@ draws the same file the same way (0, 1, 2, 3, 4 dots).
 - Nobody has looked at it on the monitor yet: both board turns were
   judged from screenshots and figures. Whether the pointer and the menus
   feel as quick with a page of animations open is the owner's to say.
-- The corrected large test file has only been drawn by Pillow and by the
-  PC decoder; a fourth board turn looks at it.
 - "Restore to previous" is treated as "leave it". If a file that matters
   uses it, the patch has to be saved before it is drawn.
 - A page's animation is decoded even when another window covers it.
