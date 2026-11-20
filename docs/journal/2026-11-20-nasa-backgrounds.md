@@ -78,6 +78,19 @@ no error; the screenshots caught the eyes open only (they are shut for
 150 ms in every three seconds). No refill missed, and the memory comes back
 when the viewer closes. The merge waits for the owner.
 
+## The drawn landscape goes
+
+After the board turn the owner said to remove "the photo of the
+landscape", which he does not like at all. Read as `landscape.jpg`, the
+evening landscape the generator draws (item 21), the only landscape among
+the samples; none of the NASA photographs is one. It is out of
+`SAMPLE_NAMES`, so a new drive does not get it and `tools/flash.py`
+deletes it from the board at the next run, as it does with any file that
+left its set. The picture tests, the lifecycle test and the VNC test
+opened it by name: they open `earthrise.jpg` now. 59 reference pictures
+differ from `main` in all (the viewer's show the Earthrise) and were
+looked at. PC tests 59 of 59. Not on the board again: no code changed.
+
 ## What is left
 
 - Using one as the desktop's background, and choosing it: a later item.

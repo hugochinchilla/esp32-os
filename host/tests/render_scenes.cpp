@@ -378,28 +378,28 @@ int main(int argc, char **argv)
     key(wm::key::Escape);
 
     // Pictures, all from the keyboard so the board can replay it. First a
-    // damaged copy of landscape.jpg (its first half), as tools put it there.
+    // damaged copy of earthrise.jpg (its first half), as tools put it there.
     static uint8_t bytes[16384];
     size_t size = 0;
-    storage.read_file("C:\\pictures\\landscape.jpg", bytes, sizeof(bytes), size);
+    storage.read_file("C:\\pictures\\earthrise.jpg", bytes, sizeof(bytes), size);
     storage.write_file("C:\\pictures\\broken.jpg", bytes, size / 2);
 
     // Up to C:, into pictures: blue marble.png, broken.jpg, earthrise.jpg,
-    // landscape.jpg, mascot.bmp, test card.png.
+    // mascot blinks.gif, mascot.bmp, test card.png.
     key(wm::key::Backspace);
     key(wm::key::Home);
     key(wm::key::Right); // Documents, pictures
     key(wm::key::Enter);
     save("23-pictures-folder");
 
-    // Open landscape.jpg (the fourth) in the Picture viewer, decoded to the end.
+    // Open earthrise.jpg (the third) in the Picture viewer, decoded to the end.
     key(wm::key::Home);
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 2; i++) {
         key(wm::key::Right);
     }
     key(wm::key::Enter);
     shell::finish_picture();
-    save("24-viewer-landscape");
+    save("24-viewer-earthrise");
 
     // The View menu (Alt+V) with Dithering open (D), then Bayer 4x4
     // and no dither from it.
@@ -432,7 +432,7 @@ int main(int argc, char **argv)
     shell::finish_picture();
 
     // Smaller window: fitted, then actual size with scroll bars.
-    const gfx::Rect vf = find("landscape.jpg - Picture viewer")->frame();
+    const gfx::Rect vf = find("earthrise.jpg - Picture viewer")->frame();
     mouse(vf.right() - 2, vf.bottom() - 2, 0);
     mouse(vf.right() - 2, vf.bottom() - 2, 1);
     mouse(vf.right() - 162, vf.bottom() - 122, 1);

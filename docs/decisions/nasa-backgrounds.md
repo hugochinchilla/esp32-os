@@ -20,6 +20,11 @@ Sources: `third_party/samples/README.md`.
   choice on a card, 2026-11-20): `mir over clouds 800x600.jpg`. Not
   chosen: a folder for each size (the agent's recommendation), a folder
   `space` for all of them.
+- **`landscape.jpg` is no longer a sample** (the owner, 2026-11-20, once
+  the photographs were on the board: "elimina la foto del paisaje, no me
+  gusta nada"). It was the drawn evening landscape of item 21, 320x240.
+  The generator still draws it for the decoder's tests and the bench
+  files; the tests that opened it from the drive open `earthrise.jpg`.
 
 The rest is the agent's, to confirm:
 

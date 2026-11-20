@@ -793,8 +793,7 @@ def make_tests(folder):
 
 
 # The sample pictures, in the order they are embedded.
-SAMPLE_NAMES = ("test card.png", "landscape.jpg", "mascot.bmp", "mascot blinks.gif", "earthrise.jpg",
-                "blue marble.png")
+SAMPLE_NAMES = ("test card.png", "mascot.bmp", "mascot blinks.gif", "earthrise.jpg", "blue marble.png")
 # And the photographs that fill the screen, each at two sizes
 # (tools/gen_photos.py): "mir over clouds 800x600.jpg".
 
@@ -812,7 +811,6 @@ def samples():
     tmp = "/tmp/chinchilla-samples"
     os.makedirs(tmp, exist_ok=True)
     write_png(tmp + "/test card.png", test_card(320, 240), "rgb8")
-    write_jpeg(tmp + "/landscape.jpg", landscape(320, 240), quality=75)
     idx_rows = mascot(128, 128)
     pal = sorted(set(c for row in idx_rows for c in row))
     write_bmp(tmp + "/mascot.bmp", [[pal.index(c) for c in row] for row in idx_rows], 4,
