@@ -198,18 +198,16 @@ public:
         out_y_ = 0;
         // What may now differ from the picture before: the new patch and
         // what the last one gave back; going round again, everything.
-        clip(x_, y_, fw_, fh_, changed_);
+        // Going round again, the first picture comes back as it was shown
+        // the first time: what differs is only what the pictures after it
+        // touched, all of them together.
         if (round) {
-            clip(0, 0, w_, h_, changed_);
-        } else if (was[2] > 0 && was[3] > 0) {
-            const int x0 = was[0] < changed_[0] || changed_[2] == 0 ? was[0] : changed_[0];
-            const int y0 = was[1] < changed_[1] || changed_[3] == 0 ? was[1] : changed_[1];
-            const int x1 = was[0] + was[2] > changed_[0] + changed_[2] ? was[0] + was[2] : changed_[0] + changed_[2];
-            const int y1 = was[1] + was[3] > changed_[1] + changed_[3] ? was[1] + was[3] : changed_[1] + changed_[3];
-            changed_[0] = x0;
-            changed_[1] = y0;
-            changed_[2] = x1 - x0;
-            changed_[3] = y1 - y0;
+            memcpy(changed_, touched_, sizeof(changed_));
+            memset(touched_, 0, sizeof(touched_));
+        } else {
+            clip(x_, y_, fw_, fh_, changed_);
+            join(changed_, was);
+            join(touched_, changed_);
         }
         return Error::None;
     }
@@ -218,6 +216,25 @@ public:
     void from_row(int first) override { out_y_ = first; }
 
 private:
+    // `to` grows to hold `more` as well (x, y, w, h; nothing if w or h is 0).
+    static void join(int to[4], const int more[4])
+    {
+        if (more[2] <= 0 || more[3] <= 0) {
+            return;
+        }
+        if (to[2] <= 0 || to[3] <= 0) {
+            memcpy(to, more, 4 * sizeof(int));
+            return;
+        }
+        const int x0 = to[0] < more[0] ? to[0] : more[0], y0 = to[1] < more[1] ? to[1] : more[1];
+        const int x1 = to[0] + to[2] > more[0] + more[2] ? to[0] + to[2] : more[0] + more[2];
+        const int y1 = to[1] + to[3] > more[1] + more[3] ? to[1] + to[3] : more[1] + more[3];
+        to[0] = x0;
+        to[1] = y0;
+        to[2] = x1 - x0;
+        to[3] = y1 - y0;
+    }
+
     // x, y, w, h cut to the screen; w and h 0 if none of it is on it.
     void clip(int x, int y, int w, int h, int out[4]) const
     {
@@ -562,6 +579,7 @@ private:
     uint32_t next_at_ = 0;      // where the next picture's begin; 0: there is none
     int frame_ = 0, delay_ms_ = 100, disposal_ = 0;
     int changed_[4] = {}; // of the screen, by the picture in hand: x, y, w, h
+    int touched_[4] = {}; // and by all the pictures after the first, this time round
     bool loops_known_ = false, forever_ = false;
     int rounds_left_ = 0; // more times round, after this one
 

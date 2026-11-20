@@ -137,7 +137,7 @@ much of the time went into decoding them (`dmesg`).
 
 ## How it was tested
 
-On the PC only. Not compiled for the board, and not run on it.
+On the PC first; then twice on the board, see below.
 
 - `test_image`: the 16 GIFs decode to exactly the expected pixels. The
   four animations are played picture by picture against the expected
@@ -230,6 +230,44 @@ outside the part the decoder names; every reference picture is as it was,
 the frog's included. How much faster the board is, only the board can say:
 a second request is with the coordinator.
 
+## On the board, the second time
+
+Commit `e71b563`, the same day. It built (1,739,088 bytes). No trail on
+the banner, in the viewer or in the page; still PNG, JPEG and GIF pictures
+right when fitted and at Actual size; nothing painted outside the page
+while scrolling under moving pictures; memory back to within 20 bytes
+after 5 cycles; no refill missed.
+
+| | Asked | First turn | Second turn |
+| --- | --- | --- | --- |
+| `gifs.htm` in Vizcacha, four animations | 47.5 a second | 4.9 | 34.1, 8.9 ms of decoding each |
+| `spinner.gif` in the viewer | 12.5 | 12.4, 17.6 ms each | 12.0, 11.6 ms each |
+| `banner.gif` in the viewer | 10 | 9.9, 29 ms each | 9.6, 8.1 ms each |
+| `landscape640-moving.gif` in the viewer | 2 | 1.8, 220 ms each | 1.8, 94 ms each |
+| the same, maximised | 2 | 1.4, 290 ms each | 1.7, 78 ms each |
+
+With the page animating the desktop's task had 6.2 per cent of the
+processor and Vizcacha's 43.3 (2.0 and 29.6 the first time); the page's
+animations hold 428 KB of external memory.
+
+What the figures say and do not say:
+
+- The page went from a tenth of what was asked to seven tenths. The rest
+  is the three spinners, whose every picture is the whole 96x96.
+- The decoding per picture fell as hoped where pictures are patches: the
+  banner to a quarter, the large animation to under a half. The spinner's
+  fell by a third, which is the row no longer averaged.
+- The pictures a second in the viewer did not move, and two are a little
+  lower. They were already at what the file asks; why the spinner counts
+  12.0 and not 12.5 was not found. One thing is known to cost: the count
+  in the log stops at the first picture finished after five seconds, so
+  the time of that one picture is in the figure. For the large animation
+  that picture is the first of the next round, the only one that was
+  still converted whole: 630 ms on its own.
+- That last point was then changed, and has not been on the board: going
+  round again, only what the later pictures touched is converted, since
+  the first picture comes back exactly as it was shown the first time.
+
 ## What was learned
 
 - The format needs very little. What takes thought is all at the edges:
@@ -247,11 +285,11 @@ a second request is with the coordinator.
 
 ## What is left
 
-- The board: nothing here has run on it. Wanted there: the time to decode
-  a GIF against a PNG of the same picture, how many pictures a second the
-  spinner, the banner and the 640x480 animation really get, what the
-  desktop feels like meanwhile, and `tools/dbg.py misses` and `frames`
-  after. A request is with the coordinator.
+- Nobody has looked at it on the monitor yet: both board turns were
+  judged from screenshots and figures. Whether the pointer and the menus
+  feel as quick with a page of animations open is the owner's to say.
+- The change made after the second turn (going round again) has only run
+  on the PC. It rides with the next board turn of this branch.
 - "Restore to previous" is treated as "leave it". If a file that matters
   uses it, the patch has to be saved before it is drawn.
 - A page's animation is decoded even when another window covers it.
