@@ -59,6 +59,16 @@ change as that file's "Recording a decision" says: a file of its own in
   asked the Memory port for, and keep what must outlive a close in the
   program's settings file. Do not keep a pointer or reference to a window
   across an event unless something clears it when the window is destroyed.
+- The programs are files, not part of the firmware (the owner's rule,
+  2026-11-19; `docs/decisions/programs-out-of-the-firmware.md`): a new
+  program is a folder in `programs/` with `APP_INFO` and `APP_MAIN`, its
+  pictures in its own `art.hpp`, and no row in `core/src/shell/apps.cpp`.
+  It is the same source on the board, in the Linux program and in the web
+  page; do not add a form of a program for one machine. Only what the
+  desktop cannot do without stays in the firmware (the Task Manager, the
+  settings tools, About, Welcome). The PC test `program_exports` fails when
+  a program asks for a name the firmware does not export
+  (`tools/gen_exports.py`).
 - Programs ask the system through the OS calls (`core/os/os.hpp`, listed in
   `docs/os-calls.md`; backlog item 20). A new program uses only those and
   goes on the `MOVED` list of `tools/check_os_calls.py`; if a call is

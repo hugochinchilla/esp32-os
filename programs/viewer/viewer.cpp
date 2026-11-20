@@ -6,12 +6,11 @@
 #include <cstring>
 
 #include "core/app/app.hpp"
-#include "core/gfx/art.hpp"
 #include "core/image/convert.hpp"
 #include "core/image/image.hpp"
 #include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
-#include "internal.hpp"
+#include "art.hpp"
 
 namespace shell {
 
@@ -98,9 +97,6 @@ const image::Dither kDithers[image::kDitherCount] = {
 
 void set_dither(image::Dither d);
 
-// Timings of the last picture, kept after its window has gone (see
-// picture_timings()).
-uint32_t g_timings[kPictureTimings] = {};
 
 class ViewerWindow : public app::Window {
 public:
@@ -214,9 +210,9 @@ public:
     // The picture and the working memory go back with the window.
     ~ViewerWindow() override
     {
-        decoder_.release(program_port());
-        converter_.release(program_port());
-        free_program_memory(shown_);
+        decoder_.release(os::memory());
+        converter_.release(os::memory());
+        os::release(shown_);
     }
 
     // For tests and the debug link: decodes to the end at once (of an
@@ -284,9 +280,9 @@ private:
     bool memory_ready()
     {
         if (shown_ == nullptr) {
-            shown_ = static_cast<uint8_t *>(program_memory(kMaxShown));
+            shown_ = static_cast<uint8_t *>(os::allocate(kMaxShown));
         }
-        if (shown_ == nullptr || !converter_.ready(program_port())) {
+        if (shown_ == nullptr || !converter_.ready(os::memory())) {
             message_box("Picture viewer", "There is not enough memory for the Picture viewer.");
             return false;
         }
@@ -312,21 +308,21 @@ private:
         stop();
         // The file is this program's, held while the picture is decoded a
         // piece at a time; the decoder only reads from it.
-        decoder_.use_pool(program_port(), image::kPoolBytes);
+        decoder_.use_pool(os::memory(), image::kPoolBytes);
         image::Error e = os::file::open(path_, ports::OpenMode::Read, source_.file) == ports::FsError::Ok
-                             ? decoder_.open(source_, program_port(), info_, kBackgroundRgb)
+                             ? decoder_.open(source_, os::memory(), info_, kBackgroundRgb)
                              : image::Error::NotFound;
         // An animation too large for the usual working memory: more of it,
         // while this picture is open, if that is not asking too much.
         const size_t pool = image::animation_pool(info_.width, info_.height);
         if (e == image::Error::None && info_.several && !info_.animated && pool <= kMaxAnimationPool) {
-            decoder_.use_pool(program_port(), pool);
+            decoder_.use_pool(os::memory(), pool);
             image::Info again;
-            if (decoder_.open(source_, program_port(), again, kBackgroundRgb) == image::Error::None) {
+            if (decoder_.open(source_, os::memory(), again, kBackgroundRgb) == image::Error::None) {
                 info_ = again;
             } else { // no memory for it: the first picture, still
-                decoder_.use_pool(program_port(), image::kPoolBytes);
-                e = decoder_.open(source_, program_port(), info_, kBackgroundRgb);
+                decoder_.use_pool(os::memory(), image::kPoolBytes);
+                e = decoder_.open(source_, os::memory(), info_, kBackgroundRgb);
             }
         }
         snprintf(title_, sizeof(title_), "%s - Picture viewer", fs::path::name(path_));
@@ -360,7 +356,7 @@ private:
         show(shown_, w, h);
         started_us_ = os::now_us();
         busy_us_ = 0;
-        g_timings[0] = g_timings[1] = g_timings[2] = 0;
+        memset(os::counters(), 0, os::kCounters * sizeof(uint32_t));
         timer_ = os::start_timer(0, kTickUs, &ViewerWindow::slice, this);
         set_status("Loading...");
     }
@@ -385,8 +381,8 @@ private:
         }
         const uint32_t spent = static_cast<uint32_t>(os::now_us() - start);
         v->busy_us_ += spent;
-        if (spent > g_timings[2]) {
-            g_timings[2] = spent;
+        if (spent > os::counters()[2]) {
+            os::counters()[2] = spent;
         }
         const int after = v->converter_.rows_done();
         if (after > before) {
@@ -401,8 +397,8 @@ private:
             return;
         }
         if (v->decoder_.done()) {
-            g_timings[0] = v->busy_us_;
-            g_timings[1] = static_cast<uint32_t>(os::now_us() - v->started_us_);
+            os::counters()[0] = v->busy_us_;
+            os::counters()[1] = static_cast<uint32_t>(os::now_us() - v->started_us_);
             if (v->decoder_.more_frames()) {
                 v->playing_ = true; // the file stays open and the timer goes on
                 v->waiting_ = true;
@@ -509,7 +505,7 @@ private:
     static void menu_options(void *c)
     {
         auto *v = static_cast<ViewerWindow *>(c);
-        if (has_dialog(v->number())) {
+        if (os::ui::has_dialog(v->number())) {
             return;
         }
         app::Look look;
@@ -519,7 +515,7 @@ private:
         look.flags = app::kDialog;
         look.over = v->number();
         if (app::open<OptionsDialog>(look, v->dither_, &set_dither) == app::kNone) {
-            no_memory_for("Options");
+            message_box("Picture viewer", "There is not enough memory for Options.");
         }
     }
 
@@ -593,40 +589,63 @@ void set_dither(image::Dither d)
     }
 }
 
-} // namespace
-
-void open_picture(const char *path)
+// Asked to open one more picture while it runs (os::accept_open), or
+// started again with none: the window there is takes it, or asks which.
+void open_another(const char *path)
 {
-    const PathArg p(path);
-    in_program("Picture viewer", [p] {
-        if (!app::bring_forward(g_window)) {
-            app::Look look;
-            look.title = "Picture viewer";
-            look.x = 110;
-            look.y = 40;
-            look.width = 420;
-            look.height = 360;
-            look.icon = &gfx::viewer_icon_16();
-            look.flags = app::kMenuBar;
-            g_window = app::open<ViewerWindow>(look);
-            if (g_window == app::kNone) {
-                no_memory_for("Picture viewer");
-                return;
-            }
-        }
-        if (ViewerWindow *viewer = app::program<ViewerWindow>(g_window)) {
-            viewer->open_path(p.get());
-        }
-    });
+    app::bring_forward(g_window);
+    if (ViewerWindow *viewer = app::program<ViewerWindow>(g_window)) {
+        viewer->open_path(path);
+    }
 }
 
+} // namespace
+
+#ifdef APP_LINKED
+// For the tests and the simulated board, which have the program linked
+// into them (programs/test_hooks.hpp): decode the picture shown to the end
+// now.
 void finish_picture()
 {
-    if (ViewerWindow *viewer = app::program<ViewerWindow>(g_window)) {
+    if (ViewerWindow *viewer = app::program<ViewerWindow>(os::main_window(os::find("Picture viewer")))) {
         viewer->finish();
     }
 }
 
-const uint32_t *picture_timings() { return g_timings; }
+#endif
 
 } // namespace shell
+
+// The Picture viewer is a program kept in a file (backlog item 82): not
+// part of the system. One copy runs at a time: asked for another picture,
+// the window there is shows it. 8 KB of stack: it reads files on its own
+// task, and the file system's code runs on it too.
+APP_INFO(app::file_info("Picture viewer", 8 * 1024, art::kSmall, art::kSmallInks, art::kLarge, art::kLargeInks));
+
+namespace {
+// The window's icon: the header's own pixels are not in memory with the
+// program, so they are made again here from the same rows.
+constexpr app::Icon16 kWindowIcon = app::icon16(art::kSmall, art::kSmallInks);
+} // namespace
+
+// argv[1], if there is one, is the picture to show; without it the viewer
+// asks for one.
+APP_MAIN(int argc, char **argv)
+{
+    static const gfx::Bitmap icon = {16, 16, kWindowIcon.pixels, app::kClearInk};
+    app::Look look;
+    look.title = "Picture viewer";
+    look.x = 110;
+    look.y = 40;
+    look.width = 420;
+    look.height = 360;
+    look.icon = &icon;
+    look.flags = app::kMenuBar;
+    shell::g_window = app::open<shell::ViewerWindow>(look);
+    if (shell::g_window == app::kNone) {
+        return 1;
+    }
+    os::accept_open(&shell::open_another);
+    shell::open_another(argc > 1 ? argv[1] : nullptr);
+    return 0;
+}

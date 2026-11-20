@@ -183,6 +183,13 @@ Error Decoder::step(RowSink &sink, int rows)
     return Error::None;
 }
 
+Decoder::Decoder() = default;
+
+Decoder::~Decoder()
+{
+    close();
+}
+
 void Decoder::close()
 {
     if (own_.file.open() && own_.storage != nullptr) {

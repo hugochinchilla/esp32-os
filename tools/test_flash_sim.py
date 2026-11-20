@@ -53,6 +53,10 @@ def main():
         # ask for the windows at all (board batch 26: with none open, the
         # copy never started).
         flash.wait_for_drive(board, timeout=10, settle_ms=0)
+        # The simulated board has the system's programs linked into it, each
+        # with its file in C:\\Programs: they are not the tool's.
+        programs = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "programs")
+        linked = {name + ".app" for name in os.listdir(programs)} - {"hello.app"}
 
         class Mute:  # a board that is still restarting, then answers
             def __init__(self):
@@ -95,6 +99,14 @@ def main():
             raise AssertionError("fetched a file the board has")
         known = flash.Wanted("C:\\Programs\\DATA.BIN", "test", never, mark=flash.stamp(big), size=len(big))
         assert flash.sync(board, first[:2] + [known], say=lines.append) == (0, 0, 0)
+        # The same with the board's list gone (the board, 2026-11-20: the
+        # game data was sent again at every run, six minutes each): a file
+        # of the known name and size is it, and goes back on the list.
+        board.rm(flash.MANIFEST)
+        assert flash.sync(board, first[:2] + [known], say=lines.append) == (2, 0, len(hello) + len(card))
+        assert flash.parse_manifest(board.get(flash.MANIFEST).decode())["C:\\Programs\\DATA.BIN"] == \
+            (flash.stamp(big), len(big))
+        assert "not in the board's list" in lines[-1]
         # One changed (same size), one deleted on the board, one of another
         # size on the board: those three are sent, each once.
         hello2 = hello.replace(b"hello", b"HELLO")
@@ -111,14 +123,14 @@ def main():
         board.put("C:\\Programs\\mine.app", b"the user's own")
         assert flash.sync(board, second[:1], keep=("C:\\Programs\\DATA.BIN",), say=lines.append) == (0, 1, 0)
         names = {n for n, _, _ in board.ls("C:\\Programs")}
-        assert names == {"hello.app", "DATA.BIN", "mine.app"}, names
+        assert names - linked == {"hello.app", "DATA.BIN", "mine.app"}, names
         assert "card.png" not in {n for n, _, _ in board.ls("C:\\pictures")}
         assert set(flash.parse_manifest(board.get(flash.MANIFEST).decode())) == \
             {"C:\\Programs\\hello.app", "C:\\Programs\\DATA.BIN"}
         assert board.get("C:\\Documents\\notes.txt") == notes
         # Without `keep` it goes too.
         assert flash.sync(board, second[:1], say=lines.append) == (0, 1, 0)
-        assert {n for n, _, _ in board.ls("C:\\Programs")} == {"hello.app", "mine.app"}
+        assert {n for n, _, _ in board.ls("C:\\Programs")} - linked == {"hello.app", "mine.app"}
         board.close()
     finally:
         sim.kill()

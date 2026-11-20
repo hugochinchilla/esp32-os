@@ -7,6 +7,7 @@
 #include <atomic>
 #include <cstdio>
 #include <cstring>
+#include <strings.h>
 
 #include "core/app/file.hpp"
 #include "core/os/os.hpp"
@@ -25,11 +26,15 @@ struct Loaded {
     proc::Pid pid = proc::kNone;
     void *module = nullptr;
     int32_t bytes = 0;               // counted as the process's memory
+    os::OpenFn opened = nullptr;     // os::accept_open: it takes one more thing to open while it runs
+    os::file::ChangedFn watching = nullptr; // os::file::watch: it is told of the folders that change
+    char *words = nullptr;           // its file's path and what it was asked to open: argv
+    char *argv[3] = {};
     int result = 0;                  // what its way in returned
     std::atomic<bool> inside{false}; // its way in has not returned yet
     bool gone = false;               // its process has ended: to be taken out of memory
 };
-constexpr int kMaxLoaded = 8;
+constexpr int kMaxLoaded = 16;
 // The header of the file being made ready: too large for a program's stack,
 // and one file is made ready at a time.
 app::FileInfo g_info;
@@ -70,6 +75,10 @@ void sweep(void *)
         }
         proc::table().add_memory(l.pid, -l.bytes);
         g_loader->unload(l.module);
+        os::release(l.words);
+        l.words = nullptr;
+        l.opened = nullptr;
+        l.watching = nullptr;
         l.pid = proc::kNone;
         l.module = nullptr;
         l.bytes = 0;
@@ -95,6 +104,11 @@ void ended(proc::Pid pid, void *)
     for (Loaded &l : g_loaded) {
         if (l.module != nullptr && l.pid == pid) {
             l.gone = true;
+            // Its arguments go with its process; its code leaves later.
+            os::release(l.words);
+            l.words = nullptr;
+            l.opened = nullptr;
+            l.watching = nullptr;
             ask_sweep();
         }
     }
@@ -125,6 +139,56 @@ bool fail(char *why, size_t capacity, const char *text)
 
 } // namespace
 
+void accept_open(os::OpenFn opened)
+{
+    const proc::Pid pid = os::self();
+    for (Loaded &l : g_loaded) {
+        if (l.module != nullptr && l.pid == pid) {
+            l.opened = opened;
+        }
+    }
+}
+
+void watch_files(os::file::ChangedFn changed)
+{
+    const proc::Pid pid = os::self();
+    for (Loaded &l : g_loaded) {
+        if (l.module != nullptr && l.pid == pid) {
+            l.watching = changed;
+        }
+    }
+}
+
+void tell_watchers(const FolderKeys &changed)
+{
+    for (const Loaded &l : g_loaded) {
+        if (l.module != nullptr && !l.gone && l.watching != nullptr) {
+            const os::file::ChangedFn tell = l.watching;
+            in_process(l.pid, nullptr, [tell, changed] { tell(changed); });
+        }
+    }
+}
+
+bool show_document(const char *program, const char *path)
+{
+    if (path == nullptr || path[0] == 0) {
+        return false;
+    }
+    wm::Wm &wm = manager();
+    for (int z = wm.window_count() - 1; z >= 0; z--) {
+        wm::Window *w = wm.window_at(z);
+        if (w == nullptr || strcasecmp(w->document(), path) != 0) {
+            continue;
+        }
+        const proc::Process *owner = os::process(w->owner());
+        if (owner != nullptr && strcmp(owner->name, program) == 0) {
+            os::show(*w);
+            return true;
+        }
+    }
+    return false;
+}
+
 void set_loader(ports::Loader *loader)
 {
     g_loader = loader;
@@ -153,11 +217,52 @@ bool program_info(const char *path, app::FileInfo &info)
     return read == ports::FsError::Ok && got == sizeof(info) && app::is_program(info);
 }
 
-bool run_file(const char *path, char *why, size_t capacity)
+// A program that runs already may be all that is asked for: told from the
+// file's header alone, before the rest of it is read.
+static bool running_takes(const char *path, const app::FileInfo &info, const char *argument)
+{
+    char name[proc::Process::kNameSize];
+    process_name(path, info, name, sizeof(name));
+    // What it is asked to open may be on the screen already, in a window
+    // of this program: that window comes forward and nothing is loaded.
+    if (show_document(name, argument)) {
+        return true;
+    }
+    // One copy at a time unless the program says otherwise: opened again,
+    // it is told what to open if it takes that (os::accept_open) and
+    // brings forward the window it chooses; if it does not, its main
+    // window comes forward.
+    if (info.many != 0) {
+        return false;
+    }
+    const proc::Pid running = proc::table().find_by_name(name);
+    wm::Window *window = running != proc::kNone ? manager().main_window_of(running) : nullptr;
+    if (window == nullptr) {
+        return false;
+    }
+    os::OpenFn opened = nullptr;
+    for (const Loaded &l : g_loaded) {
+        if (l.module != nullptr && l.pid == running) {
+            opened = l.opened;
+        }
+    }
+    if (opened != nullptr) {
+        const PathArg words(argument);
+        in_process(running, nullptr, [opened, words] { opened(words.get()); });
+    } else {
+        os::activate(*window);
+    }
+    return true;
+}
+
+bool run_file(const char *path, char *why, size_t capacity, const char *argument)
 {
     const prog::InCall in_call;
     if (g_loader == nullptr) {
         return fail(why, capacity, "this machine cannot load programs");
+    }
+    if (program_info(path, g_info) && running_takes(path, g_info, argument)) {
+        return true;
     }
     Loaded *place = nullptr;
     for (Loaded &l : g_loaded) {
@@ -192,19 +297,6 @@ bool run_file(const char *path, char *why, size_t capacity)
     if (ours) {
         memcpy(&info, image, sizeof(info));
     }
-    // One copy at a time unless the program says otherwise: opened again,
-    // the one that runs comes forward.
-    if (ours && app::is_program(info) && info.many == 0) {
-        char name[proc::Process::kNameSize];
-        process_name(path, info, name, sizeof(name));
-        const proc::Pid running = proc::table().find_by_name(name);
-        wm::Window *window = running != proc::kNone ? manager().main_window_of(running) : nullptr;
-        if (window != nullptr) {
-            os::release(image);
-            os::activate(*window);
-            return true;
-        }
-    }
     void *module = ours && app::is_program(info)
                        ? g_loader->load(static_cast<const uint8_t *>(image) + sizeof(info), size - sizeof(info), reason)
                        : nullptr;
@@ -217,11 +309,31 @@ bool run_file(const char *path, char *why, size_t capacity)
     }
     char name[proc::Process::kNameSize];
     process_name(path, info, name, sizeof(name));
+    // Its arguments, kept while it is loaded: the file, then what to open.
+    const size_t path_size = strlen(path) + 1, argument_size = argument != nullptr ? strlen(argument) + 1 : 0;
     const proc::Pid pid = os::spawn(name);
     if (pid == proc::kNone) {
         g_loader->unload(module);
         return fail(why, capacity, "too many programs are running");
     }
+    char *words = nullptr;
+    {
+        const os::As as_program(pid); // counted as the program's own
+        words = static_cast<char *>(os::allocate(path_size + argument_size));
+    }
+    if (words == nullptr) {
+        os::signal(pid, proc::Signal::Kill);
+        g_loader->unload(module);
+        return fail(why, capacity, "there is not enough memory");
+    }
+    memcpy(words, path, path_size);
+    if (argument != nullptr) {
+        memcpy(words + path_size, argument, argument_size);
+    }
+    place->words = words;
+    place->argv[0] = words;
+    place->argv[1] = argument != nullptr ? words + path_size : nullptr;
+    place->argv[2] = nullptr;
     place->pid = pid;
     place->module = module;
     place->bytes = static_cast<int32_t>(g_loader->bytes(module));
@@ -233,12 +345,14 @@ bool run_file(const char *path, char *why, size_t capacity)
     // A program has a task of its own where the machine has tasks (backlog
     // item 26), with the stack its header asks for. Without one (none here,
     // none left) it runs on the caller's.
-    prog::runner().start(pid, info.stack);
+    if (info.stack != app::kNoTask) {
+        prog::runner().start(pid, info.stack);
+    }
     // Its way in, as itself. It opens its window and returns; a program
     // that opens none ends at once and is swept away. One that is late
     // coming back is left to it: the sweep sees how it went.
     in_process(pid, nullptr, [place] {
-        place->result = g_loader->enter(place->module);
+        place->result = g_loader->enter(place->module, place->argv[1] != nullptr ? 2 : 1, place->argv);
         place->inside.store(false);
     });
     if (place->inside.load()) {

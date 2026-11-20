@@ -128,6 +128,9 @@ def main():
         assert stats["mouse_events"] == 7, stats
         assert stats["receive_errors"] == 0, stats
 
+        # The processes: the desktop's own are there, each with its parent.
+        names = [name for _, _, _, _, name in board.processes()]
+        assert "desktop" in names and "taskbar" in names, names
         # The kernel's tasks (the simulator makes a list up), read twice.
         totals, tasks = board.tasks()
         assert totals["cores"] == 2 and totals["left_out"] == 0 and totals["clock_us"] > 0, totals

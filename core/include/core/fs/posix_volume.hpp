@@ -118,7 +118,7 @@ public:
     ports::FsError rename(const char *from, const char *to) override
     {
         const std::string f = full(from), t = full(to);
-        if (access(t.c_str(), F_OK) == 0 && t != f) {
+        if (there(t) && t != f) {
             return ports::FsError::Exists;
         }
         // A change of case only: the same entry, renamed to the name as given.
@@ -212,7 +212,7 @@ protected:
             const std::string name(path, static_cast<size_t>(end - path));
             const bool last = *end == 0 || end[1] == 0;
             std::string next = p + "/" + name;
-            if (found && !(last && last_as_written) && access(next.c_str(), F_OK) != 0) {
+            if (found && !(last && last_as_written) && !there(next)) {
                 found = false;
                 if (DIR *d = opendir(p.c_str())) {
                     for (dirent *e; (e = readdir(d)) != nullptr;) {
@@ -234,6 +234,16 @@ protected:
     // The file system's own date. One from before 2000 was written while
     // the machine did not know the time (the board counts from 1970 until
     // the network tells it): not known.
+    // Whether a name is taken. Asked with stat(), not access(): ESP-IDF's
+    // LittleFS layer has no access(), which there always says no. With it
+    // rename() took every name for free and wrote over the file that had
+    // it (the board, 2026-11-20), and every path was looked up by reading
+    // its folders.
+    static bool there(const std::string &path)
+    {
+        struct stat s;
+        return ::stat(path.c_str(), &s) == 0;
+    }
     static int64_t when(const struct stat &s)
     {
         return s.st_mtime >= 946684800 ? static_cast<int64_t>(s.st_mtime) : 0;

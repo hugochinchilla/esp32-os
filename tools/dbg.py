@@ -44,6 +44,7 @@ LOG_READ = 22
 FRAMES = 23
 PAINT_BENCH = 24
 VIDEO_MODE = 25
+PROCESSES = 26
 WIFI = 0x20
 BLUETOOTH = 0x21
 MAX_REQUEST = 1024  # largest request payload the board takes
@@ -399,6 +400,15 @@ class Board:
 
     def animations(self, on):
         self.request(ANIMATIONS, b"\x01" if on else b"\x00")
+
+    def processes(self):
+        """[(pid, parent, bytes held, jobs, name)] of the process table."""
+        out = []
+        for line in self.request(PROCESSES).decode("utf-8", "replace").splitlines():
+            parts = line.split(" ", 4)
+            if len(parts) == 5:
+                out.append((int(parts[0]), int(parts[1]), int(parts[2]), int(parts[3]), parts[4]))
+        return out
 
     def memory_report(self):
         """Where the board's memory goes: heaps and video timing, as text
@@ -1085,6 +1095,9 @@ def main(argv=None):
     p.add_argument("to", nargs="?", help="a mode's number, or its size as WIDTHxHEIGHT")
     sub.add_parser("paintbench", help="time each kind of drawing and each open window on the screen (it draws "
                                       "over the screen for about a second)")
+    sub.add_parser("ps", help="the processes: number, parent, memory held, jobs, name")
+    sub.add_parser("counters", help="the figures a program left for whoever measures it (os::counters): the "
+                                    "Picture viewer's last picture, in microseconds")
     sub.add_parser("memory", help="where the memory goes: heaps and video timing (stacks: tasks)")
     sub.add_parser("dmesg", help="the system log the board keeps, oldest first")
     p = sub.add_parser("misses", help="missed video refills in the log not caused by the debug link; exits 1 if any")
@@ -1233,6 +1246,14 @@ def main(argv=None):
                        m["pixel_clock_hz"] / 1e6))
         elif args.command == "paintbench":
             print(board.paint_bench(), end="")
+        elif args.command == "ps":
+            print("%5s %5s %9s %4s  %s" % ("PID", "PPID", "MEMORY", "JOBS", "NAME"))
+            for pid, parent, memory, jobs, name in board.processes():
+                print("%5d %5s %9d %4d  %s" % (pid, parent if parent else "-", memory, jobs, name))
+        elif args.command == "counters":
+            stats = board.stats()
+            for name in ("picture_decode_us", "picture_total_us", "picture_longest_slice_us"):
+                print("%-26s %d" % (name, stats.get(name, 0)))
         elif args.command == "memory":
             print(board.memory_report(), end="")
         elif args.command == "dmesg":

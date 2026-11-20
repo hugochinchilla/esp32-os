@@ -13,6 +13,7 @@
 #include "core/gfx/canvas.hpp"
 #include "core/desk/desk.hpp"
 #include "core/shell/shell.hpp"
+#include "../../programs/test_hooks.hpp"
 #include "core/wm/wm.hpp"
 #include "../host_adapters.hpp"
 

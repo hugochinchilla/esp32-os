@@ -78,7 +78,7 @@ public:
     // Keys, as the bytes a terminal sends for them.
     void typed(const uint8_t *bytes, size_t size);
     // The device's size in characters.
-    void set_size(int columns, int rows) { tty_.set_size(columns, rows); }
+    void set_size(int columns, int rows);
     // The device is gone (the window closed). A command that is running is
     // stopped as Ctrl+C would stop it, the shell ends, and nothing more is
     // written to the device once this has returned. `gone` follows: at once

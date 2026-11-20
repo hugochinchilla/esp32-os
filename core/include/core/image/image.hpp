@@ -76,6 +76,9 @@ protected:
 
 class Decoder {
 public:
+    // Made and ended in the system's code, not in the caller's: a program
+    // file then needs none of what the decoder itself asks for.
+    Decoder();
     // Opens a picture and reads its header. Transparent parts of PNGs and
     // GIFs are shown over `background` (RGB).
     Error open(const fs::Storage &storage, const char *path, ports::Memory &memory, Info &info,
@@ -114,7 +117,7 @@ public:
     // `rows` rows from `first` and is done().
     void changed(int part[4]) const;
     void only_rows(int first, int rows);
-    ~Decoder() { close(); }
+    ~Decoder();
 
     // Working memory, for the format decoders: a bump allocator over the pool.
     void *allocate(size_t bytes);

@@ -303,6 +303,21 @@ are whole. A repaint takes 14.4 ms, no refill was missed and the memory
 comes back. The large GIF: 10 pictures in 5380 ms with 697 ms of decoding,
 and in 5372 ms with 762 ms maximised. The merge waits for the owner.
 
+## Joined with the programs that left the firmware
+
+Item 82 (PR 91) was merged first: the Picture viewer, Vizcacha and the
+File manager are program files now, in `programs/`. `main` was merged into
+this branch. What had to be put together by hand: the decoder's
+constructor and destructor, now in the system's code, beside the new calls
+for animations; the viewer's larger working memory and its playing, now
+asking `os::memory()` and `os::counters()`; and the list of what opens a
+picture, which moved to `core/src/shell/run.cpp` and has `gif` there. The
+new calls are in namespace `image`, which program files may already ask
+for by name. PC tests 59 of 59, among them the check of what the program
+files ask for. Not compiled for the board and not run there since the
+merge: the two programs are loaded from files now, which the four turns
+before did not do with this code.
+
 ## What was learned
 
 - The format needs very little. What takes thought is all at the edges:

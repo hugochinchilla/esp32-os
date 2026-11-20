@@ -12,9 +12,10 @@
 #include "core/os/os.hpp"
 #include "core/fs/memory_volume.hpp"
 #include "core/shell/boot.hpp"
-#include "core/shell/defrag.hpp"
+#include "../../programs/defragmenter/defrag.hpp"
 #include "core/desk/desk.hpp"
 #include "core/shell/shell.hpp"
+#include "../../programs/test_hooks.hpp"
 #include "core/wm/text_edit.hpp"
 #include "core/wm/wm.hpp"
 #include "../host_adapters.hpp"
@@ -272,7 +273,7 @@ int main(int argc, char **argv)
     // Launch the Widget gallery from Programs, type into its text field.
     // Found by name, so a new program in the table does not move it.
     int gallery = 0;
-    while (std::string(shell::app(gallery).name) != "Widget gallery") {
+    while (std::string(shell::program(gallery).name) != "Widget gallery") {
         gallery++;
     }
     centre_of(desktop.popup_item(1, gallery), x, y);
@@ -499,7 +500,7 @@ int main(int argc, char **argv)
     while (desktop.active() != nullptr) {
         desktop.close(*desktop.active());
     }
-    shell::launch(*shell::find_app("Culebra"));
+    shell::start_program("Culebra");
     save("39-culebra-new-game");
     play_culebra(8);
     save("40-culebra-playing");
@@ -521,7 +522,7 @@ int main(int argc, char **argv)
     while (desktop.active() != nullptr) {
         desktop.close(*desktop.active());
     }
-    shell::launch(*shell::find_app("Terminal"));
+    shell::start_program("Terminal");
     save("44-terminal");
     desktop.text("dir");
     key(wm::key::Enter);
@@ -558,7 +559,7 @@ int main(int argc, char **argv)
     while (desktop.active() != nullptr) {
         desktop.close(*desktop.active());
     }
-    shell::open_defragmenter();
+    shell::start_program("Defragmenter");
     save("35-defragmenter");
     key(wm::key::Enter); // Start
     for (int i = 0; i < 601; i++) {
@@ -761,11 +762,12 @@ int main(int argc, char **argv)
     {
         wm::Window *w = desktop.active();
         const gfx::Rect c = w->client();
-        // Documents, pictures, system, readme.txt.
-        const int fx = c.x + 2 + 10 + 38, fy = c.y + 64 + 2 + 8 + 16;
-        mouse(fx + 3 * 76, fy, 0);
-        mouse(fx + 3 * 76, fy, 1);
-        mouse(fx + 3 * 76 - 10, fy + 10, 1);
+        // Documents, pictures, Programs, system; readme.txt begins the
+        // second row.
+        const int fx = c.x + 2 + 10 + 38, fy = c.y + 64 + 2 + 8 + 16, row = 64;
+        mouse(fx, fy + row, 0);
+        mouse(fx, fy + row, 1);
+        mouse(fx + 10, fy + row - 10, 1);
         mouse(fx, fy, 1);
         save("37l-dragging-to-folder");
         mouse(fx, fy, 0);
@@ -1056,7 +1058,7 @@ int main(int argc, char **argv)
             desktop.tick();
             save((name + "-start-menu").c_str());
             int gallery = 0;
-            while (std::string(shell::app(gallery).name) != "Widget gallery") {
+            while (std::string(shell::program(gallery).name) != "Widget gallery") {
                 gallery++;
             }
             centre_of(desktop.popup_item(1, gallery), x, y);

@@ -61,6 +61,7 @@
 #include "core/net/wifi.hpp"
 #include "core/proc/table.hpp"
 #include "core/shell/boot.hpp"
+#include "core/os/os.hpp"
 #include "core/shell/shell.hpp"
 #include "core/wm/wm.hpp"
 #include "core/ports.hpp"
@@ -1036,7 +1037,7 @@ void ui_task(void *)
             static net::PosixDialer dialer;
             os::install_dialer(&dialer);
             shell::start(desktop, system, storage, memory);
-            protocol.set_counters(shell::picture_timings(), shell::kPictureTimings);
+            protocol.set_counters(os::counters(), os::kCounters);
             // The plain desktop first, and what is on it fades in once
             // this task is in its loop (backlog item 74); a fast start
             // shows it all at once, and the figure below is that painting.

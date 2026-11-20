@@ -444,6 +444,12 @@ int move_one(Session &s, const char *from, void *context)
     if (strlen(from) <= 3) {
         return s.fail(t.command, from, "a drive cannot be moved");
     }
+    // `ren` gives a new name: a folder of that name is a name that is taken,
+    // not a place to move into (the board, 2026-11-20: `ren two one` put
+    // `two` inside `one` without a word). `mv` moves into it.
+    if (strncmp(t.command, "ren", 3) == 0 && t.into && !path::same(from, t.to)) {
+        return s.fail(t.command, t.to, FsError::Exists);
+    }
     if (!target_for(s, t, from, to)) {
         return 1;
     }
@@ -466,6 +472,13 @@ int move_one(Session &s, const char *from, void *context)
         }
         e = storage.remove(from);
         return e == FsError::Ok ? 0 : s.fail(t.command, from, e);
+    }
+    // `ren` and `rename` give a new name and never take one that is taken
+    // (the board, 2026-11-20: `ren C.txt b.txt` lost b.txt without a word).
+    // `mv` and `move` put a file in the place of another, as Unix does.
+    const bool renaming = strncmp(t.command, "ren", 3) == 0;
+    if (renaming && !path::same(from, to) && kind(s, to, there) == FsError::Ok) {
+        return s.fail(t.command, to, FsError::Exists);
     }
     // A file moved onto another file takes its place, in one step. (Not for
     // a change of capitals only: that is the same file.)

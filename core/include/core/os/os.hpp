@@ -193,9 +193,27 @@ SaverRun last_saver_run();
 // says the power can go. Returns at once; a program that says no calls it
 // off. False: this machine has no Shut Down.
 bool shut_down();
-// Starts one of the system's own programs by its name ("About Chinchilla"),
-// or brings it forward if it runs. False: there is none of that name.
-bool launch(const char *program);
+// Starts a program by its name ("About Chinchilla", "Editor"), whether it
+// is one of the system's own or a file in C:\Programs, or brings it forward
+// if it runs. `argument` is what it is asked to open (a path, an address):
+// its argv[1]. A window that already shows that (os::ui::set_document)
+// comes forward instead. False: there is none of that name, or it did not
+// start.
+bool launch(const char *program, const char *argument = nullptr);
+// A few figures a program leaves for whoever measures it, read over the
+// debug link (`tools/dbg.py counters`) and kept after the program has
+// gone. They are the system's, one set: the Picture viewer writes the
+// timings of its last picture there (µs: decoding, opening to last row,
+// longest timer slice).
+constexpr int kCounters = 3;
+uint32_t *counters();
+// For a program that runs one copy at a time and can open one more thing
+// while it runs (another picture, another folder): `opened` is called, as
+// the program, when it is started again, with the argument it was started
+// with (nullptr: none). Without it the program's window only comes forward.
+// Once, from its way in.
+using OpenFn = void (*)(const char *argument);
+void accept_open(OpenFn opened);
 
 /* ---- The network ---------------------------------------------------------------- */
 
@@ -271,6 +289,21 @@ int open_files(proc::Pid pid = proc::kNone);
 Error read_file(const char *path, void *data, size_t capacity, size_t &size);
 Error write_file(const char *path, const void *data, size_t size);
 
+// The folders that changed since the program was last told: their keys
+// (fs::path::key), or `all` when there were more than fit.
+struct Changes {
+    uint32_t key[8] = {};
+    int count = 0;
+    bool all = false;
+    // True if `folder` may be one of them.
+    bool has(const char *folder) const;
+};
+// For a program that shows folders: `changed` is called, as the program,
+// a moment after files or folders were made, written, renamed or removed
+// by anyone. Once, from its way in; it ends with the program.
+using ChangedFn = void (*)(const Changes &changed);
+void watch(ChangedFn changed);
+
 } // namespace file
 
 /* ---- Files on the clipboard --------------------------------------------------- */
@@ -339,7 +372,9 @@ struct Kit {
     fs::Storage *storage = nullptr;
     ports::Memory *memory = nullptr;
     bool (*shut_down)() = nullptr; // starts Shut Down: programs close, the picture fades, the last screen
-    bool (*launch)(const char *program) = nullptr; // a row of the program table, by name
+    bool (*launch)(const char *program, const char *argument) = nullptr; // a program, by name
+    void (*accept_open)(OpenFn opened) = nullptr;
+    void (*watch_files)(file::ChangedFn changed) = nullptr;
     sh::TerminalSession *(*open_session)(ports::ByteSink &device, const char *&why) = nullptr;
 };
 // What the calls work with. The desktop hands it in when it starts.

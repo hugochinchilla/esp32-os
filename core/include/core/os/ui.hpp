@@ -111,9 +111,18 @@ void *state(Window window);
 bool alive(Window window);
 bool on_screen(Window window); // shown, and not closed
 void set_title(Window window, const char *title); // the text must stay valid
+// What the window shows, if it shows a file or the like: its path, as the
+// program was asked to open it ("" or nullptr: nothing). The text must stay
+// valid. Asked to open the same thing again, the system brings this window
+// forward instead of starting the program once more.
+void set_document(Window window, const char *path);
 // Another icon for the title bar and the taskbar (16x16; nullptr: none).
 void set_icon(Window window, const gfx::Bitmap *icon);
 bool in_front(Window window);                     // it is the window in use
+// True if a dialog is over the window (a file dialog, a question): the
+// window is brought forward, with its dialog. A program asks before it
+// opens a dialog of its own over it.
+bool has_dialog(Window window);
 // The size of the client area, as `w` and `h`.
 gfx::Rect client_size(Window window);
 // Another size for the client area. A window on the screen stays where it

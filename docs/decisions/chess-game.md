@@ -16,7 +16,7 @@ Backlog item 50; the mock-ups are in `docs/look/chess/` and the reasoning
 in `docs/journal/2026-11-18-chess-design.md`. Designed and approved; built
 and tested on the PC, not yet run on the board.
 
-- The engine is one written for this project in `core/src/games/`, tested
+- The engine is one written for this project in `programs/chess/chess_game.cpp` (it was in `core/src/games/`), tested
   on the PC (chosen on a card). Not micro-Max (through mcu-max), and not a
   port of a larger engine.
 - A piece is moved by dragging it, or by a click on it and a click on

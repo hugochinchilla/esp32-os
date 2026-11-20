@@ -35,5 +35,5 @@ tested on the PC only (not yet compiled for or run on the board).
 - The right mouse button now reaches windows: a press in a client area
   calls `Window::right_click()`. No program used it before.
 - The rules are in `core/games/cactus.hpp`, the window and its pictures in
-  `core/src/shell/cactus_patch.cpp`. Its tests and reference pictures are
+  `programs/cactus_patch/cactus_patch.cpp`. Its tests and reference pictures are
   `host/tests/test_cactus.cpp` (pictures 50 to 54).
