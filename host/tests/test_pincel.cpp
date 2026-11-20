@@ -625,14 +625,13 @@ void test_files()
     CHECK(strcmp(front(), "Size") == 0);
     desktop.text("333");
     key(wm::key::Tab);
-    desktop.text("0");
+    desktop.update();
+    desktop.text("0"); // in place of the 240: Tab picked all of it
     key(wm::key::Enter);
     CHECK(strcmp(front(), "Pincel") == 0); // "from 1 by 1 to 800 by 600"
     key(wm::key::Enter);
     CHECK(strcmp(front(), "Size") == 0);
-    for (int i = 0; i < 4; i++) {
-        key(wm::key::Backspace); // "2400"
-    }
+    key(wm::key::Backspace);
     desktop.text("77");
     key(wm::key::Enter);
     s = pincel::test_sheet();
@@ -799,9 +798,7 @@ int write_pictures(const std::string &folder)
     save("94-pincel-size");
     desktop.text("700");
     key(wm::key::Tab);
-    for (int i = 0; i < 3; i++) {
-        key(wm::key::Backspace);
-    }
+    desktop.update();
     desktop.text("500");
     key(wm::key::Enter);
     save("95-pincel-scroll-bars");

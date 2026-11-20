@@ -105,6 +105,21 @@ public:
         return false;
     }
 
+    // Tab into a field picks all of its number, so that typing replaces it
+    // (found on the board: "800", Tab, "600" made a height of 240600).
+    void painting() override
+    {
+        const app::Control now = focus();
+        if (now != focused_) {
+            focused_ = now;
+            if (now == width_) {
+                width_.select_all();
+            } else if (now == height_) {
+                height_.select_all();
+            }
+        }
+    }
+
 private:
     const char *number_text(int n)
     {
@@ -121,6 +136,7 @@ private:
     app::TextField height_;
     app::Label limit_;
     app::Button ok_, cancel_;
+    app::Control focused_; // the control the keys went to when last painted
 };
 
 enum class Then : uint8_t { Nothing, New, Open, OpenPath, Exit };
