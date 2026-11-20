@@ -262,6 +262,17 @@ void test_file_manager()
     key(wm::key::Enter);
     CHECK(!exists("C:\\Documents\\cosas") && exists("C:\\Documents\\trastos\\inside.txt"));
 
+    // A name that is taken is refused and nothing is written over (the
+    // board, 2026-11-20: renaming a file to the name of another lost the
+    // other). The folder, onto a file's name.
+    const std::string kept = file("C:\\Documents\\a.txt");
+    key(0x3B);
+    desktop.text("a.txt");
+    key(wm::key::Enter);
+    CHECK(strcmp(title(), "Rename") == 0 && desktop.active()->dialog()); // "There is already..."
+    key(wm::key::Enter);
+    CHECK(exists("C:\\Documents\\trastos\\inside.txt") && file("C:\\Documents\\a.txt") == kept);
+
     // Delete it, contents and all, after saying Yes.
     key(wm::key::Delete);
     CHECK(strcmp(title(), "Confirm Folder Delete") == 0);

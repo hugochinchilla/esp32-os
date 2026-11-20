@@ -462,7 +462,11 @@ const tty::Screen *terminal_screen()
 
 } // namespace shell
 
-APP_INFO(app::many(app::file_info("Terminal", 8 * 1024, art::kSmall, art::kSmallInks)));
+// No task of its own (stack 0): the window is a device, it reads no files,
+// and its session already has a task. It ran on the UI task before it was
+// a file; the 8 KB it asked for at first were 24 KB of internal memory
+// with three Terminals open (the board, 2026-11-20).
+APP_INFO(app::many(app::file_info("Terminal", 0, art::kSmall, art::kSmallInks)));
 
 namespace {
 // The window's icon: the header's own pixels are not in memory with the

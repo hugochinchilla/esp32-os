@@ -976,6 +976,13 @@ private:
     void after(ports::FsError e, const char *what, const char *name)
     {
         refresh();
+        if (e == ports::FsError::Exists) {
+            // Nothing is ever written over by a rename or a new folder.
+            snprintf(message_, sizeof(message_),
+                     "There is already a file or a folder named '%s' here.\nChoose another name.", name);
+            message_box(what, message_);
+            return;
+        }
         if (e != ports::FsError::Ok) {
             snprintf(message_, sizeof(message_), "Cannot %s '%s':\n%s.", what[0] == 'N' ? "create" : (what[0] == 'R' ? "rename" : "delete"),
                      name, fs::error_text(e));

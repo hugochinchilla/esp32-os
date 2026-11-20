@@ -380,6 +380,46 @@ the laptop. Six things were reported; what was done with each:
 
 PC: 59 of 59, with new checks for each of the three that are code.
 
+## After the second board turn (2026-11-20)
+
+The re-test at `5adaae0` passed every fix, and the drags, the Trash, Cut
+and Paste and the timings. It found two things.
+
+**Renaming a file to a name that was taken wrote over the other file.**
+`b (2).txt` renamed to `b.txt`: the first `b.txt` was gone. A folder onto
+a folder was refused, but as "the folder is not empty". Not this branch's
+(the File manager's code is the same as on `main`), and not in the File
+manager: the drive's code asked whether the new name was taken with
+`access()`, and ESP-IDF's LittleFS layer has no `access()`; there it
+always answers no. So on the board `rename` took every name for free, and
+the C library's rename then replaced the file. The PC, where `access()`
+works, refused as it should, which is why no test saw it. The same call
+decided whether a path could be used as written, so every path on the
+board was being looked up by reading its folders.
+
+Both ask with `stat()` now (`core/fs/posix_volume.hpp`). The File
+manager, the desktop's own rename and the shell's `ren` and `mv` all go
+through it. The File manager's message for a taken name is "There is
+already a file or a folder named 'b.txt' here. Choose another name.", for
+files and folders alike. Paste and a drop were looked at: both ask the
+system whether the name is there with `stat` already (`exists()` in
+`trash.cpp`, `free_name_in` for Paste, which numbers the copy), so they
+could not write over a file. Doom's saved games delete the old file
+before they rename, on purpose.
+
+**27,680 bytes of internal memory at the least**, with three Terminals,
+Vizcacha and three folder windows. One cause was this branch's: the
+Terminal's file asked for a task of its own with 8 KB of stack, which the
+Terminal never had (its window is a device and ran on the UI task; its
+session has the task). Three Terminals were 24 KB of internal memory for
+nothing. It asks for none now. Other margin, not taken without a
+measurement: the stacks of the programs' tasks could come from external
+memory (a board experiment: a task whose stack is there must not be the
+one writing to the flash), and the File manager's 12 KB can be trimmed
+once `dbg.py tasks` has shown what it uses after a deep copy.
+
+PC: 59 of 59, with a File manager test that renames onto a taken name.
+
 ## What is left
 
 - The board has run none of this. Two turns are asked for: steps 1 to 3
