@@ -1,12 +1,15 @@
 // Shared between the shell's source files.
 #pragma once
 
+#include <cstddef>
 #include <cstdio>
 #include <new>
 #include <type_traits>
 #include <utility>
 
 #include "core/fs/fs.hpp"
+#include "core/image/image.hpp"
+#include "core/job/job.hpp"
 #include "core/os/os.hpp"
 #include "core/ports.hpp"
 #include "core/proc/table.hpp"
@@ -196,6 +199,49 @@ gfx::Rect centred(const wm::Wm &wm, int w, int h);
 
 // Puts the desktop background in place with its settings (display.cpp).
 void install_display();
+// Text into a fixed array, cut to what fits.
+template <size_t N> void keep_text(char (&to)[N], const char *from)
+{
+    size_t n = 0;
+    while (n < N - 1 && from[n] != '\0') {
+        to[n] = from[n];
+        n++;
+    }
+    to[n] = '\0';
+}
+
+// The desktop's picture (wallpaper.cpp; backlog item 87). install_wallpaper()
+// before install_display(), which names the picture the settings hold.
+void install_wallpaper();
+// What os::set_wallpaper does: the file to show over the desktop's colour,
+// "" for none. The UI task. The picture comes when a background job has
+// read it; the colour stays if it cannot be shown.
+void set_wallpaper(const char *path, os::Wallpaper how);
+// A picture in the screen's colours, one byte per pixel, from the Memory
+// port: give it back with release_fitted().
+struct FittedPicture {
+    uint8_t *pixels = nullptr;
+    int width = 0, height = 0;
+};
+// The size of a width x height picture inside max_w x max_h: made smaller
+// to fit, keeping its shape, never larger.
+void fit_inside(int width, int height, int max_w, int max_h, int &w, int &h);
+// Reads a picture file and fits it so, or with `stretch` makes it max_w x
+// max_h whatever its shape and size, then makes it `part` / `of` of that
+// size (1, 1 for the desktop; less for Display's small screen).
+// `background`: behind the clear parts of a PNG or GIF. Any task; `job`, if
+// the caller is one, lets the others run meanwhile. Seconds of work for a
+// photograph on the board.
+image::Error decode_fitted(const char *path, int max_w, int max_h, bool stretch, int part, int of,
+                           const uint8_t background[3], const job::Job *job, FittedPicture &out);
+void release_fitted(FittedPicture &picture);
+// The file beside `path` made for a screen of this size, if `path` is named
+// for a screen: "C:\pictures\Mir 800x600.jpg" and 640 x 480 give
+// "C:\pictures\Mir 640x480.jpg". False if it is not named so.
+bool wallpaper_for_screen(const char *path, int width, int height, char *out, int capacity);
+// The file the desktop shows for `path` on such a screen: that one if it is
+// on the drive, else `path` itself.
+void wallpaper_file(const char *path, int width, int height, char *out, int capacity);
 // Puts the screensaver in place with its settings (screensaver.cpp).
 void install_screen_saver();
 
@@ -215,5 +261,8 @@ using FolderKeys = os::file::Changes;
 // each as itself.
 void watch_files(os::file::ChangedFn changed);
 void tell_watchers(const FolderKeys &changed);
+// The same for the desktop's picture: it is looked for again if its folder
+// is among them.
+void wallpaper_files_changed(const FolderKeys &changed);
 
 } // namespace shell

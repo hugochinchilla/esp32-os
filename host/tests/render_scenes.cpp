@@ -704,6 +704,110 @@ int main(int argc, char **argv)
         check(desktop.backdrop().colour.r == 73 && desktop.backdrop().pattern[0] == 0, "and back again");
     }
 
+    // A picture on the desktop (backlog item 87): Browse... in Display opens
+    // the Open dialog, the small screen shows the picture, OK keeps it.
+    // Centre, Tile and Stretch; and the colour again once the file is gone.
+    {
+        const auto check = [&](bool ok, const char *what) {
+            if (!ok) {
+                printf("Desktop picture: %s\n", what);
+                failures++;
+            }
+        };
+        const auto settled = [&] {
+            for (int i = 0; i < 20; i++) {
+                desktop.tick();
+                clock_.now += 33334;
+            }
+        };
+        static uint8_t bytes[64 * 1024];
+        size_t size = 0;
+        storage.read_file("C:\\pictures\\mascot.bmp", bytes, sizeof(bytes), size);
+        check(storage.write_file("C:\\pictures\\small.bmp", bytes, size) == ports::FsError::Ok && size > 0,
+              "the small picture is written");
+        // The photograph is one of the samples, under another name while
+        // it is the desktop's: it has to go and come back.
+        check(storage.rename("C:\\pictures\\earthrise.jpg", "C:\\pictures\\wall.jpg") == ports::FsError::Ok,
+              "the photograph has its name");
+        settled();
+        shell::display_dialog();
+        key(0x05, true);                // Alt+B: Browse...
+        check(desktop.active() != nullptr && strcmp(desktop.active()->title(), "Open") == 0,
+              "Browse... opens the Open dialog");
+        save("38g-display-browse");
+        desktop.text("wall.jpg");
+        key(wm::key::Enter);
+        check(desktop.active() != nullptr && strcmp(desktop.active()->title(), "Display") == 0,
+              "the file goes to Display");
+        save("38h-display-picture-picked");
+        check(desktop.wallpaper().pixels == nullptr, "nothing changes before Apply");
+        key(0x04, true);                // Alt+A
+        check(desktop.wallpaper().pixels != nullptr, "Apply shows the picture");
+        key(wm::key::Escape);
+        check(desktop.wallpaper().pixels == nullptr, "Escape takes it back");
+        shell::display_dialog();
+        key(0x05, true);
+        desktop.text("wall.jpg");
+        key(wm::key::Enter);
+        key(wm::key::Enter);            // OK
+        fs::Ini ini;
+        char value[fs::kMaxPath] = "";
+        check(shell::load_settings("desktop", ini) && ini.get("background", "picture", value, sizeof(value)) &&
+                  strcmp(value, "C:\\pictures\\wall.jpg") == 0,
+              "the picture is in desktop.ini");
+        check(desktop.wallpaper().pixels != nullptr && desktop.wallpaper().width <= 640 &&
+                  desktop.wallpaper().height <= 480,
+              "OK keeps it");
+        save("38i-desktop-picture-centre");
+        os::set_wallpaper("C:\\pictures\\wall.jpg", os::Wallpaper::Stretch);
+        check(desktop.wallpaper().width == 640 && desktop.wallpaper().height == 480, "stretched, it is the screen's size");
+        save("38j-desktop-picture-stretch");
+        // A small one, tiled: Display shows it so, and so does the desktop.
+        shell::display_dialog();
+        key(0x05, true);
+        desktop.text("small.bmp");
+        key(wm::key::Enter);
+        key(0x0C, true);                // Alt+I: the position
+        key(wm::key::Tab);
+        key(wm::key::Space);            // Tile
+        save("38k-display-picture-tile");
+        key(wm::key::Enter);
+        check(shell::load_settings("desktop", ini) && ini.get("background", "position", value, sizeof(value)) &&
+                  strcmp(value, "tile") == 0,
+              "the position is in desktop.ini");
+        save("38l-desktop-picture-tile");
+        os::set_wallpaper("C:\\pictures\\small.bmp", os::Wallpaper::Stretch);
+        save("38m-desktop-picture-small-stretch");
+        // The file goes: the colour, with nothing said. It comes back: the picture.
+        os::set_wallpaper("C:\\pictures\\wall.jpg", os::Wallpaper::Centre);
+        check(desktop.wallpaper().pixels != nullptr, "the picture is up");
+        storage.rename("C:\\pictures\\wall.jpg", "C:\\pictures\\moved.jpg");
+        settled();
+        check(desktop.wallpaper().pixels == nullptr, "the file renamed: the colour");
+        save("38n-desktop-picture-gone");
+        storage.rename("C:\\pictures\\moved.jpg", "C:\\pictures\\wall.jpg");
+        settled();
+        check(desktop.wallpaper().pixels != nullptr, "the file back: the picture");
+        storage.rename("C:\\pictures\\wall.jpg", "C:\\pictures\\earthrise.jpg");
+        settled();
+        check(desktop.wallpaper().pixels == nullptr, "the file given its old name: the colour");
+        // Not a picture: said, and not taken.
+        shell::display_dialog();
+        key(0x05, true);
+        desktop.text("broken.jpg");
+        key(wm::key::Enter);
+        save("38o-display-picture-refused");
+        key(wm::key::Enter);            // the message
+        key(0x11, true);                // Alt+N: None
+        key(wm::key::Enter);            // OK
+        check(shell::load_settings("desktop", ini) && ini.get("background", "picture", value, sizeof(value)) &&
+                  value[0] == '\0',
+              "None is kept");
+        storage.remove("C:\\pictures\\small.bmp");
+        settled();
+        check(desktop.wallpaper().pixels == nullptr, "no picture is left");
+    }
+
     // The Trash. Empty at first, from its desktop icon.
     const auto there = [&](const char *path) {
         ports::DirEntry e;

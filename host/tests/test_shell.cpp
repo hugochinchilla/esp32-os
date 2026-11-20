@@ -123,6 +123,15 @@ std::string file(const char *path)
     return std::string(buf, n);
 }
 
+std::string file_bytes(const char *path)
+{
+    std::string bytes(64 * 1024, '\0');
+    size_t n = 0;
+    storage.read_file(path, &bytes[0], bytes.size(), n);
+    bytes.resize(n);
+    return bytes;
+}
+
 bool exists(const char *path)
 {
     ports::DirEntry e;
@@ -613,6 +622,172 @@ void idle(int seconds)
     }
 }
 
+// A queue and tasks, as on the board, from test_change_notices() on.
+host::ThreadQueue thread_queue;
+host::ThreadTasks thread_tasks;
+
+// A BMP of one colour with a black frame, written to `path`: one bit per
+// pixel, so that a whole screen of it is small on the RAM disk.
+void write_bmp(const char *path, int w, int h, uint8_t r, uint8_t g, uint8_t b)
+{
+    const int stride = ((w + 31) / 32) * 4;
+    std::string bytes(62 + static_cast<size_t>(stride) * h, '\0');
+    auto put = [&](int at, uint32_t v, int n) {
+        for (int i = 0; i < n; i++) {
+            bytes[at + i] = static_cast<char>(v >> (8 * i));
+        }
+    };
+    bytes[0] = 'B';
+    bytes[1] = 'M';
+    put(2, static_cast<uint32_t>(bytes.size()), 4);
+    put(10, 62, 4);
+    put(14, 40, 4);
+    put(18, static_cast<uint32_t>(w), 4);
+    put(22, static_cast<uint32_t>(h), 4);
+    put(26, 1, 2);
+    put(28, 1, 2);
+    put(46, 2, 4);
+    put(58, static_cast<uint32_t>(b | g << 8 | r << 16), 4); // colour 1; colour 0 is black
+    for (int y = 0; y < h; y++) {
+        for (int x = 0; x < w; x++) {
+            if (x != 0 && y != 0 && x != w - 1 && y != h - 1) {
+                bytes[62 + static_cast<size_t>(y) * stride + x / 8] |= static_cast<char>(0x80 >> (x % 8));
+            }
+        }
+    }
+    storage.write_file(path, bytes.data(), bytes.size());
+}
+
+// The desktop's picture (backlog item 87). Tasks and a queue are in place
+// from test_change_notices(), as on the board: the picture is read by a job.
+void test_wallpaper()
+{
+    char out[fs::kMaxPath];
+    CHECK(shell::wallpaper_for_screen("C:\\pictures\\Mir 800x600.jpg", 640, 480, out, sizeof(out)) &&
+          strcmp(out, "C:\\pictures\\Mir 640x480.jpg") == 0);
+    CHECK(shell::wallpaper_for_screen("C:\\a b\\earth_640x480.PNG", 800, 600, out, sizeof(out)) &&
+          strcmp(out, "C:\\a b\\earth_800x600.PNG") == 0);
+    CHECK(!shell::wallpaper_for_screen("C:\\pictures\\Mir.jpg", 640, 480, out, sizeof(out)));
+    CHECK(!shell::wallpaper_for_screen("C:\\pictures\\800x600.jpg", 640, 480, out, sizeof(out)));
+    CHECK(!shell::wallpaper_for_screen("C:\\pictures\\Mir x600.jpg", 640, 480, out, sizeof(out)));
+    CHECK(!shell::wallpaper_for_screen("C:\\pictures\\Mir 800x.jpg", 640, 480, out, sizeof(out)));
+    CHECK(!shell::wallpaper_for_screen("C:\\pic 800x600.s\\Mir", 640, 480, out, sizeof(out)));
+    int w, h;
+    shell::fit_inside(1600, 600, 640, 480, w, h);
+    CHECK(w == 640 && h == 240);
+    shell::fit_inside(480, 960, 640, 480, w, h);
+    CHECK(w == 240 && h == 480);
+    shell::fit_inside(100, 50, 640, 480, w, h);
+    CHECK(w == 100 && h == 50);
+
+    host::ThreadQueue &queue = thread_queue;
+    host::ThreadTasks &tasks = thread_tasks;
+    msg::set_queue(&queue);
+    job::jobs().set_tasks(&tasks);
+    tasks.hold();
+    msg::Inbox inbox(queue);
+    const auto back = [&] { // the job runs to its end and its result reaches the UI task
+        tasks.finish();
+        inbox.deliver();
+        desktop.tick();
+    };
+    const auto changed = [&] { // a change notice reaches the UI task
+        clock_.now += 300000;
+        inbox.deliver();
+        desktop.tick();
+    };
+    storage.make_folder("C:\\wall");
+    write_bmp("C:\\wall\\earth 800x600.bmp", 800, 600, 255, 0, 0);
+    write_bmp("C:\\wall\\earth 640x480.bmp", 640, 480, 0, 255, 0);
+    write_bmp("C:\\wall\\wide.bmp", 1280, 480, 0, 0, 255);
+    write_bmp("C:\\wall\\stamp.bmp", 100, 60, 255, 255, 255);
+    changed();
+    const int base = memory.in_use();
+    const gfx::Colour red = gfx::nearest({255, 0, 0}), green = gfx::nearest({0, 255, 0});
+    const gfx::Colour blue = gfx::nearest({0, 0, 255}), white = gfx::nearest({255, 255, 255});
+    const auto at = [&](int x, int y) { return display.pixels()[y * display.width() + x]; };
+
+    // The picture named for another screen: its sister for this one is shown.
+    // Until the job is back the desktop is as it was, and goes on.
+    const int started = tasks.started;
+    os::set_wallpaper("C:\\wall\\earth 800x600.bmp");
+    CHECK(tasks.started == started + 1 && desktop.wallpaper().pixels == nullptr);
+    desktop.tick();
+    back();
+    CHECK(desktop.wallpaper().width == 640 && desktop.wallpaper().height == 480 && at(320, 240) == green);
+    CHECK(memory.in_use() == base + 1); // the picture, and nothing of the reading
+    CHECK(no_stale_pixels());
+    // Named again as it is (Display, closing): nothing is read.
+    os::set_wallpaper("C:\\wall\\earth 800x600.bmp");
+    CHECK(tasks.started == started + 1);
+    // Something else in its folder changes: looked at, not read again.
+    const uint8_t *shown = desktop.wallpaper().pixels;
+    storage.write_file("C:\\wall\\note.txt", "n", 1);
+    changed();
+    back();
+    CHECK(desktop.wallpaper().pixels == shown);
+    // The other screen: the picture made for it, before the first painting there.
+    desktop.set_video_mode(1);
+    desktop.tick();
+    back();
+    CHECK(display.width() == 800 && desktop.wallpaper().width == 800 && at(400, 300) == red);
+    CHECK(memory.in_use() == base + 1);
+    desktop.set_video_mode(0);
+    desktop.tick();
+    back();
+    CHECK(display.width() == 640 && desktop.wallpaper().width == 640 && at(320, 240) == green);
+
+    // Centre: one too wide is made smaller, the colour above and below it.
+    const gfx::Colour plain = gfx::nearest(desktop.backdrop().colour);
+    os::set_wallpaper("C:\\wall\\wide.bmp");
+    back();
+    CHECK(desktop.wallpaper().width == 640 && desktop.wallpaper().height == 240);
+    CHECK(at(320, 240) == blue && at(320, 60) == plain && at(320, 400) == plain);
+    // A small one stays its size; tiled, it starts at the corner and repeats.
+    os::set_wallpaper("C:\\wall\\stamp.bmp");
+    back();
+    CHECK(desktop.wallpaper().width == 100 && desktop.wallpaper().height == 60);
+    CHECK(at(320, 240) == white && at(200, 240) == plain && at(320, 150) == plain);
+    os::set_wallpaper("C:\\wall\\stamp.bmp", os::Wallpaper::Tile);
+    back();
+    CHECK(desktop.wallpaper().width == 100 && at(250, 30) == white && at(550, 330) == white &&
+          at(300, 30) == gfx::kBlack && at(250, 60) == gfx::kBlack);
+    CHECK(no_stale_pixels());
+    // Stretched, it is the screen: its frame is the screen's edge.
+    os::set_wallpaper("C:\\wall\\stamp.bmp", os::Wallpaper::Stretch);
+    back();
+    CHECK(desktop.wallpaper().width == 640 && desktop.wallpaper().height == 480);
+    CHECK(at(320, 240) == white && at(200, 100) == white && at(0, 240) == gfx::kBlack && at(320, 0) == gfx::kBlack);
+    CHECK(memory.in_use() == base + 1);
+
+    // The file is deleted: the colour, and nothing kept. It comes back: the picture.
+    std::string kept = file_bytes("C:\\wall\\stamp.bmp");
+    storage.remove("C:\\wall\\stamp.bmp");
+    changed();
+    back();
+    CHECK(desktop.wallpaper().pixels == nullptr && at(320, 240) == plain && memory.in_use() == base);
+    storage.write_file("C:\\wall\\stamp.bmp", kept.data(), kept.size());
+    changed();
+    back();
+    CHECK(desktop.wallpaper().pixels != nullptr && at(320, 240) == white);
+    // Moved to another folder: the colour.
+    storage.rename("C:\\wall\\stamp.bmp", "C:\\Documents\\stamp.bmp");
+    changed();
+    back();
+    CHECK(desktop.wallpaper().pixels == nullptr && memory.in_use() == base);
+    // Not a picture: the colour.
+    os::set_wallpaper("C:\\wall\\note.txt");
+    back();
+    CHECK(desktop.wallpaper().pixels == nullptr && memory.in_use() == base);
+    // None asked for while a picture is being read: what the job brings is dropped.
+    os::set_wallpaper("C:\\wall\\wide.bmp");
+    os::set_wallpaper("");
+    back();
+    CHECK(desktop.wallpaper().pixels == nullptr && memory.in_use() == base);
+    job::jobs().set_tasks(nullptr);
+    msg::set_queue(nullptr);
+}
+
 void test_change_notices()
 {
     while (desktop.active() != nullptr) {
@@ -675,8 +850,8 @@ void test_change_notices()
     // With a queue and tasks, as on the board: the notice is a message, the
     // folder is read by a job on another task, and the icons are set when
     // the job's result comes back.
-    static host::ThreadQueue queue;
-    static host::ThreadTasks tasks;
+    host::ThreadQueue &queue = thread_queue;
+    host::ThreadTasks &tasks = thread_tasks;
     msg::Inbox inbox(queue);
     msg::set_queue(&queue);
     job::jobs().set_tasks(&tasks);
@@ -769,6 +944,7 @@ int main()
     test_trash_view();
     test_copy_cut_paste();
     test_change_notices();
+    test_wallpaper();
     if (failures == 0) {
         printf("all tests passed\n");
     }

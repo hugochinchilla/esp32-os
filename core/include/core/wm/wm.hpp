@@ -69,7 +69,7 @@ class Panel {
 public:
     // Paints the parts of its place in `clip` (Wm::canvas() gives the
     // canvas). The desktop panel paints the background too, where it does
-    // not paint something else (Wm::fill_backdrop), so each pixel is
+    // not paint something else (Wm::paint_backdrop), so each pixel is
     // painted once.
     virtual void paint(const gfx::RectList &clip) = 0;
     // The left button: Down in its place, then Move and Up wherever the
@@ -126,6 +126,7 @@ public:
     static constexpr uint32_t kFadeStepUs = 60000; // one level of colour
     static constexpr int kFadeLevels = 7;          // red and green have eight levels
     static constexpr int kFadeRestSteps = 5;       // the plain desktop stays this many steps
+    static constexpr int kFadeHoldSteps = 50;      // and no more than this many while held (hold_arrival)
     ~Wm();
 
     // The process table, and the process that owns the server itself (its
@@ -162,8 +163,12 @@ public:
     Panel *panel(PanelPlace place) const { return panels_[place == PanelPlace::Bar ? 1 : 0].panel; }
     proc::Pid panel_owner(PanelPlace place) const { return panels_[place == PanelPlace::Bar ? 1 : 0].owner; }
     // For a panel's paint(): a canvas on the screen, in screen coordinates,
-    // clipped to `clip` and to `bounds`; and the background.
+    // clipped to `clip` and to `bounds`; and the background: all of it
+    // (paint_backdrop: the colour, its pattern and the picture over them),
+    // or the plain desktop with no picture (fill_backdrop: what the fades
+    // go to and come from).
     gfx::Canvas canvas(const gfx::RectList &clip, const Rect &bounds);
+    void paint_backdrop(gfx::Canvas &c, const Rect &r) const;
     void fill_backdrop(gfx::Canvas &c, const Rect &r) const;
     // Ends a process as KILL does: its windows, menus and timers go and its
     // row is removed. For a stop function (proc::Table::set_stop) of a
@@ -303,6 +308,7 @@ public:
     // the bottom left, with `banner` down its side. nullptr: none.
     void set_start_menu(Menu *menu, const char *banner);
 
+    using ModeFn = void (*)(void *context); // for set_mode_listener() and set_screen_listener()
     // The desktop behind everything: a colour and, over it, an 8x8 pattern
     // drawn in `ink` (the top bit of a row is its left pixel; all rows 0:
     // the plain colour).
@@ -312,6 +318,26 @@ public:
         uint8_t pattern[8];
     };
     void set_backdrop(const Backdrop &backdrop);
+    // A picture over that colour (backlog item 87): one board colour per
+    // pixel, in the middle of the screen, the colour and its pattern around
+    // it where it is smaller; or, `tiled`, side by side from the top left
+    // corner over all of the screen. The pixels stay the caller's, who keeps them
+    // until it has set others or none (nullptr). One wider or taller
+    // than the screen shows its middle; the screen listener is where to set
+    // another when the screen's mode changes.
+    void set_wallpaper(const uint8_t *pixels, int width, int height, bool tiled = false);
+    const gfx::Bitmap &wallpaper() const { return wallpaper_; }
+    // Told after a change of the screen's mode and before anything is
+    // painted in it, for the desktop shell (the remote screen has
+    // set_mode_listener).
+    void set_screen_listener(ModeFn fn, void *context)
+    {
+        screen_changed_fn_ = fn;
+        screen_changed_context_ = context;
+    }
+    // While held, the desktop that fades in at start-up stays on its plain
+    // colour, for kFadeHoldSteps at most: the picture is still being read.
+    void hold_arrival(bool hold) { arrive_hold_ = hold; }
     // The look of everything (a row of gfx's table of themes); all of the
     // screen is painted again if it changes.
     void set_theme(int index);
@@ -396,7 +422,6 @@ public:
     bool set_video_mode(int index) override;
     // Told after every change, for whoever keeps the screen's size (a
     // remote screen).
-    using ModeFn = void (*)(void *context);
     void set_mode_listener(ModeFn fn, void *context)
     {
         mode_fn_ = fn;
@@ -604,6 +629,11 @@ private:
     bool desktop_over_ = false;   // the desktop panel has been shown the drag
     bool desktop_target_ = false; // and it would take the file
     Backdrop backdrop_ = {{73, 109, 182}, {0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0}};
+    gfx::Bitmap wallpaper_ = {0, 0, nullptr, -1};
+    bool wallpaper_tiled_ = false;
+    ModeFn screen_changed_fn_ = nullptr;
+    void *screen_changed_context_ = nullptr;
+    bool arrive_hold_ = false;
 
     // Double clicks: the target of the last press and when it happened.
     int last_target_ = -1;

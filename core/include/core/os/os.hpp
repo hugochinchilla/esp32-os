@@ -160,6 +160,18 @@ public:
 
 // The desktop's background: a colour and an 8x8 pattern over it.
 void set_backdrop(const wm::Wm::Backdrop &backdrop);
+// A picture file shown over that colour (backlog item 87): BMP, PNG, JPEG
+// or GIF. "": none. Centre and Tile make it smaller if it is larger than
+// the screen and never larger; Stretch makes it the screen's size, whatever
+// its shape. It returns at once and the picture comes when it has been
+// read; a file that is not there or cannot be shown leaves the colour, and
+// so does one that goes away later.
+enum class Wallpaper : uint8_t {
+    Centre,  // in the middle, the colour around it
+    Tile,    // side by side from the top left corner
+    Stretch, // pulled to fill the screen
+};
+void set_wallpaper(const char *path, Wallpaper how = Wallpaper::Centre);
 // The look of windows, buttons and the taskbar: a place in the table of
 // themes (core/gfx/theme.hpp, where gfx::theme() tells the one in use).
 // Everything on the screen is painted again.
@@ -375,6 +387,7 @@ struct Kit {
     bool (*launch)(const char *program, const char *argument) = nullptr; // a program, by name
     void (*accept_open)(OpenFn opened) = nullptr;
     void (*watch_files)(file::ChangedFn changed) = nullptr;
+    void (*set_wallpaper)(const char *path, Wallpaper how) = nullptr;
     sh::TerminalSession *(*open_session)(ports::ByteSink &device, const char *&why) = nullptr;
 };
 // What the calls work with. The desktop hands it in when it starts.

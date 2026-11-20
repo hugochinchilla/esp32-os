@@ -480,7 +480,7 @@ void Icons::paint(const RectList &clip)
     }
     const bool split = !around.overflowed();
     Canvas plain = wm_.canvas(split ? around : clip, screen);
-    wm_.fill_backdrop(plain, screen);
+    wm_.paint_backdrop(plain, screen);
     Canvas c = wm_.canvas(clip, screen);
     const Rect bounds = clip.bounds();
     for (int i = 0; i < count_; i++) {
@@ -493,7 +493,7 @@ void Icons::paint(const RectList &clip)
         const bool selected = picked(i) || i == drop_icon_;
         const auto draw = [&](Canvas &c) {
         if (split) {
-            wm_.fill_backdrop(c, r);
+            wm_.paint_backdrop(c, r);
         }
         if (icon.picture != nullptr) {
             if (selected) {

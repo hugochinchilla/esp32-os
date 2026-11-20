@@ -45,6 +45,7 @@ SYSTEM = [
     "power.cpp",
     "programs.cpp",
     "sessions.cpp",
+    "wallpaper.cpp",
 ]
 
 # What a moved program may not write, and what to write instead.

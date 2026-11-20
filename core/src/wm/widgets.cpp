@@ -340,6 +340,9 @@ void RadioButton::select()
     if (window() != nullptr) {
         window()->invalidate_client({0, 0, 4000, 4000});
     }
+    if (on_change_ != nullptr) {
+        on_change_(*this, context_);
+    }
 }
 
 /* ---- Text field ------------------------------------------------------------- */

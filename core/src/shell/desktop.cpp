@@ -788,6 +788,7 @@ void settle()
         // again itself: its windows are its own to touch.
         tell_watchers(keys);
     }
+    wallpaper_files_changed(keys); // the desktop's picture may have gone, or come back
     if (msg::queue() != nullptr && !g_settle_wait) {
         g_settle_wait = os::start_timer(kSettleGapUs, 0, &settle_later, nullptr) != 0;
     }
@@ -1197,6 +1198,7 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
     };
     kit.accept_open = &accept_open;
     kit.watch_files = &watch_files;
+    kit.set_wallpaper = &set_wallpaper;
     os::install(kit);
     // The desktop is a process too: the Start menu, the icons and the
     // taskbar, and the dialogs they open. (It is the window server and the
@@ -1233,6 +1235,7 @@ void start(wm::Wm &wm, ports::System &system, fs::Storage &storage, ports::Memor
     move_old_documents();
     welcome_file();
     install_screen_saver();
+    install_wallpaper();
     install_display();
     start_network();
     start_bluetooth();

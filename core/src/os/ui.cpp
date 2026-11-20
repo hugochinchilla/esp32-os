@@ -1319,6 +1319,7 @@ public:
     }
     static void pressed(wm::Button &b, void *context) { static_cast<Behind *>(context)->from(b, What::Command); }
     static void ticked(wm::CheckBox &b, void *context) { static_cast<Behind *>(context)->from(b, What::Changed); }
+    static void chosen_one(wm::RadioButton &b, void *context) { static_cast<Behind *>(context)->from(b, What::Changed); }
     static void scrolled(wm::ScrollBar &b, void *context) { static_cast<Behind *>(context)->from(b, What::Changed); }
     static void picked(wm::ListBox &l, void *context) { static_cast<Behind *>(context)->from(l, What::Changed); }
     static void turned(wm::Tabs &t, void *context) { static_cast<Behind *>(context)->from(t, What::Changed); }
@@ -1688,7 +1689,8 @@ Control radio(Window window, const gfx::Rect &place, const char *text, int group
     const prog::InCall in_call;
     Behind *w = behind(window);
     int *chosen = w != nullptr ? w->radio_group(group) : nullptr;
-    return chosen != nullptr ? w->make<wm::RadioButton>(Kind::Radio, place, text, chosen, value) : kNoControl;
+    return chosen != nullptr ? w->make<wm::RadioButton>(Kind::Radio, place, text, chosen, value, &Behind::chosen_one, w)
+                             : kNoControl;
 }
 
 Control text_field(Window window, const gfx::Rect &place, const char *initial)

@@ -442,6 +442,18 @@ void Canvas::blit(const Bitmap &b, int x, int y)
     });
 }
 
+void Canvas::copy(const Bitmap &b, int x, int y, const Rect &part)
+{
+    each(part.intersect({x, y, b.width, b.height}), [&](const Rect &s) {
+        const int bx = s.x - (x + ox_), by = s.y - (y + oy_);
+        for (int row = 0; row < s.h; row++) {
+            memcpy(pixels_ + (s.y + row) * width_ + s.x, b.pixels + (by + row) * b.width + bx,
+                   static_cast<size_t>(s.w));
+            mark(s.x, s.y + row, s.w);
+        }
+    });
+}
+
 void Canvas::blit_selected(const Bitmap &b, int x, int y, Colour tint)
 {
     each({x, y, b.width, b.height}, [&](const Rect &s) {
