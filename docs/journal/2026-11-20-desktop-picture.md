@@ -125,6 +125,40 @@ takes to decode there, what a repaint over a photograph costs against the
 frame budget, whether 469 KB more in use leaves Doom its memory, and what
 a remote screen makes of a dithered desktop are all for the board turn.
 
+## On the board
+
+The board turn of 2026-11-20 (commit f5669c7; a batch with items 85 and
+86). Passed what was asked; not merged, the owner has not seen it yet.
+
+- The firmware is 1,659,504 bytes (7,408 more than `main`).
+- Display fits above the taskbar at 640x480. A 640x480 JPEG picked with
+  Browse... shows on the small screen; after Apply it is on the desktop
+  in 1.5 to 2 s, with the desktop usable meanwhile.
+- With that picture up: external RAM 311,280 bytes lower, internal the
+  same, no "wallpaper" task left. A full repaint takes 15.9 to 16.4 ms
+  (14.5 to 15.1 ms without a picture on the same boot).
+  `desktop_frames.py`: 1,909 frames, 35 over the budget, the worst
+  37.6 ms; no refill missed. Not compared with `main` in the same turn.
+- A normal restart shows the desktop with its picture already in it; the
+  plain colour was shorter than the camera could see. `reboot --fast`
+  left the monitor black for about 4 s and then showed the desktop with
+  the picture.
+- 800x600: the file named for that screen is shown, centred. Stretched
+  to 800x600: external RAM 483,308 bytes lower, repaint 26.1 to 27.4 ms,
+  nothing over that mode's budget. Doom starts and runs at 35 pictures a
+  second with it up, with 566,144 bytes of external RAM left free: a
+  narrow margin. The desktop and the memory come back whole after.
+- Tile and Centre as drawn on the PC.
+- The file removed (`dbg.py rm`): the plain colour within 3 s, no
+  message, the memory back. Put again: the picture back in about 6 s. A
+  restart without the file: the plain desktop, no message.
+- A text file picked: refused with the decoder's sentence.
+- Display opened and closed ten times: no drift. No panic, no watchdog
+  line, no missed refill.
+- Not done in the turn: watching a window dragged over the picture by
+  eye; the mode was changed with `dbg.py mode`, not through Resolution
+  and Keep.
+
 ## What was learned
 
 - The fades needed no change: they already treated "the plain desktop" as
