@@ -444,6 +444,12 @@ int move_one(Session &s, const char *from, void *context)
     if (strlen(from) <= 3) {
         return s.fail(t.command, from, "a drive cannot be moved");
     }
+    // `ren` gives a new name: a folder of that name is a name that is taken,
+    // not a place to move into (the board, 2026-11-20: `ren two one` put
+    // `two` inside `one` without a word). `mv` moves into it.
+    if (strncmp(t.command, "ren", 3) == 0 && t.into && !path::same(from, t.to)) {
+        return s.fail(t.command, t.to, FsError::Exists);
+    }
     if (!target_for(s, t, from, to)) {
         return 1;
     }

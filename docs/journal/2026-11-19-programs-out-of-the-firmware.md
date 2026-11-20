@@ -456,6 +456,16 @@ about 5.1 KB used after drags, the Trash, Paste and a copy of 355 KB.
 
 PC: 59 of 59, with `ren` onto a taken name in the shell's test.
 
+## After the fourth board turn (2026-11-20)
+
+At `af84df2`: `ren` of files refuses, `mv` replaces, no Terminal task, and
+the least internal memory with the usual windows was 47,348 bytes (27,680
+two turns before). One thing left: `ren two one`, two folders, left only
+`one`. Nothing was deleted: the command took `one` for a place to move
+into, as `mv` does, and `two` was inside it. For `ren` a folder of that
+name is a name that is taken: it says "already exists" now, for a file or
+a folder being renamed. `mv two one` still moves into it.
+
 ## What is left
 
 - The board has run none of this. Two turns are asked for: steps 1 to 3
