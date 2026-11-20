@@ -140,6 +140,13 @@ target_link_libraries(test_chess_window PRIVATE core Threads::Threads)
 add_test(NAME chess_window COMMAND test_chess_window)
 add_test(NAME chess_window_pictures
          COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/check_pictures.py $<TARGET_FILE:test_chess_window>)
+# Pincel, the drawing program: its tools on a sheet, its window driven with
+# the mouse, and its reference pictures.
+add_executable(test_pincel tests/test_pincel.cpp)
+target_link_libraries(test_pincel PRIVATE core)
+add_test(NAME pincel COMMAND test_pincel)
+add_test(NAME pincel_pictures
+         COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/check_pictures.py $<TARGET_FILE:test_pincel>)
 add_executable(test_saver tests/test_saver.cpp)
 target_link_libraries(test_saver PRIVATE core)
 add_test(NAME saver COMMAND test_saver)

@@ -252,6 +252,7 @@ The programs and games, one decision each.
 - [The Shut Down sequence](decisions/shut-down-sequence.md) (2026-11-19, owner+agent, decided): Shut Down closes the programs (ended after 20 s), fades the desktop, then to black, and shows the last screen on black (backlog 60)
 - [GIF pictures](decisions/gif-pictures.md) (2026-11-20, owner+agent, to-confirm): One GIF decoder for the Picture viewer and Vizcacha; animations play in both, decoded again each time round, within memory limits (backlog 84)
 - [NASA photographs that fill the screen](decisions/nasa-backgrounds.md) (2026-11-20, owner+agent, to-confirm): Seven NASA photographs in C:\pictures at 800x600 and 640x480, size in the name, to be desktop backgrounds later (backlog 85)
+- [Pincel, the drawing program](decisions/pincel.md) (2026-11-20, owner+agent, to-confirm): Pincel: a program file with eight tools, a palette of 28 of the board's colours, one Undo; saves 8-bit BMP, opens what the system decodes (backlog 86)
 
 ### console
 
